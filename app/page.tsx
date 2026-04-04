@@ -1,111 +1,309 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useGame } from "@/hooks/useGame";
+import { detectCombo } from "@/lib/combo";
+import { beats } from "@/lib/compare";
+import Hand from "@/components/Hand";
+import PlayArea from "@/components/PlayArea";
+import PlayerSlot from "@/components/PlayerSlot";
+import GameOver from "@/components/GameOver";
+import type { Card as CardType } from "@/lib/constants";
 
 function genCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
+// Read room code from URL hash: #room=XXXX
+function getRoomFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash;
+  const match = hash.match(/^#room=(\d{4})$/);
+  return match ? match[1] : null;
+}
+
 export default function Home() {
-  const router = useRouter();
-  const [mode, setMode] = useState<"home" | "create" | "join">("home");
-  const [code, setCode] = useState("");
+  const [screen, setScreen] = useState<"home" | "create" | "join" | "room">("home");
+  const [roomCode, setRoomCode] = useState("");
+  const [joinCode, setJoinCode] = useState("");
   const [name, setName] = useState("");
+  const [nameReady, setNameReady] = useState(false);
   const [error, setError] = useState("");
+
+  // Check hash on load
+  useEffect(() => {
+    const code = getRoomFromHash();
+    if (code) {
+      setRoomCode(code);
+      setScreen("room");
+    }
+    const stored = localStorage.getItem("big2_name");
+    if (stored) {
+      setName(stored);
+      setNameReady(true);
+    }
+
+    const onHash = () => {
+      const c = getRoomFromHash();
+      if (c) { setRoomCode(c); setScreen("room"); }
+      else { setScreen("home"); setRoomCode(""); }
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   function handleCreate() {
     if (!name.trim()) { setError("請輸入暱稱"); return; }
-    const roomCode = genCode();
     localStorage.setItem("big2_name", name.trim());
-    router.push(`/room/${roomCode}`);
+    setNameReady(true);
+    const code = genCode();
+    setRoomCode(code);
+    setScreen("room");
+    window.location.hash = `room=${code}`;
   }
 
   function handleJoin() {
-    if (!code || code.length !== 4) { setError("請輸入4位數房間碼"); return; }
+    if (!joinCode || joinCode.length !== 4) { setError("請輸入4位數房間碼"); return; }
     if (!name.trim()) { setError("請輸入暱稱"); return; }
     localStorage.setItem("big2_name", name.trim());
-    router.push(`/room/${code}`);
+    setNameReady(true);
+    setRoomCode(joinCode);
+    setScreen("room");
+    window.location.hash = `room=${joinCode}`;
   }
 
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center px-6">
-      <div className="flex flex-col items-center gap-8 w-full max-w-sm">
-        {/* Title */}
-        <div className="text-center">
-          <div className="text-5xl mb-2">
-            <span className="text-red-400">♥</span>
-            <span className="text-white">♠</span>
-            <span className="text-red-400">♦</span>
-            <span className="text-white">♣</span>
+  function goHome() {
+    setScreen("home");
+    setRoomCode("");
+    window.location.hash = "";
+  }
+
+  // ─── Home / Create / Join screens ───
+  if (screen !== "room") {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-8 w-full max-w-sm">
+          <div className="text-center">
+            <div className="text-5xl mb-2">
+              <span className="text-red-400">♥</span>
+              <span className="text-white">♠</span>
+              <span className="text-red-400">♦</span>
+              <span className="text-white">♣</span>
+            </div>
+            <h1 className="text-5xl font-bold tracking-wider text-gold-light">大老二</h1>
+            <p className="text-white/50 mt-2 text-sm">Big Two - 4 Players</p>
           </div>
-          <h1 className="text-5xl font-bold tracking-wider text-gold-light">大老二</h1>
-          <p className="text-white/50 mt-2 text-sm">Big Two - 4 Players</p>
+
+          {screen === "home" ? (
+            <div className="flex flex-col gap-4 w-full fade-in">
+              <button onClick={() => { setScreen("create"); setError(""); }}
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+                建立房間
+              </button>
+              <button onClick={() => { setScreen("join"); setError(""); }}
+                className="w-full py-4 rounded-2xl border-2 border-gold/60 text-gold-light font-bold text-lg active:scale-95 transition-transform">
+                加入房間
+              </button>
+            </div>
+          ) : screen === "create" ? (
+            <div className="flex flex-col gap-4 w-full fade-in">
+              <input type="text" maxLength={8} placeholder="你的暱稱" value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50" />
+              <button onClick={handleCreate}
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+                建立房間
+              </button>
+              <button onClick={() => { setScreen("home"); setError(""); }} className="text-white/40 text-sm">返回</button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 w-full fade-in">
+              <input type="text" inputMode="numeric" maxLength={4} placeholder="房間碼 (4位數)" value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ""))}
+                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-2xl tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal placeholder:text-base outline-none focus:ring-2 focus:ring-gold/50" />
+              <input type="text" maxLength={8} placeholder="你的暱稱" value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50" />
+              <button onClick={handleJoin}
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+                加入遊戲
+              </button>
+              <button onClick={() => { setScreen("home"); setError(""); }} className="text-white/40 text-sm">返回</button>
+            </div>
+          )}
+
+          {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
         </div>
+      </div>
+    );
+  }
 
-        {mode === "home" ? (
-          <div className="flex flex-col gap-4 w-full fade-in">
-            <button
-              onClick={() => { setMode("create"); setError(""); }}
-              className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform"
-            >
-              建立房間
-            </button>
-            <button
-              onClick={() => { setMode("join"); setError(""); }}
-              className="w-full py-4 rounded-2xl border-2 border-gold/60 text-gold-light font-bold text-lg active:scale-95 transition-transform"
-            >
-              加入房間
-            </button>
-          </div>
-        ) : mode === "create" ? (
-          <div className="flex flex-col gap-4 w-full fade-in">
-            <input
-              type="text"
-              maxLength={8}
-              placeholder="你的暱稱"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50"
-            />
-            <button
-              onClick={handleCreate}
-              className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform"
-            >
-              建立房間
-            </button>
-            <button onClick={() => { setMode("home"); setError(""); }} className="text-white/40 text-sm">返回</button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 w-full fade-in">
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="房間碼 (4位數)"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-2xl tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal placeholder:text-base outline-none focus:ring-2 focus:ring-gold/50"
-            />
-            <input
-              type="text"
-              maxLength={8}
-              placeholder="你的暱稱"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50"
-            />
-            <button
-              onClick={handleJoin}
-              className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform"
-            >
-              加入遊戲
-            </button>
-            <button onClick={() => { setMode("home"); setError(""); }} className="text-white/40 text-sm">返回</button>
-          </div>
-        )}
+  // ─── Room ───
+  return <RoomView code={roomCode} playerName={name} nameReady={nameReady}
+    onSetName={(n) => { setName(n); setNameReady(true); localStorage.setItem("big2_name", n); }}
+    onGoHome={goHome} />;
+}
 
-        {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
+// ─── Room Component ───
+function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
+  code: string; playerName: string; nameReady: boolean;
+  onSetName: (n: string) => void; onGoHome: () => void;
+}) {
+  const [localName, setLocalName] = useState(playerName);
+  const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
+  const [playError, setPlayError] = useState("");
+
+  const { state, startGame, playCards, pass, isMyTurn, canPass } = useGame(
+    code, nameReady ? playerName : ""
+  );
+
+  const toggleCard = (card: CardType) => {
+    setSelectedCards((prev) => prev.includes(card) ? prev.filter((c) => c !== card) : [...prev, card]);
+    setPlayError("");
+  };
+
+  const selectedCombo = selectedCards.length > 0 ? detectCombo(selectedCards) : null;
+  const isValidPlay = (() => {
+    if (!selectedCombo || !isMyTurn) return false;
+    if (state.lastPlay === null) {
+      const isFirstTurn = state.players.every((p) => p.cardCount === 13);
+      if (isFirstTurn && state.myHand.includes("3C") && !selectedCards.includes("3C")) return false;
+      return true;
+    }
+    return beats(state.lastPlay.combo, selectedCombo);
+  })();
+
+  const handlePlay = () => {
+    const result = playCards(selectedCards);
+    if (result.success) { setSelectedCards([]); setPlayError(""); }
+    else setPlayError(result.error || "無效的出牌");
+  };
+
+  const handlePass = () => { pass(); setSelectedCards([]); setPlayError(""); };
+
+  const comboName = (type: string) => {
+    const m: Record<string, string> = { single: "單張", pair: "對子", straight: "順子", fullHouse: "葫蘆", fourOfAKind: "鐵支", straightFlush: "同花順" };
+    return m[type] || type;
+  };
+
+  const getOpponent = (offset: number) => {
+    const seat = (state.mySeat + offset) % 4;
+    return state.players.find((p) => p.seat === seat);
+  };
+
+  // Name input
+  if (!nameReady) {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-6 w-full max-w-sm">
+          <h2 className="text-2xl font-bold text-gold-light">加入房間 {code}</h2>
+          <input type="text" maxLength={8} placeholder="你的暱稱" value={localName}
+            onChange={(e) => setLocalName(e.target.value)}
+            className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50" />
+          <button onClick={() => { if (localName.trim()) onSetName(localName.trim()); }}
+            className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+            加入
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Lobby
+  if (state.status === "waiting") {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-6 w-full max-w-sm">
+          <h2 className="text-xl font-bold text-gold-light">等待玩家加入</h2>
+          <div className="bg-white/10 rounded-2xl px-8 py-4 text-center">
+            <p className="text-white/50 text-xs mb-1">房間碼</p>
+            <p className="text-4xl font-bold text-gold tracking-[0.3em]">{code}</p>
+            <button onClick={() => {
+              const base = window.location.origin + window.location.pathname;
+              navigator.clipboard?.writeText(`${base}#room=${code}`);
+            }} className="mt-2 text-xs text-white/40 active:text-gold">
+              點擊複製連結
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 w-full">
+            {[0, 1, 2, 3].map((seat) => {
+              const player = state.players.find((p) => p.seat === seat);
+              return (
+                <div key={seat} className={`rounded-xl p-4 text-center ${player ? "bg-gold/20 border border-gold/30" : "bg-white/5 border border-white/10"}`}>
+                  <p className="text-xs text-white/40 mb-1">座位 {seat + 1}</p>
+                  {player ? <p className="font-bold text-gold-light">{player.name}{player.id === state.myId && " (你)"}</p>
+                    : <p className="text-white/20">等待中...</p>}
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={startGame} disabled={state.players.length !== 4}
+            className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform disabled:opacity-30">
+            {state.players.length === 4 ? "開始遊戲" : `等待玩家 (${state.players.length}/4)`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Game Over
+  if (state.status === "finished") {
+    const results = state.players.map((p) => ({
+      seat: p.seat, name: p.name,
+      hand: (state.finishedHands || {})[p.id] || [],
+      finishOrder: p.finishOrder ?? null,
+    }));
+    return <GameOver results={results} onGoHome={onGoHome} />;
+  }
+
+  // Playing
+  const top = getOpponent(2);
+  const left = getOpponent(3);
+  const right = getOpponent(1);
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden relative">
+      <div className="flex justify-center pt-safe px-4 py-2">
+        {top && <PlayerSlot name={top.name} cardCount={top.cardCount} isCurrentTurn={state.currentTurn === top.seat} isFinished={top.isFinished} position="top" />}
+      </div>
+
+      <div className="flex-1 flex items-center px-2 min-h-0">
+        <div className="w-16 flex-shrink-0">
+          {left && <PlayerSlot name={left.name} cardCount={left.cardCount} isCurrentTurn={state.currentTurn === left.seat} isFinished={left.isFinished} position="left" />}
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2">
+          <PlayArea
+            lastPlay={state.lastPlay ? { cards: state.lastPlay.cards, comboType: comboName(state.lastPlay.combo.type), playerName: state.lastPlay.playerName } : null}
+            isNewRound={state.lastPlay === null} />
+          <p className="text-xs text-white/50">
+            {isMyTurn ? "輪到你出牌" : `等待 ${state.players.find((p) => p.seat === state.currentTurn)?.name || "..."}`}
+          </p>
+        </div>
+        <div className="w-16 flex-shrink-0">
+          {right && <PlayerSlot name={right.name} cardCount={right.cardCount} isCurrentTurn={state.currentTurn === right.seat} isFinished={right.isFinished} position="right" />}
+        </div>
+      </div>
+
+      <div className="pb-safe bg-black/30 backdrop-blur-sm rounded-t-2xl">
+        <div className="h-7 flex items-center justify-center">
+          {selectedCombo && (
+            <span className={`text-xs font-bold px-3 py-0.5 rounded-full ${isValidPlay ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+              {comboName(selectedCombo.type)}{!isValidPlay && state.lastPlay ? " (打不過)" : ""}
+            </span>
+          )}
+          {playError && <span className="text-xs text-red-400">{playError}</span>}
+        </div>
+        <Hand cards={state.myHand} selectedCards={selectedCards} onToggleCard={toggleCard} />
+        <div className="flex gap-3 px-4 py-3">
+          <button onClick={handlePass} disabled={!canPass}
+            className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold text-sm active:scale-95 transition-transform disabled:opacity-30">
+            Pass
+          </button>
+          <button onClick={handlePlay} disabled={!isValidPlay}
+            className="flex-1 py-3 rounded-xl bg-gold text-felt font-bold text-sm active:scale-95 transition-transform disabled:opacity-30">
+            出牌
+          </button>
+        </div>
       </div>
     </div>
   );
