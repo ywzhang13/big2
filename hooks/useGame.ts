@@ -5,9 +5,10 @@ import { getSupabase } from "@/lib/supabase";
 import { deal } from "@/lib/deck";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
-import { validatePlay } from "@/lib/rules";
+import { compareCards } from "@/lib/card";
 import type { Card } from "@/lib/constants";
 import type { GameState, GameMessage, Player } from "@/lib/gameState";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 function genId() {
   return Math.random().toString(36).slice(2, 10);
@@ -27,55 +28,39 @@ export function useGame(roomCode: string, playerName: string) {
     roundStarter: 0,
   });
 
-  const channelRef = useRef<ReturnType<ReturnType<typeof getSupabase>["channel"]> | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
-
-  // Initialize player ID
   const myIdRef = useRef("");
+  const joinedRef = useRef(false);
+
+  // Generate stable player ID
   useEffect(() => {
-    let id = localStorage.getItem(`big2_id_${roomCode}`);
+    let id = localStorage.getItem(`big2_pid`);
     if (!id) {
       id = genId();
-      localStorage.setItem(`big2_id_${roomCode}`, id);
+      localStorage.setItem(`big2_pid`, id);
     }
     myIdRef.current = id;
     setState((s) => ({ ...s, myId: id! }));
-  }, [roomCode]);
+  }, []);
 
   // Broadcast helper
   const broadcast = useCallback((msg: GameMessage) => {
     channelRef.current?.send({ type: "broadcast", event: "game", payload: msg });
   }, []);
 
-  // Handle incoming messages
+  // Handle broadcast messages (game actions only, not player tracking)
   const handleMessage = useCallback((msg: GameMessage) => {
-    const s = stateRef.current;
-
     switch (msg.type) {
-      case "player_joined": {
-        setState((prev) => {
-          if (prev.players.find((p) => p.id === msg.player.id)) return prev;
-          return {
-            ...prev,
-            players: [...prev.players, { ...msg.player, cardCount: 0, isFinished: false }],
-          };
-        });
-        break;
-      }
-      case "player_left": {
-        setState((prev) => ({
-          ...prev,
-          players: prev.players.filter((p) => p.id !== msg.playerId),
-        }));
-        break;
-      }
       case "game_start": {
         const myHand = msg.hands[myIdRef.current] || [];
+        // Sort hand by rank then suit (3C, 3D, 3H, 3S, 4C, ...)
+        myHand.sort(compareCards);
         setState((prev) => ({
           ...prev,
           status: "playing",
-          myHand: myHand.sort(),
+          myHand,
           currentTurn: msg.currentTurn,
           roundStarter: msg.roundStarter,
           lastPlay: null,
@@ -91,22 +76,14 @@ export function useGame(roomCode: string, playerName: string) {
       }
       case "play_cards": {
         setState((prev) => {
-          const newPlayers = prev.players.map((p) => {
-            if (p.seat === msg.seat) {
-              return {
-                ...p,
-                cardCount: msg.cardCount,
-                isFinished: msg.isFinished,
-                finishOrder: msg.finishOrder,
-              };
-            }
-            return p;
-          });
-          // Remove cards from my hand if it was me
-          let newHand = prev.myHand;
-          if (msg.seat === prev.mySeat) {
-            newHand = prev.myHand.filter((c) => !msg.cards.includes(c));
-          }
+          const newPlayers = prev.players.map((p) =>
+            p.seat === msg.seat
+              ? { ...p, cardCount: msg.cardCount, isFinished: msg.isFinished, finishOrder: msg.finishOrder }
+              : p
+          );
+          const newHand = msg.seat === prev.mySeat
+            ? prev.myHand.filter((c) => !msg.cards.includes(c))
+            : prev.myHand;
           return {
             ...prev,
             players: newPlayers,
@@ -115,10 +92,6 @@ export function useGame(roomCode: string, playerName: string) {
             passCount: 0,
           };
         });
-        break;
-      }
-      case "pass": {
-        // handled by turn_change
         break;
       }
       case "turn_change": {
@@ -150,90 +123,79 @@ export function useGame(roomCode: string, playerName: string) {
         }));
         break;
       }
-      case "sync_request": {
-        // Only host (seat 0) responds
-        if (s.mySeat === 0 && s.status === "waiting") {
-          broadcast({
-            type: "sync_response",
-            state: {
-              players: s.players,
-              status: s.status,
-              currentTurn: s.currentTurn,
-              lastPlay: s.lastPlay,
-              passCount: s.passCount,
-              roundStarter: s.roundStarter,
-            },
-          });
-        }
+      default:
         break;
-      }
-      case "sync_response": {
-        setState((prev) => {
-          if (prev.players.length === 0) {
-            return {
-              ...prev,
-              players: msg.state.players,
-              status: msg.state.status,
-              currentTurn: msg.state.currentTurn,
-              lastPlay: msg.state.lastPlay,
-              passCount: msg.state.passCount,
-              roundStarter: msg.state.roundStarter,
-            };
-          }
-          return prev;
-        });
-        break;
-      }
     }
-  }, [broadcast]);
+  }, []);
 
-  // Connect to channel
+  // Connect to Supabase Realtime channel with Presence
   useEffect(() => {
-    if (!myIdRef.current) return;
+    if (!myIdRef.current || !playerName || !roomCode) return;
+    if (joinedRef.current) return;
+    joinedRef.current = true;
 
     const supabase = getSupabase();
     const channel = supabase.channel(`big2:${roomCode}`, {
-      config: { broadcast: { self: true } },
+      config: { broadcast: { self: true }, presence: { key: myIdRef.current } },
     });
 
+    // Handle presence sync — rebuild player list from presence state
+    channel.on("presence", { event: "sync" }, () => {
+      const presenceState = channel.presenceState();
+      const players: Player[] = [];
+      const entries = Object.entries(presenceState);
+      // Sort by join order (presence_ref or first seen)
+      entries.forEach(([key, presences]) => {
+        const p = presences[0] as unknown as { name: string; seat: number };
+        if (p && typeof p.name === "string") {
+          players.push({
+            id: key,
+            name: p.name,
+            seat: p.seat,
+            cardCount: 0,
+            isFinished: false,
+          });
+        }
+      });
+      // Sort by seat
+      players.sort((a, b) => a.seat - b.seat);
+
+      setState((prev) => {
+        // Preserve game state (cardCount, isFinished etc) if playing
+        if (prev.status === "playing" || prev.status === "finished") {
+          const updated = players.map((np) => {
+            const existing = prev.players.find((ep) => ep.id === np.id);
+            return existing || np;
+          });
+          return { ...prev, players: updated };
+        }
+        // Update mySeat
+        const me = players.find((p) => p.id === myIdRef.current);
+        return { ...prev, players, mySeat: me?.seat ?? prev.mySeat };
+      });
+    });
+
+    // Handle broadcast messages
     channel.on("broadcast", { event: "game" }, ({ payload }) => {
       handleMessage(payload as GameMessage);
     });
 
-    channel.subscribe((status) => {
+    channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
-        // Join the room
-        const seat = stateRef.current.players.length;
-        const me: Player = {
-          id: myIdRef.current,
-          name: playerName,
-          seat,
-          cardCount: 0,
-          isFinished: false,
-        };
-
-        setState((prev) => {
-          if (prev.players.find((p) => p.id === myIdRef.current)) return prev;
-          return { ...prev, mySeat: seat, players: [...prev.players, me] };
+        // Determine seat: count existing presence entries
+        const existing = channel.presenceState();
+        const takenSeats = new Set<number>();
+        Object.values(existing).forEach((presences) => {
+          const p = presences[0] as unknown as { seat: number };
+          if (p && typeof p.seat === "number") takenSeats.add(p.seat);
         });
+        let seat = 0;
+        while (takenSeats.has(seat) && seat < 4) seat++;
 
-        channel.send({
-          type: "broadcast",
-          event: "game",
-          payload: {
-            type: "player_joined",
-            player: { id: myIdRef.current, name: playerName, seat },
-          } satisfies GameMessage,
-        });
+        setState((prev) => ({ ...prev, mySeat: seat }));
 
-        // Request sync from host
-        setTimeout(() => {
-          channel.send({
-            type: "broadcast",
-            event: "game",
-            payload: { type: "sync_request", fromId: myIdRef.current } satisfies GameMessage,
-          });
-        }, 500);
+        // Track presence
+        await channel.track({ name: playerName, seat });
       }
     });
 
@@ -242,10 +204,11 @@ export function useGame(roomCode: string, playerName: string) {
     return () => {
       channel.unsubscribe();
       channelRef.current = null;
+      joinedRef.current = false;
     };
   }, [roomCode, playerName, handleMessage]);
 
-  // Start game (host only)
+  // Start game
   const startGame = useCallback(() => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
@@ -274,24 +237,30 @@ export function useGame(roomCode: string, playerName: string) {
     const s = stateRef.current;
     if (s.currentTurn !== s.mySeat) return { success: false, error: "不是你的回合" };
 
-    const isFirstTurn = s.status === "playing" && s.lastPlay === null && s.passCount === 0 &&
-      s.players.every((p) => p.cardCount === 13 || p.cardCount === 0);
+    const isFirstTurn = s.players.every((p) => p.cardCount === 13);
     const isNewRound = s.lastPlay === null;
 
-    const lastCombo = s.lastPlay?.combo || null;
-    const validation = validatePlay(s.myHand, selectedCards, lastCombo, isFirstTurn && s.myHand.includes("3C"), isNewRound);
-    if (!validation.valid) return { success: false, error: validation.error };
+    // First turn must include 3C
+    if (isFirstTurn && s.myHand.includes("3C") && !selectedCards.includes("3C")) {
+      return { success: false, error: "第一手必須包含梅花3" };
+    }
 
-    const combo = detectCombo(selectedCards)!;
+    const combo = detectCombo(selectedCards);
+    if (!combo) return { success: false, error: "無效的牌型" };
+
+    // Must beat last play (if not new round)
+    if (!isNewRound && s.lastPlay) {
+      if (!beats(s.lastPlay.combo, combo)) {
+        return { success: false, error: "打不過上家" };
+      }
+    }
+
     const newHand = s.myHand.filter((c) => !selectedCards.includes(c));
     const isFinished = newHand.length === 0;
-
     const finishedCount = s.players.filter((p) => p.isFinished).length;
     const finishOrder = isFinished ? finishedCount + 1 : undefined;
-
     const me = s.players.find((p) => p.id === s.myId)!;
 
-    // Broadcast play
     broadcast({
       type: "play_cards",
       seat: s.mySeat,
@@ -303,32 +272,22 @@ export function useGame(roomCode: string, playerName: string) {
       finishOrder,
     });
 
-    // Calculate next turn
+    // Check game over
     const activePlayers = s.players.filter((p) => !p.isFinished && !(p.seat === s.mySeat && isFinished));
     if (activePlayers.length <= 1) {
-      // Game over
       const allHands: Record<string, Card[]> = {};
       s.players.forEach((p) => {
-        if (p.id === s.myId) {
-          allHands[p.id] = newHand;
-        } else {
-          allHands[p.id] = []; // other players' hands are unknown, will be filled by their own state
-        }
+        allHands[p.id] = p.id === s.myId ? newHand : [];
       });
-      broadcast({
-        type: "game_over",
-        winner: me.name,
-        hands: allHands,
-      });
+      broadcast({ type: "game_over", winner: me.name, hands: allHands });
     } else {
       // Next turn
       let next = (s.mySeat + 1) % 4;
-      const allFinishedSeats = new Set(
-        [...s.players.filter((p) => p.isFinished).map((p) => p.seat), ...(isFinished ? [s.mySeat] : [])]
-      );
-      while (allFinishedSeats.has(next)) {
-        next = (next + 1) % 4;
-      }
+      const finishedSeats = new Set([
+        ...s.players.filter((p) => p.isFinished).map((p) => p.seat),
+        ...(isFinished ? [s.mySeat] : []),
+      ]);
+      while (finishedSeats.has(next)) next = (next + 1) % 4;
 
       broadcast({
         type: "turn_change",
@@ -346,42 +305,27 @@ export function useGame(roomCode: string, playerName: string) {
   const pass = useCallback(() => {
     const s = stateRef.current;
     if (s.currentTurn !== s.mySeat) return;
-    if (!s.lastPlay) return; // Can't pass if no one has played
+    if (!s.lastPlay) return;
 
     const newPassCount = s.passCount + 1;
-
     broadcast({ type: "pass", seat: s.mySeat });
 
-    // Check if round should clear (all other active players passed)
     const activePlayers = s.players.filter((p) => !p.isFinished);
-    const passThreshold = activePlayers.length - 1; // everyone except the last player who played
+    const passThreshold = activePlayers.length - 1;
 
     if (newPassCount >= passThreshold) {
-      // Round clear - give turn back to round starter
       let starter = s.roundStarter;
       const finishedSeats = new Set(s.players.filter((p) => p.isFinished).map((p) => p.seat));
-      while (finishedSeats.has(starter)) {
-        starter = (starter + 1) % 4;
-      }
-      broadcast({
-        type: "round_clear",
-        currentTurn: starter,
-        roundStarter: starter,
-      });
+      while (finishedSeats.has(starter)) starter = (starter + 1) % 4;
+      broadcast({ type: "round_clear", currentTurn: starter, roundStarter: starter });
     } else {
       let next = (s.mySeat + 1) % 4;
       const finishedSeats = new Set(s.players.filter((p) => p.isFinished).map((p) => p.seat));
-      while (finishedSeats.has(next)) {
-        next = (next + 1) % 4;
-      }
-      // Skip the round starter (they already played the current cards)
+      while (finishedSeats.has(next)) next = (next + 1) % 4;
       if (next === s.roundStarter && newPassCount < passThreshold) {
         next = (next + 1) % 4;
-        while (finishedSeats.has(next)) {
-          next = (next + 1) % 4;
-        }
+        while (finishedSeats.has(next)) next = (next + 1) % 4;
       }
-
       broadcast({
         type: "turn_change",
         currentTurn: next,
