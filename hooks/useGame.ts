@@ -251,12 +251,32 @@ export function useGame(roomCode: string, playerName: string) {
     const finishOrder = isFinished ? finishedCount + 1 : undefined;
     const me = s.players.find((p) => p.id === myId)!;
 
+    // Game ends when FIRST player finishes (Taiwan rules)
+    if (isFinished && finishedCount === 0) {
+      // First player to finish — game over!
+      send({
+        type: "play_cards", seat: s.mySeat, cards: selectedCards, combo,
+        playerName: me.name, cardCount: 0,
+        isFinished: true, finishOrder: 1, nextTurn: -1,
+      });
+      // Immediately update local hand before game_over fires
+      setState((prev) => ({
+        ...prev,
+        myHand: newHand,
+      }));
+      setTimeout(() => {
+        send({ type: "game_over", winner: me.name, hands: { [myId]: [] } });
+      }, 200);
+      return { success: true };
+    }
+
     const finishedSeats = new Set([
       ...s.players.filter((p) => p.isFinished).map((p) => p.seat),
       ...(isFinished ? [s.mySeat] : []),
     ]);
     let next = (s.mySeat + 1) % 4;
-    while (finishedSeats.has(next) && next !== s.mySeat) next = (next + 1) % 4;
+    let safety = 0;
+    while (finishedSeats.has(next) && safety < 4) { next = (next + 1) % 4; safety++; }
 
     send({
       type: "play_cards", seat: s.mySeat, cards: selectedCards, combo,
@@ -264,12 +284,11 @@ export function useGame(roomCode: string, playerName: string) {
       isFinished, finishOrder, nextTurn: next,
     });
 
-    const activePlayers = s.players.filter((p) => !p.isFinished && !(p.seat === s.mySeat && isFinished));
-    if (activePlayers.length <= 1) {
-      const allHands: Record<string, Card[]> = {};
-      s.players.forEach((p) => { allHands[p.id] = p.id === myId ? newHand : []; });
-      setTimeout(() => send({ type: "game_over", winner: me.name, hands: allHands }), 100);
-    }
+    // Also immediately update local hand to prevent stale state
+    setState((prev) => ({
+      ...prev,
+      myHand: newHand,
+    }));
 
     return { success: true };
   }, [send, myId]);
@@ -282,20 +301,24 @@ export function useGame(roomCode: string, playerName: string) {
     const newPassCount = s.passCount + 1;
     const activePlayers = s.players.filter((p) => !p.isFinished);
     const passThreshold = activePlayers.length - 1;
-    const clearRound = newPassCount >= passThreshold;
 
     const finishedSeats = new Set(s.players.filter((p) => p.isFinished).map((p) => p.seat));
-    let next: number;
+
+    // Find next active player after me
+    let next = (s.mySeat + 1) % 4;
+    let safety = 0;
+    while ((finishedSeats.has(next) || next === s.mySeat) && safety < 4) {
+      next = (next + 1) % 4;
+      safety++;
+    }
+
+    // If next player is the roundStarter (the one who played last), round clears
+    const clearRound = next === s.roundStarter || newPassCount >= passThreshold;
+
     if (clearRound) {
+      // Round starter gets free turn
       next = s.roundStarter;
       while (finishedSeats.has(next)) next = (next + 1) % 4;
-    } else {
-      next = (s.mySeat + 1) % 4;
-      while (finishedSeats.has(next)) next = (next + 1) % 4;
-      if (next === s.roundStarter) {
-        next = (next + 1) % 4;
-        while (finishedSeats.has(next)) next = (next + 1) % 4;
-      }
     }
 
     send({ type: "pass", seat: s.mySeat, passCount: newPassCount, nextTurn: next, clearRound });
