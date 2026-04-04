@@ -5,7 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import { deal } from "@/lib/deck";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
-import { compareCards } from "@/lib/card";
+import { compareCardsDisplay } from "@/lib/card";
 import type { Card } from "@/lib/constants";
 import type { GameState, GameMessage, Player } from "@/lib/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -54,23 +54,27 @@ export function useGame(roomCode: string, playerName: string) {
   const handleMessage = useCallback((msg: GameMessage) => {
     switch (msg.type) {
       case "game_start": {
-        const myHand = msg.hands[myIdRef.current] || [];
-        // Sort hand by rank then suit (3C, 3D, 3H, 3S, 4C, ...)
-        myHand.sort(compareCards);
+        const myHand = [...(msg.hands[myIdRef.current] || [])];
+        myHand.sort(compareCardsDisplay);
+        // Use players from message to ensure all 4 are present
+        const gamePlayers: Player[] = msg.players.map((p) => ({
+          id: p.id,
+          name: p.name,
+          seat: p.seat,
+          cardCount: 13,
+          isFinished: false,
+        }));
+        const mySeat = gamePlayers.find((p) => p.id === myIdRef.current)?.seat ?? -1;
         setState((prev) => ({
           ...prev,
           status: "playing",
           myHand,
+          mySeat,
           currentTurn: msg.currentTurn,
           roundStarter: msg.roundStarter,
           lastPlay: null,
           passCount: 0,
-          players: prev.players.map((p) => ({
-            ...p,
-            cardCount: 13,
-            isFinished: false,
-            finishOrder: undefined,
-          })),
+          players: gamePlayers,
         }));
         break;
       }
@@ -229,6 +233,7 @@ export function useGame(roomCode: string, playerName: string) {
       hands: handMap,
       currentTurn: clubThreeSeat,
       roundStarter: clubThreeSeat,
+      players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat })),
     });
   }, [broadcast]);
 

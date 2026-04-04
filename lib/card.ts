@@ -31,13 +31,30 @@ export function parseCard(card: Card): ParsedCard {
 }
 
 /**
- * Compare two cards: sort by rank ascending, then suit ascending.
- * Returns negative if a < b, positive if a > b, 0 if equal.
+ * Compare two cards by game rank (3 < 4 < ... < K < A < 2), then suit.
  */
 export function compareCards(a: Card, b: Card): number {
   const pa = parseCard(a);
   const pb = parseCard(b);
   if (pa.rank !== pb.rank) return pa.rank - pb.rank;
+  return pa.suit - pb.suit;
+}
+
+/**
+ * Display sort order for hand: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K
+ * Then by suit: ♣ < ♦ < ♥ < ♠
+ */
+const DISPLAY_ORDER: Record<string, number> = {
+  A: 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7,
+  "8": 8, "9": 9, "10": 10, J: 11, Q: 12, K: 13,
+};
+
+export function compareCardsDisplay(a: Card, b: Card): number {
+  const pa = parseCard(a);
+  const pb = parseCard(b);
+  const ra = DISPLAY_ORDER[getCardRank(a)] || 0;
+  const rb = DISPLAY_ORDER[getCardRank(b)] || 0;
+  if (ra !== rb) return ra - rb;
   return pa.suit - pb.suit;
 }
 

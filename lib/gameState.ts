@@ -30,7 +30,7 @@ export interface GameState {
 export type GameMessage =
   | { type: "player_joined"; player: { id: string; name: string; seat: number } }
   | { type: "player_left"; playerId: string }
-  | { type: "game_start"; hands: Record<string, Card[]>; currentTurn: number; roundStarter: number }
+  | { type: "game_start"; hands: Record<string, Card[]>; currentTurn: number; roundStarter: number; players: { id: string; name: string; seat: number }[] }
   | { type: "play_cards"; seat: number; cards: Card[]; combo: Combo; playerName: string; cardCount: number; isFinished: boolean; finishOrder?: number }
   | { type: "pass"; seat: number }
   | { type: "turn_change"; currentTurn: number; passCount: number; lastPlay: GameState["lastPlay"]; roundStarter: number }
