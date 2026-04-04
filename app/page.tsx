@@ -85,23 +85,27 @@ export default function Home() {
         <div className="flex flex-col items-center gap-8 w-full max-w-sm">
           <div className="text-center">
             <div className="text-5xl mb-2">
-              <span className="text-red-400">♥</span>
-              <span className="text-white">♠</span>
-              <span className="text-red-400">♦</span>
-              <span className="text-white">♣</span>
+              <span className="text-red-400">&#9829;</span>
+              <span className="text-white">&#9824;</span>
+              <span className="text-red-400">&#9830;</span>
+              <span className="text-white">&#9827;</span>
             </div>
-            <h1 className="text-5xl font-bold tracking-wider text-gold-light">大老二</h1>
-            <p className="text-white/50 mt-2 text-sm">Big Two - 4 Players</p>
+            <h1 className="text-5xl font-bold tracking-wider text-gold-light font-heading">大老二</h1>
+            <p className="text-white/50 mt-2 text-sm">Big Two &mdash; 4 Players</p>
           </div>
 
           {screen === "home" ? (
             <div className="flex flex-col gap-4 w-full fade-in">
               <button onClick={() => { setScreen("create"); setError(""); }}
-                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                           cursor-pointer active:scale-95 transition-all duration-150
+                           hover:brightness-110">
                 建立房間
               </button>
               <button onClick={() => { setScreen("join"); setError(""); }}
-                className="w-full py-4 rounded-2xl border-2 border-gold/60 text-gold-light font-bold text-lg active:scale-95 transition-transform">
+                className="w-full py-4 rounded-2xl border-2 border-gold/60 text-gold-light font-bold text-lg
+                           cursor-pointer active:scale-95 transition-all duration-150
+                           hover:border-gold hover:bg-gold/5">
                 加入房間
               </button>
             </div>
@@ -109,26 +113,36 @@ export default function Home() {
             <div className="flex flex-col gap-4 w-full fade-in">
               <input type="text" maxLength={8} placeholder="你的暱稱" value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50" />
+                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50 transition-all" />
               <button onClick={handleCreate}
-                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                           cursor-pointer active:scale-95 transition-all duration-150
+                           hover:brightness-110">
                 建立房間
               </button>
-              <button onClick={() => { setScreen("home"); setError(""); }} className="text-white/40 text-sm">返回</button>
+              <button onClick={() => { setScreen("home"); setError(""); }}
+                className="text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors">
+                返回
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-4 w-full fade-in">
               <input type="text" inputMode="numeric" maxLength={4} placeholder="房間碼 (4位數)" value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ""))}
-                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-2xl tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal placeholder:text-base outline-none focus:ring-2 focus:ring-gold/50" />
+                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-2xl tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal placeholder:text-base outline-none focus:ring-2 focus:ring-gold/50 transition-all" />
               <input type="text" maxLength={8} placeholder="你的暱稱" value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50" />
+                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50 transition-all" />
               <button onClick={handleJoin}
-                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                           cursor-pointer active:scale-95 transition-all duration-150
+                           hover:brightness-110">
                 加入遊戲
               </button>
-              <button onClick={() => { setScreen("home"); setError(""); }} className="text-white/40 text-sm">返回</button>
+              <button onClick={() => { setScreen("home"); setError(""); }}
+                className="text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors">
+                返回
+              </button>
             </div>
           )}
 
@@ -196,12 +210,13 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
     return (
       <div className="flex flex-col flex-1 items-center justify-center px-6">
         <div className="flex flex-col items-center gap-6 w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-gold-light">加入房間 {code}</h2>
+          <h2 className="text-2xl font-bold text-gold-light font-heading">加入房間 {code}</h2>
           <input type="text" maxLength={8} placeholder="你的暱稱" value={localName}
             onChange={(e) => setLocalName(e.target.value)}
-            className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50" />
+            className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50 transition-all" />
           <button onClick={() => { if (localName.trim()) onSetName(localName.trim()); }}
-            className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform">
+            className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                       cursor-pointer active:scale-95 transition-all duration-150">
             加入
           </button>
         </div>
@@ -211,17 +226,29 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
 
   // Lobby
   if (state.status === "waiting") {
+    const isFull = state.players.length >= 4;
+    const isInRoom = state.players.some((p) => p.id === state.myId);
+    const roomFull = isFull && !isInRoom;
+
     return (
       <div className="flex flex-col flex-1 items-center justify-center px-6">
         <div className="flex flex-col items-center gap-6 w-full max-w-sm">
-          <h2 className="text-xl font-bold text-gold-light">等待玩家加入</h2>
+          <h2 className="text-xl font-bold text-gold-light font-heading">等待玩家加入</h2>
+
+          {roomFull && (
+            <div className="w-full rounded-2xl bg-red-500/20 border border-red-500/30 p-4 text-center fade-in">
+              <p className="text-red-400 font-bold text-lg">房間已滿</p>
+              <p className="text-red-300/70 text-sm mt-1">此房間已有 4 位玩家</p>
+            </div>
+          )}
+
           <div className="bg-white/10 rounded-2xl px-8 py-4 text-center">
             <p className="text-white/50 text-xs mb-1">房間碼</p>
-            <p className="text-4xl font-bold text-gold tracking-[0.3em]">{code}</p>
+            <p className="text-4xl font-bold text-gold tracking-[0.3em] font-heading">{code}</p>
             <button onClick={() => {
               const base = window.location.origin + window.location.pathname;
               navigator.clipboard?.writeText(`${base}#room=${code}`);
-            }} className="mt-2 text-xs text-white/40 active:text-gold">
+            }} className="mt-2 text-xs text-white/40 cursor-pointer active:text-gold hover:text-white/60 transition-colors">
               點擊複製連結
             </button>
           </div>
@@ -229,7 +256,7 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
             {[0, 1, 2, 3].map((seat) => {
               const player = state.players.find((p) => p.seat === seat);
               return (
-                <div key={seat} className={`rounded-xl p-4 text-center ${player ? "bg-gold/20 border border-gold/30" : "bg-white/5 border border-white/10"}`}>
+                <div key={seat} className={`rounded-xl p-4 text-center transition-all duration-300 ${player ? "bg-gold/20 border border-gold/30" : "bg-white/5 border border-white/10"}`}>
                   <p className="text-xs text-white/40 mb-1">座位 {seat + 1}</p>
                   {player ? <p className="font-bold text-gold-light">{player.name}{player.id === state.myId && " (你)"}</p>
                     : <p className="text-white/20">等待中...</p>}
@@ -238,7 +265,9 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
             })}
           </div>
           <button onClick={startGame} disabled={state.players.length !== 4}
-            className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg active:scale-95 transition-transform disabled:opacity-30">
+            className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                       cursor-pointer active:scale-95 transition-all duration-150
+                       disabled:opacity-30 disabled:cursor-not-allowed">
             {state.players.length === 4 ? "開始遊戲" : `等待玩家 (${state.players.length}/4)`}
           </button>
         </div>
@@ -275,7 +304,7 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
           <PlayArea
             lastPlay={state.lastPlay ? { cards: state.lastPlay.cards, comboType: comboName(state.lastPlay.combo.type), playerName: state.lastPlay.playerName } : null}
             isNewRound={state.lastPlay === null} />
-          <p className="text-xs text-white/50">
+          <p className={`text-xs font-medium ${isMyTurn ? "text-gold-light" : "text-white/50"}`}>
             {isMyTurn ? "輪到你出牌" : `等待 ${state.players.find((p) => p.seat === state.currentTurn)?.name || "..."}`}
           </p>
         </div>
@@ -296,11 +325,15 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
         <Hand cards={state.myHand} selectedCards={selectedCards} onToggleCard={toggleCard} />
         <div className="flex gap-3 px-4 py-3">
           <button onClick={handlePass} disabled={!canPass}
-            className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold text-sm active:scale-95 transition-transform disabled:opacity-30">
+            className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold text-sm
+                       cursor-pointer active:scale-95 transition-all duration-150
+                       disabled:opacity-30 disabled:cursor-not-allowed">
             Pass
           </button>
           <button onClick={handlePlay} disabled={!isValidPlay}
-            className="flex-1 py-3 rounded-xl bg-gold text-felt font-bold text-sm active:scale-95 transition-transform disabled:opacity-30">
+            className="flex-1 py-3 rounded-xl bg-gold text-felt font-bold text-sm
+                       cursor-pointer active:scale-95 transition-all duration-150
+                       disabled:opacity-30 disabled:cursor-not-allowed">
             出牌
           </button>
         </div>

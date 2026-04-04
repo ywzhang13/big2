@@ -1,6 +1,6 @@
 "use client";
 
-import { getCardRank, getCardSuit, getSuitEmoji, getSuitColor } from "@/lib/card";
+import { getCardRank, getCardSuit, getSuitColor } from "@/lib/card";
 
 interface CardProps {
   card: string;
@@ -8,7 +8,15 @@ interface CardProps {
   onClick?: () => void;
   faceDown?: boolean;
   small?: boolean;
+  glow?: boolean;
 }
+
+const SUIT_CHARS: Record<string, string> = {
+  S: "\u2660", // ♠ (black)
+  H: "\u2665", // ♥ (red)
+  D: "\u2666", // ♦ (red)
+  C: "\u2663", // ♣ (black)
+};
 
 export default function Card({
   card,
@@ -16,11 +24,12 @@ export default function Card({
   onClick,
   faceDown = false,
   small = false,
+  glow = false,
 }: CardProps) {
-  const w = small ? "w-[36px]" : "w-[44px]";
-  const h = small ? "h-[50px]" : "h-[62px]";
-  const textSize = small ? "text-[10px]" : "text-xs";
-  const suitSize = small ? "text-sm" : "text-base";
+  const w = small ? "w-[38px]" : "w-[48px]";
+  const h = small ? "h-[54px]" : "h-[68px]";
+  const textSize = small ? "text-[10px]" : "text-sm";
+  const suitSize = small ? "text-[14px]" : "text-[18px]";
 
   if (faceDown) {
     return (
@@ -34,7 +43,7 @@ export default function Card({
 
   const rank = getCardRank(card);
   const suit = getCardSuit(card);
-  const emoji = getSuitEmoji(suit);
+  const suitChar = SUIT_CHARS[suit] ?? suit;
   const color = getSuitColor(suit);
   const textColor = color === "red" ? "text-red-600" : "text-gray-900";
 
@@ -42,11 +51,25 @@ export default function Card({
     <div
       onClick={onClick}
       className={`${w} ${h} rounded-lg bg-white flex flex-col items-center justify-center
-                  cursor-pointer shrink-0 card-base border border-gray-200 select-none
-                  ${selected ? "card-selected" : "shadow-md"}`}
+                  cursor-pointer shrink-0 card-base select-none
+                  ${selected ? "card-selected" : "shadow-md border border-gray-200/80"}
+                  ${glow ? "card-glow" : ""}
+                  `}
+      style={{
+        boxShadow: selected
+          ? undefined
+          : "0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.8)",
+      }}
     >
-      <span className={`${suitSize} leading-none ${textColor}`}>{emoji}</span>
-      <span className={`${textSize} font-bold leading-tight ${textColor}`}>{rank}</span>
+      <span
+        className={`${suitSize} leading-none ${textColor}`}
+        style={{ fontFamily: "serif", fontWeight: 700 }}
+      >
+        {suitChar}
+      </span>
+      <span className={`${textSize} font-extrabold leading-tight ${textColor}`}>
+        {rank}
+      </span>
     </div>
   );
 }

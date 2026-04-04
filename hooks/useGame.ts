@@ -64,6 +64,9 @@ export function useGame(roomCode: string, playerName: string) {
       const existing = knownPlayers.get(playerId);
       if (existing) return existing.seat;
 
+      // Reject if room is full (4 players already)
+      if (knownPlayers.size >= 4) return -1;
+
       // Find available seat
       const takenSeats = new Set([...knownPlayers.values()].map((p) => p.seat));
       let seat = requestedSeat ?? 0;
@@ -71,6 +74,7 @@ export function useGame(roomCode: string, playerName: string) {
         seat = 0;
         while (takenSeats.has(seat) && seat < 4) seat++;
       }
+      if (seat >= 4) return -1;
       return seat;
     }
 
@@ -96,8 +100,8 @@ export function useGame(roomCode: string, playerName: string) {
 
       switch (msg.type) {
         case "heartbeat": {
-          // Player announcing themselves
           const seat = getOrAssignSeat(msg.playerId, msg.name, msg.seat);
+          if (seat === -1) break; // Room full, ignore
           knownPlayers.set(msg.playerId, { name: msg.name, seat, ts: Date.now() });
           syncPlayersToState();
           break;
@@ -169,30 +173,38 @@ export function useGame(roomCode: string, playerName: string) {
       if (status === "SUBSCRIBED") {
         console.log("[big2] connected to room", roomCode);
 
-        // Assign self seat 0 initially (will be corrected by heartbeats)
-        const mySeat = 0;
-        knownPlayers.set(myId, { name: playerName, seat: mySeat, ts: Date.now() });
-        syncPlayersToState();
-
-        // Send heartbeat immediately
-        channel.send({
-          type: "broadcast", event: "game",
-          payload: { type: "heartbeat", playerId: myId, name: playerName, seat: mySeat } satisfies GameMessage,
-        });
-
-        // Keep sending heartbeat every 2 seconds during lobby
-        announceTimerRef.current = setInterval(() => {
-          const s = stateRef.current;
-          if (s.status !== "waiting") {
-            if (announceTimerRef.current) clearInterval(announceTimerRef.current);
+        // Wait briefly to receive existing heartbeats before joining
+        setTimeout(() => {
+          const mySeat = getOrAssignSeat(myId, playerName);
+          if (mySeat === -1) {
+            // Room is full
+            setState((prev) => ({ ...prev, status: "finished" as const }));
             return;
           }
-          const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
+
+          knownPlayers.set(myId, { name: playerName, seat: mySeat, ts: Date.now() });
+          syncPlayersToState();
+
+          // Send heartbeat immediately
           channel.send({
             type: "broadcast", event: "game",
-            payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
+            payload: { type: "heartbeat", playerId: myId, name: playerName, seat: mySeat } satisfies GameMessage,
           });
-        }, 2000);
+
+          // Keep sending heartbeat every 2 seconds during lobby
+          announceTimerRef.current = setInterval(() => {
+            const s = stateRef.current;
+            if (s.status !== "waiting") {
+              if (announceTimerRef.current) clearInterval(announceTimerRef.current);
+              return;
+            }
+            const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
+            channel.send({
+              type: "broadcast", event: "game",
+              payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
+            });
+          }, 2000);
+        }, 500);
       }
     });
 

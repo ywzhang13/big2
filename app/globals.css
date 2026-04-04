@@ -1,9 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
   --felt-green: #1a472a;
   --felt-light: #2d6b45;
-  --gold: #d4a843;
+  --gold: #C9A96E;
   --gold-light: #f0d68a;
   --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
@@ -31,6 +32,10 @@ body {
   font-family: "PingFang TC", "Noto Sans TC", "Helvetica Neue", Arial,
     sans-serif;
   background: var(--felt-green);
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(45, 107, 69, 0.4) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(45, 107, 69, 0.3) 0%, transparent 60%),
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   color: #fff;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
@@ -38,18 +43,25 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* Chakra Petch for headings */
+.font-heading {
+  font-family: "Chakra Petch", "PingFang TC", "Noto Sans TC", sans-serif;
+}
+
 /* Card selection animation */
 .card-selected {
-  transform: translateY(-12px);
+  transform: translateY(-14px);
   box-shadow:
-    0 0 0 2px #4ade80,
-    0 4px 12px rgba(74, 222, 128, 0.4);
+    0 0 0 2.5px #4ade80,
+    0 0 12px rgba(74, 222, 128, 0.5),
+    0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .card-base {
   transition:
     transform 0.15s ease-out,
-    box-shadow 0.15s ease-out;
+    box-shadow 0.15s ease-out,
+    border-color 0.15s ease-out;
 }
 
 .card-base:active {
@@ -57,10 +69,45 @@ body {
 }
 
 .card-selected:active {
-  transform: translateY(-12px) scale(0.95);
+  transform: translateY(-14px) scale(0.95);
 }
 
-/* Pulsing turn indicator */
+/* Card glow for played cards */
+@keyframes card-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(201, 169, 110, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(201, 169, 110, 0.5);
+  }
+}
+
+.card-glow {
+  animation: card-glow 2s ease-in-out infinite;
+}
+
+/* Pulsing ring for turn indicator */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.turn-pulse-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 16px;
+  border: 2px solid #4ade80;
+  animation: pulse-ring 1.5s ease-out infinite;
+  pointer-events: none;
+}
+
+/* Pulsing dot */
 @keyframes pulse-dot {
   0%,
   100% {
@@ -107,6 +154,40 @@ body {
 
 .fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+/* Winner celebration */
+@keyframes trophy-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.trophy-bounce {
+  animation: trophy-bounce 1s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer-gold {
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 40%, #fff 50%, var(--gold-light) 60%, var(--gold) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Free play pulse */
+@keyframes free-play-pulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(201, 169, 110, 0.4); }
+  50% { text-shadow: 0 0 20px rgba(201, 169, 110, 0.8); }
+}
+
+.free-play-pulse {
+  animation: free-play-pulse 1.5s ease-in-out infinite;
 }
 
 /* Scrollbar hide for hand area */
