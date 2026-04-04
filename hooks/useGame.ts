@@ -173,38 +173,35 @@ export function useGame(roomCode: string, playerName: string) {
       if (status === "SUBSCRIBED") {
         console.log("[big2] connected to room", roomCode);
 
-        // Wait briefly to receive existing heartbeats before joining
-        setTimeout(() => {
-          const mySeat = getOrAssignSeat(myId, playerName);
-          if (mySeat === -1) {
-            // Room is full
-            setState((prev) => ({ ...prev, status: "finished" as const }));
+        // Join immediately — assign seat from known players
+        const mySeat = getOrAssignSeat(myId, playerName);
+        if (mySeat === -1) {
+          setState((prev) => ({ ...prev, status: "finished" as const }));
+          return;
+        }
+
+        knownPlayers.set(myId, { name: playerName, seat: mySeat, ts: Date.now() });
+        syncPlayersToState();
+
+        // Send heartbeat immediately
+        channel.send({
+          type: "broadcast", event: "game",
+          payload: { type: "heartbeat", playerId: myId, name: playerName, seat: mySeat } satisfies GameMessage,
+        });
+
+        // Keep sending heartbeat every 1.5 seconds during lobby
+        announceTimerRef.current = setInterval(() => {
+          const s = stateRef.current;
+          if (s.status !== "waiting") {
+            if (announceTimerRef.current) clearInterval(announceTimerRef.current);
             return;
           }
-
-          knownPlayers.set(myId, { name: playerName, seat: mySeat, ts: Date.now() });
-          syncPlayersToState();
-
-          // Send heartbeat immediately
+          const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
           channel.send({
             type: "broadcast", event: "game",
-            payload: { type: "heartbeat", playerId: myId, name: playerName, seat: mySeat } satisfies GameMessage,
+            payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
           });
-
-          // Keep sending heartbeat every 2 seconds during lobby
-          announceTimerRef.current = setInterval(() => {
-            const s = stateRef.current;
-            if (s.status !== "waiting") {
-              if (announceTimerRef.current) clearInterval(announceTimerRef.current);
-              return;
-            }
-            const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
-            channel.send({
-              type: "broadcast", event: "game",
-              payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
-            });
-          }, 2000);
-        }, 500);
+        }, 1500);
       }
     });
 
