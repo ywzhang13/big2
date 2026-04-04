@@ -1,65 +1,147 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
+  const [mode, setMode] = useState<"home" | "join">("home");
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCreate() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/game/create", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create room");
+      localStorage.setItem("big2_roomId", data.roomId);
+      localStorage.setItem("big2_code", data.code);
+      router.push(`/room/${data.code}`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleJoin() {
+    if (!code || code.length !== 4) {
+      setError("請輸入4位數房間碼");
+      return;
+    }
+    if (!name.trim()) {
+      setError("請輸入暱稱");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/game/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, name: name.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to join room");
+      localStorage.setItem("big2_roomId", data.roomId);
+      localStorage.setItem("big2_playerId", data.playerId);
+      localStorage.setItem("big2_sessionToken", data.sessionToken);
+      localStorage.setItem("big2_seat", String(data.seat));
+      localStorage.setItem("big2_code", code);
+      localStorage.setItem("big2_name", name.trim());
+      router.push(`/room/${code}`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="flex flex-col flex-1 items-center justify-center px-6">
+      <div className="flex flex-col items-center gap-8 w-full max-w-sm">
+        {/* Title */}
+        <div className="text-center">
+          <div className="text-5xl mb-2">
+            <span className="text-red-400">♥</span>
+            <span className="text-white">♠</span>
+            <span className="text-red-400">♦</span>
+            <span className="text-white">♣</span>
+          </div>
+          <h1 className="text-5xl font-bold tracking-wider text-gold-light">
+            大老二
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+          <p className="text-white/50 mt-2 text-sm">Big Two - 4 Players</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {mode === "home" ? (
+          <div className="flex flex-col gap-4 w-full fade-in">
+            <button
+              onClick={handleCreate}
+              disabled={loading}
+              className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                         active:scale-95 transition-transform disabled:opacity-50"
+            >
+              {loading ? "建立中..." : "建立房間"}
+            </button>
+            <button
+              onClick={() => setMode("join")}
+              className="w-full py-4 rounded-2xl border-2 border-gold/60 text-gold-light font-bold text-lg
+                         active:scale-95 transition-transform"
+            >
+              加入房間
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 w-full fade-in">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="房間碼 (4位數)"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-2xl
+                         tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal
+                         placeholder:text-base outline-none focus:ring-2 focus:ring-gold/50"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <input
+              type="text"
+              maxLength={8}
+              placeholder="你的暱稱"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg
+                         placeholder:text-white/30 outline-none focus:ring-2 focus:ring-gold/50"
+            />
+            <button
+              onClick={handleJoin}
+              disabled={loading}
+              className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                         active:scale-95 transition-transform disabled:opacity-50"
+            >
+              {loading ? "加入中..." : "加入遊戲"}
+            </button>
+            <button
+              onClick={() => {
+                setMode("home");
+                setError("");
+              }}
+              className="text-white/40 text-sm"
+            >
+              返回
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <p className="text-red-400 text-sm text-center fade-in">{error}</p>
+        )}
+      </div>
     </div>
   );
 }
