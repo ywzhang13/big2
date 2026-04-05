@@ -32,4 +32,5 @@ export type GameMessage =
   | { type: "play_cards"; seat: number; cards: Card[]; combo: Combo; playerName: string; cardCount: number; isFinished: boolean; finishOrder?: number; nextTurn: number }
   | { type: "pass"; seat: number; passCount: number; nextTurn: number; clearRound: boolean }
   | { type: "game_over"; winner: string; hands: Record<string, Card[]> }
+  | { type: "reveal_hand"; playerId: string; hand: Card[] }
   ;

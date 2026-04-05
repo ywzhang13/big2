@@ -160,9 +160,29 @@ export function useGame(roomCode: string, playerName: string) {
         }
 
         case "game_over": {
+          // When game ends, reveal my remaining hand to everyone
+          const myCurrentHand = stateRef.current.myHand;
+          if (myCurrentHand.length > 0) {
+            setTimeout(() => {
+              channel.send({
+                type: "broadcast", event: "game",
+                payload: { type: "reveal_hand", playerId: myId, hand: myCurrentHand } satisfies GameMessage,
+              });
+            }, 200);
+          }
           setState((prev) => ({
             ...prev, status: "finished",
-            winner: msg.winner, finishedHands: msg.hands,
+            winner: msg.winner,
+            finishedHands: { ...msg.hands, [myId]: prev.myHand },
+          }));
+          break;
+        }
+
+        case "reveal_hand": {
+          // Another player revealing their remaining hand
+          setState((prev) => ({
+            ...prev,
+            finishedHands: { ...prev.finishedHands, [msg.playerId]: msg.hand },
           }));
           break;
         }

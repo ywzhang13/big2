@@ -41,36 +41,33 @@ export default function GameOver({ results, onGoHome, onPlayAgain }: GameOverPro
       </div>
 
       <div className="w-full max-w-sm flex flex-col gap-3">
-        {sorted.map((p, i) => {
-          const rank = p.finishOrder ?? 4;
+        {sorted.map((p) => {
+          const rank = p.finishOrder; // null means didn't finish
+          const rankIdx = rank ?? 0;
+          const isWinner = rank === 1;
+          const hasRank = rank !== null && rank >= 1 && rank <= 4;
           return (
             <div
               key={p.seat}
-              className={`rounded-2xl p-4 bg-gradient-to-r ${RANK_COLORS[rank] || RANK_COLORS[4]}
-                          ${rank <= 3 ? "ring-1" : ""}`}
+              className={`rounded-2xl p-4 bg-gradient-to-r ${hasRank ? (RANK_COLORS[rankIdx] || RANK_COLORS[4]) : RANK_COLORS[4]}
+                          ${isWinner ? "ring-1" : ""}`}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  {rank <= 3 && (
-                    <span className={`text-2xl ${rank === 1 ? "trophy-bounce" : ""}`}>
-                      {RANK_ICONS[rank]}
-                    </span>
+                  {isWinner && (
+                    <span className="text-2xl trophy-bounce">{RANK_ICONS[1]}</span>
                   )}
-                  <span className={`font-bold ${rank === 1 ? "text-xl text-gold-light" : "text-lg text-white"}`}>
+                  <span className={`font-bold ${isWinner ? "text-xl text-gold-light" : "text-lg text-white"}`}>
                     {p.name}
                   </span>
                 </div>
-                <span
-                  className={`text-sm font-semibold ${
-                    rank === 1 ? "text-gold-light" : rank === 2 ? "text-gray-300" : rank === 3 ? "text-amber-600" : "text-white/40"
-                  }`}
-                >
-                  {RANK_LABELS[rank]}
+                <span className={`text-sm font-semibold ${isWinner ? "text-gold-light" : "text-white/40"}`}>
+                  {isWinner ? "勝利" : ""}
                 </span>
               </div>
               {p.hand && p.hand.length > 0 ? (
                 <div>
-                  <div className="text-white/40 text-xs mb-1">
+                  <div className="text-red-400/80 text-xs mb-1">
                     剩餘 {p.hand.length} 張
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -81,7 +78,7 @@ export default function GameOver({ results, onGoHome, onPlayAgain }: GameOverPro
                 </div>
               ) : (
                 <div className="text-green-400 text-sm font-medium">
-                  已出完所有牌
+                  {isWinner ? "出完所有牌！" : "載入中..."}
                 </div>
               )}
             </div>
