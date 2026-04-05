@@ -36,4 +36,6 @@ export type GameMessage =
   | { type: "game_over"; winner: string; hands: Record<string, Card[]> }
   | { type: "reveal_hand"; playerId: string; hand: Card[] }
   | { type: "continue_game"; hands: Record<string, Card[]>; currentTurn: number; roundStarter: number; players: { id: string; name: string; seat: number }[]; scores: Record<string, number> }
+  | { type: "sync_request"; fromId: string }
+  | { type: "sync_state"; status: "playing"; players: { id: string; name: string; seat: number; cardCount: number; isFinished: boolean; finishOrder?: number }[]; currentTurn: number; lastPlay: GameState["lastPlay"]; passCount: number; roundStarter: number; scores: Record<string, number>; hands: Record<string, Card[]> }
   ;

@@ -188,6 +188,52 @@ export function useGame(roomCode: string, playerName: string) {
           break;
         }
 
+        case "sync_request": {
+          // Current turn player responds with full state (they're the authority)
+          const s = stateRef.current;
+          if (s.status === "playing" && s.currentTurn === s.mySeat) {
+            const handsForSync: Record<string, Card[]> = { [myId]: s.myHand };
+            channel.send({
+              type: "broadcast", event: "game",
+              payload: {
+                type: "sync_state",
+                status: "playing",
+                players: s.players.map((p) => ({
+                  id: p.id, name: p.name, seat: p.seat,
+                  cardCount: p.id === myId ? s.myHand.length : p.cardCount,
+                  isFinished: p.isFinished, finishOrder: p.finishOrder,
+                })),
+                currentTurn: s.currentTurn,
+                lastPlay: s.lastPlay,
+                passCount: s.passCount,
+                roundStarter: s.roundStarter,
+                scores: s.scores,
+                hands: handsForSync,
+              } satisfies GameMessage,
+            });
+          }
+          break;
+        }
+
+        case "sync_state": {
+          setState((prev) => {
+            // Only apply sync if we're out of sync (different turn or status)
+            if (prev.status !== "playing") return prev;
+            const myHand = msg.hands[myId] || prev.myHand;
+            return {
+              ...prev,
+              players: msg.players.map((p) => ({ ...p })),
+              currentTurn: msg.currentTurn,
+              lastPlay: msg.lastPlay,
+              passCount: msg.passCount,
+              roundStarter: msg.roundStarter,
+              scores: msg.scores,
+              myHand: myHand.length > 0 ? myHand : prev.myHand, // keep own hand if not provided
+            };
+          });
+          break;
+        }
+
         case "continue_game": {
           const myHand = [...(msg.hands[myId] || [])];
           myHand.sort(compareCardsDisplay);
@@ -229,19 +275,23 @@ export function useGame(roomCode: string, playerName: string) {
           payload: { type: "heartbeat", playerId: myId, name: playerName, seat: mySeat } satisfies GameMessage,
         });
 
-        // Keep sending heartbeat every 1.5 seconds during lobby
+        // Periodic: heartbeat during lobby, sync requests during game
         announceTimerRef.current = setInterval(() => {
           const s = stateRef.current;
-          if (s.status !== "waiting") {
-            if (announceTimerRef.current) clearInterval(announceTimerRef.current);
-            return;
+          if (s.status === "waiting") {
+            const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
+            channel.send({
+              type: "broadcast", event: "game",
+              payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
+            });
+          } else if (s.status === "playing" && s.currentTurn !== s.mySeat) {
+            // Request sync if it's not my turn (might have missed an update)
+            channel.send({
+              type: "broadcast", event: "game",
+              payload: { type: "sync_request", fromId: myId } satisfies GameMessage,
+            });
           }
-          const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
-          channel.send({
-            type: "broadcast", event: "game",
-            payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
-          });
-        }, 1500);
+        }, 3000);
       }
     });
 
