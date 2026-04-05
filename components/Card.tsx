@@ -50,7 +50,7 @@ export default function Card({
   return (
     <div
       onClick={onClick}
-      className={`${w} ${h} rounded-lg bg-white flex flex-col items-center justify-center
+      className={`${w} ${h} rounded-lg bg-white flex flex-col items-center justify-center gap-0.5
                   cursor-pointer shrink-0 card-base select-none
                   ${selected ? "card-selected" : "shadow-md border border-gray-200/80"}
                   ${glow ? "card-glow" : ""}
@@ -67,7 +67,7 @@ export default function Card({
       >
         {suitChar}
       </span>
-      <span className={`${textSize} font-extrabold leading-tight ${textColor}`}>
+      <span className={`${textSize} font-extrabold leading-none ${textColor}`}>
         {rank}
       </span>
     </div>
