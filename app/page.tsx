@@ -309,12 +309,12 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
   return (
     <div className="flex flex-col flex-1 overflow-hidden relative">
       <div className="flex justify-center pt-safe px-4 py-2">
-        {top && <PlayerSlot name={top.name} cardCount={top.cardCount} isCurrentTurn={state.currentTurn === top.seat} isFinished={top.isFinished} position="top" />}
+        {top && <PlayerSlot name={top.name} cardCount={top.cardCount} isCurrentTurn={state.currentTurn === top.seat} isFinished={top.isFinished} position="top" score={state.scores[top.id]} />}
       </div>
 
       <div className="flex-1 flex items-center px-2 min-h-0">
         <div className="w-16 flex-shrink-0">
-          {left && <PlayerSlot name={left.name} cardCount={left.cardCount} isCurrentTurn={state.currentTurn === left.seat} isFinished={left.isFinished} position="left" />}
+          {left && <PlayerSlot name={left.name} cardCount={left.cardCount} isCurrentTurn={state.currentTurn === left.seat} isFinished={left.isFinished} position="left" score={state.scores[left.id]} />}
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
           <PlayArea
@@ -325,7 +325,7 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
           </p>
         </div>
         <div className="w-16 flex-shrink-0">
-          {right && <PlayerSlot name={right.name} cardCount={right.cardCount} isCurrentTurn={state.currentTurn === right.seat} isFinished={right.isFinished} position="right" />}
+          {right && <PlayerSlot name={right.name} cardCount={right.cardCount} isCurrentTurn={state.currentTurn === right.seat} isFinished={right.isFinished} position="right" score={state.scores[right.id]} />}
         </div>
       </div>
 
@@ -333,6 +333,11 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
         <div className="h-7 flex items-center justify-between px-4">
           <span className="text-[10px] text-white/40">
             {playerName} · <span className={`font-bold ${state.myHand.length <= 3 ? "text-red-400" : "text-gold-light"}`}>{state.myHand.length}</span> 張
+            {(state.scores[state.myId] ?? 0) !== 0 && (
+              <span className={`ml-1.5 font-bold ${(state.scores[state.myId] || 0) > 0 ? "text-green-400" : "text-red-400"}`}>
+                {(state.scores[state.myId] || 0) > 0 ? "+" : ""}{state.scores[state.myId]}分
+              </span>
+            )}
           </span>
           <div>
             {selectedCombo && (

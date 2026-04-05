@@ -6,6 +6,7 @@ interface PlayerSlotProps {
   isCurrentTurn: boolean;
   isFinished: boolean;
   position: "top" | "left" | "right";
+  score?: number;
 }
 
 export default function PlayerSlot({
@@ -14,6 +15,7 @@ export default function PlayerSlot({
   isCurrentTurn,
   isFinished,
   position,
+  score,
 }: PlayerSlotProps) {
   const isVertical = position === "left" || position === "right";
 
@@ -48,6 +50,13 @@ export default function PlayerSlot({
               {cardCount}
             </span>
             <span className="text-white/40 text-[10px]">張</span>
+          </div>
+        )}
+
+        {/* Score */}
+        {score !== undefined && score !== 0 && (
+          <div className={`text-[9px] font-bold mt-0.5 ${score > 0 ? "text-green-400" : "text-red-400"}`}>
+            {score > 0 ? "+" : ""}{score}
           </div>
         )}
 
