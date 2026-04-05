@@ -26,10 +26,10 @@ export default function Card({
   small = false,
   glow = false,
 }: CardProps) {
-  const w = small ? "w-[38px]" : "w-[48px]";
-  const h = small ? "h-[54px]" : "h-[68px]";
-  const textSize = small ? "text-[10px]" : "text-sm";
-  const suitSize = small ? "text-[14px]" : "text-[18px]";
+  const w = small ? "w-[38px]" : "w-[42px]";
+  const h = small ? "h-[54px]" : "h-[60px]";
+  const textSize = small ? "text-[10px]" : "text-xs";
+  const suitSize = small ? "text-[14px]" : "text-[16px]";
 
   if (faceDown) {
     return (

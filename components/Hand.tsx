@@ -10,29 +10,34 @@ interface HandProps {
 
 export default function Hand({ cards, selectedCards, onToggleCard }: HandProps) {
   const cardCount = cards.length;
-  // Card width is now 48px. Target fit within ~355px (iPhone SE: 375 - 20 padding)
-  // totalWidth = cardWidth + (cardCount - 1) * step
-  // step = (355 - 48) / (cardCount - 1)
-  // overlap = step - 48
-  const availableWidth = typeof window !== "undefined" ? Math.min(window.innerWidth - 20, 375) : 355;
-  const cardWidth = 48;
-  const step = cardCount > 1 ? (availableWidth - cardWidth) / (cardCount - 1) : 0;
-  const overlapPx = cardCount > 1 ? Math.min(0, Math.floor(step - cardWidth)) : 0;
+  const cardWidth = 42;
+  // Target: fit all cards within screen width minus padding
+  const availableWidth = typeof window !== "undefined" ? Math.min(window.innerWidth - 16, 400) : 370;
+  // Calculate step between cards so they all fit
+  const step = cardCount > 1 ? Math.min(cardWidth + 2, (availableWidth - cardWidth) / (cardCount - 1)) : 0;
+  const overlapPx = cardCount > 1 ? Math.floor(step - cardWidth) : 0;
 
-  // Subtle arc: cards near edges rotate slightly, center cards stay flat
+  // Subtle arc for natural feel
   const getArc = (index: number, total: number) => {
     if (total <= 3) return { rotate: 0, translateY: 0 };
     const mid = (total - 1) / 2;
     const offset = index - mid;
-    const maxRotate = Math.min(3, total * 0.3); // max rotation in degrees
+    const maxRotate = Math.min(2.5, total * 0.25);
     const rotate = (offset / mid) * maxRotate;
-    const translateY = Math.abs(offset / mid) * 4; // max 4px dip at edges
+    const translateY = Math.abs(offset / mid) * 3;
     return { rotate, translateY };
   };
 
+  // Total width of the hand
+  const totalWidth = cardCount > 1 ? cardWidth + (cardCount - 1) * step : cardWidth;
+  const needsScroll = totalWidth > availableWidth;
+
   return (
-    <div className="w-full py-2 px-2.5">
-      <div className="flex items-end justify-center">
+    <div className={`w-full py-1.5 px-2 ${needsScroll ? "overflow-x-auto hide-scrollbar" : ""}`}>
+      <div
+        className="flex items-end justify-center"
+        style={{ minWidth: needsScroll ? totalWidth + 8 : undefined }}
+      >
         {cards.map((card, i) => {
           const { rotate, translateY } = getArc(i, cardCount);
           const isSelected = selectedCards.includes(card);
