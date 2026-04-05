@@ -24,6 +24,8 @@ export interface GameState {
   roundStarter: number;
   winner?: string;
   finishedHands?: Record<string, Card[]>;
+  scores: Record<string, number>; // playerId -> cumulative score
+  roundScores?: Record<string, number>; // this round's scores
 }
 
 export type GameMessage =
@@ -33,4 +35,5 @@ export type GameMessage =
   | { type: "pass"; seat: number; passCount: number; nextTurn: number; clearRound: boolean }
   | { type: "game_over"; winner: string; hands: Record<string, Card[]> }
   | { type: "reveal_hand"; playerId: string; hand: Card[] }
+  | { type: "continue_game"; hands: Record<string, Card[]>; currentTurn: number; roundStarter: number; players: { id: string; name: string; seat: number }[]; scores: Record<string, number> }
   ;

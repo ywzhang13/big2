@@ -9,6 +9,7 @@ import PlayArea from "@/components/PlayArea";
 import PlayerSlot from "@/components/PlayerSlot";
 import GameOver from "@/components/GameOver";
 import type { Card as CardType } from "@/lib/constants";
+import { calculateScore } from "@/lib/scoring";
 
 function genCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
@@ -167,7 +168,7 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, startGame, playCards, pass, isMyTurn, canPass } = useGame(
+  const { state, startGame, continueGame, playCards, pass, isMyTurn, canPass } = useGame(
     code, nameReady ? playerName : ""
   );
 
@@ -277,12 +278,17 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
 
   // Game Over
   if (state.status === "finished") {
-    const results = state.players.map((p) => ({
-      seat: p.seat, name: p.name,
-      hand: (state.finishedHands || {})[p.id] || [],
-      finishOrder: p.finishOrder ?? null,
-    }));
-    return <GameOver results={results} onGoHome={onGoHome} />;
+    const results = state.players.map((p) => {
+      const hand = (state.finishedHands || {})[p.id] || [];
+      const roundScore = calculateScore(hand);
+      return {
+        seat: p.seat, name: p.name, hand,
+        finishOrder: p.finishOrder ?? null,
+        score: (state.scores[p.id] || 0) + roundScore,
+        roundScore,
+      };
+    });
+    return <GameOver results={results} onGoHome={onGoHome} onPlayAgain={continueGame} />;
   }
 
   // Playing

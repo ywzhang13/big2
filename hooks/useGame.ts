@@ -6,6 +6,7 @@ import { deal } from "@/lib/deck";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
 import { compareCardsDisplay } from "@/lib/card";
+import { calculateScore } from "@/lib/scoring";
 import type { Card } from "@/lib/constants";
 import type { GameState, GameMessage, Player } from "@/lib/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -38,6 +39,7 @@ export function useGame(roomCode: string, playerName: string) {
     lastPlay: null,
     passCount: 0,
     roundStarter: 0,
+    scores: {},
   });
 
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -179,10 +181,28 @@ export function useGame(roomCode: string, playerName: string) {
         }
 
         case "reveal_hand": {
-          // Another player revealing their remaining hand
           setState((prev) => ({
             ...prev,
             finishedHands: { ...prev.finishedHands, [msg.playerId]: msg.hand },
+          }));
+          break;
+        }
+
+        case "continue_game": {
+          const myHand = [...(msg.hands[myId] || [])];
+          myHand.sort(compareCardsDisplay);
+          const gamePlayers: Player[] = msg.players.map((p) => ({
+            id: p.id, name: p.name, seat: p.seat,
+            cardCount: 13, isFinished: false,
+          }));
+          const mySeat = gamePlayers.find((p) => p.id === myId)?.seat ?? -1;
+          setState((prev) => ({
+            ...prev,
+            status: "playing", myHand, mySeat,
+            currentTurn: msg.currentTurn, roundStarter: msg.roundStarter,
+            lastPlay: null, passCount: 0, players: gamePlayers,
+            scores: msg.scores,
+            finishedHands: undefined, winner: undefined, roundScores: undefined,
           }));
           break;
         }
@@ -254,6 +274,38 @@ export function useGame(roomCode: string, playerName: string) {
       currentTurn: clubThreeSeat,
       roundStarter: clubThreeSeat,
       players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat })),
+    });
+  }, [send]);
+
+  // Continue game (new round with scores)
+  const continueGame = useCallback(() => {
+    const s = stateRef.current;
+    if (s.players.length !== 4) return;
+
+    // Calculate this round's scores from finishedHands
+    const newScores = { ...s.scores };
+    s.players.forEach((p) => {
+      const hand = s.finishedHands?.[p.id] || [];
+      const roundScore = calculateScore(hand);
+      newScores[p.id] = (newScores[p.id] || 0) + roundScore;
+    });
+
+    const hands = deal();
+    const handMap: Record<string, Card[]> = {};
+    let clubThreeSeat = 0;
+
+    s.players.forEach((p, i) => {
+      handMap[p.id] = hands[i];
+      if (hands[i].includes("3C")) clubThreeSeat = p.seat;
+    });
+
+    send({
+      type: "continue_game",
+      hands: handMap,
+      currentTurn: clubThreeSeat,
+      roundStarter: clubThreeSeat,
+      players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat })),
+      scores: newScores,
     });
   }, [send]);
 
@@ -354,7 +406,7 @@ export function useGame(roomCode: string, playerName: string) {
   }, [send]);
 
   return {
-    state, startGame, playCards, pass,
+    state, startGame, continueGame, playCards, pass,
     isMyTurn: state.currentTurn === state.mySeat,
     canPass: state.lastPlay !== null && state.currentTurn === state.mySeat,
   };
