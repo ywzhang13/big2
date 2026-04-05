@@ -330,13 +330,18 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
       </div>
 
       <div className="pb-safe bg-black/30 backdrop-blur-sm rounded-t-2xl">
-        <div className="h-7 flex items-center justify-center">
-          {selectedCombo && (
-            <span className={`text-xs font-bold px-3 py-0.5 rounded-full ${isValidPlay ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
-              {comboName(selectedCombo.type)}{!isValidPlay && state.lastPlay ? " (打不過)" : ""}
-            </span>
-          )}
-          {playError && <span className="text-xs text-red-400">{playError}</span>}
+        <div className="h-7 flex items-center justify-between px-4">
+          <span className="text-[10px] text-white/40">
+            {playerName} · <span className={`font-bold ${state.myHand.length <= 3 ? "text-red-400" : "text-gold-light"}`}>{state.myHand.length}</span> 張
+          </span>
+          <div>
+            {selectedCombo && (
+              <span className={`text-xs font-bold px-3 py-0.5 rounded-full ${isValidPlay ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                {comboName(selectedCombo.type)}{!isValidPlay && state.lastPlay ? " (打不過)" : ""}
+              </span>
+            )}
+            {playError && <span className="text-xs text-red-400">{playError}</span>}
+          </div>
         </div>
         <Hand cards={state.myHand} selectedCards={selectedCards} onToggleCard={toggleCard} />
         <div className="flex gap-3 px-4 py-3">
