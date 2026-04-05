@@ -16,7 +16,7 @@ export default function Hand({ cards, selectedCards, onToggleCard }: HandProps) 
   return (
     <div className="w-full py-1.5 overflow-x-auto hide-scrollbar">
       <div
-        className="flex items-end"
+        className="flex items-end justify-center"
         style={{ paddingLeft: 12, paddingRight: 12 }}
       >
         {cards.map((card, i) => {

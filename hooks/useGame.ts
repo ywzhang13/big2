@@ -217,8 +217,21 @@ export function useGame(roomCode: string, playerName: string) {
 
         case "sync_state": {
           setState((prev) => {
-            // Only apply sync if we're out of sync (different turn or status)
             if (prev.status !== "playing") return prev;
+            // Only apply sync if we're genuinely out of sync
+            // (different turn AND we're not the current turn player)
+            if (prev.currentTurn === msg.currentTurn && prev.currentTurn !== prev.mySeat) {
+              // Same turn, just update player card counts
+              return {
+                ...prev,
+                players: msg.players.map((p) => ({ ...p })),
+                scores: msg.scores,
+              };
+            }
+            if (prev.currentTurn === prev.mySeat) {
+              // It's our turn — don't let sync override our state
+              return prev;
+            }
             const myHand = msg.hands[myId] || prev.myHand;
             return {
               ...prev,
@@ -228,7 +241,7 @@ export function useGame(roomCode: string, playerName: string) {
               passCount: msg.passCount,
               roundStarter: msg.roundStarter,
               scores: msg.scores,
-              myHand: myHand.length > 0 ? myHand : prev.myHand, // keep own hand if not provided
+              myHand: myHand.length > 0 ? myHand : prev.myHand,
             };
           });
           break;
