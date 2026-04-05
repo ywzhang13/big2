@@ -88,11 +88,27 @@ function detectStraight(sorted: Card[], parsed: ParsedCard[]): Combo | null {
     ranks[4] === 15
   ) {
     // A2345 is the smallest straight, rank = 5 (the highest of 3,4,5)
-    // The determining card for suit comparison is the 5 (index 2)
     return {
       type: "straight",
       rank: 5,
-      suit: parsed[2].suit,
+      suit: parsed[2].suit, // compare by 5's suit
+      cards: sorted,
+    };
+  }
+
+  // Check for 23456 special case: ranks would be [3,4,5,6,15] after sort
+  if (
+    ranks[0] === 3 &&
+    ranks[1] === 4 &&
+    ranks[2] === 5 &&
+    ranks[3] === 6 &&
+    ranks[4] === 15
+  ) {
+    // 23456 is the biggest straight, compare by 2's suit
+    return {
+      type: "straight",
+      rank: 16, // higher than any normal straight (max normal is A=14)
+      suit: parsed[4].suit, // the 2's suit
       cards: sorted,
     };
   }
