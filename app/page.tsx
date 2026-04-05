@@ -278,16 +278,26 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
 
   // Game Over
   if (state.status === "finished") {
-    const results = state.players.map((p) => {
+    // Calculate losers' scores first
+    const roundScores: Record<string, number> = {};
+    let losersTotal = 0;
+    state.players.forEach((p) => {
       const hand = (state.finishedHands || {})[p.id] || [];
-      const roundScore = calculateScore(hand);
-      return {
-        seat: p.seat, name: p.name, hand,
-        finishOrder: p.finishOrder ?? null,
-        score: (state.scores[p.id] || 0) + roundScore,
-        roundScore,
-      };
+      const score = calculateScore(hand);
+      roundScores[p.id] = score;
+      if (score < 0) losersTotal += score; // negative
     });
+    // Winner gets absolute value of losers' total
+    const winnerId = state.players.find((p) => p.finishOrder === 1)?.id;
+    if (winnerId) roundScores[winnerId] = Math.abs(losersTotal);
+
+    const results = state.players.map((p) => ({
+      seat: p.seat, name: p.name,
+      hand: (state.finishedHands || {})[p.id] || [],
+      finishOrder: p.finishOrder ?? null,
+      roundScore: roundScores[p.id] || 0,
+      score: (state.scores[p.id] || 0) + (roundScores[p.id] || 0),
+    }));
     return <GameOver results={results} onGoHome={onGoHome} onPlayAgain={continueGame} />;
   }
 

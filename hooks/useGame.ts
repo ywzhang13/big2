@@ -282,13 +282,21 @@ export function useGame(roomCode: string, playerName: string) {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
 
-    // Calculate this round's scores from finishedHands
+    // Calculate this round's scores — winner gets abs of losers' total
     const newScores = { ...s.scores };
+    let losersTotal = 0;
+    const winnerId = s.players.find((p) => p.finishOrder === 1)?.id;
     s.players.forEach((p) => {
       const hand = s.finishedHands?.[p.id] || [];
-      const roundScore = calculateScore(hand);
-      newScores[p.id] = (newScores[p.id] || 0) + roundScore;
+      const score = calculateScore(hand);
+      if (score < 0) losersTotal += score;
+      if (p.id !== winnerId) {
+        newScores[p.id] = (newScores[p.id] || 0) + score;
+      }
     });
+    if (winnerId) {
+      newScores[winnerId] = (newScores[winnerId] || 0) + Math.abs(losersTotal);
+    }
 
     const hands = deal();
     const handMap: Record<string, Card[]> = {};
