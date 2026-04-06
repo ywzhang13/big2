@@ -2,11 +2,10 @@ import { Combo, detectCombo } from "./combo";
 import { COMBO_POWER } from "./constants";
 
 /**
- * Ensure combo has valid data (re-detect from cards if needed after serialization)
+ * Ensure combo has valid data — always re-detect from cards for safety.
+ * JSON serialization through Supabase broadcast can corrupt type/rank/suit.
  */
 function ensureCombo(combo: Combo): Combo {
-  if (combo && combo.type && COMBO_POWER[combo.type] !== undefined) return combo;
-  // Re-detect from cards (combo may have been corrupted by JSON serialization)
   if (combo?.cards?.length > 0) {
     const redetected = detectCombo(combo.cards);
     if (redetected) return redetected;

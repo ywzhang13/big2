@@ -358,11 +358,8 @@ export function useGame(roomCode: string, playerName: string) {
               type: "broadcast", event: "game",
               payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
             });
-          } else if (s.status === "playing" && s.currentTurn !== s.mySeat) {
-            channel.send({
-              type: "broadcast", event: "game",
-              payload: { type: "sync_request", fromId: myId } satisfies GameMessage,
-            });
+          // Disabled sync during gameplay — it was overwriting valid state
+          // Players recover via the next play_cards/pass broadcast instead
           }
         }, 5000);
       }
@@ -377,7 +374,8 @@ export function useGame(roomCode: string, playerName: string) {
     };
   }, [roomCode, playerName, myId]);
 
-  const isHost = state.hostId === myId;
+  // Host = seat 0 player. Use both hostId and mySeat for reliability
+  const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
   // Start game — sends ready check first (host only)
   const startGame = useCallback(() => {
