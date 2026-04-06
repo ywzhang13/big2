@@ -321,6 +321,9 @@ export function useGame(roomCode: string, playerName: string) {
   const startGame = useCallback(() => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
+    if (s.status !== "waiting") return; // prevent double start
+    // Immediately mark as playing to prevent double-click
+    setState((prev) => ({ ...prev, status: "playing" }));
 
     const hands = deal();
     const handMap: Record<string, Card[]> = {};
