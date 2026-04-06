@@ -320,9 +320,15 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
           <PlayArea
             lastPlay={state.lastPlay ? { cards: state.lastPlay.cards, comboType: comboName(state.lastPlay.combo.type), playerName: state.lastPlay.playerName } : null}
             isNewRound={state.lastPlay === null} />
-          <p className={`text-xs font-medium ${isMyTurn ? "text-gold-light" : "text-white/50"}`}>
-            {isMyTurn ? "輪到你出牌" : `等待 ${state.players.find((p) => p.seat === state.currentTurn)?.name || "..."}`}
-          </p>
+          {isMyTurn ? (
+            <div className="px-4 py-1.5 rounded-full bg-gold/20 border border-gold/40 animate-pulse">
+              <p className="text-sm font-bold text-gold-light">輪到你出牌</p>
+            </div>
+          ) : (
+            <p className="text-xs text-white/50">
+              等待 {state.players.find((p) => p.seat === state.currentTurn)?.name || "..."}
+            </p>
+          )}
         </div>
         <div className="w-16 flex-shrink-0">
           {right && <PlayerSlot name={right.name} cardCount={right.cardCount} isCurrentTurn={state.currentTurn === right.seat} isFinished={right.isFinished} position="right" score={state.scores[right.id]} />}

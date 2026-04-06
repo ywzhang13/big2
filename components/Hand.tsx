@@ -9,9 +9,9 @@ interface HandProps {
 }
 
 export default function Hand({ cards, selectedCards, onToggleCard }: HandProps) {
-  // Always use horizontal scroll with comfortable spacing
-  // Each card overlaps by a fixed amount that keeps them readable
-  const overlapPx = -14; // 42 - 14 = 28px visible per card, comfortable to tap
+  const cardCount = cards.length;
+  // When few cards remain, don't overlap — show them fully spaced
+  const overlapPx = cardCount <= 5 ? 4 : -14;
 
   return (
     <div className="w-full py-1.5 overflow-x-auto hide-scrollbar">
