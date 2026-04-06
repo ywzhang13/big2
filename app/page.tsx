@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/hooks/useGame";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
@@ -171,6 +171,15 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
   const { state, startGame, continueGame, playCards, pass, isMyTurn, canPass } = useGame(
     code, nameReady ? playerName : ""
   );
+
+  // Vibrate when it becomes my turn
+  const prevIsMyTurn = useRef(false);
+  useEffect(() => {
+    if (isMyTurn && !prevIsMyTurn.current && state.status === "playing") {
+      try { navigator.vibrate?.(200); } catch {}
+    }
+    prevIsMyTurn.current = isMyTurn;
+  }, [isMyTurn, state.status]);
 
   const toggleCard = (card: CardType) => {
     setSelectedCards((prev) => prev.includes(card) ? prev.filter((c) => c !== card) : [...prev, card]);

@@ -132,6 +132,32 @@ export function useGame(roomCode: string, playerName: string) {
         }
 
         case "play_cards": {
+          // Check if this play triggers game over
+          if (msg.gameOver && msg.winner) {
+            // Reveal own hand for game over screen
+            const myCurrentHand = stateRef.current.myHand;
+            if (myCurrentHand.length > 0) {
+              setTimeout(() => {
+                channel.send({
+                  type: "broadcast", event: "game",
+                  payload: { type: "reveal_hand", playerId: myId, hand: myCurrentHand } satisfies GameMessage,
+                });
+              }, 200);
+            }
+            setState((prev) => ({
+              ...prev,
+              status: "finished",
+              winner: msg.winner,
+              players: prev.players.map((p) =>
+                p.seat === msg.seat
+                  ? { ...p, cardCount: 0, isFinished: true, finishOrder: 1 }
+                  : p
+              ),
+              myHand: msg.seat === prev.mySeat ? [] : prev.myHand,
+              finishedHands: { [myId]: msg.seat === prev.mySeat ? [] : prev.myHand },
+            }));
+            break;
+          }
           setState((prev) => ({
             ...prev,
             players: prev.players.map((p) =>
@@ -412,20 +438,20 @@ export function useGame(roomCode: string, playerName: string) {
 
     // Game ends when FIRST player finishes (Taiwan rules)
     if (isFinished && finishedCount === 0) {
-      // First player to finish — game over!
+      // Include gameOver flag directly in play_cards — no separate delayed message
       send({
         type: "play_cards", seat: s.mySeat, cards: selectedCards, combo,
         playerName: me.name, cardCount: 0,
         isFinished: true, finishOrder: 1, nextTurn: -1,
+        gameOver: true, winner: me.name,
       });
-      // Immediately update local hand before game_over fires
       setState((prev) => ({
         ...prev,
-        myHand: newHand,
+        myHand: [],
+        status: "finished",
+        winner: me.name,
+        finishedHands: { [myId]: [] },
       }));
-      setTimeout(() => {
-        send({ type: "game_over", winner: me.name, hands: { [myId]: [] } });
-      }, 200);
       return { success: true };
     }
 

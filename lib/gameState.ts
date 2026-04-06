@@ -31,7 +31,7 @@ export interface GameState {
 export type GameMessage =
   | { type: "heartbeat"; playerId: string; name: string; seat: number }
   | { type: "game_start"; hands: Record<string, Card[]>; currentTurn: number; roundStarter: number; players: { id: string; name: string; seat: number }[] }
-  | { type: "play_cards"; seat: number; cards: Card[]; combo: Combo; playerName: string; cardCount: number; isFinished: boolean; finishOrder?: number; nextTurn: number }
+  | { type: "play_cards"; seat: number; cards: Card[]; combo: Combo; playerName: string; cardCount: number; isFinished: boolean; finishOrder?: number; nextTurn: number; gameOver?: boolean; winner?: string }
   | { type: "pass"; seat: number; passCount: number; nextTurn: number; clearRound: boolean }
   | { type: "game_over"; winner: string; hands: Record<string, Card[]> }
   | { type: "reveal_hand"; playerId: string; hand: Card[] }
