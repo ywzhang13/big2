@@ -529,25 +529,27 @@ export function useGame(roomCode: string, playerName: string) {
 
     const newPassCount = s.passCount + 1;
     const activePlayers = s.players.filter((p) => !p.isFinished);
+    // Round clears when all other active players have passed
+    // (everyone except the roundStarter)
     const passThreshold = activePlayers.length - 1;
+    const clearRound = newPassCount >= passThreshold;
 
     const finishedSeats = new Set(s.players.filter((p) => p.isFinished).map((p) => p.seat));
 
-    // Find next active player after me
-    let next = (s.mySeat + 1) % 4;
-    let safety = 0;
-    while ((finishedSeats.has(next) || next === s.mySeat) && safety < 4) {
-      next = (next + 1) % 4;
-      safety++;
-    }
-
-    // If next player is the roundStarter (the one who played last), round clears
-    const clearRound = next === s.roundStarter || newPassCount >= passThreshold;
-
+    let next: number;
     if (clearRound) {
-      // Round starter gets free turn
+      // Give free turn to the roundStarter (who played the last cards)
       next = s.roundStarter;
-      while (finishedSeats.has(next)) next = (next + 1) % 4;
+      let safety = 0;
+      while (finishedSeats.has(next) && safety < 4) { next = (next + 1) % 4; safety++; }
+    } else {
+      // Find next active player after me (skip finished and self)
+      next = (s.mySeat + 1) % 4;
+      let safety = 0;
+      while ((finishedSeats.has(next) || next === s.mySeat) && safety < 4) {
+        next = (next + 1) % 4;
+        safety++;
+      }
     }
 
     send({ type: "pass", seat: s.mySeat, passCount: newPassCount, nextTurn: next, clearRound });
