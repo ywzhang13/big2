@@ -2,27 +2,31 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { deal } from "@/lib/deck";
-import { detectCombo } from "@/lib/combo";
-import { beats } from "@/lib/compare";
 import { compareCardsDisplay } from "@/lib/card";
-import { calculateScore } from "@/lib/scoring";
 import type { Card } from "@/lib/constants";
-import type { GameState, GameMessage, Player } from "@/lib/gameState";
+import type { GameState, Player } from "@/lib/gameState";
+import type { Combo } from "@/lib/combo";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-
-function genId() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 function getMyId(): string {
   if (typeof window === "undefined") return "";
   let id = localStorage.getItem("big2_pid");
   if (!id) {
-    id = genId();
+    id = Math.random().toString(36).slice(2, 10);
     localStorage.setItem("big2_pid", id);
   }
   return id;
+}
+
+async function api<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>): Promise<T> {
+  const opts: RequestInit = { method, headers: { "Content-Type": "application/json" } };
+  if (body && method === "POST") opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `API error ${res.status}`);
+  }
+  return res.json();
 }
 
 export function useGame(roomCode: string, playerName: string) {
@@ -45,15 +49,66 @@ export function useGame(roomCode: string, playerName: string) {
     readyPlayers: new Set(),
   });
 
+  const [roomId, setRoomId] = useState<string>("");
   const channelRef = useRef<RealtimeChannel | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const announceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const roomIdRef = useRef(roomId);
+  roomIdRef.current = roomId;
 
-  const send = useCallback((msg: GameMessage) => {
-    channelRef.current?.send({ type: "broadcast", event: "game", payload: msg });
-  }, []);
+  // Fetch full state from API (for reconnection)
+  const fetchState = useCallback(async (rid: string) => {
+    try {
+      const data = await api<{
+        status: string;
+        players: { id: string; name: string; seat: number; cardCount: number; isFinished: boolean; finishOrder?: number }[];
+        currentTurn: number;
+        lastPlay: { seat: number; cards: Card[]; combo: Combo; playerName: string } | null;
+        passCount: number;
+        roundStarter: number;
+        scores: Record<string, number>;
+        hostId: string;
+        myHand: Card[];
+        mySeat: number;
+        winner?: string;
+        finishedHands?: Record<string, Card[]>;
+        readyCheck?: boolean;
+        readyPlayers?: string[];
+      }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`);
 
+      const hand = [...(data.myHand || [])];
+      hand.sort(compareCardsDisplay);
+
+      setState((prev) => ({
+        ...prev,
+        status: data.status as GameState["status"],
+        players: data.players.map((p) => ({
+          id: p.id,
+          name: p.name,
+          seat: p.seat,
+          cardCount: p.cardCount,
+          isFinished: p.isFinished,
+          finishOrder: p.finishOrder,
+        })),
+        currentTurn: data.currentTurn,
+        lastPlay: data.lastPlay,
+        passCount: data.passCount,
+        roundStarter: data.roundStarter,
+        scores: data.scores || {},
+        hostId: data.hostId || "",
+        myHand: hand,
+        mySeat: data.mySeat,
+        winner: data.winner,
+        finishedHands: data.finishedHands,
+        readyCheck: data.readyCheck || false,
+        readyPlayers: new Set(data.readyPlayers || []),
+      }));
+    } catch (err) {
+      console.error("[big2] fetchState failed:", err);
+    }
+  }, [myId]);
+
+  // Subscribe to Supabase Realtime
   useEffect(() => {
     if (!playerName || !roomCode || !myId) return;
 
@@ -62,502 +117,323 @@ export function useGame(roomCode: string, playerName: string) {
       config: { broadcast: { self: true } },
     });
 
-    // Track known players and their join timestamps for seat assignment
-    const knownPlayers = new Map<string, { name: string; seat: number; ts: number }>();
-
-    function getOrAssignSeat(playerId: string, name: string, requestedSeat?: number): number {
-      const existing = knownPlayers.get(playerId);
-      if (existing) return existing.seat;
-
-      // Reject if room is full (4 players already)
-      if (knownPlayers.size >= 4) return -1;
-
-      // Find available seat
-      const takenSeats = new Set([...knownPlayers.values()].map((p) => p.seat));
-      let seat = requestedSeat ?? 0;
-      if (takenSeats.has(seat)) {
-        seat = 0;
-        while (takenSeats.has(seat) && seat < 4) seat++;
-      }
-      if (seat >= 4) return -1;
-      return seat;
-    }
-
-    function syncPlayersToState() {
-      const players: Player[] = [];
-      knownPlayers.forEach((p, id) => {
-        players.push({
-          id, name: p.name, seat: p.seat,
-          cardCount: 0, isFinished: false,
-        });
-      });
-      players.sort((a, b) => a.seat - b.seat);
-
-      // Find host (seat 0 player)
-      const hostPlayer = players.find((p) => p.seat === 0);
-
+    channel.on("broadcast", { event: "player_joined" }, ({ payload }) => {
+      const { playerId, name, seat } = payload as { playerId: string; name: string; seat: number };
       setState((prev) => {
         if (prev.status !== "waiting") return prev;
-        const mySeat = knownPlayers.get(myId)?.seat ?? prev.mySeat;
+        const exists = prev.players.find((p) => p.id === playerId);
+        let players: Player[];
+        if (exists) {
+          players = prev.players.map((p) =>
+            p.id === playerId ? { ...p, name, seat } : p
+          );
+        } else {
+          players = [...prev.players, { id: playerId, name, seat, cardCount: 0, isFinished: false }];
+        }
+        players.sort((a, b) => a.seat - b.seat);
+        const hostPlayer = players.find((p) => p.seat === 0);
+        const mySeat = playerId === myId ? seat : prev.mySeat;
         return { ...prev, players, mySeat, hostId: hostPlayer?.id || prev.hostId };
       });
-    }
+    });
 
-    channel.on("broadcast", { event: "game" }, ({ payload }) => {
-      const msg = payload as GameMessage;
+    channel.on("broadcast", { event: "ready_check" }, () => {
+      try { navigator.vibrate?.(200); } catch {}
+      setState((prev) => ({
+        ...prev,
+        readyCheck: true,
+        readyPlayers: new Set(),
+      }));
+    });
 
-      switch (msg.type) {
-        case "heartbeat": {
-          const seat = getOrAssignSeat(msg.playerId, msg.name, msg.seat);
-          if (seat === -1) break; // Room full, ignore
-          knownPlayers.set(msg.playerId, { name: msg.name, seat, ts: Date.now() });
-          syncPlayersToState();
-          break;
-        }
+    channel.on("broadcast", { event: "player_ready" }, ({ payload }) => {
+      const { playerId } = payload as { playerId: string };
+      setState((prev) => {
+        const newReady = new Set(prev.readyPlayers);
+        newReady.add(playerId);
+        return { ...prev, readyPlayers: newReady };
+      });
+    });
 
-        case "ready_check": {
-          // Vibrate to alert players
-          try { navigator.vibrate?.(200); } catch {}
-          setState((prev) => ({
-            ...prev,
-            readyCheck: true,
-            readyPlayers: new Set(),
-          }));
-          break;
-        }
+    channel.on("broadcast", { event: "game_start" }, ({ payload }) => {
+      const msg = payload as {
+        currentTurn: number;
+        roundStarter: number;
+        players: { id: string; name: string; seat: number; cardCount: number }[];
+      };
+      const gamePlayers: Player[] = msg.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        seat: p.seat,
+        cardCount: p.cardCount,
+        isFinished: false,
+      }));
+      const mySeat = gamePlayers.find((p) => p.id === myId)?.seat ?? -1;
+      setState((prev) => ({
+        ...prev,
+        status: "playing",
+        mySeat,
+        currentTurn: msg.currentTurn,
+        roundStarter: msg.roundStarter,
+        lastPlay: null,
+        passCount: 0,
+        players: gamePlayers,
+        readyCheck: false,
+        readyPlayers: new Set(),
+        finishedHands: undefined,
+        winner: undefined,
+        roundScores: undefined,
+      }));
+    });
 
-        case "player_ready": {
-          setState((prev) => {
-            const newReady = new Set(prev.readyPlayers);
-            newReady.add(msg.playerId);
-            return { ...prev, readyPlayers: newReady };
-          });
-          break;
-        }
+    channel.on("broadcast", { event: "deal_hand" }, ({ payload }) => {
+      const { playerId, hand } = payload as { playerId: string; hand: Card[] };
+      if (playerId !== myId) return;
+      const sorted = [...hand];
+      sorted.sort(compareCardsDisplay);
+      setState((prev) => ({ ...prev, myHand: sorted }));
+    });
 
-        case "game_start": {
-          const myHand = [...(msg.hands[myId] || [])];
-          myHand.sort(compareCardsDisplay);
-          const gamePlayers: Player[] = msg.players.map((p) => ({
-            id: p.id, name: p.name, seat: p.seat,
-            cardCount: 13, isFinished: false,
-          }));
-          const mySeat = gamePlayers.find((p) => p.id === myId)?.seat ?? -1;
-          // Stop heartbeat during game
-          if (announceTimerRef.current) {
-            clearInterval(announceTimerRef.current);
-            announceTimerRef.current = null;
-          }
-          setState((prev) => ({
-            ...prev,
-            status: "playing", myHand, mySeat,
-            currentTurn: msg.currentTurn, roundStarter: msg.roundStarter,
-            lastPlay: null, passCount: 0, players: gamePlayers,
-          }));
-          break;
-        }
+    channel.on("broadcast", { event: "play_cards" }, ({ payload }) => {
+      const msg = payload as {
+        seat: number;
+        cards: Card[];
+        combo: Combo;
+        playerName: string;
+        cardCount: number;
+        isFinished: boolean;
+        finishOrder?: number;
+        nextTurn: number;
+        gameOver?: boolean;
+        winner?: string;
+      };
 
-        case "play_cards": {
-          // Check if this play triggers game over
-          if (msg.gameOver && msg.winner) {
-            // Reveal own hand for game over screen
-            const myCurrentHand = stateRef.current.myHand;
-            if (myCurrentHand.length > 0) {
-              setTimeout(() => {
-                channel.send({
-                  type: "broadcast", event: "game",
-                  payload: { type: "reveal_hand", playerId: myId, hand: myCurrentHand } satisfies GameMessage,
-                });
-              }, 200);
-            }
-            setState((prev) => ({
-              ...prev,
-              status: "finished",
-              winner: msg.winner,
-              players: prev.players.map((p) =>
-                p.seat === msg.seat
-                  ? { ...p, cardCount: 0, isFinished: true, finishOrder: 1 }
-                  : p
-              ),
-              myHand: msg.seat === prev.mySeat ? [] : prev.myHand,
-              finishedHands: { [myId]: msg.seat === prev.mySeat ? [] : prev.myHand },
-            }));
-            break;
-          }
-          setState((prev) => ({
-            ...prev,
-            players: prev.players.map((p) =>
-              p.seat === msg.seat
-                ? { ...p, cardCount: msg.cardCount, isFinished: msg.isFinished, finishOrder: msg.finishOrder }
-                : p
-            ),
-            myHand: msg.seat === prev.mySeat
-              ? prev.myHand.filter((c) => !msg.cards.includes(c))
-              : prev.myHand,
-            lastPlay: { seat: msg.seat, cards: msg.cards, combo: msg.combo, playerName: msg.playerName },
-            passCount: 0,
-            currentTurn: msg.nextTurn,
-            roundStarter: msg.seat,
-          }));
-          break;
-        }
-
-        case "pass": {
-          setState((prev) => ({
-            ...prev,
-            passCount: msg.passCount,
-            currentTurn: msg.nextTurn,
-            lastPlay: msg.clearRound ? null : prev.lastPlay,
-            roundStarter: msg.clearRound ? msg.nextTurn : prev.roundStarter,
-          }));
-          break;
-        }
-
-        case "game_over": {
-          // When game ends, reveal my remaining hand to everyone
-          const myCurrentHand = stateRef.current.myHand;
-          if (myCurrentHand.length > 0) {
-            setTimeout(() => {
-              channel.send({
-                type: "broadcast", event: "game",
-                payload: { type: "reveal_hand", playerId: myId, hand: myCurrentHand } satisfies GameMessage,
-              });
-            }, 200);
-          }
-          setState((prev) => ({
-            ...prev, status: "finished",
-            winner: msg.winner,
-            finishedHands: { ...msg.hands, [myId]: prev.myHand },
-          }));
-          break;
-        }
-
-        case "reveal_hand": {
-          setState((prev) => ({
-            ...prev,
-            finishedHands: { ...prev.finishedHands, [msg.playerId]: msg.hand },
-          }));
-          break;
-        }
-
-        case "sync_request": {
-          // Current turn player responds with full state (they're the authority)
-          const s = stateRef.current;
-          if (s.status === "playing" && s.currentTurn === s.mySeat) {
-            const handsForSync: Record<string, Card[]> = { [myId]: s.myHand };
+      if (msg.gameOver && msg.winner) {
+        // Reveal own hand for game over screen
+        const myCurrentHand = stateRef.current.myHand;
+        if (myCurrentHand.length > 0) {
+          setTimeout(() => {
             channel.send({
-              type: "broadcast", event: "game",
-              payload: {
-                type: "sync_state",
-                status: "playing",
-                players: s.players.map((p) => ({
-                  id: p.id, name: p.name, seat: p.seat,
-                  cardCount: p.id === myId ? s.myHand.length : p.cardCount,
-                  isFinished: p.isFinished, finishOrder: p.finishOrder,
-                })),
-                currentTurn: s.currentTurn,
-                lastPlay: s.lastPlay,
-                passCount: s.passCount,
-                roundStarter: s.roundStarter,
-                scores: s.scores,
-                hands: handsForSync,
-              } satisfies GameMessage,
+              type: "broadcast",
+              event: "reveal_hand",
+              payload: { playerId: myId, hand: myCurrentHand },
             });
-          }
-          break;
+          }, 200);
         }
-
-        case "sync_state": {
-          setState((prev) => {
-            if (prev.status !== "playing") return prev;
-            // Only apply sync if we're genuinely out of sync
-            // (different turn AND we're not the current turn player)
-            if (prev.currentTurn === msg.currentTurn && prev.currentTurn !== prev.mySeat) {
-              // Same turn, just update player card counts
-              return {
-                ...prev,
-                players: msg.players.map((p) => ({ ...p })),
-                scores: msg.scores,
-              };
-            }
-            if (prev.currentTurn === prev.mySeat) {
-              // It's our turn — don't let sync override our state
-              return prev;
-            }
-            const myHand = msg.hands[myId] || prev.myHand;
-            return {
-              ...prev,
-              players: msg.players.map((p) => ({ ...p })),
-              currentTurn: msg.currentTurn,
-              lastPlay: msg.lastPlay,
-              passCount: msg.passCount,
-              roundStarter: msg.roundStarter,
-              scores: msg.scores,
-              myHand: myHand.length > 0 ? myHand : prev.myHand,
-            };
-          });
-          break;
-        }
-
-        case "continue_game": {
-          const myHand = [...(msg.hands[myId] || [])];
-          myHand.sort(compareCardsDisplay);
-          const gamePlayers: Player[] = msg.players.map((p) => ({
-            id: p.id, name: p.name, seat: p.seat,
-            cardCount: 13, isFinished: false,
-          }));
-          const mySeat = gamePlayers.find((p) => p.id === myId)?.seat ?? -1;
-          setState((prev) => ({
-            ...prev,
-            status: "playing", myHand, mySeat,
-            currentTurn: msg.currentTurn, roundStarter: msg.roundStarter,
-            lastPlay: null, passCount: 0, players: gamePlayers,
-            scores: msg.scores,
-            finishedHands: undefined, winner: undefined, roundScores: undefined,
-          }));
-          break;
-        }
+        setState((prev) => ({
+          ...prev,
+          status: "finished",
+          winner: msg.winner,
+          players: prev.players.map((p) =>
+            p.seat === msg.seat
+              ? { ...p, cardCount: 0, isFinished: true, finishOrder: 1 }
+              : p
+          ),
+          myHand: msg.seat === prev.mySeat ? [] : prev.myHand,
+          finishedHands: { [myId]: msg.seat === prev.mySeat ? [] : prev.myHand },
+        }));
+        return;
       }
+
+      setState((prev) => ({
+        ...prev,
+        players: prev.players.map((p) =>
+          p.seat === msg.seat
+            ? { ...p, cardCount: msg.cardCount, isFinished: msg.isFinished, finishOrder: msg.finishOrder }
+            : p
+        ),
+        myHand: msg.seat === prev.mySeat
+          ? prev.myHand.filter((c) => !msg.cards.includes(c))
+          : prev.myHand,
+        lastPlay: { seat: msg.seat, cards: msg.cards, combo: msg.combo, playerName: msg.playerName },
+        passCount: 0,
+        currentTurn: msg.nextTurn,
+        roundStarter: msg.seat,
+      }));
+    });
+
+    channel.on("broadcast", { event: "pass" }, ({ payload }) => {
+      const msg = payload as { seat: number; passCount: number; nextTurn: number; clearRound: boolean };
+      setState((prev) => ({
+        ...prev,
+        passCount: msg.passCount,
+        currentTurn: msg.nextTurn,
+        lastPlay: msg.clearRound ? null : prev.lastPlay,
+        roundStarter: msg.clearRound ? msg.nextTurn : prev.roundStarter,
+      }));
+    });
+
+    channel.on("broadcast", { event: "game_over" }, ({ payload }) => {
+      const msg = payload as { winner: string; hands: Record<string, Card[]> };
+      const myCurrentHand = stateRef.current.myHand;
+      if (myCurrentHand.length > 0) {
+        setTimeout(() => {
+          channel.send({
+            type: "broadcast",
+            event: "reveal_hand",
+            payload: { playerId: myId, hand: myCurrentHand },
+          });
+        }, 200);
+      }
+      setState((prev) => ({
+        ...prev,
+        status: "finished",
+        winner: msg.winner,
+        finishedHands: { ...msg.hands, [myId]: prev.myHand },
+      }));
+    });
+
+    channel.on("broadcast", { event: "reveal_hand" }, ({ payload }) => {
+      const { playerId, hand } = payload as { playerId: string; hand: Card[] };
+      setState((prev) => ({
+        ...prev,
+        finishedHands: { ...prev.finishedHands, [playerId]: hand },
+      }));
     });
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         console.log("[big2] connected to room", roomCode);
-
-        // Join immediately — assign seat from known players
-        const mySeat = getOrAssignSeat(myId, playerName);
-        if (mySeat === -1) {
-          setState((prev) => ({ ...prev, status: "finished" as const }));
-          return;
+        // If we already have a roomId, fetch state for reconnection
+        const rid = roomIdRef.current;
+        if (rid) {
+          fetchState(rid);
         }
-
-        knownPlayers.set(myId, { name: playerName, seat: mySeat, ts: Date.now() });
-        // First player (seat 0) becomes host
-        if (mySeat === 0) {
-          setState((prev) => ({ ...prev, hostId: myId }));
-        }
-        syncPlayersToState();
-
-        // Send heartbeat immediately
-        channel.send({
-          type: "broadcast", event: "game",
-          payload: { type: "heartbeat", playerId: myId, name: playerName, seat: mySeat } satisfies GameMessage,
-        });
-
-        // Periodic: heartbeat during lobby, sync requests during game
-        announceTimerRef.current = setInterval(() => {
-          const s = stateRef.current;
-          if (s.status === "finished") {
-            // Stop timer when game is over
-            if (announceTimerRef.current) clearInterval(announceTimerRef.current);
-            return;
-          }
-          if (s.status === "waiting") {
-            const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
-            channel.send({
-              type: "broadcast", event: "game",
-              payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
-            });
-          // Disabled sync during gameplay — it was overwriting valid state
-          // Players recover via the next play_cards/pass broadcast instead
-          }
-        }, 5000);
       }
     });
 
     channelRef.current = channel;
 
     return () => {
-      if (announceTimerRef.current) clearInterval(announceTimerRef.current);
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId]);
+  }, [roomCode, playerName, myId, fetchState]);
 
-  // Host = seat 0 player. Use both hostId and mySeat for reliability
+  // Host = seat 0 player
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
-  // Start game — sends ready check first (host only)
-  const startGame = useCallback(() => {
+  // Start game - sends ready check (host only)
+  const startGame = useCallback(async () => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
     if (s.status !== "waiting" || s.readyCheck) return;
-    if (s.hostId !== myId) return; // only host can start
-    send({ type: "ready_check", hostId: myId });
-  }, [send, myId]);
+    if (s.hostId !== myId) return;
+    try {
+      await api("POST", "/api/game/ready-check", {
+        roomId: roomIdRef.current,
+        playerId: myId,
+      });
+    } catch (err) {
+      console.error("[big2] ready-check failed:", err);
+    }
+  }, [myId]);
 
   // Confirm ready
-  const confirmReady = useCallback(() => {
-    send({ type: "player_ready", playerId: myId });
-  }, [send, myId]);
-
-  // Actually deal and start (called when all players ready, host only)
-  const dealAndStart = useCallback(() => {
-    const s = stateRef.current;
-    if (s.players.length !== 4) return;
-    if (s.hostId !== myId) return; // only host deals
-    setState((prev) => ({ ...prev, status: "playing" }));
-
-    const hands = deal();
-    const handMap: Record<string, Card[]> = {};
-    let clubThreeSeat = 0;
-
-    s.players.forEach((p, i) => {
-      handMap[p.id] = hands[i];
-      if (hands[i].includes("3C")) clubThreeSeat = p.seat;
-    });
-
-    send({
-      type: "game_start",
-      hands: handMap,
-      currentTurn: clubThreeSeat,
-      roundStarter: clubThreeSeat,
-      players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat })),
-    });
-  }, [send]);
-
-  // Continue game (new round with scores)
-  const continueGame = useCallback(() => {
-    const s = stateRef.current;
-    if (s.players.length !== 4) return;
-    if (s.hostId !== myId) return; // only host can continue
-
-    // Calculate this round's scores — winner gets abs of losers' total
-    const newScores = { ...s.scores };
-    let losersTotal = 0;
-    const winnerId = s.players.find((p) => p.finishOrder === 1)?.id;
-    s.players.forEach((p) => {
-      const hand = s.finishedHands?.[p.id] || [];
-      const score = calculateScore(hand);
-      if (score < 0) losersTotal += score;
-      if (p.id !== winnerId) {
-        newScores[p.id] = (newScores[p.id] || 0) + score;
+  const confirmReady = useCallback(async () => {
+    try {
+      const data = await api<{ allReady: boolean }>("POST", "/api/game/ready", {
+        roomId: roomIdRef.current,
+        playerId: myId,
+      });
+      // If all ready, the backend will broadcast game_start + deal_hand
+      if (data.allReady) {
+        console.log("[big2] all players ready, game starting...");
       }
-    });
-    if (winnerId) {
-      newScores[winnerId] = (newScores[winnerId] || 0) + Math.abs(losersTotal);
+    } catch (err) {
+      console.error("[big2] ready failed:", err);
     }
+  }, [myId]);
 
-    const hands = deal();
-    const handMap: Record<string, Card[]> = {};
-    let clubThreeSeat = 0;
+  // dealAndStart - in API mode, this is handled by the backend when all players are ready
+  // Keep the function for interface compatibility but it's a no-op
+  const dealAndStart = useCallback(() => {
+    // The backend auto-deals when all players confirm ready.
+    // This is kept for interface compatibility.
+  }, []);
 
-    s.players.forEach((p, i) => {
-      handMap[p.id] = hands[i];
-      if (hands[i].includes("3C")) clubThreeSeat = p.seat;
-    });
-
-    send({
-      type: "continue_game",
-      hands: handMap,
-      currentTurn: clubThreeSeat,
-      roundStarter: clubThreeSeat,
-      players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat })),
-      scores: newScores,
-    });
-  }, [send]);
+  // Continue game (new round)
+  const continueGame = useCallback(async () => {
+    try {
+      await api("POST", "/api/game/continue", {
+        roomId: roomIdRef.current,
+        playerId: myId,
+      });
+    } catch (err) {
+      console.error("[big2] continue failed:", err);
+    }
+  }, [myId]);
 
   // Play cards
-  const playCards = useCallback((selectedCards: Card[]) => {
+  const playCards = useCallback((selectedCards: Card[]): { success: boolean; error?: string } => {
     const s = stateRef.current;
     if (s.currentTurn !== s.mySeat) return { success: false, error: "不是你的回合" };
 
-    const isFirstTurn = s.players.every((p) => p.cardCount === 13);
-    if (isFirstTurn && s.myHand.includes("3C") && !selectedCards.includes("3C")) {
-      return { success: false, error: "第一手必須包含梅花3" };
-    }
-
-    const combo = detectCombo(selectedCards);
-    if (!combo) return { success: false, error: "無效的牌型" };
-
-    if (s.lastPlay && !beats(s.lastPlay.combo, combo)) {
-      return { success: false, error: "打不過上家" };
-    }
-
+    // Optimistically remove cards from hand
     const newHand = s.myHand.filter((c) => !selectedCards.includes(c));
-    const isFinished = newHand.length === 0;
-    const finishedCount = s.players.filter((p) => p.isFinished).length;
-    const finishOrder = isFinished ? finishedCount + 1 : undefined;
-    const me = s.players.find((p) => p.id === myId)!;
+    setState((prev) => ({ ...prev, myHand: newHand }));
 
-    // Game ends when FIRST player finishes (Taiwan rules)
-    if (isFinished && finishedCount === 0) {
-      // Include gameOver flag directly in play_cards — no separate delayed message
-      send({
-        type: "play_cards", seat: s.mySeat, cards: selectedCards, combo,
-        playerName: me.name, cardCount: 0,
-        isFinished: true, finishOrder: 1, nextTurn: -1,
-        gameOver: true, winner: me.name,
-      });
+    // Fire and forget the API call, but handle errors
+    api<{ success: boolean; error?: string; gameOver?: boolean }>("POST", "/api/game/play", {
+      roomId: roomIdRef.current,
+      playerId: myId,
+      cards: selectedCards,
+    }).then((data) => {
+      if (!data.success) {
+        // Revert optimistic update
+        setState((prev) => ({
+          ...prev,
+          myHand: [...prev.myHand, ...selectedCards].sort(compareCardsDisplay),
+        }));
+        console.error("[big2] play rejected:", data.error);
+      }
+      // If success, the broadcast will update state automatically
+    }).catch((err) => {
+      // Revert optimistic update
       setState((prev) => ({
         ...prev,
-        myHand: [],
-        status: "finished",
-        winner: me.name,
-        finishedHands: { [myId]: [] },
+        myHand: [...prev.myHand, ...selectedCards].sort(compareCardsDisplay),
       }));
-      return { success: true };
-    }
-
-    const finishedSeats = new Set([
-      ...s.players.filter((p) => p.isFinished).map((p) => p.seat),
-      ...(isFinished ? [s.mySeat] : []),
-    ]);
-    let next = (s.mySeat + 1) % 4;
-    let safety = 0;
-    while (finishedSeats.has(next) && safety < 4) { next = (next + 1) % 4; safety++; }
-
-    send({
-      type: "play_cards", seat: s.mySeat, cards: selectedCards, combo,
-      playerName: me.name, cardCount: newHand.length,
-      isFinished, finishOrder, nextTurn: next,
+      console.error("[big2] play API error:", err);
     });
 
-    // Also immediately update local hand to prevent stale state
-    setState((prev) => ({
-      ...prev,
-      myHand: newHand,
-    }));
-
     return { success: true };
-  }, [send, myId]);
+  }, [myId]);
 
   // Pass
-  const pass = useCallback(() => {
+  const pass = useCallback(async () => {
     const s = stateRef.current;
     if (s.currentTurn !== s.mySeat || !s.lastPlay) return;
-
-    const newPassCount = s.passCount + 1;
-    const activePlayers = s.players.filter((p) => !p.isFinished);
-    // Round clears when all other active players have passed
-    // (everyone except the roundStarter)
-    const passThreshold = activePlayers.length - 1;
-    const clearRound = newPassCount >= passThreshold;
-
-    const finishedSeats = new Set(s.players.filter((p) => p.isFinished).map((p) => p.seat));
-
-    let next: number;
-    if (clearRound) {
-      // Give free turn to the roundStarter (who played the last cards)
-      next = s.roundStarter;
-      let safety = 0;
-      while (finishedSeats.has(next) && safety < 4) { next = (next + 1) % 4; safety++; }
-    } else {
-      // Find next active player after me (skip finished and self)
-      next = (s.mySeat + 1) % 4;
-      let safety = 0;
-      while ((finishedSeats.has(next) || next === s.mySeat) && safety < 4) {
-        next = (next + 1) % 4;
-        safety++;
+    try {
+      const data = await api<{ success: boolean; error?: string }>("POST", "/api/game/pass", {
+        roomId: roomIdRef.current,
+        playerId: myId,
+      });
+      if (!data.success) {
+        console.error("[big2] pass rejected:", data.error);
       }
+    } catch (err) {
+      console.error("[big2] pass API error:", err);
     }
+  }, [myId]);
 
-    send({ type: "pass", seat: s.mySeat, passCount: newPassCount, nextTurn: next, clearRound });
-  }, [send]);
+  // Expose setRoomId for the page to call after create/join
+  const setRoomIdExternal = useCallback((id: string) => {
+    setRoomId(id);
+    roomIdRef.current = id;
+  }, []);
 
   return {
-    state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass,
+    state,
+    isHost,
+    startGame,
+    confirmReady,
+    dealAndStart,
+    continueGame,
+    playCards,
+    pass,
     isMyTurn: state.currentTurn === state.mySeat,
     canPass: state.lastPlay !== null && state.currentTurn === state.mySeat,
+    setRoomId: setRoomIdExternal,
   };
 }

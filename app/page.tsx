@@ -11,16 +11,22 @@ import GameOver from "@/components/GameOver";
 import type { Card as CardType } from "@/lib/constants";
 import { calculateScore } from "@/lib/scoring";
 
-function genCode() {
-  return String(Math.floor(1000 + Math.random() * 9000));
-}
-
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
   if (typeof window === "undefined") return null;
   const hash = window.location.hash;
   const match = hash.match(/^#room=(\d{4})$/);
   return match ? match[1] : null;
+}
+
+function getMyId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem("big2_pid");
+  if (!id) {
+    id = Math.random().toString(36).slice(2, 10);
+    localStorage.setItem("big2_pid", id);
+  }
+  return id;
 }
 
 export default function Home() {
@@ -30,6 +36,7 @@ export default function Home() {
   const [name, setName] = useState("");
   const [nameReady, setNameReady] = useState(false);
   const [error, setError] = useState("");
+  const [createdRoomId, setCreatedRoomId] = useState("");
 
   // Check hash on load
   useEffect(() => {
@@ -53,24 +60,47 @@ export default function Home() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!name.trim()) { setError("請輸入暱稱"); return; }
     localStorage.setItem("big2_name", name.trim());
     setNameReady(true);
-    const code = genCode();
-    setRoomCode(code);
-    setScreen("room");
-    window.location.hash = `room=${code}`;
+    try {
+      const res = await fetch("/api/game/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: getMyId(), playerName: name.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "建立房間失敗"); return; }
+      setRoomCode(data.code);
+      setCreatedRoomId(data.roomId);
+      setScreen("room");
+      window.location.hash = `room=${data.code}`;
+    } catch {
+      setError("網路錯誤，請重試");
+    }
   }
 
-  function handleJoin() {
+  async function handleJoin() {
     if (!joinCode || joinCode.length !== 4) { setError("請輸入4位數房間碼"); return; }
     if (!name.trim()) { setError("請輸入暱稱"); return; }
     localStorage.setItem("big2_name", name.trim());
     setNameReady(true);
-    setRoomCode(joinCode);
-    setScreen("room");
-    window.location.hash = `room=${joinCode}`;
+    try {
+      const res = await fetch("/api/game/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: joinCode, playerId: getMyId(), playerName: name.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "加入房間失敗"); return; }
+      setRoomCode(joinCode);
+      setCreatedRoomId(data.roomId);
+      setScreen("room");
+      window.location.hash = `room=${joinCode}`;
+    } catch {
+      setError("網路錯誤，請重試");
+    }
   }
 
   function goHome() {
@@ -154,29 +184,55 @@ export default function Home() {
   }
 
   // ─── Room ───
-  return <RoomView code={roomCode} playerName={name} nameReady={nameReady}
+  return <RoomView code={roomCode} playerName={name} nameReady={nameReady} initialRoomId={createdRoomId}
     onSetName={(n) => { setName(n); setNameReady(true); localStorage.setItem("big2_name", n); }}
     onGoHome={goHome} />;
 }
 
 // ─── Room Component ───
-function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
-  code: string; playerName: string; nameReady: boolean;
+function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoHome }: {
+  code: string; playerName: string; nameReady: boolean; initialRoomId: string;
   onSetName: (n: string) => void; onGoHome: () => void;
 }) {
   const [localName, setLocalName] = useState(playerName);
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass } = useGame(
+  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId } = useGame(
     code, nameReady ? playerName : ""
   );
 
-  // Auto-deal when all 4 players are ready (host triggers)
+  // Pass roomId from create/join to the hook
+  useEffect(() => {
+    if (initialRoomId) {
+      setRoomId(initialRoomId);
+    }
+  }, [initialRoomId, setRoomId]);
+
+  // When joining via hash link (no initialRoomId), call join API
+  useEffect(() => {
+    if (nameReady && playerName && code && !initialRoomId) {
+      const pid = getMyId();
+      fetch("/api/game/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, playerId: pid, playerName }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.roomId) setRoomId(data.roomId);
+        })
+        .catch((err) => console.error("[big2] auto-join failed:", err));
+    }
+  }, [nameReady, playerName, code, initialRoomId, setRoomId]);
+
+  // Auto-deal when all 4 players are ready is now handled by the backend
+  // (the last confirmReady triggers deal automatically)
   const allReady = state.readyCheck && state.readyPlayers.size >= state.players.length && state.players.length === 4;
   useEffect(() => {
     if (allReady && state.status === "waiting") {
-      // Small delay so everyone sees "all ready" state
+      // In API mode, dealAndStart is a no-op - the backend auto-deals
+      // Keep this for backward compat in case needed
       const t = setTimeout(() => dealAndStart(), 500);
       return () => clearTimeout(t);
     }
