@@ -291,6 +291,11 @@ export function useGame(roomCode: string, playerName: string) {
         // Periodic: heartbeat during lobby, sync requests during game
         announceTimerRef.current = setInterval(() => {
           const s = stateRef.current;
+          if (s.status === "finished") {
+            // Stop timer when game is over
+            if (announceTimerRef.current) clearInterval(announceTimerRef.current);
+            return;
+          }
           if (s.status === "waiting") {
             const currentSeat = knownPlayers.get(myId)?.seat ?? 0;
             channel.send({
@@ -298,13 +303,12 @@ export function useGame(roomCode: string, playerName: string) {
               payload: { type: "heartbeat", playerId: myId, name: playerName, seat: currentSeat } satisfies GameMessage,
             });
           } else if (s.status === "playing" && s.currentTurn !== s.mySeat) {
-            // Request sync if it's not my turn (might have missed an update)
             channel.send({
               type: "broadcast", event: "game",
               payload: { type: "sync_request", fromId: myId } satisfies GameMessage,
             });
           }
-        }, 3000);
+        }, 5000);
       }
     });
 

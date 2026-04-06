@@ -1,5 +1,18 @@
-import { Combo } from "./combo";
+import { Combo, detectCombo } from "./combo";
 import { COMBO_POWER } from "./constants";
+
+/**
+ * Ensure combo has valid data (re-detect from cards if needed after serialization)
+ */
+function ensureCombo(combo: Combo): Combo {
+  if (combo && combo.type && COMBO_POWER[combo.type] !== undefined) return combo;
+  // Re-detect from cards (combo may have been corrupted by JSON serialization)
+  if (combo?.cards?.length > 0) {
+    const redetected = detectCombo(combo.cards);
+    if (redetected) return redetected;
+  }
+  return combo;
+}
 
 /**
  * Compare two combos to determine if play2 beats play1.
@@ -13,8 +26,11 @@ import { COMBO_POWER } from "./constants";
  * Returns true if play2 beats play1.
  */
 export function beats(play1: Combo, play2: Combo): boolean {
-  const power1 = COMBO_POWER[play1.type];
-  const power2 = COMBO_POWER[play2.type];
+  // Re-validate combos in case JSON serialization corrupted type info
+  const c1 = ensureCombo(play1);
+  const c2 = ensureCombo(play2);
+  const power1 = COMBO_POWER[c1.type] ?? 0;
+  const power2 = COMBO_POWER[c2.type] ?? 0;
 
   // 鐵支/同花順 can cross-beat any card count
   if (power2 > 0 && power2 > power1) return true;
@@ -22,17 +38,17 @@ export function beats(play1: Combo, play2: Combo): boolean {
 
   // Both are bombs of same power: compare rank/suit
   if (power1 > 0 && power2 > 0 && power1 === power2) {
-    if (play2.rank > play1.rank) return true;
-    if (play2.rank < play1.rank) return false;
-    return play2.suit > play1.suit;
+    if (c2.rank > c1.rank) return true;
+    if (c2.rank < c1.rank) return false;
+    return c2.suit > c1.suit;
   }
 
   // Non-bomb combos: must match card count and type
-  if (play1.cards.length !== play2.cards.length) return false;
-  if (play1.type !== play2.type) return false;
+  if (c1.cards.length !== c2.cards.length) return false;
+  if (c1.type !== c2.type) return false;
 
   // Same type: compare rank then suit
-  if (play2.rank > play1.rank) return true;
-  if (play2.rank < play1.rank) return false;
-  return play2.suit > play1.suit;
+  if (c2.rank > c1.rank) return true;
+  if (c2.rank < c1.rank) return false;
+  return c2.suit > c1.suit;
 }
