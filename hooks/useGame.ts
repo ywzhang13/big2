@@ -40,6 +40,8 @@ export function useGame(roomCode: string, playerName: string) {
     passCount: 0,
     roundStarter: 0,
     scores: {},
+    readyCheck: false,
+    readyPlayers: new Set(),
   });
 
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -106,6 +108,26 @@ export function useGame(roomCode: string, playerName: string) {
           if (seat === -1) break; // Room full, ignore
           knownPlayers.set(msg.playerId, { name: msg.name, seat, ts: Date.now() });
           syncPlayersToState();
+          break;
+        }
+
+        case "ready_check": {
+          // Vibrate to alert players
+          try { navigator.vibrate?.(200); } catch {}
+          setState((prev) => ({
+            ...prev,
+            readyCheck: true,
+            readyPlayers: new Set(),
+          }));
+          break;
+        }
+
+        case "player_ready": {
+          setState((prev) => {
+            const newReady = new Set(prev.readyPlayers);
+            newReady.add(msg.playerId);
+            return { ...prev, readyPlayers: newReady };
+          });
           break;
         }
 
@@ -347,12 +369,23 @@ export function useGame(roomCode: string, playerName: string) {
     };
   }, [roomCode, playerName, myId]);
 
-  // Start game
+  // Start game — sends ready check first
   const startGame = useCallback(() => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
-    if (s.status !== "waiting") return; // prevent double start
-    // Immediately mark as playing to prevent double-click
+    if (s.status !== "waiting" || s.readyCheck) return;
+    send({ type: "ready_check", hostId: myId });
+  }, [send, myId]);
+
+  // Confirm ready
+  const confirmReady = useCallback(() => {
+    send({ type: "player_ready", playerId: myId });
+  }, [send, myId]);
+
+  // Actually deal and start (called when all players ready)
+  const dealAndStart = useCallback(() => {
+    const s = stateRef.current;
+    if (s.players.length !== 4) return;
     setState((prev) => ({ ...prev, status: "playing" }));
 
     const hands = deal();
@@ -510,7 +543,7 @@ export function useGame(roomCode: string, playerName: string) {
   }, [send]);
 
   return {
-    state, startGame, continueGame, playCards, pass,
+    state, startGame, confirmReady, dealAndStart, continueGame, playCards, pass,
     isMyTurn: state.currentTurn === state.mySeat,
     canPass: state.lastPlay !== null && state.currentTurn === state.mySeat,
   };

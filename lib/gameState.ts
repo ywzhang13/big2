@@ -26,10 +26,14 @@ export interface GameState {
   finishedHands?: Record<string, Card[]>;
   scores: Record<string, number>; // playerId -> cumulative score
   roundScores?: Record<string, number>; // this round's scores
+  readyCheck: boolean; // true when waiting for players to confirm ready
+  readyPlayers: Set<string>; // player IDs who confirmed ready
 }
 
 export type GameMessage =
   | { type: "heartbeat"; playerId: string; name: string; seat: number }
+  | { type: "ready_check"; hostId: string }
+  | { type: "player_ready"; playerId: string }
   | { type: "game_start"; hands: Record<string, Card[]>; currentTurn: number; roundStarter: number; players: { id: string; name: string; seat: number }[] }
   | { type: "play_cards"; seat: number; cards: Card[]; combo: Combo; playerName: string; cardCount: number; isFinished: boolean; finishOrder?: number; nextTurn: number; gameOver?: boolean; winner?: string }
   | { type: "pass"; seat: number; passCount: number; nextTurn: number; clearRound: boolean }
