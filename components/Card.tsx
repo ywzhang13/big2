@@ -50,7 +50,7 @@ export default function Card({
   return (
     <div
       onClick={onClick}
-      className={`${w} ${h} rounded-lg bg-white flex flex-col items-center justify-center gap-0.5
+      className={`${w} ${h} rounded-lg bg-white flex flex-col items-center justify-center gap-1
                   cursor-pointer shrink-0 card-base select-none
                   ${selected ? "card-selected" : "shadow-md border border-gray-200/80"}
                   ${glow ? "card-glow" : ""}
