@@ -168,7 +168,7 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass } = useGame(
+  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass } = useGame(
     code, nameReady ? playerName : ""
   );
 
@@ -284,7 +284,11 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
                   <p className="text-xs text-white/40 mb-1">座位 {seat + 1}</p>
                   {player ? (
                     <div>
-                      <p className="font-bold text-gold-light">{player.name}{player.id === state.myId && " (你)"}</p>
+                      <p className="font-bold text-gold-light">
+                        {player.name}
+                        {player.id === state.myId && " (你)"}
+                        {player.id === state.hostId && " 👑"}
+                      </p>
                       {state.readyCheck && (
                         <p className={`text-xs mt-1 font-bold ${isReady ? "text-green-400" : "text-white/30"}`}>
                           {isReady ? "✓ 準備好了" : "等待確認..."}
@@ -310,13 +314,19 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
             <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
               <p className="text-gold-light font-bold">等待其他玩家準備 ({state.readyPlayers.size}/{state.players.length})</p>
             </div>
-          ) : (
-            <button onClick={startGame} disabled={state.players.length !== 4 || state.readyCheck}
+          ) : isHost ? (
+            <button onClick={startGame} disabled={state.players.length !== 4}
               className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
                          cursor-pointer active:scale-95 transition-all duration-150
                          disabled:opacity-30 disabled:cursor-not-allowed">
               {state.players.length === 4 ? "開始遊戲" : `等待玩家 (${state.players.length}/4)`}
             </button>
+          ) : (
+            <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
+              <p className="text-white/50 font-medium">
+                {state.players.length === 4 ? "等待房主開始遊戲" : `等待玩家 (${state.players.length}/4)`}
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -345,7 +355,7 @@ function RoomView({ code, playerName, nameReady, onSetName, onGoHome }: {
       roundScore: roundScores[p.id] || 0,
       score: (state.scores[p.id] || 0) + (roundScores[p.id] || 0),
     }));
-    return <GameOver results={results} onGoHome={onGoHome} onPlayAgain={continueGame} />;
+    return <GameOver results={results} onGoHome={onGoHome} onPlayAgain={isHost ? continueGame : undefined} />;
   }
 
   // Playing

@@ -40,6 +40,7 @@ export function useGame(roomCode: string, playerName: string) {
     passCount: 0,
     roundStarter: 0,
     scores: {},
+    hostId: "",
     readyCheck: false,
     readyPlayers: new Set(),
   });
@@ -92,10 +93,13 @@ export function useGame(roomCode: string, playerName: string) {
       });
       players.sort((a, b) => a.seat - b.seat);
 
+      // Find host (seat 0 player)
+      const hostPlayer = players.find((p) => p.seat === 0);
+
       setState((prev) => {
         if (prev.status !== "waiting") return prev;
         const mySeat = knownPlayers.get(myId)?.seat ?? prev.mySeat;
-        return { ...prev, players, mySeat };
+        return { ...prev, players, mySeat, hostId: hostPlayer?.id || prev.hostId };
       });
     }
 
@@ -328,6 +332,10 @@ export function useGame(roomCode: string, playerName: string) {
         }
 
         knownPlayers.set(myId, { name: playerName, seat: mySeat, ts: Date.now() });
+        // First player (seat 0) becomes host
+        if (mySeat === 0) {
+          setState((prev) => ({ ...prev, hostId: myId }));
+        }
         syncPlayersToState();
 
         // Send heartbeat immediately
@@ -369,11 +377,14 @@ export function useGame(roomCode: string, playerName: string) {
     };
   }, [roomCode, playerName, myId]);
 
-  // Start game — sends ready check first
+  const isHost = state.hostId === myId;
+
+  // Start game — sends ready check first (host only)
   const startGame = useCallback(() => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
     if (s.status !== "waiting" || s.readyCheck) return;
+    if (s.hostId !== myId) return; // only host can start
     send({ type: "ready_check", hostId: myId });
   }, [send, myId]);
 
@@ -382,10 +393,11 @@ export function useGame(roomCode: string, playerName: string) {
     send({ type: "player_ready", playerId: myId });
   }, [send, myId]);
 
-  // Actually deal and start (called when all players ready)
+  // Actually deal and start (called when all players ready, host only)
   const dealAndStart = useCallback(() => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
+    if (s.hostId !== myId) return; // only host deals
     setState((prev) => ({ ...prev, status: "playing" }));
 
     const hands = deal();
@@ -410,6 +422,7 @@ export function useGame(roomCode: string, playerName: string) {
   const continueGame = useCallback(() => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
+    if (s.hostId !== myId) return; // only host can continue
 
     // Calculate this round's scores — winner gets abs of losers' total
     const newScores = { ...s.scores };
@@ -543,7 +556,7 @@ export function useGame(roomCode: string, playerName: string) {
   }, [send]);
 
   return {
-    state, startGame, confirmReady, dealAndStart, continueGame, playCards, pass,
+    state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass,
     isMyTurn: state.currentTurn === state.mySeat,
     canPass: state.lastPlay !== null && state.currentTurn === state.mySeat,
   };

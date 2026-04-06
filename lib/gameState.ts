@@ -26,8 +26,9 @@ export interface GameState {
   finishedHands?: Record<string, Card[]>;
   scores: Record<string, number>; // playerId -> cumulative score
   roundScores?: Record<string, number>; // this round's scores
-  readyCheck: boolean; // true when waiting for players to confirm ready
-  readyPlayers: Set<string>; // player IDs who confirmed ready
+  hostId: string; // first player to join — only they can start/continue
+  readyCheck: boolean;
+  readyPlayers: Set<string>;
 }
 
 export type GameMessage =
