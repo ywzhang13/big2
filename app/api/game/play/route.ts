@@ -200,9 +200,8 @@ export async function POST(request: Request) {
       allPlayers[currentPlayerIdx].is_finished = isFinished;
     }
 
-    // Check if game is over: only one player has cards left (or all finished)
-    const activePlayers = allPlayers.filter((p) => !p.is_finished);
-    const gameOver = activePlayers.length <= 1;
+    // Game over when FIRST player finishes (Taiwan rules)
+    const gameOver = isFinished && finishOrder === 1;
 
     // Calculate next turn (skip finished players)
     let nextTurn = typedPlayer.seat;
