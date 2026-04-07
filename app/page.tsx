@@ -222,7 +222,7 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
       fetch("/api/game/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, playerId: pid, playerName }),
+        body: JSON.stringify({ code, playerId: pid, name: playerName }),
       })
         .then((res) => res.json())
         .then((data) => {
