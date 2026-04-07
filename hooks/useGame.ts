@@ -304,7 +304,23 @@ export function useGame(roomCode: string, playerName: string) {
 
     channelRef.current = channel;
 
+    // Periodic state poll to recover from missed broadcasts
+    const pollTimer = setInterval(() => {
+      const s = stateRef.current;
+      const rid = roomIdRef.current;
+      if (!rid) return;
+      // During gameplay, poll if it's NOT our turn (we might have missed a broadcast)
+      if (s.status === "playing" && s.currentTurn !== s.mySeat) {
+        fetchState(rid);
+      }
+      // During lobby, poll to keep player list updated
+      if (s.status === "waiting") {
+        fetchState(rid);
+      }
+    }, 4000);
+
     return () => {
+      clearInterval(pollTimer);
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
