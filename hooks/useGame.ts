@@ -79,9 +79,15 @@ export function useGame(roomCode: string, playerName: string) {
       const hand = [...(data.myHand || [])];
       hand.sort(compareCardsDisplay);
 
+      // Map API status to GameState status
+      const isReadyCheck = data.status === "ready_check";
+      const mappedStatus: GameState["status"] =
+        data.status === "playing" ? "playing" :
+        data.status === "finished" ? "finished" : "waiting";
+
       setState((prev) => ({
         ...prev,
-        status: data.status as GameState["status"],
+        status: mappedStatus,
         players: data.players.map((p) => ({
           id: p.id,
           name: p.name,
@@ -100,7 +106,7 @@ export function useGame(roomCode: string, playerName: string) {
         mySeat: data.mySeat,
         winner: data.winner,
         finishedHands: data.finishedHands,
-        readyCheck: data.readyCheck || false,
+        readyCheck: isReadyCheck,
         readyPlayers: new Set(data.readyPlayers || []),
       }));
     } catch (err) {
