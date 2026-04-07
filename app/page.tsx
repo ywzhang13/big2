@@ -68,10 +68,16 @@ export default function Home() {
       const res = await fetch("/api/game/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId: getMyId(), playerName: name.trim() }),
+        body: JSON.stringify({ hostId: getMyId() }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "建立房間失敗"); return; }
+      // Host also joins as a player
+      await fetch("/api/game/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: data.code, playerId: getMyId(), name: name.trim() }),
+      });
       setRoomCode(data.code);
       setCreatedRoomId(data.roomId);
       setScreen("room");
@@ -90,7 +96,7 @@ export default function Home() {
       const res = await fetch("/api/game/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: joinCode, playerId: getMyId(), playerName: name.trim() }),
+        body: JSON.stringify({ code: joinCode, playerId: getMyId(), name: name.trim() }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "加入房間失敗"); return; }
