@@ -24,6 +24,7 @@ export interface GameState {
   roundStarter: number;
   winner?: string;
   finishedHands?: Record<string, Card[]>;
+  winnerLastPlay?: { cards: Card[]; comboType: string; playerName: string };
   scores: Record<string, number>; // playerId -> cumulative score
   roundScores?: Record<string, number>; // this round's scores
   hostId: string; // first player to join — only they can start/continue

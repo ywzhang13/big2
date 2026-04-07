@@ -14,11 +14,17 @@ interface PlayerResult {
 
 interface GameOverProps {
   results: PlayerResult[];
+  winnerLastPlay?: { cards: string[]; comboType: string; playerName: string };
   onGoHome: () => void;
   onPlayAgain?: () => void;
 }
 
-export default function GameOver({ results, onGoHome, onPlayAgain }: GameOverProps) {
+const COMBO_NAMES: Record<string, string> = {
+  single: "單張", pair: "對子", straight: "順子",
+  fullHouse: "葫蘆", fourOfAKind: "鐵支", straightFlush: "同花順",
+};
+
+export default function GameOver({ results, winnerLastPlay, onGoHome, onPlayAgain }: GameOverProps) {
   // Sort: winner first, then by remaining cards (fewer = better)
   const sorted = [...results].sort((a, b) => {
     if (a.finishOrder === 1) return -1;
@@ -33,6 +39,19 @@ export default function GameOver({ results, onGoHome, onPlayAgain }: GameOverPro
         <div className="text-5xl mb-2 trophy-bounce">{"\u{1F3C6}"}</div>
         <h2 className="text-3xl font-bold font-heading shimmer-gold">遊戲結束</h2>
       </div>
+
+      {/* Winner's last play */}
+      {winnerLastPlay && (
+        <div className="bg-white/10 rounded-2xl p-4 text-center w-full max-w-sm">
+          <p className="text-white/50 text-xs mb-2">{winnerLastPlay.playerName} 的最後一手</p>
+          <div className="flex items-end justify-center gap-1">
+            {winnerLastPlay.cards.map((card) => (
+              <Card key={card} card={card} small glow />
+            ))}
+          </div>
+          <p className="text-gold-light text-sm font-bold mt-2">{COMBO_NAMES[winnerLastPlay.comboType] || winnerLastPlay.comboType}</p>
+        </div>
+      )}
 
       <div className="w-full max-w-sm flex flex-col gap-3">
         {sorted.map((p) => {

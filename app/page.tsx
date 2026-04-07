@@ -365,30 +365,61 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
             })}
           </div>
 
-          {/* Ready check state */}
-          {state.readyCheck && !state.readyPlayers.has(state.myId) ? (
-            <button onClick={confirmReady}
-              className="w-full py-4 rounded-2xl bg-green-500 text-white font-bold text-lg
-                         cursor-pointer active:scale-95 transition-all duration-150 animate-pulse">
-              準備好了！
-            </button>
-          ) : state.readyCheck ? (
-            <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
-              <p className="text-gold-light font-bold">等待其他玩家準備 ({state.readyPlayers.size}/{state.players.length})</p>
+          {/* Ready check modal (LOL style) */}
+          {state.readyCheck && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm fade-in">
+              <div className="bg-gradient-to-b from-[#1a2a1a] to-[#0d1a0d] rounded-3xl p-8 w-[340px] border border-gold/30 shadow-2xl text-center">
+                <div className="text-4xl mb-3">⚔️</div>
+                <h3 className="text-2xl font-bold text-gold-light font-heading mb-2">遊戲即將開始</h3>
+                <p className="text-white/50 text-sm mb-6">所有玩家準備後開始</p>
+
+                {/* Player ready status */}
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  {state.players.map((p) => {
+                    const ready = state.readyPlayers.has(p.id);
+                    return (
+                      <div key={p.id} className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-300 ${
+                        ready ? "bg-green-500/20 border border-green-500/40 text-green-400" : "bg-white/5 border border-white/10 text-white/40"
+                      }`}>
+                        {ready ? "✓ " : ""}{p.name}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Ready button or waiting */}
+                {!state.readyPlayers.has(state.myId) ? (
+                  <button onClick={confirmReady}
+                    className="w-full py-4 rounded-2xl bg-green-500 text-white font-bold text-lg
+                               cursor-pointer active:scale-95 transition-all duration-150 animate-pulse
+                               shadow-lg shadow-green-500/30">
+                    準備好了！
+                  </button>
+                ) : (
+                  <div className="w-full py-4 rounded-2xl bg-white/10">
+                    <p className="text-gold-light font-bold">{state.readyPlayers.size}/{state.players.length} 已準備</p>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : isHost ? (
-            <button onClick={startGame} disabled={state.players.length !== 4}
-              className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
-                         cursor-pointer active:scale-95 transition-all duration-150
-                         disabled:opacity-30 disabled:cursor-not-allowed">
-              {state.players.length === 4 ? "開始遊戲" : `等待玩家 (${state.players.length}/4)`}
-            </button>
-          ) : (
-            <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
-              <p className="text-white/50 font-medium">
-                {state.players.length === 4 ? "等待房主開始遊戲" : `等待玩家 (${state.players.length}/4)`}
-              </p>
-            </div>
+          )}
+
+          {/* Start button (only when NOT in ready check) */}
+          {!state.readyCheck && (
+            isHost ? (
+              <button onClick={startGame} disabled={state.players.length !== 4}
+                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
+                           cursor-pointer active:scale-95 transition-all duration-150
+                           disabled:opacity-30 disabled:cursor-not-allowed">
+                {state.players.length === 4 ? "開始遊戲" : `等待玩家 (${state.players.length}/4)`}
+              </button>
+            ) : (
+              <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
+                <p className="text-white/50 font-medium">
+                  {state.players.length === 4 ? "等待房主開始遊戲" : `等待玩家 (${state.players.length}/4)`}
+                </p>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -417,7 +448,7 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
       roundScore: roundScores[p.id] || 0,
       score: (state.scores[p.id] || 0) + (roundScores[p.id] || 0),
     }));
-    return <GameOver results={results} onGoHome={onGoHome} onPlayAgain={isHost ? continueGame : undefined} />;
+    return <GameOver results={results} winnerLastPlay={state.winnerLastPlay} onGoHome={onGoHome} onPlayAgain={isHost ? continueGame : undefined} />;
   }
 
   // Playing

@@ -279,6 +279,11 @@ export async function POST(request: Request) {
       await broadcast(typedRoom.code, "game_over", {
         winner: winnerName ?? typedPlayer.name,
         hands,
+        lastPlay: {
+          cards: combo.cards,
+          comboType: combo.type,
+          playerName: typedPlayer.name,
+        },
       });
     }
 

@@ -270,7 +270,7 @@ export function useGame(roomCode: string, playerName: string) {
     });
 
     channel.on("broadcast", { event: "game_over" }, ({ payload }) => {
-      const msg = payload as { winner: string; hands: Record<string, Card[]> };
+      const msg = payload as { winner: string; hands: Record<string, Card[]>; lastPlay?: { cards: Card[]; comboType: string; playerName: string } };
       const myCurrentHand = stateRef.current.myHand;
       if (myCurrentHand.length > 0) {
         setTimeout(() => {
@@ -286,6 +286,7 @@ export function useGame(roomCode: string, playerName: string) {
         status: "finished",
         winner: msg.winner,
         finishedHands: { ...msg.hands, [myId]: prev.myHand },
+        winnerLastPlay: msg.lastPlay,
       }));
     });
 
