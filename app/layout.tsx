@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "大老二",
-  description: "Big Two card game for 4 players",
+  title: "阿瑋娛樂城",
+  description: "多人線上娛樂遊戲 — 大老二、台灣麻將",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "大老二",
+    title: "阿瑋娛樂城",
   },
 };
 
