@@ -69,7 +69,7 @@ export default function Lobby() {
                     {t.text ? (
                       <span className="text-xl font-black" style={{color:t.color, fontFamily:"serif", textShadow:"0 1px 1px rgba(0,0,0,0.1)"}}>{t.text}</span>
                     ) : (
-                      <div className="w-6 h-8 rounded-sm border-2 border-gray-300/60" />
+                      <div className="w-7 h-9 rounded" style={{border:"3px solid #4a90d9", background:"linear-gradient(135deg, #e8f0fe 0%, #c4d7f2 100%)"}} />
                     )}
                   </div>
                 ))}
