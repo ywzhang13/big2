@@ -53,7 +53,17 @@ export default function Lobby() {
                        text-left px-6"
           >
             <div className="flex items-center gap-4">
-              <div className="text-4xl font-bold">麻</div>
+              <div className="flex gap-1">
+                <div className="w-9 h-12 rounded bg-white/95 flex items-center justify-center shadow-md">
+                  <span className="text-red-600 text-lg font-bold" style={{fontFamily:"serif"}}>中</span>
+                </div>
+                <div className="w-9 h-12 rounded bg-white/95 flex items-center justify-center shadow-md">
+                  <span className="text-green-700 text-lg font-bold" style={{fontFamily:"serif"}}>發</span>
+                </div>
+                <div className="w-9 h-12 rounded bg-white/90 flex items-center justify-center shadow-md border border-gray-300">
+                  <span className="text-gray-400 text-lg font-bold" style={{fontFamily:"serif"}}>白</span>
+                </div>
+              </div>
               <div>
                 <div className="text-2xl font-bold text-gold-light">台灣麻將</div>
                 <div className="text-xs text-white/60 mt-1">16 張制 · 4 人桌遊</div>
