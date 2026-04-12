@@ -56,55 +56,49 @@ function OpponentPanel({
     right: "flex-col items-center",
   };
 
+  const isHorizontal = position === "top";
+  const tileSize = position === "top" ? 18 : 14; // top has more space
+  const tileH = position === "top" ? 24 : 20;
+
   return (
     <div
       className={`flex ${posClasses[position]} gap-1 transition-all duration-200
-        ${isCurrent ? "scale-105" : "opacity-70"}`}
+        ${isCurrent ? "" : "opacity-60"}`}
     >
-      <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg
-        ${isCurrent ? "bg-[#C9A96E]/20 border border-[#C9A96E]/40" : "bg-white/5"}`}>
-        <span className="text-xs font-bold text-white truncate max-w-[60px]">
-          {player.name}
-        </span>
-        {player.isDealer && (
-          <span className="text-[10px] text-[#C9A96E]">莊</span>
-        )}
+      {/* Name badge */}
+      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px]
+        ${isCurrent ? "bg-[#C9A96E]/25 border border-[#C9A96E]/40 text-[#f0d68a]" : "bg-white/5 text-white/70"}`}>
+        <span className="font-bold truncate max-w-[50px]">{player.name}</span>
+        {player.isDealer && <span className="text-[#C9A96E]">莊</span>}
       </div>
 
-      {/* Tile count */}
-      <div className="flex items-center gap-1">
-        <div className="flex gap-[1px]">
-          {Array.from({ length: Math.min(player.tileCount, 8) }).map((_, i) => (
-            <div key={i} className="w-[6px] h-[10px] rounded-[1px] bg-emerald-700 border border-emerald-500/30" />
-          ))}
-          {player.tileCount > 8 && (
-            <span className="text-[8px] text-white/40 ml-0.5">+{player.tileCount - 8}</span>
-          )}
-        </div>
-        <span className="text-[10px] text-white/50">{player.tileCount}張</span>
+      {/* Face-down tiles — show actual count as tile backs */}
+      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
+        {Array.from({ length: player.tileCount }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-[2px]"
+            style={{
+              width: isHorizontal ? tileSize : tileSize - 2,
+              height: isHorizontal ? tileH : tileSize,
+              background: "linear-gradient(180deg, #3a7a4a 0%, #1a5028 100%)",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+              border: "0.5px solid rgba(255,255,255,0.1)",
+            }}
+          />
+        ))}
       </div>
 
-      {/* Flowers */}
-      {player.flowers.length > 0 && (
-        <div className="flex gap-[2px]">
+      {/* Flowers + Revealed melds */}
+      {(player.flowers.length > 0 || player.revealed.length > 0) && (
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-1 items-center`}>
           {player.flowers.map((f) => (
             <MjTile key={f.id} tile={f} small />
           ))}
-        </div>
-      )}
-
-      {/* Revealed melds */}
-      {player.revealed.length > 0 && (
-        <div className="flex gap-1 flex-wrap justify-center">
           {player.revealed.map((meld, mi) => (
             <div key={mi} className="flex gap-[1px]">
               {meld.tiles.map((t) => (
-                <MjTile
-                  key={t.id}
-                  tile={t}
-                  small
-                  faceDown={meld.type === "concealed_kong"}
-                />
+                <MjTile key={t.id} tile={t} small faceDown={meld.type === "concealed_kong"} />
               ))}
             </div>
           ))}
@@ -273,7 +267,7 @@ export default function MjBoard({
             )}
             {/* Spacer + info */}
             <span className="text-[10px] text-white/30 ml-auto">
-              {playerName}{me.isDealer ? " (莊)" : ""} · {myHand.length} 張
+              {playerName}{me.isDealer ? " (莊)" : ""}
             </span>
           </div>
         )}
