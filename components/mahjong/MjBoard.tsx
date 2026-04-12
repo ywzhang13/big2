@@ -143,11 +143,6 @@ export default function MjBoard({
   const right = getOpponent(1);
   const me = players.find((p) => p.seat === mySeat);
 
-  // Collect all discards for the pool display
-  const allDiscards = players
-    .flatMap((p) => p.discards.map((d) => ({ tile: d, from: p.seat })))
-    .slice(-20); // Show last 20
-
   const hasActions = availableActions.length > 0;
 
   return (
@@ -165,62 +160,69 @@ export default function MjBoard({
           <OpponentPanel player={left} position="left" isCurrent={left?.seat === currentTurn} />
         </div>
 
-        {/* Center area */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0 overflow-hidden">
-          {/* Wind + wall info */}
+        {/* Center area — 4-sided discard pool */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-0 overflow-hidden">
+          {/* Wind + wall + turn info */}
           <div className="flex items-center gap-3 text-[10px] text-white/40">
             <span>場風: {WIND_CHARS[(players.find(p => p.seat === dealerSeat)?.seat ?? 0)] || "東"}</span>
             <span>剩餘: {wallRemaining}</span>
-          </div>
-
-          {/* Discard pool */}
-          <div className="w-full max-w-[260px] min-h-[80px] bg-black/20 rounded-xl border border-white/5 p-2
-                          flex flex-wrap justify-center gap-[2px] content-start">
-            {allDiscards.map(({ tile }, i) => (
-              <MjTile key={`${tile.id}-${i}`} tile={tile} small />
-            ))}
-            {allDiscards.length === 0 && (
-              <p className="text-white/20 text-xs self-center">牌河</p>
+            {isMyTurn ? (
+              <span className="text-[#f0d68a] font-bold animate-pulse">
+                {needsDraw ? "輪到你摸牌" : "輪到你打牌"}
+              </span>
+            ) : (
+              <span>等待 {players.find((p) => p.seat === currentTurn)?.name || "..."}</span>
             )}
           </div>
 
-          {/* Last discard highlight */}
-          {lastDiscard && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-white/40">
-                {players.find((p) => p.seat === lastDiscard.from)?.name || "?"} 打出:
-              </span>
-              <div className="ring-2 ring-[#C9A96E] rounded-md">
-                <MjTile tile={lastDiscard.tile} />
+          {/* 4-sided discard pool */}
+          <div className="relative w-full max-w-[400px] h-[140px] bg-black/15 rounded-lg border border-white/5">
+            {/* Top player discards (rotated 180deg) */}
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 flex gap-[1px] justify-center flex-wrap max-w-[280px]">
+              {(top?.discards || []).slice(-9).map((t, i) => (
+                <MjTile key={`top-${t.id}-${i}`} tile={t} small />
+              ))}
+            </div>
+            {/* Left player discards */}
+            <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-[1px] items-center max-h-[120px] overflow-hidden">
+              {(left?.discards || []).slice(-4).map((t, i) => (
+                <MjTile key={`left-${t.id}-${i}`} tile={t} small />
+              ))}
+            </div>
+            {/* Right player discards */}
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col gap-[1px] items-center max-h-[120px] overflow-hidden">
+              {(right?.discards || []).slice(-4).map((t, i) => (
+                <MjTile key={`right-${t.id}-${i}`} tile={t} small />
+              ))}
+            </div>
+            {/* My discards (bottom) */}
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-[1px] justify-center flex-wrap max-w-[280px]">
+              {(me?.discards || []).slice(-9).map((t, i) => (
+                <MjTile key={`me-${t.id}-${i}`} tile={t} small />
+              ))}
+            </div>
+            {/* Center: last discard */}
+            {lastDiscard && (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                <div className="ring-2 ring-[#C9A96E] rounded">
+                  <MjTile tile={lastDiscard.tile} small />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Turn indicator */}
-          {isMyTurn ? (
-            <div className="px-4 py-1.5 rounded-full bg-[#C9A96E]/20 border border-[#C9A96E]/40 animate-pulse">
-              <p className="text-sm font-bold text-[#f0d68a]">
-                {needsDraw ? "輪到你摸牌" : "輪到你打牌"}
-              </p>
-            </div>
-          ) : (
-            <p className="text-xs text-white/50">
-              等待 {players.find((p) => p.seat === currentTurn)?.name || "..."}
-            </p>
-          )}
-
-          {/* Action buttons (chi/pong/kong/win from other player's discard) */}
+          {/* Action buttons */}
           {hasActions && (
-            <div className="flex gap-2 flex-wrap justify-center">
+            <div className="flex gap-2 justify-center">
               {availableActions.map((action, i) => (
                 <button
                   key={`${action.type}-${i}`}
                   onClick={() => onAction(action.type, action.tiles)}
-                  className={`px-4 py-2.5 rounded-xl font-bold text-sm
-                    cursor-pointer active:scale-95 transition-all duration-150 min-w-[52px]
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs
+                    cursor-pointer active:scale-95 transition-all duration-150
                     ${action.type === "win"
-                      ? "bg-red-600 text-white shadow-lg shadow-red-600/30 animate-pulse"
-                      : "bg-[#C9A96E] text-[#0f2a1a] shadow-md shadow-[#C9A96E]/30"
+                      ? "bg-red-600 text-white animate-pulse"
+                      : "bg-[#C9A96E] text-[#0f2a1a]"
                     }`}
                 >
                   {ActionName(action.type)}
@@ -228,8 +230,8 @@ export default function MjBoard({
               ))}
               <button
                 onClick={() => onAction("pass")}
-                className="px-4 py-2.5 rounded-xl bg-white/10 text-white font-bold text-sm
-                  cursor-pointer active:scale-95 transition-all duration-150 min-w-[52px]"
+                className="px-3 py-1.5 rounded-lg bg-white/10 text-white font-bold text-xs
+                  cursor-pointer active:scale-95 transition-all duration-150"
               >
                 過
               </button>
@@ -244,61 +246,48 @@ export default function MjBoard({
       </div>
 
       {/* Bottom: my area */}
-      <div className="pb-safe bg-black/30 backdrop-blur-sm rounded-t-2xl">
-        {/* My info bar */}
-        <div className="h-7 flex items-center justify-between px-4">
-          <span className="text-[10px] text-white/40">
-            {playerName}
-            {me?.isDealer ? " (莊)" : ""}
-            {" · "}
-            <span className={`font-bold ${myHand.length <= 3 ? "text-red-400" : "text-[#f0d68a]"}`}>
-              {myHand.length}
-            </span>
-            {" 張"}
-          </span>
-          {/* My flowers */}
-          {me && me.flowers.length > 0 && (
-            <div className="flex gap-[2px]">
-              {me.flowers.map((f) => (
-                <MjTile key={f.id} tile={f} small />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* My revealed melds */}
-        {me && me.revealed.length > 0 && (
-          <div className="flex gap-2 justify-center px-4 pb-1">
-            {me.revealed.map((meld, mi) => (
-              <div key={mi} className="flex gap-[1px]">
-                {meld.tiles.map((t) => (
-                  <MjTile
-                    key={t.id}
-                    tile={t}
-                    small
-                    faceDown={meld.type === "concealed_kong"}
-                  />
+      <div className="pb-safe bg-black/20">
+        {/* Meld + Flower zone (吃碰槓/花牌區) */}
+        {me && (me.revealed.length > 0 || me.flowers.length > 0) && (
+          <div className="flex items-center gap-3 px-3 py-1 border-b border-white/5">
+            {/* Flowers */}
+            {me.flowers.length > 0 && (
+              <div className="flex gap-[2px] items-center">
+                <span className="text-[9px] text-white/30 mr-1">花</span>
+                {me.flowers.map((f) => (
+                  <MjTile key={f.id} tile={f} small />
                 ))}
               </div>
-            ))}
+            )}
+            {/* Revealed melds */}
+            {me.revealed.length > 0 && (
+              <div className="flex gap-2 items-center">
+                {me.revealed.map((meld, mi) => (
+                  <div key={mi} className="flex gap-[1px]">
+                    {meld.tiles.map((t) => (
+                      <MjTile key={t.id} tile={t} small faceDown={meld.type === "concealed_kong"} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Spacer + info */}
+            <span className="text-[10px] text-white/30 ml-auto">
+              {playerName}{me.isDealer ? " (莊)" : ""} · {myHand.length} 張
+            </span>
           </div>
         )}
 
-        {/* Hand */}
-        <MjHand
-          tiles={myHand}
-          canDiscard={needsDiscard}
-          onDiscard={onDiscard}
-        />
-
-        {/* Bottom action bar */}
-        <div className="flex gap-3 px-4 py-3">
+        {/* Hand + draw button on same row */}
+        <div className="flex items-end px-1 py-1 gap-2">
+          <div className="flex-1 min-w-0">
+            <MjHand tiles={myHand} canDiscard={needsDiscard} onDiscard={onDiscard} />
+          </div>
           {needsDraw && (
             <button
               onClick={onDraw}
-              className="flex-1 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-sm
-                         cursor-pointer active:scale-95 transition-all duration-150
-                         shadow-md shadow-[#C9A96E]/30"
+              className="px-4 py-2 rounded-lg bg-[#C9A96E] text-[#0f2a1a] font-bold text-xs
+                         cursor-pointer active:scale-95 transition-all flex-shrink-0"
             >
               摸牌
             </button>
