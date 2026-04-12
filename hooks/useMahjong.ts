@@ -94,6 +94,7 @@ export function useMahjong(roomCode: string, playerName: string) {
   stateRef.current = state;
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
+  const discardingRef = useRef(false);
 
   // Fetch full state from API (for reconnection / polling)
   const fetchState = useCallback(async (rid: string) => {
@@ -353,9 +354,17 @@ export function useMahjong(roomCode: string, playerName: string) {
         ...prev,
         lastDiscard: { tile, from: seat },
         hasDrawn: false,
+        availableActions: [],
         players: prev.players.map((p) =>
           p.seat === seat
-            ? { ...p, discards: [...p.discards, tile], tileCount: p.tileCount - 1 }
+            ? {
+                ...p,
+                // Bug #5: prevent duplicate discards
+                discards: p.discards.some((d) => d.id === tile.id)
+                  ? p.discards
+                  : [...p.discards, tile],
+                tileCount: p.tileCount - 1,
+              }
             : p
         ),
         // If not my discard, keep hand; if mine, remove that tile
@@ -384,28 +393,30 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_action (chi/pong/kong) ---
     channel.on("broadcast", { event: "mj_action" }, ({ payload }) => {
-      const { type, seat, tiles } = payload as {
+      const msg = payload as {
         type: string;
         seat: number;
         tiles: Tile[];
+        tileCount?: number;
       };
       setState((prev) => {
         const meld: Meld = {
-          type: type as Meld["type"],
-          tiles,
+          type: msg.type as Meld["type"],
+          tiles: msg.tiles,
           from: prev.lastDiscard?.from,
         };
         return {
           ...prev,
-          currentTurn: seat,
+          currentTurn: msg.seat,
           lastDiscard: null,
           availableActions: [],
-          hasDrawn: type === "kong" ? true : true, // after chi/pong/kong player must discard (or already drew for kong)
+          hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
           players: prev.players.map((p) =>
-            p.seat === seat
+            p.seat === msg.seat
               ? {
                   ...p,
                   revealed: [...p.revealed, meld],
+                  tileCount: msg.tileCount ?? p.tileCount,
                 }
               : p
           ),
@@ -425,12 +436,15 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_pass ---
     channel.on("broadcast", { event: "mj_pass" }, ({ payload }) => {
-      const { seat: _seat } = payload as { seat: number };
-      // Clear available actions for this player
+      const { seat: _seat, allPassed } = payload as {
+        seat: number;
+        allPassed?: boolean;
+      };
       setState((prev) => ({
         ...prev,
+        // Always clear actions for the passing player; clear for everyone if all passed
         availableActions:
-          prev.mySeat === _seat ? [] : prev.availableActions,
+          prev.mySeat === _seat || allPassed ? [] : prev.availableActions,
       }));
     });
 
@@ -544,6 +558,9 @@ export function useMahjong(roomCode: string, playerName: string) {
     async (tileId: number) => {
       const rid = roomIdRef.current;
       if (!rid) return;
+      // Bug #16: prevent double-discard race condition
+      if (discardingRef.current) return;
+      discardingRef.current = true;
       // Optimistically remove tile from hand
       setState((prev) => ({
         ...prev,
@@ -561,6 +578,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         // Revert on failure — poll will fix state
         const rid2 = roomIdRef.current;
         if (rid2) fetchState(rid2);
+      } finally {
+        discardingRef.current = false;
       }
     },
     [myId, fetchState]

@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       // Determine if self-draw or from discard
       const isSelfDraw = state.currentTurn === seat && state.hasDrawn;
       newState = declareWin(state, seat, isSelfDraw);
+      newState.pendingActions = undefined;
 
       await saveGameState(roomId, newState, "finished");
 
@@ -72,16 +73,40 @@ export async function POST(request: Request) {
     }
 
     if (actionType === "pass") {
-      // For now, just advance turn and draw for next player
-      // In a full implementation, we'd track which players passed
-      // and only proceed when all potential actors have passed
-      newState = advanceTurn(state);
+      // Multi-player action window: track who has passed
+      if (state.pendingActions) {
+        const pending = { ...state.pendingActions };
+        // Add this player to passedActors if they are a potential actor
+        if (
+          pending.potentialActors.includes(seat) &&
+          !pending.passedActors.includes(seat)
+        ) {
+          pending.passedActors = [...pending.passedActors, seat];
+        }
+
+        const allPassed = pending.potentialActors.every((s) =>
+          pending.passedActors.includes(s)
+        );
+
+        if (allPassed) {
+          // Everyone passed — advance turn, clear pending
+          newState = advanceTurn(state);
+          newState.pendingActions = undefined;
+        } else {
+          // Still waiting for others — just update passedActors
+          newState = { ...state, pendingActions: pending } as MahjongGameState;
+        }
+      } else {
+        // No pending actions — just advance turn
+        newState = advanceTurn(state);
+      }
 
       await saveGameState(roomId, newState);
 
       // Broadcast that the turn advances (no action taken)
       await mjBroadcast(room.code, "mj_pass", {
         seat,
+        allPassed: !newState.pendingActions, // true if turn advanced
       });
 
       return Response.json({ success: true });
@@ -110,15 +135,19 @@ export async function POST(request: Request) {
     };
 
     newState = executeAction(state, action);
+    // Clear pendingActions after a successful chi/pong/kong
+    newState.pendingActions = undefined;
 
     await saveGameState(roomId, newState);
 
-    // Broadcast the action (revealed meld)
-    const lastMeld = newState.players[seat].revealed[newState.players[seat].revealed.length - 1];
+    // Broadcast the action (revealed meld) with tileCount
+    const updatedPlayer = newState.players[seat];
+    const lastMeld = updatedPlayer.revealed[updatedPlayer.revealed.length - 1];
     await mjBroadcast(room.code, "mj_action", {
       type: actionType,
       seat,
       tiles: lastMeld.tiles,
+      tileCount: updatedPlayer.hand.length,
     });
 
     // After chi/pong, the player needs to discard.

@@ -47,6 +47,21 @@ export async function POST(request: Request) {
     // Check available actions for other players
     const actions = getAvailableActions(newState);
 
+    // If there are actions available, save pendingActions so the action
+    // route knows who still needs to pass before the turn advances.
+    if (actions.length > 0) {
+      const potentialActors = [...new Set(actions.map((a) => a.playerSeat))];
+      newState.pendingActions = {
+        discardFrom: seat,
+        potentialActors,
+        passedActors: [],
+      };
+    } else {
+      // No one can act — clear any stale pending and leave state as-is
+      // (turn will NOT auto-advance here; the next player must draw)
+      newState.pendingActions = undefined;
+    }
+
     // Save state
     await saveGameState(roomId, newState);
 

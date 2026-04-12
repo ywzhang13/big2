@@ -41,4 +41,10 @@ export interface MahjongGameState {
   isFirstRound: boolean;
   // Track if the last action was a kong (for 槓上開花)
   isAfterKong: boolean;
+  // Multi-player action window after a discard
+  pendingActions?: {
+    discardFrom: number;         // who discarded
+    potentialActors: number[];   // seats that can act
+    passedActors: number[];      // seats that already passed
+  };
 }
