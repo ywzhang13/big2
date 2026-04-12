@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="89" viewBox="0 0 64 89">
+  <rect x="1" y="1" width="62" height="87" rx="5" fill="#f5f0e0" stroke="#c0b090" stroke-width="1"/>
+  <rect x="4" y="4" width="56" height="81" rx="3" fill="#faf5e8" stroke="#e0d8c0" stroke-width="0.5"/>
+  <text x="32" y="54" text-anchor="middle" font-size="36" font-weight="900" font-family="serif" fill="#7c3aed">竹</text>
+</svg>
