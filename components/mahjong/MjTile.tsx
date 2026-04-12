@@ -61,9 +61,15 @@ export default function MjTile({ tile, selected, onClick, small, faceDown }: MjT
       <img
         src={src}
         alt={tile.display}
-        width={w}
-        height={h}
-        style={{ width: w, height: h, objectFit: "cover", display: "block" }}
+        width={Math.round(w * 0.9)}
+        height={Math.round(h * 0.9)}
+        style={{
+          width: Math.round(w * 0.9),
+          height: Math.round(h * 0.9),
+          objectFit: "contain",
+          display: "block",
+          margin: "auto",
+        }}
         draggable={false}
       />
     </button>

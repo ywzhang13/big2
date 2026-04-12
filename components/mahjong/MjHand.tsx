@@ -27,7 +27,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard }: MjHandProps) {
   return (
     <div className="flex flex-col items-center gap-2">
       {/* Tiles row */}
-      <div className="flex flex-wrap justify-center gap-[3px] px-2 max-w-full">
+      <div className="flex flex-wrap justify-center gap-[6px] px-2 max-w-full">
         {tiles.map((t) => (
           <MjTile
             key={t.id}
