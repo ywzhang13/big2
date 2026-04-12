@@ -53,8 +53,8 @@ export default function MjTile({ tile, selected, onClick, small, faceDown }: MjT
         background: "#ffffff",
         boxShadow: selected
           ? "0 6px 16px rgba(0,0,0,0.5), 0 0 0 2px #fbbf24"
-          : "1px 3px 5px rgba(0,0,0,0.4)",
-        border: selected ? "1px solid #fbbf24" : "1px solid rgba(0,0,0,0.15)",
+          : "0 1px 3px rgba(0,0,0,0.2)",
+        border: selected ? "1px solid #fbbf24" : "none",
       }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
