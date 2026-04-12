@@ -151,9 +151,10 @@ export default function MjBoard({
   const hasActions = availableActions.length > 0;
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden relative">
+    <div className="mj-landscape flex flex-col flex-1 overflow-hidden relative bg-[#0f2a1a]"
+         style={{ minHeight: "100dvh" }}>
       {/* Top opponent */}
-      <div className="flex justify-center pt-safe px-4 py-2">
+      <div className="flex justify-center pt-safe px-4 py-1">
         <OpponentPanel player={top} position="top" isCurrent={top?.seat === currentTurn} />
       </div>
 

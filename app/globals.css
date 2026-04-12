@@ -9,6 +9,20 @@
   --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Force landscape for mahjong game */
+@media (orientation: portrait) {
+  .mj-landscape {
+    transform: rotate(90deg);
+    transform-origin: top left;
+    width: 100dvh;
+    height: 100dvw;
+    position: absolute;
+    top: 0;
+    left: 100dvw;
+    overflow: hidden;
+  }
+}
+
 @theme inline {
   --color-felt: var(--felt-green);
   --color-felt-light: var(--felt-light);
