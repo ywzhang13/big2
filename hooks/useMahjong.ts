@@ -129,7 +129,19 @@ export function useMahjong(roomCode: string, playerName: string) {
 
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
-        // Keep status as waiting, don't overwrite players from broadcast
+        // Update players from DB
+        const lobbyPlayers = (data as { lobbyPlayers?: { id: string; name: string; seat: number }[]; hostId?: string }).lobbyPlayers || [];
+        const hostId = (data as { hostId?: string }).hostId || "";
+        if (lobbyPlayers.length > 0) {
+          setState((prev) => {
+            const players: MjPlayer[] = lobbyPlayers.map((p) => ({
+              id: p.id, name: p.name, seat: p.seat,
+              tileCount: 0, flowers: [], discards: [], revealed: [], isDealer: false,
+            }));
+            const mySeat = players.find((p) => p.id === myId)?.seat ?? prev.mySeat;
+            return { ...prev, players, mySeat, hostId };
+          });
+        }
         return;
       }
 

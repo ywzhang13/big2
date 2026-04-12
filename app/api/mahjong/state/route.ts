@@ -1,4 +1,4 @@
-import { loadRoom, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
+import { loadRoom, loadPlayers, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function GET(request: Request) {
@@ -11,41 +11,47 @@ export async function GET(request: Request) {
       return Response.json({ error: "缺少 roomId" }, { status: 400 });
     }
 
-    // Load room
     const room = await loadRoom(roomId);
     if (!room) {
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 
-    // If no game state yet, return room info only
+    // If no game state yet (still in lobby), return players from DB
     if (!room.game_state) {
+      const dbPlayers = await loadPlayers(roomId);
       return Response.json({
         roomId: room.id,
         code: room.code,
         status: room.status,
+        hostId: room.host_id,
+        lobbyPlayers: (dbPlayers || []).map((p: { player_id: string; name: string; seat: number }) => ({
+          id: p.player_id,
+          name: p.name,
+          seat: p.seat,
+        })),
         gameState: null,
       });
     }
 
     const state = room.game_state as MahjongGameState;
 
-    // If playerId provided, return their hand; otherwise public-only view
     if (playerId) {
       const playerView = toPlayerGameState(state, playerId);
       return Response.json({
         roomId: room.id,
         code: room.code,
         status: room.status,
+        hostId: room.host_id,
         gameState: playerView,
       });
     }
 
-    // Public view only (no hands)
     const publicView = toPublicGameState(state);
     return Response.json({
       roomId: room.id,
       code: room.code,
       status: room.status,
+      hostId: room.host_id,
       gameState: publicView,
     });
   } catch {
