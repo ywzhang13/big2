@@ -53,16 +53,26 @@ export default function Lobby() {
                        text-left px-6"
           >
             <div className="flex items-center gap-4">
-              <div className="flex gap-1">
-                <div className="w-9 h-12 rounded bg-white/95 flex items-center justify-center shadow-md">
-                  <span className="text-red-600 text-lg font-bold" style={{fontFamily:"serif"}}>中</span>
-                </div>
-                <div className="w-9 h-12 rounded bg-white/95 flex items-center justify-center shadow-md">
-                  <span className="text-green-700 text-lg font-bold" style={{fontFamily:"serif"}}>發</span>
-                </div>
-                <div className="w-9 h-12 rounded bg-white/90 flex items-center justify-center shadow-md border border-gray-300">
-                  <span className="text-gray-400 text-lg font-bold" style={{fontFamily:"serif"}}>白</span>
-                </div>
+              <div className="flex gap-0.5" style={{perspective:"200px"}}>
+                {[
+                  {text:"中", color:"#dc2626"},
+                  {text:"發", color:"#15803d"},
+                  {text:"", color:""},
+                ].map((t, i) => (
+                  <div key={i} className="w-10 h-14 rounded-md flex items-center justify-center relative"
+                    style={{
+                      background:"linear-gradient(145deg, #f5f0e0 0%, #e8dfc8 50%, #d4c9a8 100%)",
+                      boxShadow:"2px 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8), inset -1px -1px 0 rgba(0,0,0,0.1)",
+                      border:"1px solid rgba(180,170,140,0.6)",
+                      transform:`rotateY(${(i-1)*3}deg)`,
+                    }}>
+                    {t.text ? (
+                      <span className="text-xl font-black" style={{color:t.color, fontFamily:"serif", textShadow:"0 1px 1px rgba(0,0,0,0.1)"}}>{t.text}</span>
+                    ) : (
+                      <div className="w-6 h-8 rounded-sm border-2 border-gray-300/60" />
+                    )}
+                  </div>
+                ))}
               </div>
               <div>
                 <div className="text-2xl font-bold text-gold-light">台灣麻將</div>
