@@ -125,7 +125,15 @@ export default function MahjongPage() {
       <div className="flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] items-center justify-center px-6">
         <div className="flex flex-col items-center gap-8 w-full max-w-sm">
           <div className="text-center">
-            <p className="text-5xl mb-2">&#127936;</p>
+            <div className="flex gap-1 justify-center mb-2">
+              {[{t:"中",c:"#dc2626"},{t:"發",c:"#15803d"},{t:"",c:""}].map((x,i)=>(
+                <div key={i} className="w-10 h-14 rounded-md flex items-center justify-center"
+                  style={{background:"linear-gradient(145deg, #f5f0e0 0%, #e8dfc8 50%, #d4c9a8 100%)",boxShadow:"2px 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8)",border:"1px solid rgba(180,170,140,0.6)"}}>
+                  {x.t ? <span className="text-xl font-black" style={{color:x.c,fontFamily:"serif"}}>{x.t}</span>
+                    : <div className="w-6 h-8 rounded-sm" style={{border:"2.5px solid #1a1a1a"}} />}
+                </div>
+              ))}
+            </div>
             <h1 className="text-5xl font-bold tracking-wider text-[#f0d68a] font-heading">
               台灣麻將
             </h1>
