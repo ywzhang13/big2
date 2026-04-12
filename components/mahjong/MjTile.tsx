@@ -29,9 +29,8 @@ function getTileSvg(tile: Tile): string {
 }
 
 export default function MjTile({ tile, selected, onClick, small, faceDown }: MjTileProps) {
-  // Reduced 20% from original
-  const w = small ? 27 : 38;
-  const h = small ? 38 : 54;
+  const w = small ? 32 : 46;
+  const h = small ? 44 : 64;
 
   const src = faceDown
     ? "/tiles/Back.svg"
@@ -50,10 +49,10 @@ export default function MjTile({ tile, selected, onClick, small, faceDown }: MjT
         width: w, height: h,
         borderRadius: 4,
         overflow: "hidden",
-        background: "#ffffff",
+        background: "transparent",
         boxShadow: selected
           ? "0 6px 16px rgba(0,0,0,0.5), 0 0 0 2px #fbbf24"
-          : "0 1px 3px rgba(0,0,0,0.2)",
+          : "none",
         border: selected ? "1px solid #fbbf24" : "none",
       }}
     >
@@ -61,14 +60,13 @@ export default function MjTile({ tile, selected, onClick, small, faceDown }: MjT
       <img
         src={src}
         alt={tile.display}
-        width={Math.round(w * 0.9)}
-        height={Math.round(h * 0.9)}
+        width={w}
+        height={h}
         style={{
-          width: Math.round(w * 0.9),
-          height: Math.round(h * 0.9),
+          width: w,
+          height: h,
           objectFit: "contain",
           display: "block",
-          margin: "auto",
         }}
         draggable={false}
       />
