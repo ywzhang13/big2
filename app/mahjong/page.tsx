@@ -504,17 +504,31 @@ function RoomView({
           <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             {state.winner.seat < 0 ? (
               <div className="text-center">
-                <p className="text-3xl mb-2">&#128524;</p>
+                <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/5 flex items-center justify-center text-2xl">
+                  &#9940;
+                </div>
                 <h2 className="text-xl font-bold text-white/70">流局</h2>
                 <p className="text-white/40 text-sm mt-1">牌牆摸完，無人胡牌</p>
               </div>
             ) : (
               <div className="text-center">
-                <p className="text-3xl mb-2">&#127936;</p>
+                <div className="w-14 h-14 mx-auto mb-2 rounded-full flex items-center justify-center text-2xl"
+                  style={{ background: "radial-gradient(circle, #C9A96E, #8B6914)", boxShadow: "0 0 20px rgba(201,169,110,0.4)" }}>
+                  胡
+                </div>
                 <h2 className="text-xl font-bold text-[#f0d68a]">
                   {state.winner.name} 胡牌！
                 </h2>
-                <p className="text-white/50 text-sm mt-2">
+                {/* Show 自摸 or 放槍 */}
+                <p className="text-white/50 text-sm mt-1">
+                  {state.winner.score.fans.some(f => f.name.includes("自摸"))
+                    ? <span className="text-[#C9A96E]">自摸</span>
+                    : state.lastDiscard
+                      ? <span className="text-red-400">{state.players.find(p => p.seat === state.lastDiscard?.from)?.name} 放槍</span>
+                      : <span className="text-[#C9A96E]">自摸</span>
+                  }
+                </p>
+                <p className="text-white/50 text-sm mt-1">
                   {state.winner.score.totalFan > 0 && (
                     <span>共 <span className="text-[#C9A96E] font-bold text-lg">{state.winner.score.totalFan}</span> 台</span>
                   )}

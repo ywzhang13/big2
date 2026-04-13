@@ -105,14 +105,11 @@ function PlayerPanel({
 
       {/* Flowers + Revealed melds (closer to center for left/right) */}
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-1 items-center`}>
-          {player.flowers.map((f) => (
-            <div key={f.id} style={rotStyle ? { transform: rotStyle } : undefined}>
-              <MjTile tile={f} tiny />
-            </div>
-          ))}
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} ${isHorizontal ? "gap-2" : "gap-1.5"} items-center`}>
+          {/* Each meld is a tight group */}
           {player.revealed.map((meld, mi) => (
-            <div key={mi} className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px]`}>
+            <div key={mi} className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-0`}
+              style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3 }}>
               {meld.tiles.map((t) => (
                 <div key={t.id} style={rotStyle ? { transform: rotStyle } : undefined}>
                   <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
@@ -120,6 +117,16 @@ function PlayerPanel({
               ))}
             </div>
           ))}
+          {/* Flowers as a group */}
+          {player.flowers.length > 0 && (
+            <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-0`}>
+              {player.flowers.map((f) => (
+                <div key={f.id} style={rotStyle ? { transform: rotStyle } : undefined}>
+                  <MjTile tile={f} tiny />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
