@@ -589,6 +589,8 @@ export function useMahjong(roomCode: string, playerName: string) {
     async (actionType: string, tiles?: Tile[]) => {
       const rid = roomIdRef.current;
       if (!rid) return;
+      // Optimistically clear action buttons immediately
+      setState((prev) => ({ ...prev, availableActions: [] }));
       try {
         await api("POST", "/api/mahjong/action", {
           roomId: rid,
@@ -596,9 +598,10 @@ export function useMahjong(roomCode: string, playerName: string) {
           actionType,
           tiles: tiles?.map((t) => t.id),
         });
-        setState((prev) => ({ ...prev, availableActions: [] }));
       } catch (err) {
         console.error("[mj] action failed:", err);
+        // Clear actions on failure to prevent stuck buttons
+        setState((prev) => ({ ...prev, availableActions: [] }));
       }
     },
     [myId]
