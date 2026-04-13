@@ -5,7 +5,7 @@ import {
   toPublicGameState,
 } from "@/lib/mahjong/db";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
-import { discardTile, getAvailableActions } from "@/lib/mahjong/gameLogic";
+import { discardTile, getAvailableActions, advanceTurn } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
@@ -57,8 +57,9 @@ export async function POST(request: Request) {
         passedActors: [],
       };
     } else {
-      // No one can act — clear any stale pending and leave state as-is
-      // (turn will NOT auto-advance here; the next player must draw)
+      // No one can act — advance turn to next player
+      const advanced = advanceTurn(newState);
+      Object.assign(newState, advanced);
       newState.pendingActions = undefined;
     }
 
