@@ -301,17 +301,18 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_draw (public) ---
     channel.on("broadcast", { event: "mj_draw" }, ({ payload }) => {
-      const { seat, tileCount, wallCount } = payload as {
+      const { seat, tileCount, wallCount, flowers } = payload as {
         seat: number;
         tileCount: number;
         wallCount: number;
+        flowers?: Tile[];
       };
       setState((prev) => ({
         ...prev,
         wallRemaining: wallCount,
         hasDrawn: true,
         players: prev.players.map((p) =>
-          p.seat === seat ? { ...p, tileCount } : p
+          p.seat === seat ? { ...p, tileCount, ...(flowers ? { flowers } : {}) } : p
         ),
       }));
     });

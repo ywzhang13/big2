@@ -82,11 +82,12 @@ export async function POST(request: Request) {
     // Save state
     await saveGameState(roomId, newState);
 
-    // Broadcast public draw info (tile count only, not the tile itself)
+    // Broadcast public draw info (tile count + flowers for all to see補花)
     await mjBroadcast(room.code, "mj_draw", {
       seat,
       tileCount: player.hand.length,
       wallCount: newState.wall.length,
+      flowers: player.flowers,
     });
 
     // Send drawn tile only to the drawing player (include flowers for補花)
