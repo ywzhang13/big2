@@ -618,8 +618,17 @@ export function useMahjong(roomCode: string, playerName: string) {
         });
       } catch (err) {
         console.error("[mj] action failed:", err);
-        // Clear actions on failure to prevent stuck buttons
-        setState((prev) => ({ ...prev, availableActions: [] }));
+        // Action failed (e.g., tile already taken) — auto-pass to keep game moving
+        try {
+          await api("POST", "/api/mahjong/action", {
+            roomId: rid,
+            playerId: myId,
+            actionType: "pass",
+          });
+        } catch {
+          // If pass also fails, poll to resync
+          fetchState(rid);
+        }
       }
     },
     [myId]
