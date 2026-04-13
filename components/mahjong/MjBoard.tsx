@@ -21,6 +21,7 @@ interface MjBoardProps {
   isMyTurn: boolean;
   playerName: string;
   drawnTileId: number | null;
+  actionNotice: { seat: number; type: string } | null;
   onDraw: () => void;
   onDiscard: (tileId: number) => void;
   onAction: (type: string, tiles?: Tile[]) => void;
@@ -84,15 +85,16 @@ function PlayerPanel({
         </div>
       </div>
 
-      {/* Face-down tiles */}
-      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
+      {/* Face-down tiles (rotated 90° for left/right) */}
+      <div className={`flex ${isHorizontal ? "flex-row" : "flex-row"} gap-[1px] items-center`}
+        style={!isHorizontal ? { transform: position === "left" ? "rotate(90deg)" : "rotate(-90deg)" } : undefined}>
         {Array.from({ length: player.tileCount }).map((_, i) => (
           <div
             key={i}
             className="rounded-[3px]"
             style={{
-              width: isHorizontal ? tileSize : tileSize - 2,
-              height: isHorizontal ? tileH : tileSize,
+              width: tileSize - 2,
+              height: tileH - 4,
               background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
@@ -101,16 +103,17 @@ function PlayerPanel({
         ))}
       </div>
 
-      {/* Flowers + Revealed melds */}
+      {/* Flowers + Revealed melds (rotated 90° for left/right) */}
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-1 items-center`}>
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-row"} gap-1 items-center`}
+          style={!isHorizontal ? { transform: position === "left" ? "rotate(90deg)" : "rotate(-90deg)" } : undefined}>
           {player.flowers.map((f) => (
-            <MjTile key={f.id} tile={f} small />
+            <MjTile key={f.id} tile={f} tiny />
           ))}
           {player.revealed.map((meld, mi) => (
             <div key={mi} className="flex gap-[1px]">
               {meld.tiles.map((t) => (
-                <MjTile key={t.id} tile={t} small faceDown={meld.type === "concealed_kong"} />
+                <MjTile key={t.id} tile={t} tiny faceDown={meld.type === "concealed_kong"} />
               ))}
             </div>
           ))}
@@ -188,6 +191,7 @@ export default function MjBoard({
   isMyTurn,
   playerName,
   drawnTileId,
+  actionNotice,
   onDraw,
   onDiscard,
   onAction,
@@ -341,6 +345,17 @@ export default function MjBoard({
               </div>
             </div>
           </div>
+
+          {/* Action notice animation (碰!/吃!/槓!) */}
+          {actionNotice && (
+            <div className="flex items-center justify-center gap-2 animate-bounce">
+              <span className="px-4 py-2 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg shadow-lg shadow-[#C9A96E]/30">
+                {players.find(p => p.seat === actionNotice.seat)?.name}
+                {" "}
+                {ActionName(actionNotice.type)}！
+              </span>
+            </div>
+          )}
 
           {/* Turn status */}
           <div className="text-center">

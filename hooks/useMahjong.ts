@@ -71,6 +71,7 @@ export interface MjClientState {
   hostId: string;
   hasDrawn: boolean;
   drawnTileId: number | null;
+  actionNotice: { seat: number; type: string } | null;
 }
 
 export { getMjId };
@@ -93,6 +94,7 @@ export function useMahjong(roomCode: string, playerName: string) {
     hostId: "",
     hasDrawn: false,
     drawnTileId: null,
+    actionNotice: null,
   });
 
   const [roomId, setRoomId] = useState<string>("");
@@ -370,8 +372,10 @@ export function useMahjong(roomCode: string, playerName: string) {
       setState((prev) => ({
         ...prev,
         lastDiscard: { tile, from: seat },
-        hasDrawn: false,
+        // Don't change hasDrawn here — wait for mj_pass/mj_draw to set it properly
+        // This prevents the brief "輪到你摸牌" flash
         availableActions: [],
+        drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
         players: prev.players.map((p) =>
           p.seat === seat
             ? {
@@ -428,6 +432,7 @@ export function useMahjong(roomCode: string, playerName: string) {
           lastDiscard: null,
           availableActions: [],
           hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
+          actionNotice: { seat: msg.seat, type: msg.type },
           players: prev.players.map((p) =>
             p.seat === msg.seat
               ? {
@@ -439,6 +444,10 @@ export function useMahjong(roomCode: string, playerName: string) {
           ),
         };
       });
+      // Auto-clear action notice after 1.5s
+      setTimeout(() => {
+        setState((prev) => ({ ...prev, actionNotice: null }));
+      }, 1500);
     });
 
     // --- mj_hand_update (private, after action) ---

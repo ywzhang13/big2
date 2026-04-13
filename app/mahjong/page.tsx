@@ -495,6 +495,7 @@ function RoomView({
         isMyTurn={isMyTurn}
         playerName={playerName}
         drawnTileId={state.drawnTileId}
+        actionNotice={state.actionNotice}
         onDraw={drawTile}
         onDiscard={discardTile}
         onAction={doAction}
