@@ -58,11 +58,11 @@ export async function POST(request: Request) {
       players: publicState.players,
     });
 
-    // Send each player their hand privately
+    // Send each player their hand privately (defensive: filter flowers from hand)
     for (const player of state.players) {
       await mjBroadcast(room.code, "mj_deal_hand", {
         playerId: player.id,
-        hand: player.hand,
+        hand: player.hand.filter((t) => t.suit !== "f"),
         flowers: player.flowers,
       });
     }

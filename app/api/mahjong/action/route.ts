@@ -153,9 +153,10 @@ export async function POST(request: Request) {
     // After chi/pong, the player needs to discard.
     // After kong, the player already drew a replacement (handled in executeAction).
     // Send the player their updated hand.
+    // Defensive: filter flowers from hand
     await mjBroadcast(room.code, "mj_hand_update", {
       playerId,
-      hand: newState.players[seat].hand,
+      hand: newState.players[seat].hand.filter((t) => t.suit !== "f"),
     });
 
     return Response.json({ success: true });

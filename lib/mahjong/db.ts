@@ -146,9 +146,11 @@ export function toPlayerGameState(
 ): PublicGameState & { hand?: Tile[] } {
   const pub = toPublicGameState(state);
   const player = state.players.find((p) => p.id === playerId);
+  // Defensive: filter out any flower tiles that shouldn't be in hand
+  const hand = player?.hand.filter((t) => t.suit !== "f");
   return {
     ...pub,
-    hand: player?.hand,
+    hand,
   };
 }
 

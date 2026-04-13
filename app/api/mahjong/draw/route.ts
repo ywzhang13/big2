@@ -100,11 +100,11 @@ export async function POST(request: Request) {
       flowers: player.flowers,
     });
 
-    // Send drawn tile only to the drawing player (include flowers for補花)
+    // Send drawn tile only to the drawing player (defensive: filter flowers from hand)
     await mjBroadcast(room.code, "mj_draw_tile", {
       playerId,
       tile: drawnTile,
-      hand: player.hand,
+      hand: player.hand.filter((t) => t.suit !== "f"),
       flowers: player.flowers,
       canWin,
       canKong,
