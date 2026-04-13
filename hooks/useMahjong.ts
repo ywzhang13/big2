@@ -482,6 +482,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         // Always clear actions for the passing player; clear for everyone if all passed
         availableActions:
           prev.mySeat === _seat || allPassed ? [] : prev.availableActions,
+        // When all passed, reset hasDrawn so next player can draw
+        ...(allPassed ? { hasDrawn: false } : {}),
       }));
     });
 

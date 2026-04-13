@@ -58,34 +58,34 @@ function PlayerPanel({
   const tileSize = position === "top" ? 20 : 16;
   const tileH = position === "top" ? 26 : 22;
 
+  // For left/right: layout is horizontal row with hand on outside, melds towards center
+  // Each tile rotated 90° to face center
+  const rotStyle = position === "left" ? "rotate(90deg)" : position === "right" ? "rotate(-90deg)" : undefined;
+
   return (
-    <div className={`flex ${isHorizontal ? "flex-col" : "flex-col"} items-center gap-1.5 transition-all duration-300
+    <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-300
+      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
         ${isCurrent
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
         }`}>
-        {/* Wind avatar circle */}
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-          ${isCurrent
-            ? "bg-[#C9A96E] text-[#0f2a1a]"
-            : "bg-white/10 text-white/60"
-          }`}>
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
+          ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
           {windChar}
         </div>
         <div className="flex flex-col">
-          <span className={`text-xs font-bold truncate max-w-[60px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
+          <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
             {player.name}
           </span>
-          <span className="text-[9px] text-white/30">
+          <span className="text-[8px] text-white/30">
             {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
           </span>
         </div>
       </div>
 
-      {/* Face-down tiles */}
+      {/* Face-down tiles (outside edge) */}
       <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
         {Array.from({ length: player.tileCount }).map((_, i) => (
           <div
@@ -97,21 +97,26 @@ function PlayerPanel({
               background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
+              ...(rotStyle ? { transform: rotStyle } : {}),
             }}
           />
         ))}
       </div>
 
-      {/* Flowers + Revealed melds */}
+      {/* Flowers + Revealed melds (closer to center for left/right) */}
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
         <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-1 items-center`}>
           {player.flowers.map((f) => (
-            <MjTile key={f.id} tile={f} tiny />
+            <div key={f.id} style={rotStyle ? { transform: rotStyle } : undefined}>
+              <MjTile tile={f} tiny />
+            </div>
           ))}
           {player.revealed.map((meld, mi) => (
             <div key={mi} className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px]`}>
               {meld.tiles.map((t) => (
-                <MjTile key={t.id} tile={t} tiny faceDown={meld.type === "concealed_kong"} />
+                <div key={t.id} style={rotStyle ? { transform: rotStyle } : undefined}>
+                  <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
+                </div>
               ))}
             </div>
           ))}
