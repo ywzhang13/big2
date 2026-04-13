@@ -85,16 +85,15 @@ function PlayerPanel({
         </div>
       </div>
 
-      {/* Face-down tiles (rotated 90° for left/right) */}
-      <div className={`flex ${isHorizontal ? "flex-row" : "flex-row"} gap-[1px] items-center`}
-        style={!isHorizontal ? { transform: position === "left" ? "rotate(90deg)" : "rotate(-90deg)" } : undefined}>
+      {/* Face-down tiles */}
+      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
         {Array.from({ length: player.tileCount }).map((_, i) => (
           <div
             key={i}
-            className="rounded-[3px]"
+            className="rounded-[2px]"
             style={{
-              width: tileSize - 2,
-              height: tileH - 4,
+              width: isHorizontal ? tileSize - 2 : tileH - 6,
+              height: isHorizontal ? tileH - 4 : tileSize - 4,
               background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
@@ -103,15 +102,14 @@ function PlayerPanel({
         ))}
       </div>
 
-      {/* Flowers + Revealed melds (rotated 90° for left/right) */}
+      {/* Flowers + Revealed melds */}
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-row"} gap-1 items-center`}
-          style={!isHorizontal ? { transform: position === "left" ? "rotate(90deg)" : "rotate(-90deg)" } : undefined}>
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-1 items-center`}>
           {player.flowers.map((f) => (
             <MjTile key={f.id} tile={f} tiny />
           ))}
           {player.revealed.map((meld, mi) => (
-            <div key={mi} className="flex gap-[1px]">
+            <div key={mi} className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px]`}>
               {meld.tiles.map((t) => (
                 <MjTile key={t.id} tile={t} tiny faceDown={meld.type === "concealed_kong"} />
               ))}

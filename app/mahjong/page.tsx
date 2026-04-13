@@ -458,14 +458,11 @@ function RoomView({
     );
   }
 
-  // Game Over
-  if (state.status === "finished" && state.winner) {
-    return <MjGameOver winner={state.winner} onGoHome={onGoHome} />;
-  }
+  // Playing (or finished — show board with result overlay)
+  const isFinished = state.status === "finished" && state.winner;
 
-  // Playing
   return (
-    <div className="flex flex-col flex-1 min-h-dvh bg-[#0f2a1a]">
+    <div className="flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] relative">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
         <button
@@ -500,6 +497,51 @@ function RoomView({
         onDiscard={discardTile}
         onAction={doAction}
       />
+
+      {/* Game over overlay — stays on the board */}
+      {isFinished && state.winner && (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            {state.winner.seat < 0 ? (
+              <div className="text-center">
+                <p className="text-3xl mb-2">&#128524;</p>
+                <h2 className="text-xl font-bold text-white/70">流局</h2>
+                <p className="text-white/40 text-sm mt-1">牌牆摸完，無人胡牌</p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-3xl mb-2">&#127936;</p>
+                <h2 className="text-xl font-bold text-[#f0d68a]">
+                  {state.winner.name} 胡牌！
+                </h2>
+                <p className="text-white/50 text-sm mt-2">
+                  {state.winner.score.totalFan > 0 && (
+                    <span>共 <span className="text-[#C9A96E] font-bold text-lg">{state.winner.score.totalFan}</span> 台</span>
+                  )}
+                </p>
+                {/* Fan breakdown */}
+                {state.winner.score.fans.length > 0 && (
+                  <div className="mt-3 border-t border-white/10 pt-3">
+                    {state.winner.score.fans.map((fan, i) => (
+                      <div key={i} className="flex justify-between text-sm px-2 py-1">
+                        <span className="text-white/70">{fan.name}</span>
+                        <span className="text-[#C9A96E] font-bold">{fan.value} 台</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <button
+              onClick={onGoHome}
+              className="w-full mt-4 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold
+                cursor-pointer active:scale-95 transition-all"
+            >
+              回大廳
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
