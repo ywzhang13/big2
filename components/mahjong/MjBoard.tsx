@@ -154,23 +154,32 @@ function WindDial({
   ];
 
   return (
-    <div className="relative w-[80px] h-[80px] rounded-lg bg-black/40 border border-[#C9A96E]/30
-      shadow-inner flex items-center justify-center">
+    <div className="relative w-[72px] h-[72px] rounded-xl flex items-center justify-center"
+      style={{
+        background: "radial-gradient(circle, rgba(201,169,110,0.08) 0%, rgba(0,0,0,0.3) 100%)",
+        border: "1.5px solid rgba(201,169,110,0.25)",
+        boxShadow: "inset 0 0 12px rgba(0,0,0,0.3)",
+      }}>
       {/* Remaining count */}
       <div className="flex flex-col items-center">
-        <span className="text-lg font-bold text-[#f0d68a] font-heading">{wallRemaining}</span>
-        <span className="text-[8px] text-white/30">剩餘</span>
+        <span className="text-xl font-bold text-[#f0d68a]" style={{ textShadow: "0 0 8px rgba(240,214,138,0.3)" }}>
+          {wallRemaining}
+        </span>
+        <span className="text-[7px] text-[#C9A96E]/50 tracking-wider">剩餘</span>
       </div>
       {/* Wind markers */}
       {winds.map((w) => (
         <div
           key={w.position}
-          className={`absolute text-[11px] font-bold transition-all duration-300 px-1
+          className={`absolute text-[10px] font-bold transition-all duration-300
             ${w.isActive
-              ? "text-[#f0d68a] scale-125 drop-shadow-[0_0_4px_rgba(240,214,138,0.5)]"
-              : "text-white/25"
+              ? "text-[#f0d68a] scale-110"
+              : "text-white/20"
             }`}
-          style={posStyle[w.position] as React.CSSProperties}
+          style={{
+            ...posStyle[w.position] as React.CSSProperties,
+            ...(w.isActive ? { textShadow: "0 0 6px rgba(240,214,138,0.6)" } : {}),
+          }}
         >
           {w.char}
         </div>
@@ -305,16 +314,19 @@ export default function MjBoard({
                 </div>
 
                 {/* Center: wind dial + last discard */}
-                <div className="flex-1 flex flex-col items-center justify-center gap-1">
+                <div className="flex-1 flex flex-col items-center justify-center gap-2">
                   <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} />
                   {lastDiscard && (
-                    <div className="flex items-center gap-1.5 bg-black/40 px-2 py-1 rounded-lg border border-[#C9A96E]/30">
-                      <span className="text-[9px] text-white/40">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="rounded-lg overflow-hidden shadow-xl"
+                        style={{
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 0 2px rgba(201,169,110,0.3)",
+                        }}>
+                        <MjTile tile={lastDiscard.tile} />
+                      </div>
+                      <span className="text-[9px] text-[#C9A96E]/60 font-bold">
                         {players.find(p => p.seat === lastDiscard.from)?.name}
                       </span>
-                      <div className="ring-2 ring-[#C9A96E]/60 rounded shadow-lg shadow-[#C9A96E]/20">
-                        <MjTile tile={lastDiscard.tile} small />
-                      </div>
                     </div>
                   )}
                 </div>
