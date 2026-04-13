@@ -7,6 +7,7 @@ interface MjTileProps {
   selected?: boolean;
   onClick?: () => void;
   small?: boolean;
+  tiny?: boolean; // even smaller for discard pool
   faceDown?: boolean;
 }
 
@@ -28,9 +29,9 @@ function getTileSvg(tile: Tile): string {
   return "Blank";
 }
 
-export default function MjTile({ tile, selected, onClick, small, faceDown }: MjTileProps) {
-  const w = small ? 30 : 44;
-  const h = small ? 42 : 60;
+export default function MjTile({ tile, selected, onClick, small, tiny, faceDown }: MjTileProps) {
+  const w = tiny ? 22 : small ? 30 : 44;
+  const h = tiny ? 30 : small ? 42 : 60;
 
   const src = faceDown
     ? "/tiles/Back.svg"
