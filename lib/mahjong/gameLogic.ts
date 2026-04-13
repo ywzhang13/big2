@@ -184,8 +184,8 @@ export function handleFlowers(
 export function drawTile(state: MahjongGameState): MahjongGameState {
   let s = cloneState(state);
 
-  if (s.wall.length === 0) {
-    // 流局 — no more tiles
+  if (s.wall.length <= 16) {
+    // 流局 — 剩餘 16 張（海底）時結束
     s.status = "finished";
     return s;
   }
@@ -629,5 +629,5 @@ export function advanceTurn(state: MahjongGameState): MahjongGameState {
  * Check if the game should end in a draw (流局/荒牌).
  */
 export function isDraw(state: MahjongGameState): boolean {
-  return state.wall.length === 0 && state.status === "playing";
+  return state.wall.length <= 16 && state.status === "playing";
 }
