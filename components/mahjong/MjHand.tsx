@@ -26,8 +26,20 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId }: Mj
   }
 
   // Separate drawn tile from the rest
-  const mainTiles = drawnTileId ? tiles.filter(t => t.id !== drawnTileId) : tiles;
-  const drawnTile = drawnTileId ? tiles.find(t => t.id === drawnTileId) : null;
+  // If drawnTileId matches a tile, separate it; otherwise show last tile as drawn
+  let drawnTile: Tile | null = null;
+  let mainTiles = tiles;
+  if (drawnTileId) {
+    drawnTile = tiles.find(t => t.id === drawnTileId) ?? null;
+    if (drawnTile) {
+      mainTiles = tiles.filter(t => t.id !== drawnTileId);
+    } else if (tiles.length > 0) {
+      // Fallback: if drawn tile ID doesn't match (e.g. after flower replacement),
+      // show the last tile as the drawn one
+      drawnTile = tiles[tiles.length - 1];
+      mainTiles = tiles.slice(0, -1);
+    }
+  }
 
   return (
     <div className="flex flex-col items-center gap-2">
