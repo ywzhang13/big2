@@ -278,12 +278,23 @@ export default function MjBoard({
 
               {/* Middle: left | center | right */}
               <div className="flex-1 flex items-center min-h-0">
-                {/* Left discards (rotated 90° facing center) */}
-                <div className="flex-shrink-0 flex flex-wrap gap-[1px] content-center overflow-hidden"
-                  style={{ maxWidth: 48, maxHeight: 200, transform: "rotate(90deg)", transformOrigin: "center" }}>
-                  {(left?.discards || []).slice(-14).map((t, i) => (
-                    <MjTile key={`left-${t.id}-${i}`} tile={t} small />
-                  ))}
+                {/* Left discards (vertical columns, 6 per column, newest on right) */}
+                <div className="flex-shrink-0 flex gap-[2px] items-center overflow-hidden"
+                  style={{ maxWidth: 100 }}>
+                  {(() => {
+                    const tiles = (left?.discards || []).slice(-12);
+                    const cols: typeof tiles[] = [];
+                    for (let i = 0; i < tiles.length; i += 6) {
+                      cols.push(tiles.slice(i, i + 6));
+                    }
+                    return cols.map((col, ci) => (
+                      <div key={ci} className="flex flex-col gap-[1px]">
+                        {col.map((t, ti) => (
+                          <MjTile key={`left-${t.id}-${ti}`} tile={t} small />
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </div>
 
                 {/* Center: wind dial + last discard */}
@@ -301,12 +312,23 @@ export default function MjBoard({
                   )}
                 </div>
 
-                {/* Right discards (rotated -90° facing center) */}
-                <div className="flex-shrink-0 flex flex-wrap gap-[1px] content-center overflow-hidden"
-                  style={{ maxWidth: 48, maxHeight: 200, transform: "rotate(-90deg)", transformOrigin: "center" }}>
-                  {(right?.discards || []).slice(-14).map((t, i) => (
-                    <MjTile key={`right-${t.id}-${i}`} tile={t} small />
-                  ))}
+                {/* Right discards (vertical columns, 6 per column, newest on left towards center) */}
+                <div className="flex-shrink-0 flex flex-row-reverse gap-[2px] items-center overflow-hidden"
+                  style={{ maxWidth: 100 }}>
+                  {(() => {
+                    const tiles = (right?.discards || []).slice(-12);
+                    const cols: typeof tiles[] = [];
+                    for (let i = 0; i < tiles.length; i += 6) {
+                      cols.push(tiles.slice(i, i + 6));
+                    }
+                    return cols.map((col, ci) => (
+                      <div key={ci} className="flex flex-col gap-[1px]">
+                        {col.map((t, ti) => (
+                          <MjTile key={`right-${t.id}-${ti}`} tile={t} small />
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
 

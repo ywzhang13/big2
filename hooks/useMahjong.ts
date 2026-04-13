@@ -318,10 +318,11 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_draw_tile (private) ---
     channel.on("broadcast", { event: "mj_draw_tile" }, ({ payload }) => {
-      const { playerId, hand, canWin, canKong, kongOptions } = payload as {
+      const { playerId, hand, flowers, canWin, canKong, kongOptions } = payload as {
         playerId: string;
         tile: Tile;
         hand: Tile[];
+        flowers?: Tile[];
         canWin: boolean;
         canKong: boolean;
         kongOptions: number[][];
@@ -344,6 +345,12 @@ export function useMahjong(roomCode: string, playerName: string) {
         availableActions: actions,
         hasDrawn: true,
         drawnTileId: drawnTile?.id ?? null,
+        // Update flowers if provided (補花)
+        players: flowers
+          ? prev.players.map((p) =>
+              p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
+            )
+          : prev.players,
       }));
     });
 

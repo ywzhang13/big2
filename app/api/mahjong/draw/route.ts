@@ -89,11 +89,12 @@ export async function POST(request: Request) {
       wallCount: newState.wall.length,
     });
 
-    // Send drawn tile only to the drawing player
+    // Send drawn tile only to the drawing player (include flowers for補花)
     await mjBroadcast(room.code, "mj_draw_tile", {
       playerId,
       tile: drawnTile,
       hand: player.hand,
+      flowers: player.flowers,
       canWin,
       canKong,
       kongOptions: canKong
