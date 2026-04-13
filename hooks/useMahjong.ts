@@ -2,8 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { sortTiles } from "@/lib/mahjong/tiles";
+import { sortTiles, isFlower } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
+
+/** Filter out any flower tiles that shouldn't be in hand (defensive) */
+function safeHand(tiles: Tile[]): Tile[] {
+  return sortTiles(tiles.filter((t) => !isFlower(t)));
+}
 import type { Meld, ScoreResult } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -149,7 +154,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       }
 
       const gs = data.gameState;
-      const hand = gs.hand ? sortTiles([...gs.hand]) : [];
+      const hand = gs.hand ? safeHand(gs.hand) : [];
       const mySeat = gs.players.find((p) => p.id === myId)?.seat ?? -1;
 
       setState((prev) => ({
@@ -291,7 +296,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       if (playerId !== myId) return;
       setState((prev) => ({
         ...prev,
-        myHand: sortTiles([...hand]),
+        myHand: safeHand(hand),
         // Update my flower count in players list
         players: prev.players.map((p) =>
           p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
@@ -342,7 +347,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       const drawnTile = payload.tile as Tile;
       setState((prev) => ({
         ...prev,
-        myHand: sortTiles([...hand]),
+        myHand: safeHand(hand),
         availableActions: actions,
         hasDrawn: true,
         drawnTileId: drawnTile?.id ?? null,
@@ -442,7 +447,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       if (playerId !== myId) return;
       setState((prev) => ({
         ...prev,
-        myHand: sortTiles([...hand]),
+        myHand: safeHand(hand),
       }));
     });
 
