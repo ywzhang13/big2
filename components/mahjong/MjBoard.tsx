@@ -256,19 +256,37 @@ export default function MjBoard({
         {/* Center table area */}
         <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0 overflow-hidden">
           {/* Table surface with wood-frame border */}
-          <div className="relative w-full max-w-[420px] aspect-square max-h-[280px] rounded-xl overflow-hidden"
+          <div className="relative w-full max-w-[480px] max-h-[320px] rounded-xl overflow-hidden"
             style={{
+              aspectRatio: "3 / 2",
               background: "linear-gradient(145deg, #1e4a2e 0%, #153a22 50%, #0f2a1a 100%)",
               border: "3px solid #8B6914",
               boxShadow: "0 0 0 1px #5a4510, 0 0 0 5px #3a2a08, 0 8px 32px rgba(0,0,0,0.5), inset 0 2px 20px rgba(0,0,0,0.3)",
             }}>
 
-            {/* Wind dial in center */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-              {lastDiscard ? (
-                <div className="flex flex-col items-center gap-1">
-                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} />
-                  {/* Last discard showcase */}
+            {/* 4-sided discard pool: grid layout like real mahjong table */}
+            <div className="absolute inset-0 grid grid-rows-[1fr_auto_1fr] grid-cols-[1fr_auto_1fr] p-2 gap-1">
+              {/* Top-left: empty */}
+              <div />
+              {/* Top: opponent discards (6 per row) */}
+              <div className="flex flex-wrap justify-center gap-[1px] max-w-[200px] self-start mx-auto">
+                {(top?.discards || []).map((t, i) => (
+                  <MjTile key={`top-${t.id}-${i}`} tile={t} small />
+                ))}
+              </div>
+              {/* Top-right: empty */}
+              <div />
+
+              {/* Left: discards in grid (2 cols) */}
+              <div className="grid grid-cols-2 gap-[1px] content-center self-center justify-self-start">
+                {(left?.discards || []).map((t, i) => (
+                  <MjTile key={`left-${t.id}-${i}`} tile={t} small />
+                ))}
+              </div>
+              {/* Center: wind dial + last discard */}
+              <div className="flex flex-col items-center justify-center gap-1">
+                <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} />
+                {lastDiscard && (
                   <div className="flex items-center gap-1.5 bg-black/40 px-2 py-1 rounded-lg border border-[#C9A96E]/30">
                     <span className="text-[9px] text-white/40">
                       {players.find(p => p.seat === lastDiscard.from)?.name}
@@ -277,35 +295,25 @@ export default function MjBoard({
                       <MjTile tile={lastDiscard.tile} small />
                     </div>
                   </div>
-                </div>
-              ) : (
-                <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} />
-              )}
-            </div>
+                )}
+              </div>
+              {/* Right: discards in grid (2 cols) */}
+              <div className="grid grid-cols-2 gap-[1px] content-center self-center justify-self-end">
+                {(right?.discards || []).map((t, i) => (
+                  <MjTile key={`right-${t.id}-${i}`} tile={t} small />
+                ))}
+              </div>
 
-            {/* Top player discards */}
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 flex gap-[1px] justify-center flex-wrap max-w-[280px]">
-              {(top?.discards || []).slice(-9).map((t, i) => (
-                <MjTile key={`top-${t.id}-${i}`} tile={t} small />
-              ))}
-            </div>
-            {/* Left player discards */}
-            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-[1px] items-center max-h-[140px] overflow-hidden">
-              {(left?.discards || []).slice(-5).map((t, i) => (
-                <MjTile key={`left-${t.id}-${i}`} tile={t} small />
-              ))}
-            </div>
-            {/* Right player discards */}
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-[1px] items-center max-h-[140px] overflow-hidden">
-              {(right?.discards || []).slice(-5).map((t, i) => (
-                <MjTile key={`right-${t.id}-${i}`} tile={t} small />
-              ))}
-            </div>
-            {/* My discards (bottom) */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-[1px] justify-center flex-wrap max-w-[280px]">
-              {(me?.discards || []).slice(-9).map((t, i) => (
-                <MjTile key={`me-${t.id}-${i}`} tile={t} small />
-              ))}
+              {/* Bottom-left: empty */}
+              <div />
+              {/* Bottom: my discards (6 per row) */}
+              <div className="flex flex-wrap justify-center gap-[1px] max-w-[200px] self-end mx-auto">
+                {(me?.discards || []).map((t, i) => (
+                  <MjTile key={`me-${t.id}-${i}`} tile={t} small />
+                ))}
+              </div>
+              {/* Bottom-right: empty */}
+              <div />
             </div>
           </div>
 

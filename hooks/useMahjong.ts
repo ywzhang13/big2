@@ -613,6 +613,16 @@ export function useMahjong(roomCode: string, playerName: string) {
   const needsDraw = isMyTurn && !state.hasDrawn && state.status === "playing";
   const needsDiscard = isMyTurn && state.hasDrawn && state.status === "playing";
 
+  // Auto-draw: when it's my turn and I need to draw, do it automatically
+  useEffect(() => {
+    if (needsDraw && state.mySeat >= 0) {
+      const timer = setTimeout(() => {
+        drawTileAction();
+      }, 400); // small delay for UX
+      return () => clearTimeout(timer);
+    }
+  }, [needsDraw, state.mySeat]);
+
   return {
     state,
     isHost,
