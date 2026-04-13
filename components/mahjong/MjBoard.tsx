@@ -63,7 +63,7 @@ function PlayerPanel({
   const rotStyle = position === "left" ? "rotate(90deg)" : position === "right" ? "rotate(-90deg)" : undefined;
 
   return (
-    <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
+    <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center ${isHorizontal ? "gap-1.5" : "gap-0.5"} transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
       <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
@@ -450,8 +450,8 @@ export default function MjBoard({
           )}
         </div>
 
-        {/* Hand + draw button */}
-        <div className="flex items-end px-1 py-1.5 gap-2">
+        {/* Hand — extra top padding for selected tile float */}
+        <div className="flex items-end px-1 pt-4 pb-1.5 gap-2">
           <div className="flex-1 min-w-0">
             <MjHand tiles={myHand} canDiscard={needsDiscard} onDiscard={onDiscard} drawnTileId={drawnTileId ?? undefined} />
           </div>
