@@ -610,28 +610,20 @@ export function useMahjong(roomCode: string, playerName: string) {
       // Optimistically clear action buttons immediately
       setState((prev) => ({ ...prev, availableActions: [] }));
       try {
-        await api("POST", "/api/mahjong/action", {
+        const res = await api("POST", "/api/mahjong/action", {
           roomId: rid,
           playerId: myId,
           actionType,
           tiles: tiles?.map((t) => t.id),
         });
+        console.log(`[mj] action ${actionType} success`, res);
       } catch (err) {
-        console.error("[mj] action failed:", err);
-        // Action failed (e.g., tile already taken) — auto-pass to keep game moving
-        try {
-          await api("POST", "/api/mahjong/action", {
-            roomId: rid,
-            playerId: myId,
-            actionType: "pass",
-          });
-        } catch {
-          // If pass also fails, poll to resync
-          fetchState(rid);
-        }
+        console.error(`[mj] action ${actionType} failed:`, err, { tiles: tiles?.map(t => ({ id: t.id, display: t.display })) });
+        // Resync state from server to recover
+        fetchState(rid);
       }
     },
-    [myId]
+    [myId, fetchState]
   );
 
   const setRoomIdExternal = useCallback((id: string) => {
@@ -644,14 +636,15 @@ export function useMahjong(roomCode: string, playerName: string) {
   const needsDiscard = isMyTurn && state.hasDrawn && state.status === "playing";
 
   // Auto-draw: when it's my turn and I need to draw, do it automatically
+  // BUT NOT if there are pending actions (chi/pong/kong from another player's discard)
   useEffect(() => {
-    if (needsDraw && state.mySeat >= 0) {
+    if (needsDraw && state.mySeat >= 0 && state.availableActions.length === 0) {
       const timer = setTimeout(() => {
         drawTileAction();
-      }, 400); // small delay for UX
+      }, 800); // longer delay to let action broadcasts arrive first
       return () => clearTimeout(timer);
     }
-  }, [needsDraw, state.mySeat]);
+  }, [needsDraw, state.mySeat, state.availableActions.length]);
 
   return {
     state,

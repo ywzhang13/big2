@@ -46,6 +46,16 @@ export async function POST(request: Request) {
       return Response.json({ error: "已經摸過牌了" }, { status: 400 });
     }
 
+    // Don't allow draw if there are pending actions (chi/pong/kong in progress)
+    if (state.pendingActions && state.pendingActions.potentialActors.length > 0) {
+      const allPassed = state.pendingActions.potentialActors.every(
+        (s) => state.pendingActions!.passedActors.includes(s)
+      );
+      if (!allPassed) {
+        return Response.json({ error: "等待其他玩家動作中" }, { status: 400 });
+      }
+    }
+
     // Draw tile
     const newState = drawTile(state);
 
