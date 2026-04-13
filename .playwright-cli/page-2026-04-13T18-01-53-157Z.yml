@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: ♥♠♦♣
+      - heading "阿瑋娛樂城" [level=1] [ref=e6]
+      - paragraph [ref=e7]: 多人線上桌遊平台
+    - generic [ref=e8]:
+      - button "♥♠ 大老二 4 人撲克競技 · Big Two" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]:
+          - generic [ref=e11]: ♥♠
+          - generic [ref=e12]:
+            - generic [ref=e13]: 大老二
+            - generic [ref=e14]: 4 人撲克競技 · Big Two
+      - button "中 發 台灣麻將 16 張制 · 4 人桌遊" [ref=e15] [cursor=pointer]:
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e19]: 中
+            - generic [ref=e21]: 發
+          - generic [ref=e24]:
+            - generic [ref=e25]: 台灣麻將
+            - generic [ref=e26]: 16 張制 · 4 人桌遊
+    - paragraph [ref=e27]: 選擇遊戲開始遊玩 · 支援多人即時對戰
+  - alert [ref=e28]

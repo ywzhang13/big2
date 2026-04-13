@@ -1,0 +1,85 @@
+[    5132ms] [LOG] [mj] connected to room 6099 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[   83441ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[   83442ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  119725ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  119725ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  159812ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  159812ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  196304ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  196307ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  198199ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  198200ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  247344ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  247345ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  249375ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  249385ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  281888ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  281890ms] [ERROR] [mj] draw failed: Error: {"error":"已經摸過牌了"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  288694ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  288695ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  386915ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  386916ms] [ERROR] [mj] draw failed: Error: {"error":"已經摸過牌了"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  393552ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  393553ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  536547ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  536548ms] [ERROR] [mj] draw failed: Error: {"error":"已經摸過牌了"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  543508ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  543509ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  591834ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  591837ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  593890ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  593892ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  635244ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  635244ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  671574ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  671576ms] [ERROR] [mj] draw failed: Error: {"error":"已經摸過牌了"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  676886ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  676887ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  678412ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  678413ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  713392ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  713393ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12
+[  714984ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  714984ms] [ERROR] [mj] draw failed: Error: {"error":"遊戲未在進行中"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/14qbx07tjz95u.js:12

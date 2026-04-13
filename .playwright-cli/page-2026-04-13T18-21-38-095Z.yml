@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e18]
+  - generic [ref=e24]:
+    - heading "等待玩家加入" [level=2] [ref=e25]
+    - generic [ref=e26]:
+      - paragraph [ref=e27]: 房間碼
+      - paragraph [ref=e28]: "9576"
+      - button "點擊複製連結" [ref=e29] [cursor=pointer]
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - paragraph [ref=e32]: 東風 · 座位 1
+        - paragraph [ref=e33]: 等待中...
+      - generic [ref=e34]:
+        - paragraph [ref=e35]: 南風 · 座位 2
+        - paragraph [ref=e36]: 等待中...
+      - generic [ref=e37]:
+        - paragraph [ref=e38]: 西風 · 座位 3
+        - paragraph [ref=e39]: 等待中...
+      - generic [ref=e40]:
+        - paragraph [ref=e41]: 北風 · 座位 4
+        - paragraph [ref=e42]: 等待中...
+    - paragraph [ref=e44]: 等待玩家 (0/4)
+    - button "返回首頁" [ref=e45] [cursor=pointer]

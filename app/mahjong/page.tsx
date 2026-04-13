@@ -494,6 +494,7 @@ function RoomView({
         needsDiscard={needsDiscard}
         isMyTurn={isMyTurn}
         playerName={playerName}
+        drawnTileId={state.drawnTileId}
         onDraw={drawTile}
         onDiscard={discardTile}
         onAction={doAction}

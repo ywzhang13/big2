@@ -1,0 +1,170 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e18]
+  - generic [ref=e23]:
+    - generic [ref=e24]:
+      - button "離開" [ref=e46] [cursor=pointer]
+      - heading "台灣麻將 · 9576" [level=1] [ref=e47]
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - button "離開" [ref=e50] [cursor=pointer]
+        - heading "台灣麻將" [level=1] [ref=e51]
+        - generic [ref=e418]: 摸牌
+      - generic [ref=e54]:
+        - generic [ref=e55]: 南
+        - generic [ref=e56]:
+          - generic [ref=e57]: 南風
+          - generic [ref=e58]: 16 張
+      - generic [ref=e76]:
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e80]: 西
+            - generic [ref=e81]:
+              - generic [ref=e82]: 西風
+              - generic [ref=e83]: 16 張
+          - button "夏" [disabled] [ref=e260]:
+            - img "夏" [ref=e261]
+        - generic [ref=e101]:
+          - generic [ref=e103]:
+            - generic [ref=e197]:
+              - button "白" [disabled] [ref=e198]:
+                - img "白" [ref=e199]
+              - button "中" [disabled] [ref=e223]:
+                - img "中" [ref=e224]
+              - button "北" [disabled] [ref=e245]:
+                - img "北" [ref=e246]
+              - button "西" [disabled] [ref=e281]:
+                - img "西" [ref=e282]
+              - button "東" [disabled] [ref=e305]:
+                - img "東" [ref=e306]
+              - button "東" [disabled] [ref=e307]:
+                - img "東" [ref=e308]
+              - button "南" [disabled] [ref=e309]:
+                - img "南" [ref=e310]
+              - button "7條" [disabled] [ref=e348]:
+                - img "7條" [ref=e349]
+              - button "7條" [disabled] [ref=e362]:
+                - img "7條" [ref=e363]
+              - button "7條" [disabled] [ref=e390]:
+                - img "7條" [ref=e391]
+            - generic [ref=e104]:
+              - generic [ref=e200]:
+                - button "發" [disabled] [ref=e201]:
+                  - img "發" [ref=e202]
+                - button "西" [disabled] [ref=e233]:
+                  - img "西" [ref=e234]
+                - button "白" [disabled] [ref=e262]:
+                  - img "白" [ref=e263]
+                - button "西" [disabled] [ref=e290]:
+                  - img "西" [ref=e291]
+                - button "南" [disabled] [ref=e318]:
+                  - img "南" [ref=e319]
+                - button "東" [disabled] [ref=e350]:
+                  - img "東" [ref=e351]
+                - button "東" [disabled] [ref=e364]:
+                  - img "東" [ref=e365]
+                - button "中" [disabled] [ref=e419]:
+                  - img "中" [ref=e420]
+              - generic [ref=e105]:
+                - generic [ref=e106]:
+                  - generic [ref=e107]:
+                    - generic [ref=e108]: "39"
+                    - generic [ref=e109]: 剩餘
+                  - generic [ref=e110]: 北
+                  - generic [ref=e111]: 東
+                  - generic [ref=e112]: 南
+                  - generic [ref=e113]: 西
+                - generic [ref=e430]:
+                  - generic [ref=e431]: 北風
+                  - button "6條" [disabled] [ref=e433]:
+                    - img "6條" [ref=e434]
+              - generic [ref=e192]:
+                - button "白" [disabled] [ref=e397]:
+                  - img "白" [ref=e398]
+                - button "4條" [disabled] [ref=e399]:
+                  - img "4條" [ref=e400]
+                - button "3條" [disabled] [ref=e401]:
+                  - img "3條" [ref=e402]
+                - button "2條" [disabled] [ref=e403]:
+                  - img "2條" [ref=e404]
+                - button "2條" [disabled] [ref=e405]:
+                  - img "2條" [ref=e406]
+                - button "1條" [disabled] [ref=e407]:
+                  - img "1條" [ref=e408]
+                - button "9筒" [disabled] [ref=e409]:
+                  - img "9筒" [ref=e410]
+                - button "7筒" [disabled] [ref=e411]:
+                  - img "7筒" [ref=e412]
+                - button "3筒" [disabled] [ref=e413]:
+                  - img "3筒" [ref=e414]
+                - button "發" [disabled] [ref=e415]:
+                  - img "發" [ref=e416]
+            - generic [ref=e218]:
+              - button "發" [disabled] [ref=e219]:
+                - img "發" [ref=e220]
+              - button "北" [disabled] [ref=e243]:
+                - img "北" [ref=e244]
+              - button "北" [disabled] [ref=e277]:
+                - img "北" [ref=e278]
+              - button "南" [disabled] [ref=e303]:
+                - img "南" [ref=e304]
+              - button "9條" [disabled] [ref=e335]:
+                - img "9條" [ref=e336]
+              - button "8條" [disabled] [ref=e360]:
+                - img "8條" [ref=e361]
+              - button "8條" [disabled] [ref=e387]:
+                - img "8條" [ref=e388]
+              - button "6條" [disabled] [ref=e435]:
+                - img "6條" [ref=e436]
+          - generic [ref=e114]: 輪到你摸牌
+        - generic [ref=e118]:
+          - generic [ref=e119]: 東
+          - generic [ref=e120]:
+            - generic [ref=e121]: 東風
+            - generic [ref=e122]: 16 張 · 莊
+      - generic [ref=e141]:
+        - generic [ref=e142]:
+          - generic [ref=e143]: 北
+          - generic [ref=e144]: 北風
+          - generic [ref=e145]: 16 張
+          - generic [ref=e146]:
+            - button "菊" [disabled] [ref=e147]:
+              - img "菊" [ref=e148]
+            - button "秋" [disabled] [ref=e149]:
+              - img "秋" [ref=e150]
+            - button "竹" [disabled] [ref=e379]:
+              - img "竹" [ref=e380]
+        - generic [ref=e151]:
+          - generic [ref=e154]:
+            - button "2萬" [ref=e155] [cursor=pointer]:
+              - img "2萬" [ref=e156]
+            - button "4萬" [ref=e269] [cursor=pointer]:
+              - img "4萬" [ref=e270]
+            - button "5萬" [ref=e157] [cursor=pointer]:
+              - img "5萬" [ref=e158]
+            - button "7萬" [ref=e427] [cursor=pointer]:
+              - img "7萬" [ref=e428]
+            - button "9萬" [ref=e235] [cursor=pointer]:
+              - img "9萬" [ref=e236]
+            - button "2筒" [ref=e352] [cursor=pointer]:
+              - img "2筒" [ref=e353]
+            - button "4筒" [ref=e159] [cursor=pointer]:
+              - img "4筒" [ref=e160]
+            - button "7筒" [ref=e161] [cursor=pointer]:
+              - img "7筒" [ref=e162]
+            - button "7筒" [ref=e163] [cursor=pointer]:
+              - img "7筒" [ref=e164]
+            - button "8筒" [ref=e165] [cursor=pointer]:
+              - img "8筒" [ref=e166]
+            - button "8筒" [ref=e167] [cursor=pointer]:
+              - img "8筒" [ref=e168]
+            - button "8筒" [ref=e169] [cursor=pointer]:
+              - img "8筒" [ref=e170]
+            - button "3條" [ref=e171] [cursor=pointer]:
+              - img "3條" [ref=e172]
+            - button "3條" [ref=e173] [cursor=pointer]:
+              - img "3條" [ref=e174]
+            - button "4條" [ref=e175] [cursor=pointer]:
+              - img "4條" [ref=e176]
+            - button "5條" [ref=e177] [cursor=pointer]:
+              - img "5條" [ref=e178]
+          - button "摸牌" [ref=e437] [cursor=pointer]

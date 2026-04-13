@@ -1,0 +1,5 @@
+[    5199ms] [LOG] [mj] connected to room 5190 @ https://big2-three.vercel.app/_next/static/chunks/10pfoig3_7-zu.js:12
+[  295710ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://big2-three.vercel.app/api/mahjong/draw:0
+[  295711ms] [ERROR] [mj] draw failed: Error: {"error":"還沒輪到你"}
+    at n (https://big2-three.vercel.app/_next/static/chunks/10pfoig3_7-zu.js:1:600)
+    at async https://big2-three.vercel.app/_next/static/chunks/10pfoig3_7-zu.js:13:5644 @ https://big2-three.vercel.app/_next/static/chunks/10pfoig3_7-zu.js:12

@@ -65,6 +65,7 @@ export interface MjClientState {
   wallRemaining: number;
   hostId: string;
   hasDrawn: boolean;
+  drawnTileId: number | null;
 }
 
 export { getMjId };
@@ -86,6 +87,7 @@ export function useMahjong(roomCode: string, playerName: string) {
     wallRemaining: 0,
     hostId: "",
     hasDrawn: false,
+    drawnTileId: null,
   });
 
   const [roomId, setRoomId] = useState<string>("");
@@ -335,11 +337,13 @@ export function useMahjong(roomCode: string, playerName: string) {
           actions.push({ type: "kong", tiles });
         }
       }
+      const drawnTile = payload.tile as Tile;
       setState((prev) => ({
         ...prev,
         myHand: sortTiles([...hand]),
         availableActions: actions,
         hasDrawn: true,
+        drawnTileId: drawnTile?.id ?? null,
       }));
     });
 
@@ -566,6 +570,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         ...prev,
         myHand: prev.myHand.filter((t) => t.id !== tileId),
         availableActions: [],
+        drawnTileId: null,
       }));
       try {
         await api("POST", "/api/mahjong/discard", {

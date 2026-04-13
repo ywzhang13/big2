@@ -8,9 +8,10 @@ interface MjHandProps {
   tiles: Tile[];
   canDiscard: boolean;
   onDiscard: (tileId: number) => void;
+  drawnTileId?: number; // ID of the tile just drawn (show separated on right)
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard }: MjHandProps) {
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId }: MjHandProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   function handleTileClick(tile: Tile) {
@@ -24,27 +25,44 @@ export default function MjHand({ tiles, canDiscard, onDiscard }: MjHandProps) {
     setSelectedId(null);
   }
 
+  // Separate drawn tile from the rest
+  const mainTiles = drawnTileId ? tiles.filter(t => t.id !== drawnTileId) : tiles;
+  const drawnTile = drawnTileId ? tiles.find(t => t.id === drawnTileId) : null;
+
   return (
     <div className="flex flex-col items-center gap-2">
       {/* Tiles row */}
-      <div className="flex justify-center gap-[2px] px-1 max-w-full overflow-x-auto">
-        {tiles.map((t) => (
-          <MjTile
-            key={t.id}
-            tile={t}
-            selected={selectedId === t.id}
-            onClick={() => handleTileClick(t)}
-          />
-        ))}
+      <div className="flex justify-center items-end px-1 max-w-full overflow-x-auto">
+        {/* Main hand */}
+        <div className="flex gap-[2px]">
+          {mainTiles.map((t) => (
+            <MjTile
+              key={t.id}
+              tile={t}
+              selected={selectedId === t.id}
+              onClick={() => handleTileClick(t)}
+            />
+          ))}
+        </div>
+        {/* Drawn tile separated */}
+        {drawnTile && (
+          <div className="ml-3 pl-3 border-l border-white/10">
+            <MjTile
+              tile={drawnTile}
+              selected={selectedId === drawnTile.id}
+              onClick={() => handleTileClick(drawnTile)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Discard button */}
       {canDiscard && selectedId !== null && (
         <button
           onClick={handleDiscard}
-          className="px-6 py-2.5 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-sm
+          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#C9A96E] to-[#e8c97a] text-[#0f2a1a] font-bold text-sm
                      cursor-pointer active:scale-95 transition-all duration-150
-                     shadow-md shadow-[#C9A96E]/30 animate-pulse"
+                     shadow-md shadow-[#C9A96E]/30"
         >
           打牌
         </button>

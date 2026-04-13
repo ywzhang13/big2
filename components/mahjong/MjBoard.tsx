@@ -20,6 +20,7 @@ interface MjBoardProps {
   needsDiscard: boolean;
   isMyTurn: boolean;
   playerName: string;
+  drawnTileId: number | null;
   onDraw: () => void;
   onDiscard: (tileId: number) => void;
   onAction: (type: string, tiles?: Tile[]) => void;
@@ -186,6 +187,7 @@ export default function MjBoard({
   needsDiscard,
   isMyTurn,
   playerName,
+  drawnTileId,
   onDraw,
   onDiscard,
   onAction,
@@ -255,8 +257,8 @@ export default function MjBoard({
 
         {/* Center table area */}
         <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0 overflow-hidden">
-          {/* Table surface with wood-frame border */}
-          <div className="relative w-full max-w-[480px] max-h-[320px] rounded-xl overflow-hidden"
+          {/* Table surface with wood-frame border — 30% larger */}
+          <div className="relative w-full max-w-[624px] max-h-[416px] rounded-xl overflow-hidden"
             style={{
               aspectRatio: "3 / 2",
               background: "linear-gradient(145deg, #1e4a2e 0%, #153a22 50%, #0f2a1a 100%)",
@@ -266,20 +268,20 @@ export default function MjBoard({
 
             {/* 4-sided discard pool: compact grid layout */}
             <div className="absolute inset-0 flex flex-col p-2">
-              {/* Top discards (6 per row, max 2 rows) */}
+              {/* Top discards (8 per row, max 2 rows) */}
               <div className="flex flex-wrap justify-center gap-[1px] mx-auto overflow-hidden"
-                style={{ maxWidth: 192, maxHeight: 48 }}>
-                {(top?.discards || []).slice(-12).map((t, i) => (
+                style={{ maxWidth: 256, maxHeight: 48 }}>
+                {(top?.discards || []).slice(-16).map((t, i) => (
                   <MjTile key={`top-${t.id}-${i}`} tile={t} small />
                 ))}
               </div>
 
               {/* Middle: left | center | right */}
               <div className="flex-1 flex items-center min-h-0">
-                {/* Left discards (2 cols, max 5 rows) */}
-                <div className="w-[66px] flex-shrink-0 flex flex-wrap gap-[1px] content-center overflow-hidden"
-                  style={{ maxHeight: 120 }}>
-                  {(left?.discards || []).slice(-10).map((t, i) => (
+                {/* Left discards (rotated 90° facing center) */}
+                <div className="flex-shrink-0 flex flex-wrap gap-[1px] content-center overflow-hidden"
+                  style={{ maxWidth: 48, maxHeight: 200, transform: "rotate(90deg)", transformOrigin: "center" }}>
+                  {(left?.discards || []).slice(-14).map((t, i) => (
                     <MjTile key={`left-${t.id}-${i}`} tile={t} small />
                   ))}
                 </div>
@@ -299,19 +301,19 @@ export default function MjBoard({
                   )}
                 </div>
 
-                {/* Right discards (2 cols, max 5 rows) */}
-                <div className="w-[66px] flex-shrink-0 flex flex-wrap gap-[1px] content-center justify-end overflow-hidden"
-                  style={{ maxHeight: 120 }}>
-                  {(right?.discards || []).slice(-10).map((t, i) => (
+                {/* Right discards (rotated -90° facing center) */}
+                <div className="flex-shrink-0 flex flex-wrap gap-[1px] content-center overflow-hidden"
+                  style={{ maxWidth: 48, maxHeight: 200, transform: "rotate(-90deg)", transformOrigin: "center" }}>
+                  {(right?.discards || []).slice(-14).map((t, i) => (
                     <MjTile key={`right-${t.id}-${i}`} tile={t} small />
                   ))}
                 </div>
               </div>
 
-              {/* Bottom discards (6 per row, max 2 rows) */}
+              {/* Bottom discards (8 per row, max 2 rows) */}
               <div className="flex flex-wrap justify-center gap-[1px] mx-auto overflow-hidden"
-                style={{ maxWidth: 192, maxHeight: 48 }}>
-                {(me?.discards || []).slice(-12).map((t, i) => (
+                style={{ maxWidth: 256, maxHeight: 48 }}>
+                {(me?.discards || []).slice(-16).map((t, i) => (
                   <MjTile key={`me-${t.id}-${i}`} tile={t} small />
                 ))}
               </div>
@@ -411,19 +413,8 @@ export default function MjBoard({
         {/* Hand + draw button */}
         <div className="flex items-end px-1 py-1.5 gap-2">
           <div className="flex-1 min-w-0">
-            <MjHand tiles={myHand} canDiscard={needsDiscard} onDiscard={onDiscard} />
+            <MjHand tiles={myHand} canDiscard={needsDiscard} onDiscard={onDiscard} drawnTileId={drawnTileId ?? undefined} />
           </div>
-          {needsDraw && (
-            <button
-              onClick={onDraw}
-              className="px-5 py-2.5 rounded-xl font-bold text-sm flex-shrink-0
-                bg-gradient-to-r from-[#C9A96E] to-[#e8c97a] text-[#0f2a1a]
-                cursor-pointer active:scale-95 transition-all duration-150
-                shadow-lg shadow-[#C9A96E]/30"
-            >
-              摸牌
-            </button>
-          )}
         </div>
       </div>
     </div>
