@@ -437,11 +437,38 @@ function RoomView({
     }
   }, [state.leaveResult, onGoHome]);
 
-  // Detect self-draw (自摸) for inline header celebration in settlement overlay
+  // Detect win type for celebration overlay
   const isZimoWin =
     state.winner != null &&
     state.winner.seat >= 0 &&
     state.winner.score.fans.some((f) => f.name.includes("自摸"));
+  const isRonWin =
+    state.winner != null &&
+    state.winner.seat >= 0 &&
+    !isZimoWin;
+
+  // Celebration overlay (shown briefly on all players' screens)
+  const [celebrationMode, setCelebrationMode] = useState<"zimo" | "ron" | null>(null);
+  const lastWinnerSeatRef = useRef<number | null>(null);
+  useEffect(() => {
+    const w = state.winner;
+    if (!w || w.seat < 0) {
+      lastWinnerSeatRef.current = null;
+      return;
+    }
+    if (lastWinnerSeatRef.current === w.seat) return;
+    lastWinnerSeatRef.current = w.seat;
+    if (isZimoWin) {
+      setCelebrationMode("zimo");
+      const t = setTimeout(() => setCelebrationMode(null), 3500);
+      return () => clearTimeout(t);
+    }
+    if (isRonWin) {
+      setCelebrationMode("ron");
+      const t = setTimeout(() => setCelebrationMode(null), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [state.winner, isZimoWin, isRonWin]);
 
   // Pass roomId from create/join to the hook
   useEffect(() => {
@@ -771,6 +798,122 @@ function RoomView({
           </div>
         </div>
       )}
+      {/* Celebration overlay — shown briefly on all 4 screens before settlement */}
+      {celebrationMode && state.winner && state.winner.seat >= 0 && (
+        <div
+          className="absolute inset-0 z-[65] flex items-center justify-center overflow-hidden pointer-events-none"
+          style={{
+            background:
+              celebrationMode === "zimo"
+                ? "radial-gradient(ellipse at center, rgba(255,215,0,0.4) 0%, rgba(0,0,0,0.88) 72%)"
+                : "radial-gradient(ellipse at center, rgba(201,169,110,0.28) 0%, rgba(0,0,0,0.82) 70%)",
+            animation: `mj-win-flash ${celebrationMode === "zimo" ? 3500 : 2000}ms ease-out both`,
+          }}
+        >
+          {/* Radiating rays (zimo only, fancier) */}
+          {celebrationMode === "zimo" && (
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(255,215,0,0.3) 15deg, transparent 30deg, transparent 45deg, rgba(255,215,0,0.3) 60deg, transparent 75deg, transparent 90deg, rgba(255,215,0,0.3) 105deg, transparent 120deg, transparent 135deg, rgba(255,215,0,0.3) 150deg, transparent 165deg, transparent 180deg, rgba(255,215,0,0.3) 195deg, transparent 210deg, transparent 225deg, rgba(255,215,0,0.3) 240deg, transparent 255deg, transparent 270deg, rgba(255,215,0,0.3) 285deg, transparent 300deg, transparent 315deg, rgba(255,215,0,0.3) 330deg, transparent 345deg, transparent 360deg)",
+                animation: "mj-win-rotate 3500ms linear",
+              }}
+            />
+          )}
+          {/* Sparkles (zimo only) */}
+          {celebrationMode === "zimo" &&
+            Array.from({ length: 24 }).map((_, i) => {
+              const angle = (i * 15 * Math.PI) / 180;
+              const dist = 40 + (i % 5) * 10;
+              const tx = Math.cos(angle) * dist;
+              const ty = Math.sin(angle) * dist;
+              return (
+                <div
+                  key={i}
+                  className="absolute"
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: "50%",
+                    background:
+                      i % 3 === 0 ? "#fbbf24" : i % 3 === 1 ? "#fde68a" : "#FFD700",
+                    boxShadow: "0 0 20px rgba(255,215,0,1)",
+                    animation: `mj-sparkle 1800ms ease-out ${i * 50}ms infinite`,
+                    transform: `translate(${tx}vw, ${ty}vh)`,
+                  }}
+                />
+              );
+            })}
+          {/* Main text */}
+          <div
+            className="relative text-center"
+            style={{ animation: "mj-win-zoom 1200ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both" }}
+          >
+            <p
+              className={`font-black tracking-[0.3em] leading-none ${
+                celebrationMode === "zimo" ? "text-[14vw]" : "text-[9vw]"
+              }`}
+              style={{
+                color: celebrationMode === "zimo" ? "#fff8dc" : "#fde68a",
+                textShadow:
+                  celebrationMode === "zimo"
+                    ? "0 0 50px #FFD700, 0 0 100px #FFA500, 0 0 150px #FF6347, 0 4px 12px rgba(0,0,0,0.6)"
+                    : "0 0 30px rgba(201,169,110,0.9), 0 0 60px rgba(201,169,110,0.5), 0 3px 8px rgba(0,0,0,0.5)",
+                fontFamily: "serif",
+              }}
+            >
+              {celebrationMode === "zimo" ? "自摸" : "胡"}
+            </p>
+            <p
+              className="mt-4 text-2xl font-bold"
+              style={{
+                color: celebrationMode === "zimo" ? "#f0d68a" : "#e8c97a",
+                textShadow: "0 0 20px rgba(240,214,138,0.7)",
+                animation: "mj-win-fade-in 800ms ease-out 400ms both",
+              }}
+            >
+              {state.winner.name}
+            </p>
+            <p
+              className="mt-1 text-sm font-bold tracking-wider"
+              style={{
+                color: "#fde68a",
+                animation: "mj-win-fade-in 800ms ease-out 700ms both",
+              }}
+            >
+              共 {state.winner.score.totalFan} 台
+            </p>
+          </div>
+          <style jsx>{`
+            @keyframes mj-win-flash {
+              0% { opacity: 0; }
+              10% { opacity: 1; }
+              85% { opacity: 1; }
+              100% { opacity: 0; }
+            }
+            @keyframes mj-win-rotate {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+            @keyframes mj-win-zoom {
+              0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+              60% { transform: scale(1.15) rotate(3deg); opacity: 1; }
+              100% { transform: scale(1) rotate(0deg); opacity: 1; }
+            }
+            @keyframes mj-sparkle {
+              0% { transform: translate(0, 0) scale(0); opacity: 0; }
+              30% { opacity: 1; }
+              100% { transform: translate(var(--tx, 20vw), var(--ty, -20vh)) scale(1.5); opacity: 0; }
+            }
+            @keyframes mj-win-fade-in {
+              from { opacity: 0; transform: translateY(10px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Game over overlay — stays on the board */}
       {isFinished && state.winner && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

@@ -635,11 +635,11 @@ export function declareWin(
 
   const score = calculateScore(scoringCtx);
 
-  // Add 連N / 拉N fans when dealer wins during a consecutive streak
-  // 連N = dealer has continued N times
-  // 拉N = this win extends the streak by N
+  // 連N / 拉N bonus apply whenever the dealer was on a consecutive streak.
+  // Awarded to the winner regardless of whether winner is dealer or not —
+  // i.e. 莊家胡 (continue), 莊家放槍 or 莊家被自摸 (streak broken) both count.
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
-  if (player.isDealer && consecutive > 0) {
+  if (consecutive > 0) {
     score.fans.push({ name: `連${consecutive}`, value: consecutive });
     score.fans.push({ name: `拉${consecutive}`, value: consecutive });
     score.totalFan += consecutive * 2;
