@@ -632,6 +632,16 @@ export function declareWin(
 
   const score = calculateScore(scoringCtx);
 
+  // Add 連N / 拉N fans when dealer wins during a consecutive streak
+  // 連N = dealer has continued N times
+  // 拉N = this win extends the streak by N
+  const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
+  if (player.isDealer && consecutive > 0) {
+    score.fans.push({ name: `連${consecutive}`, value: consecutive });
+    score.fans.push({ name: `拉${consecutive}`, value: consecutive });
+    score.totalFan += consecutive * 2;
+  }
+
   s.winner = { seat, score };
   s.status = "finished";
 
@@ -683,7 +693,6 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
 
   const { basePoints, fanPoints } = settings;
   const deltas = [0, 0, 0, 0];
-  const consecutive = state.roundInfo?.dealerConsecutive ?? 0;
 
   if (!state.winner || state.winner.seat < 0) {
     // 流局
@@ -691,7 +700,8 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   }
 
   const winnerSeat = state.winner.seat;
-  const totalFan = state.winner.score.totalFan + consecutive; // 連莊拉台
+  // totalFan already includes 連N/拉N from declareWin if dealer won during streak
+  const totalFan = state.winner.score.totalFan;
   const isSelfDraw = state.winner.score.fans.some(f => f.name.includes("自摸"));
   const payment = basePoints + totalFan * fanPoints;
 
