@@ -517,19 +517,28 @@ export default function MjBoard({
 
           {/* Action buttons (碰/槓/胡/過) */}
           {hasActions && (
-            <div className="flex gap-2 justify-center">
+            <div className="flex gap-2 justify-center flex-wrap">
               {availableActions.map((action, i) => (
                 <button
                   key={`${action.type}-${i}`}
                   onClick={() => onAction(action.type, action.tiles)}
-                  className={`px-5 py-2 rounded-xl font-bold text-sm
+                  className={`px-3 py-2 rounded-xl font-bold text-sm
                     cursor-pointer active:scale-95 transition-all duration-150 shadow-lg
+                    flex items-center gap-1.5
                     ${action.type === "win"
                       ? "bg-gradient-to-r from-red-600 to-red-500 text-white animate-pulse shadow-red-500/30"
                       : "bg-gradient-to-r from-[#C9A96E] to-[#e8c97a] text-[#0f2a1a] shadow-[#C9A96E]/20"
                     }`}
                 >
-                  {ActionName(action.type)}
+                  <span>{ActionName(action.type)}</span>
+                  {/* Show the chi tile pair so multiple chi options are distinguishable */}
+                  {action.type === "chi" && action.tiles && (
+                    <span className="flex gap-[1px]">
+                      {action.tiles.map((t) => (
+                        <MjTile key={t.id} tile={t} tiny />
+                      ))}
+                    </span>
+                  )}
                 </button>
               ))}
               <button
