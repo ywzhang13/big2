@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     state.roomCode = room.code;
 
     // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
+    // 起莊者 = 開門者（第一局同一顆骰子）
     const hostSeat = state.players.findIndex((p) => p.id === room.host_id);
     const baseSeat = hostSeat >= 0 ? hostSeat : 0;
     const d1 = 1 + Math.floor(Math.random() * 6);
@@ -62,6 +63,10 @@ export async function POST(request: Request) {
     }
 
     state = dealTiles(state);
+
+    // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
+    state.dice = [d1, d2, d3];
+    state.doorSeat = firstDealerSeat;
 
     // Save full state to DB
     await saveGameState(roomId, state, "playing");
