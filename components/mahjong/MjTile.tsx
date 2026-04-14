@@ -41,11 +41,16 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
     ? "/tiles/Back.svg"
     : "/tiles/Front.svg";
 
+  // Use <button> when clickable, <div> otherwise, to avoid nested <button>
+  // issues when MjTile is rendered inside another button (e.g. chi action button).
+  const Tag: "button" | "div" = onClick ? "button" : "div";
+  const interactiveProps = onClick
+    ? { type: "button" as const, onClick }
+    : {};
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!onClick}
+    <Tag
+      {...interactiveProps}
       className={`flex-shrink-0 transition-all duration-100 active:scale-95 relative
         ${selected ? "-translate-y-3 z-10" : ""}
         ${!onClick ? "cursor-default" : "cursor-pointer"}
@@ -57,6 +62,7 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
           ? "0 6px 16px rgba(0,0,0,0.5), 0 0 0 2px #fbbf24"
           : "none",
         border: "none",
+        padding: 0,
       }}
     >
       {/* Backdrop (tile face/back) */}
@@ -97,6 +103,6 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
           draggable={false}
         />
       )}
-    </button>
+    </Tag>
   );
 }
