@@ -341,9 +341,18 @@ function scoreDecomposition(
     fans.push({ name: "五暗刻", value: 8 });
   }
 
-  // --- 花牌 ---
-  if (ctx.flowers.length > 0) {
-    fans.push({ name: "花牌", value: ctx.flowers.length });
+  // --- 正花 ---
+  // Each seat has a matching flower based on seatWind (relative to door/opener):
+  //   seatWind=1 (東/門) → flower number 1 (春 Flower1, 梅 Flower5)
+  //   seatWind=2 (南)   → flower number 2 (夏 Flower2, 蘭 Flower6)
+  //   seatWind=3 (西)   → flower number 3 (秋 Flower3, 竹 Flower7)
+  //   seatWind=4 (北)   → flower number 4 (冬 Flower4, 菊 Flower8)
+  // Only matching flowers count — 1 台 each. Duplicates allowed.
+  const matchingFlowers = ctx.flowers.filter(
+    (f) => ((f.rank - 1) % 4) + 1 === ctx.seatWind
+  ).length;
+  if (matchingFlowers > 0) {
+    fans.push({ name: "正花", value: matchingFlowers });
   }
 
   // 春夏秋冬 (flower ranks 1-4)
