@@ -221,11 +221,14 @@ export function useMahjong(roomCode: string, playerName: string) {
         hasDrawn: gs.hasDrawn,
         // Keep availableActions from broadcast — polling doesn't provide them
         availableActions: prev.availableActions,
+        // Preserve allHands from mj_game_over broadcast — polling state
+        // doesn't include allHands, so we don't want to overwrite it.
         winner: gs.winner
           ? {
               seat: gs.winner.seat,
               name: gs.players[gs.winner.seat]?.name ?? "",
               score: gs.winner.score,
+              allHands: prev.winner?.allHands,
             }
           : prev.winner,
         // Round system fields from polling
