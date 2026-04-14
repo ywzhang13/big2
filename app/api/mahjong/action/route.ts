@@ -128,24 +128,21 @@ export async function POST(request: Request) {
       await saveGameState(roomId, newState);
 
       const turnAdvanced = !newState.pendingActions;
-      // Broadcast pass + authoritative turn state in one payload so clients
-      // can update currentTurn + hasDrawn atomically (no flash).
-      await mjBroadcast(room.code, "mj_pass", {
-        seat,
-        allPassed: turnAdvanced,
-        currentTurn: newState.currentTurn,
-        hasDrawn: newState.hasDrawn,
-      });
+      const broadcasts: Promise<void>[] = [
+        mjBroadcast(room.code, "mj_pass", {
+          seat,
+          allPassed: turnAdvanced,
+          currentTurn: newState.currentTurn,
+          hasDrawn: newState.hasDrawn,
+        }),
+      ];
 
-      // If pending window still open, re-reveal next-tier actions as
-      // higher-priority players finish. Uses same tier logic as discard route:
-      //   0=win, 1=pong/kong, 2=chi
+      // If pending window still open, re-reveal next-tier actions
       if (newState.pendingActions && state.lastDiscard) {
         const remainingActions = getAvailableActions(newState);
         const passedSet = new Set(newState.pendingActions.passedActors);
         const tierOf = (type: string) =>
           type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
-
         const unpassedActions = remainingActions.filter(
           (a) => !passedSet.has(a.playerSeat)
         );
@@ -166,13 +163,16 @@ export async function POST(request: Request) {
           );
           if (filtered.length === 0) continue;
           const targetPlayerId = newState.players[actionSeat].id;
-          await mjBroadcast(room.code, "mj_available_actions", {
-            playerId: targetPlayerId,
-            actions: filtered,
-          });
+          broadcasts.push(
+            mjBroadcast(room.code, "mj_available_actions", {
+              playerId: targetPlayerId,
+              actions: filtered,
+            })
+          );
         }
       }
 
+      await Promise.all(broadcasts);
       return Response.json({ success: true });
     }
 
@@ -248,28 +248,25 @@ export async function POST(request: Request) {
     // to clients (for faceDown rendering and scoring).
     const updatedPlayer = newState.players[seat];
     const lastMeld = updatedPlayer.revealed[updatedPlayer.revealed.length - 1];
-    await mjBroadcast(room.code, "mj_action", {
-      type: lastMeld.type,
-      seat,
-      tiles: lastMeld.tiles,
-      tileCount: updatedPlayer.hand.length,
-    });
-
-    // After chi/pong, the player needs to discard.
-    // After kong, the player already drew a replacement (handled in executeAction).
-    // Send the player their updated hand.
-    // For kong, also send the replacement tile id so UI can show it separated
-    // on the right (just like a normal draw).
     const handNoFlowers = newState.players[seat].hand.filter((t) => t.suit !== "f");
     const drawnTileId =
       actionType === "kong" && handNoFlowers.length > 0
         ? handNoFlowers[handNoFlowers.length - 1].id
         : undefined;
-    await mjBroadcast(room.code, "mj_hand_update", {
-      playerId,
-      hand: handNoFlowers,
-      drawnTileId,
-    });
+
+    await Promise.all([
+      mjBroadcast(room.code, "mj_action", {
+        type: lastMeld.type,
+        seat,
+        tiles: lastMeld.tiles,
+        tileCount: updatedPlayer.hand.length,
+      }),
+      mjBroadcast(room.code, "mj_hand_update", {
+        playerId,
+        hand: handNoFlowers,
+        drawnTileId,
+      }),
+    ]);
 
     return Response.json({ success: true });
   } catch (err) {

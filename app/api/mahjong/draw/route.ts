@@ -106,26 +106,26 @@ export async function POST(request: Request) {
     // Save state
     await saveGameState(roomId, newState);
 
-    // Broadcast public draw info (tile count + flowers for all to see補花)
-    await mjBroadcast(room.code, "mj_draw", {
-      seat,
-      tileCount: player.hand.length,
-      wallCount: newState.wall.length,
-      flowers: player.flowers,
-    });
-
-    // Send drawn tile only to the drawing player (defensive: filter flowers from hand)
-    await mjBroadcast(room.code, "mj_draw_tile", {
-      playerId,
-      tile: drawnTile,
-      hand: player.hand.filter((t) => t.suit !== "f"),
-      flowers: player.flowers,
-      canWin,
-      canKong,
-      kongOptions: canKong
-        ? kongOptions.map((group) => group.map((t) => t.id))
-        : [],
-    });
+    // Broadcast in parallel for speed
+    await Promise.all([
+      mjBroadcast(room.code, "mj_draw", {
+        seat,
+        tileCount: player.hand.length,
+        wallCount: newState.wall.length,
+        flowers: player.flowers,
+      }),
+      mjBroadcast(room.code, "mj_draw_tile", {
+        playerId,
+        tile: drawnTile,
+        hand: player.hand.filter((t) => t.suit !== "f"),
+        flowers: player.flowers,
+        canWin,
+        canKong,
+        kongOptions: canKong
+          ? kongOptions.map((group) => group.map((t) => t.id))
+          : [],
+      }),
+    ]);
 
     return Response.json({
       success: true,

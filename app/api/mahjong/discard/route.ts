@@ -66,54 +66,57 @@ export async function POST(request: Request) {
     // Save state
     await saveGameState(roomId, newState);
 
-    // Broadcast discard
+    // Prepare all broadcasts
     const discardedTile = newState.lastDiscard!.tile;
-    await mjBroadcast(room.code, "mj_discard", {
-      seat,
-      tile: discardedTile,
-      availableActions: actions.map((a) => ({
-        type: a.type,
-        playerSeat: a.playerSeat,
-      })),
-    });
+    const broadcasts: Promise<void>[] = [];
+
+    broadcasts.push(
+      mjBroadcast(room.code, "mj_discard", {
+        seat,
+        tile: discardedTile,
+        availableActions: actions.map((a) => ({
+          type: a.type,
+          playerSeat: a.playerSeat,
+        })),
+      })
+    );
 
     // Priority tiers: 0=win, 1=pong/kong, 2=chi
-    // Only reveal a player's action if no OTHER player has a higher-priority
-    // action pending. Same player may see their own multi-tier options together
-    // (e.g. own pong + own chi).
     const tierOf = (type: string) =>
       type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
 
     const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
     for (const actionSeat of playerSeatsWithActions) {
       const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
-      // Highest-priority tier held by ANOTHER seat
       const otherTiers = actions
         .filter((a) => a.playerSeat !== actionSeat)
         .map((a) => tierOf(a.type));
       const minOtherTier = otherTiers.length > 0 ? Math.min(...otherTiers) : 999;
-      // Own actions whose tier is <= minOtherTier (meaning no other higher-
-      // priority seat is still in control) are revealable now.
       const filtered = playerActions.filter(
         (a) => tierOf(a.type) <= minOtherTier
       );
       if (filtered.length === 0) continue;
       const targetPlayerId = newState.players[actionSeat].id;
-      await mjBroadcast(room.code, "mj_available_actions", {
-        playerId: targetPlayerId,
-        actions: filtered,
-      });
+      broadcasts.push(
+        mjBroadcast(room.code, "mj_available_actions", {
+          playerId: targetPlayerId,
+          actions: filtered,
+        })
+      );
     }
 
-    // If turn advanced (no pending actions), broadcast the new turn so clients
-    // don't need to wait for 5s polling. Prevents "輪到你摸牌" flash on next
-    // player's UI and keeps flow snappy.
+    // Turn advance (when no pending actions) — include in parallel
     if (!newState.pendingActions) {
-      await mjBroadcast(room.code, "mj_turn_advance", {
-        currentTurn: newState.currentTurn,
-        hasDrawn: newState.hasDrawn,
-      });
+      broadcasts.push(
+        mjBroadcast(room.code, "mj_turn_advance", {
+          currentTurn: newState.currentTurn,
+          hasDrawn: newState.hasDrawn,
+        })
+      );
     }
+
+    // Fire all broadcasts in parallel for minimal latency
+    await Promise.all(broadcasts);
 
     return Response.json({
       success: true,
