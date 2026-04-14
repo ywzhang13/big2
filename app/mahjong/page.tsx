@@ -406,6 +406,14 @@ function RoomView({
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
+  // When leave request is granted, all 4 players auto-return to lobby
+  useEffect(() => {
+    if (state.leaveResult === "granted") {
+      const t = setTimeout(() => onGoHome(), 800);
+      return () => clearTimeout(t);
+    }
+  }, [state.leaveResult, onGoHome]);
+
   // Pass roomId from create/join to the hook
   useEffect(() => {
     if (initialRoomId) {
@@ -718,6 +726,16 @@ function RoomView({
       {state.leaveResult === "denied" && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-red-900/80 border border-red-500/40 rounded-xl px-4 py-2 text-red-200 text-sm z-[55] fade-in">
           離開請求被拒絕
+        </div>
+      )}
+
+      {/* Leave granted — brief overlay before auto return to lobby */}
+      {state.leaveResult === "granted" && (
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-[70]">
+          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm text-center">
+            <p className="text-[#f0d68a] font-bold text-lg mb-1">遊戲結束</p>
+            <p className="text-white/60 text-sm">玩家已離開，返回大廳...</p>
+          </div>
         </div>
       )}
 
