@@ -922,7 +922,36 @@ function RoomView({
             style={{ maxHeight: "92vh" }}
           >
           {/* Scrollable content */}
-          <div className="overflow-y-auto p-5 flex-1">
+          <div className="mj-scroll overflow-y-auto p-5 flex-1">
+            <style jsx>{`
+              .mj-scroll {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(201, 169, 110, 0.35) transparent;
+              }
+              .mj-scroll::-webkit-scrollbar {
+                width: 6px;
+              }
+              .mj-scroll::-webkit-scrollbar-track {
+                background: transparent;
+                margin: 8px 0;
+              }
+              .mj-scroll::-webkit-scrollbar-thumb {
+                background: linear-gradient(
+                  180deg,
+                  rgba(201, 169, 110, 0.55) 0%,
+                  rgba(139, 105, 20, 0.55) 100%
+                );
+                border-radius: 4px;
+                border: 1px solid rgba(201, 169, 110, 0.25);
+              }
+              .mj-scroll::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(
+                  180deg,
+                  rgba(240, 214, 138, 0.8) 0%,
+                  rgba(201, 169, 110, 0.8) 100%
+                );
+              }
+            `}</style>
             {state.winner.seat < 0 ? (
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/5 flex items-center justify-center text-2xl">
