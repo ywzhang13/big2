@@ -596,7 +596,11 @@ function RoomView({
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
         <button
           onClick={() => {
-            if (state.status === "playing") {
+            // Mid-session (game active or finished-but-not-all-rounds-done) needs consent
+            const inSession =
+              state.status === "playing" ||
+              (state.status === "finished" && state.roomSettings && !state.gameOver);
+            if (inSession) {
               setShowLeaveConfirm(true);
             } else {
               onGoHome();
@@ -651,7 +655,7 @@ function RoomView({
           <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl">
             <h3 className="text-[#f0d68a] font-bold text-lg text-center mb-2">離開房間？</h3>
             <p className="text-white/60 text-sm text-center mb-4">
-              遊戲進行中，需要其他 3 位玩家同意你才能離開。
+              牌局尚未結束，需要其他 3 位玩家同意你才能離開。
             </p>
             <div className="flex gap-3">
               <button
@@ -970,12 +974,20 @@ function RoomView({
               )}
 
               <button
-                onClick={onGoHome}
+                onClick={() => {
+                  // When all rounds done OR solo lobby, leave directly.
+                  // Mid-session (non-gameOver), require 3-player consent.
+                  if (state.gameOver || !state.roomSettings) {
+                    onGoHome();
+                  } else {
+                    setShowLeaveConfirm(true);
+                  }
+                }}
                 className={`py-3 rounded-xl font-bold
                   cursor-pointer active:scale-95 transition-all
                   ${state.gameOver ? "bg-[#C9A96E] text-[#0f2a1a]" : "border border-white/15 text-white/60"}`}
               >
-                {state.gameOver ? "結束 · 回大廳" : "回大廳"}
+                {state.gameOver ? "結束 · 回大廳" : "回大廳（需同意）"}
               </button>
             </div>
 
