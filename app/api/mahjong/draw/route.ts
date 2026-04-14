@@ -3,7 +3,7 @@ import {
   saveGameState,
   findSeatByPlayerId,
 } from "@/lib/mahjong/db";
-import { mjBroadcast } from "@/lib/mahjong/broadcast";
+import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import {
   drawTile,
   canConcealedKong,
@@ -106,25 +106,30 @@ export async function POST(request: Request) {
     // Save state
     await saveGameState(roomId, newState);
 
-    // Broadcast in parallel for speed
-    await Promise.all([
-      mjBroadcast(room.code, "mj_draw", {
-        seat,
-        tileCount: player.hand.length,
-        wallCount: newState.wall.length,
-        flowers: player.flowers,
-      }),
-      mjBroadcast(room.code, "mj_draw_tile", {
-        playerId,
-        tile: drawnTile,
-        hand: player.hand.filter((t) => t.suit !== "f"),
-        flowers: player.flowers,
-        canWin,
-        canKong,
-        kongOptions: canKong
-          ? kongOptions.map((group) => group.map((t) => t.id))
-          : [],
-      }),
+    await mjBroadcastBatch(room.code, [
+      {
+        event: "mj_draw",
+        payload: {
+          seat,
+          tileCount: player.hand.length,
+          wallCount: newState.wall.length,
+          flowers: player.flowers,
+        },
+      },
+      {
+        event: "mj_draw_tile",
+        payload: {
+          playerId,
+          tile: drawnTile,
+          hand: player.hand.filter((t) => t.suit !== "f"),
+          flowers: player.flowers,
+          canWin,
+          canKong,
+          kongOptions: canKong
+            ? kongOptions.map((group) => group.map((t) => t.id))
+            : [],
+        },
+      },
     ]);
 
     return Response.json({

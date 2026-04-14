@@ -4,7 +4,7 @@ import {
   findSeatByPlayerId,
   toPublicGameState,
 } from "@/lib/mahjong/db";
-import { mjBroadcast } from "@/lib/mahjong/broadcast";
+import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import {
   executeAction,
   executeConcealedKong,
@@ -128,16 +128,18 @@ export async function POST(request: Request) {
       await saveGameState(roomId, newState);
 
       const turnAdvanced = !newState.pendingActions;
-      const broadcasts: Promise<void>[] = [
-        mjBroadcast(room.code, "mj_pass", {
-          seat,
-          allPassed: turnAdvanced,
-          currentTurn: newState.currentTurn,
-          hasDrawn: newState.hasDrawn,
-        }),
+      const events: { event: string; payload: Record<string, unknown> }[] = [
+        {
+          event: "mj_pass",
+          payload: {
+            seat,
+            allPassed: turnAdvanced,
+            currentTurn: newState.currentTurn,
+            hasDrawn: newState.hasDrawn,
+          },
+        },
       ];
 
-      // If pending window still open, re-reveal next-tier actions
       if (newState.pendingActions && state.lastDiscard) {
         const remainingActions = getAvailableActions(newState);
         const passedSet = new Set(newState.pendingActions.passedActors);
@@ -163,16 +165,14 @@ export async function POST(request: Request) {
           );
           if (filtered.length === 0) continue;
           const targetPlayerId = newState.players[actionSeat].id;
-          broadcasts.push(
-            mjBroadcast(room.code, "mj_available_actions", {
-              playerId: targetPlayerId,
-              actions: filtered,
-            })
-          );
+          events.push({
+            event: "mj_available_actions",
+            payload: { playerId: targetPlayerId, actions: filtered },
+          });
         }
       }
 
-      await Promise.all(broadcasts);
+      await mjBroadcastBatch(room.code, events);
       return Response.json({ success: true });
     }
 
@@ -254,18 +254,20 @@ export async function POST(request: Request) {
         ? handNoFlowers[handNoFlowers.length - 1].id
         : undefined;
 
-    await Promise.all([
-      mjBroadcast(room.code, "mj_action", {
-        type: lastMeld.type,
-        seat,
-        tiles: lastMeld.tiles,
-        tileCount: updatedPlayer.hand.length,
-      }),
-      mjBroadcast(room.code, "mj_hand_update", {
-        playerId,
-        hand: handNoFlowers,
-        drawnTileId,
-      }),
+    await mjBroadcastBatch(room.code, [
+      {
+        event: "mj_action",
+        payload: {
+          type: lastMeld.type,
+          seat,
+          tiles: lastMeld.tiles,
+          tileCount: updatedPlayer.hand.length,
+        },
+      },
+      {
+        event: "mj_hand_update",
+        payload: { playerId, hand: handNoFlowers, drawnTileId },
+      },
     ]);
 
     return Response.json({ success: true });

@@ -4,7 +4,7 @@ import {
   findSeatByPlayerId,
   toPublicGameState,
 } from "@/lib/mahjong/db";
-import { mjBroadcast } from "@/lib/mahjong/broadcast";
+import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { discardTile, getAvailableActions, advanceTurn } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
@@ -66,23 +66,24 @@ export async function POST(request: Request) {
     // Save state
     await saveGameState(roomId, newState);
 
-    // Step 1: broadcast mj_discard first so clients have lastDiscard set
-    // before they receive action buttons or turn advance events.
+    // Build all events; single-channel batch keeps ordering + fast.
     const discardedTile = newState.lastDiscard!.tile;
-    await mjBroadcast(room.code, "mj_discard", {
-      seat,
-      tile: discardedTile,
-      availableActions: actions.map((a) => ({
-        type: a.type,
-        playerSeat: a.playerSeat,
-      })),
-    });
+    const events: { event: string; payload: Record<string, unknown> }[] = [
+      {
+        event: "mj_discard",
+        payload: {
+          seat,
+          tile: discardedTile,
+          availableActions: actions.map((a) => ({
+            type: a.type,
+            playerSeat: a.playerSeat,
+          })),
+        },
+      },
+    ];
 
-    // Step 2: after mj_discard settled, fire follow-ups in parallel.
     const tierOf = (type: string) =>
       type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
-
-    const followups: Promise<void>[] = [];
     const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
     for (const actionSeat of playerSeatsWithActions) {
       const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
@@ -90,29 +91,24 @@ export async function POST(request: Request) {
         .filter((a) => a.playerSeat !== actionSeat)
         .map((a) => tierOf(a.type));
       const minOtherTier = otherTiers.length > 0 ? Math.min(...otherTiers) : 999;
-      const filtered = playerActions.filter(
-        (a) => tierOf(a.type) <= minOtherTier
-      );
+      const filtered = playerActions.filter((a) => tierOf(a.type) <= minOtherTier);
       if (filtered.length === 0) continue;
       const targetPlayerId = newState.players[actionSeat].id;
-      followups.push(
-        mjBroadcast(room.code, "mj_available_actions", {
-          playerId: targetPlayerId,
-          actions: filtered,
-        })
-      );
+      events.push({
+        event: "mj_available_actions",
+        payload: { playerId: targetPlayerId, actions: filtered },
+      });
     }
     if (!newState.pendingActions) {
-      followups.push(
-        mjBroadcast(room.code, "mj_turn_advance", {
+      events.push({
+        event: "mj_turn_advance",
+        payload: {
           currentTurn: newState.currentTurn,
           hasDrawn: newState.hasDrawn,
-        })
-      );
+        },
+      });
     }
-    if (followups.length > 0) {
-      await Promise.all(followups);
-    }
+    await mjBroadcastBatch(room.code, events);
 
     return Response.json({
       success: true,

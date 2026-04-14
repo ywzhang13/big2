@@ -534,7 +534,8 @@ export function useMahjong(roomCode: string, playerName: string) {
       setState((prev) => ({
         ...prev,
         myHand: safeHand(hand),
-        ...(drawnTileId != null ? { drawnTileId } : {}),
+        // Authoritative: kong → replacement tile id; chi/pong → null
+        drawnTileId: drawnTileId ?? null,
       }));
     });
 
