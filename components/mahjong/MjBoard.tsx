@@ -485,15 +485,24 @@ export default function MjBoard({
 
           {/* Turn status */}
           <div className="text-center">
-            {isMyTurn ? (
-              <span className="text-[#f0d68a] font-bold text-sm animate-pulse">
-                {needsDraw ? "輪到你摸牌" : "輪到你打牌"}
-              </span>
-            ) : (
-              <span className="text-white/40 text-xs">
-                等待 {players.find((p) => p.seat === currentTurn)?.name || "..."}
-              </span>
-            )}
+            {(() => {
+              const iJustDiscarded = lastDiscard != null && lastDiscard.from === mySeat && currentTurn === mySeat;
+              if (iJustDiscarded) {
+                return <span className="text-white/40 text-xs">等待其他玩家...</span>;
+              }
+              if (isMyTurn) {
+                return (
+                  <span className="text-[#f0d68a] font-bold text-sm animate-pulse">
+                    {needsDraw ? "輪到你摸牌" : "輪到你打牌"}
+                  </span>
+                );
+              }
+              return (
+                <span className="text-white/40 text-xs">
+                  等待 {players.find((p) => p.seat === currentTurn)?.name || "..."}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Action buttons (碰/槓/胡/過) */}

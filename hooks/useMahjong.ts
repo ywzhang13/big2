@@ -744,13 +744,19 @@ export function useMahjong(roomCode: string, playerName: string) {
       // Bug #16: prevent double-discard race condition
       if (discardingRef.current) return;
       discardingRef.current = true;
-      // Optimistically remove tile from hand
-      setState((prev) => ({
-        ...prev,
-        myHand: prev.myHand.filter((t) => t.id !== tileId),
-        availableActions: [],
-        drawnTileId: null,
-      }));
+      // Optimistically remove tile from hand + mark hasDrawn=false so UI
+      // doesn't keep showing "輪到你打牌" during the pending-action window
+      setState((prev) => {
+        const tile = prev.myHand.find((t) => t.id === tileId);
+        return {
+          ...prev,
+          myHand: prev.myHand.filter((t) => t.id !== tileId),
+          availableActions: [],
+          drawnTileId: null,
+          hasDrawn: false,
+          lastDiscard: tile ? { tile, from: prev.mySeat } : prev.lastDiscard,
+        };
+      });
       try {
         await api("POST", "/api/mahjong/discard", {
           roomId: rid,
@@ -849,15 +855,23 @@ export function useMahjong(roomCode: string, playerName: string) {
   const needsDiscard = isMyTurn && state.hasDrawn && state.status === "playing";
 
   // Auto-draw: when it's my turn and I need to draw, do it automatically
-  // BUT NOT if there are pending actions (chi/pong/kong from another player's discard)
+  // BUT NOT if there are pending actions OR I just discarded (pending
+  // chi/pong/kong/win window on my own discard).
+  const justDiscarded =
+    state.lastDiscard != null && state.lastDiscard.from === state.mySeat;
   useEffect(() => {
-    if (needsDraw && state.mySeat >= 0 && state.availableActions.length === 0) {
+    if (
+      needsDraw &&
+      state.mySeat >= 0 &&
+      state.availableActions.length === 0 &&
+      !justDiscarded
+    ) {
       const timer = setTimeout(() => {
         drawTileAction();
-      }, 250); // short delay — server already filtered out non-actionable cases
+      }, 250);
       return () => clearTimeout(timer);
     }
-  }, [needsDraw, state.mySeat, state.availableActions.length]);
+  }, [needsDraw, state.mySeat, state.availableActions.length, justDiscarded]);
 
   return {
     state,
