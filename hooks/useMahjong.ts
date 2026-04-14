@@ -92,6 +92,8 @@ export interface MjClientState {
   // Dice / door
   dice?: [number, number, number];
   doorSeat?: number;
+  // Next-game ready check
+  nextGameReady?: string[];
 }
 
 export { getMjId };
@@ -224,6 +226,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         gameOver: (gs as Record<string, unknown>).gameOver as boolean | undefined ?? prev.gameOver,
         dice: (gs as Record<string, unknown>).dice as [number, number, number] | undefined ?? prev.dice,
         doorSeat: (gs as Record<string, unknown>).doorSeat as number | undefined ?? prev.doorSeat,
+        nextGameReady: (gs as Record<string, unknown>).nextGameReady as string[] | undefined ?? prev.nextGameReady,
       }));
     } catch (err) {
       console.error("[mj] fetchState failed:", err);
@@ -331,6 +334,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         ...(msg.playerScores ? { playerScores: msg.playerScores } : {}),
         ...(msg.dice ? { dice: msg.dice } : {}),
         ...(msg.doorSeat != null ? { doorSeat: msg.doorSeat } : {}),
+        nextGameReady: [],
       }));
     });
 
@@ -506,6 +510,19 @@ export function useMahjong(roomCode: string, playerName: string) {
       }));
     });
 
+    // --- mj_turn_advance (from discard when no actions, to avoid flash) ---
+    channel.on("broadcast", { event: "mj_turn_advance" }, ({ payload }) => {
+      const { currentTurn, hasDrawn } = payload as {
+        currentTurn: number;
+        hasDrawn: boolean;
+      };
+      setState((prev) => ({
+        ...prev,
+        currentTurn,
+        hasDrawn,
+      }));
+    });
+
     // --- mj_pass ---
     channel.on("broadcast", { event: "mj_pass" }, ({ payload }) => {
       const { seat: _seat, allPassed } = payload as {
@@ -520,6 +537,12 @@ export function useMahjong(roomCode: string, playerName: string) {
         // When all passed, reset hasDrawn so next player can draw
         ...(allPassed ? { hasDrawn: false } : {}),
       }));
+    });
+
+    // --- mj_next_game_ready (partial readiness) ---
+    channel.on("broadcast", { event: "mj_next_game_ready" }, ({ payload }) => {
+      const { readyIds } = payload as { readyIds: string[] };
+      setState((prev) => ({ ...prev, nextGameReady: readyIds }));
     });
 
     // --- mj_game_over ---
@@ -719,7 +742,7 @@ export function useMahjong(roomCode: string, playerName: string) {
     if (needsDraw && state.mySeat >= 0 && state.availableActions.length === 0) {
       const timer = setTimeout(() => {
         drawTileAction();
-      }, 800); // longer delay to let action broadcasts arrive first
+      }, 250); // short delay — server already filtered out non-actionable cases
       return () => clearTimeout(timer);
     }
   }, [needsDraw, state.mySeat, state.availableActions.length]);

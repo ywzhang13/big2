@@ -722,23 +722,54 @@ function RoomView({
             )}
 
             {/* Action buttons */}
-            <div className="flex gap-3 mt-4">
-              {state.roomSettings && !state.gameOver && isHost ? (
-                <button
-                  onClick={nextGame}
-                  className="flex-1 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold
-                    cursor-pointer active:scale-95 transition-all"
-                >
-                  下一局
-                </button>
-              ) : state.roomSettings && !state.gameOver ? (
-                <div className="flex-1 py-3 rounded-xl bg-white/10 text-center">
-                  <p className="text-white/50 text-sm">等待房主開始下一局</p>
-                </div>
-              ) : null}
+            <div className="flex flex-col gap-3 mt-4">
+              {state.roomSettings && !state.gameOver && (
+                <>
+                  {/* Ready check — 4 player consent */}
+                  <div className="rounded-xl bg-white/5 border border-[#C9A96E]/15 p-3">
+                    <p className="text-[10px] text-white/40 text-center mb-2 font-bold tracking-wider">
+                      四家同意後開始下一局 ({(state.nextGameReady?.length ?? 0)}/4)
+                    </p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {state.players.map((p) => {
+                        const isReady = state.nextGameReady?.includes(p.id) ?? false;
+                        return (
+                          <div
+                            key={p.seat}
+                            className={`text-center py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all ${
+                              isReady
+                                ? "bg-[#C9A96E]/30 text-[#f0d68a] border border-[#C9A96E]/50"
+                                : "bg-white/5 text-white/40 border border-white/10"
+                            }`}
+                          >
+                            <div>{isReady ? "✓" : "·"}</div>
+                            <div className="truncate">{p.name}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* My ready button */}
+                  {state.nextGameReady?.includes(state.myId) ? (
+                    <div className="py-3 rounded-xl bg-white/10 text-center">
+                      <p className="text-white/50 text-sm">已確認，等待其他玩家...</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={nextGame}
+                      className="py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold
+                        cursor-pointer active:scale-95 transition-all"
+                    >
+                      同意下一局
+                    </button>
+                  )}
+                </>
+              )}
+
               <button
                 onClick={onGoHome}
-                className={`${state.roomSettings && !state.gameOver ? "flex-1" : "w-full"} py-3 rounded-xl font-bold
+                className={`py-3 rounded-xl font-bold
                   cursor-pointer active:scale-95 transition-all
                   ${state.gameOver ? "bg-[#C9A96E] text-[#0f2a1a]" : "border border-white/15 text-white/60"}`}
               >

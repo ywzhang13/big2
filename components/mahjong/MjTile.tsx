@@ -30,8 +30,8 @@ function getTileSvg(tile: Tile): string {
 }
 
 export default function MjTile({ tile, selected, onClick, small, tiny, faceDown }: MjTileProps) {
-  const w = tiny ? 22 : small ? 30 : 44;
-  const h = tiny ? 30 : small ? 42 : 60;
+  const w = tiny ? 22 : small ? 30 : 40;
+  const h = tiny ? 30 : small ? 42 : 54;
 
   const src = faceDown
     ? "/tiles/Back.png"

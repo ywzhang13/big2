@@ -130,6 +130,7 @@ export interface PublicGameState {
   // Dice / door
   dice?: MahjongGameState["dice"];
   doorSeat?: MahjongGameState["doorSeat"];
+  nextGameReady?: MahjongGameState["nextGameReady"];
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
@@ -152,6 +153,7 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     gameOver: state.gameOver,
     dice: state.dice,
     doorSeat: state.doorSeat,
+    nextGameReady: state.nextGameReady,
   };
 }
 

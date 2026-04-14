@@ -131,6 +131,15 @@ export async function POST(request: Request) {
         allPassed: !newState.pendingActions, // true if turn advanced
       });
 
+      // When all passed and turn advanced, send mj_turn_advance so clients
+      // can update currentTurn immediately (avoid 5s polling lag).
+      if (!newState.pendingActions) {
+        await mjBroadcast(room.code, "mj_turn_advance", {
+          currentTurn: newState.currentTurn,
+          hasDrawn: newState.hasDrawn,
+        });
+      }
+
       // If pending window still open, check whether chi should now be
       // revealed (all higher-priority players have passed).
       if (newState.pendingActions && state.lastDiscard) {

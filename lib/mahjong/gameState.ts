@@ -76,4 +76,6 @@ export interface MahjongGameState {
   // --- Dice / door (骰子開門) ---
   dice?: [number, number, number]; // 3 dice rolled at game start
   doorSeat?: number;               // 開門 seat (門風=東), used for seat wind scoring
+  // --- Next-game ready check (下一局四家同意) ---
+  nextGameReady?: string[];        // playerIds who have confirmed ready for next game
 }

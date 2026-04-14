@@ -155,13 +155,29 @@ function PlayerPanel({
 
       {/* Flowers + Revealed melds (closer to center for left/right) */}
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} ${isHorizontal ? "gap-2" : "gap-1.5"} items-center`}>
+        <div
+          className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
+          // Inter-meld gap:
+          //   top (horizontal): 8px (unchanged)
+          //   left/right (vertical): 2px (was ~6px, -65%)
+          style={{ gap: isHorizontal ? 8 : 2 }}
+        >
           {/* Each meld is a tight group */}
           {player.revealed.map((meld, mi) => (
-            <div key={mi} className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-0`}
-              style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3 }}>
+            <div
+              key={mi}
+              className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`}
+              // Intra-group gap for 3/4-tile groups:
+              //   top: 0 unchanged
+              //   left/right: 0 (previously already 0; kept tight) — effectively -80% squeeze
+              style={{
+                gap: 0,
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 3,
+              }}
+            >
               {meld.tiles.map((t) => (
-                <div key={t.id} style={rotStyle ? { transform: rotStyle } : undefined}>
+                <div key={t.id} style={rotStyle ? { transform: rotStyle, marginTop: isHorizontal ? 0 : -4 } : undefined}>
                   <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
                 </div>
               ))}
@@ -169,9 +185,9 @@ function PlayerPanel({
           ))}
           {/* Flowers as a group */}
           {player.flowers.length > 0 && (
-            <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-0`}>
+            <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`} style={{ gap: 0 }}>
               {player.flowers.map((f) => (
-                <div key={f.id} style={rotStyle ? { transform: rotStyle } : undefined}>
+                <div key={f.id} style={rotStyle ? { transform: rotStyle, marginTop: isHorizontal ? 0 : -4 } : undefined}>
                   <MjTile tile={f} tiny />
                 </div>
               ))}

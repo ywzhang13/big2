@@ -99,6 +99,16 @@ export async function POST(request: Request) {
       });
     }
 
+    // If turn advanced (no pending actions), broadcast the new turn so clients
+    // don't need to wait for 5s polling. Prevents "輪到你摸牌" flash on next
+    // player's UI and keeps flow snappy.
+    if (!newState.pendingActions) {
+      await mjBroadcast(room.code, "mj_turn_advance", {
+        currentTurn: newState.currentTurn,
+        hasDrawn: newState.hasDrawn,
+      });
+    }
+
     return Response.json({
       success: true,
       availableActions: actions.map((a) => ({

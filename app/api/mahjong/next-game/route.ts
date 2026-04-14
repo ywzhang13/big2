@@ -1,4 +1,4 @@
-import { loadRoom, loadPlayers, saveGameState, toPublicGameState } from "@/lib/mahjong/db";
+import { loadRoom, saveGameState, toPublicGameState } from "@/lib/mahjong/db";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { startNextGame, isAllRoundsComplete } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
@@ -21,11 +21,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 
-    // Verify host
-    if (room.host_id !== playerId) {
-      return Response.json({ error: "只有房主可以開始下一局" }, { status: 403 });
-    }
-
     const state = room.game_state as MahjongGameState;
     if (state.status !== "finished") {
       return Response.json({ error: "目前的局還沒結束" }, { status: 400 });
@@ -39,8 +34,39 @@ export async function POST(request: Request) {
       return Response.json({ error: "所有圈數已結束" }, { status: 400 });
     }
 
-    // Start next game
-    const newState = startNextGame(state);
+    // Verify player is in the room
+    const player = state.players.find((p) => p.id === playerId);
+    if (!player) {
+      return Response.json({ error: "玩家不在此房間" }, { status: 403 });
+    }
+
+    // Mark this player as ready
+    const ready = new Set(state.nextGameReady ?? []);
+    ready.add(playerId);
+    const readyList = Array.from(ready);
+
+    // Need all 4 players ready before starting the next game
+    if (readyList.length < 4) {
+      // Save partial ready state
+      const partialState: MahjongGameState = {
+        ...state,
+        nextGameReady: readyList,
+      };
+      await saveGameState(roomId, partialState);
+
+      await mjBroadcast(room.code, "mj_next_game_ready", {
+        readyIds: readyList,
+      });
+
+      return Response.json({ success: true, ready: readyList.length, total: 4 });
+    }
+
+    // All 4 ready — actually start the next game
+    const clearedState: MahjongGameState = {
+      ...state,
+      nextGameReady: [],
+    };
+    const newState = startNextGame(clearedState);
 
     // Save full state to DB
     await saveGameState(roomId, newState, "playing");
@@ -60,15 +86,15 @@ export async function POST(request: Request) {
     });
 
     // Send each player their hand privately
-    for (const player of newState.players) {
+    for (const p of newState.players) {
       await mjBroadcast(room.code, "mj_deal_hand", {
-        playerId: player.id,
-        hand: player.hand.filter((t) => t.suit !== "f"),
-        flowers: player.flowers,
+        playerId: p.id,
+        hand: p.hand.filter((t) => t.suit !== "f"),
+        flowers: p.flowers,
       });
     }
 
-    return Response.json({ success: true });
+    return Response.json({ success: true, ready: 4, total: 4, started: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "伺服器錯誤";
     return Response.json({ error: message }, { status: 500 });
