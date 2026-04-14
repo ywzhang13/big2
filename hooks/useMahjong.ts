@@ -94,6 +94,15 @@ export interface MjClientState {
   doorSeat?: number;
   // Next-game ready check
   nextGameReady?: string[];
+  // Leave request (離開需他家同意)
+  leaveRequest?: {
+    requesterId: string;
+    requesterName: string;
+    requesterSeat: number;
+    approvedCount?: number;
+    deniedCount?: number;
+  };
+  leaveResult?: "granted" | "denied" | null;
 }
 
 export { getMjId };
@@ -545,6 +554,50 @@ export function useMahjong(roomCode: string, playerName: string) {
       }));
     });
 
+    // --- mj_leave_request ---
+    channel.on("broadcast", { event: "mj_leave_request" }, ({ payload }) => {
+      const { requesterId, requesterName, requesterSeat } = payload as {
+        requesterId: string;
+        requesterName: string;
+        requesterSeat: number;
+      };
+      setState((prev) => ({
+        ...prev,
+        leaveRequest: { requesterId, requesterName, requesterSeat, approvedCount: 0, deniedCount: 0 },
+        leaveResult: null,
+      }));
+    });
+
+    // --- mj_leave_vote ---
+    channel.on("broadcast", { event: "mj_leave_vote" }, ({ payload }) => {
+      const { approvedCount, deniedCount, result, requesterSeat, requesterName } = payload as {
+        voterId: string;
+        voterSeat: number;
+        approve: boolean;
+        approvedCount: number;
+        deniedCount: number;
+        result: "granted" | "denied" | "vote";
+        requesterSeat: number;
+        requesterName: string;
+      };
+      setState((prev) => ({
+        ...prev,
+        leaveRequest:
+          result === "vote"
+            ? {
+                requesterId: prev.leaveRequest?.requesterId ?? "",
+                requesterName,
+                requesterSeat,
+                approvedCount,
+                deniedCount,
+              }
+            : undefined,
+        leaveResult: result === "granted" ? "granted" : result === "denied" ? "denied" : prev.leaveResult,
+        // If granted, game becomes finished
+        ...(result === "granted" ? { status: "finished" as const } : {}),
+      }));
+    });
+
     // --- mj_next_game_ready (partial readiness) ---
     channel.on("broadcast", { event: "mj_next_game_ready" }, ({ payload }) => {
       const { readyIds } = payload as { readyIds: string[] };
@@ -720,6 +773,36 @@ export function useMahjong(roomCode: string, playerName: string) {
     [myId, fetchState]
   );
 
+  const requestLeave = useCallback(async () => {
+    const rid = roomIdRef.current;
+    if (!rid) return;
+    try {
+      await api("POST", "/api/mahjong/leave-request", {
+        roomId: rid,
+        playerId: myId,
+      });
+    } catch (err) {
+      console.error("[mj] leave-request failed:", err);
+    }
+  }, [myId]);
+
+  const voteLeave = useCallback(
+    async (approve: boolean) => {
+      const rid = roomIdRef.current;
+      if (!rid) return;
+      try {
+        await api("POST", "/api/mahjong/leave-vote", {
+          roomId: rid,
+          playerId: myId,
+          approve,
+        });
+      } catch (err) {
+        console.error("[mj] leave-vote failed:", err);
+      }
+    },
+    [myId]
+  );
+
   const nextGame = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
@@ -761,6 +844,8 @@ export function useMahjong(roomCode: string, playerName: string) {
     needsDiscard,
     startGame,
     nextGame,
+    requestLeave,
+    voteLeave,
     drawTile: drawTileAction,
     discardTile,
     doAction,

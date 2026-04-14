@@ -396,11 +396,15 @@ function RoomView({
     needsDiscard,
     startGame,
     nextGame,
+    requestLeave,
+    voteLeave,
     drawTile,
     discardTile,
     doAction,
     setRoomId,
   } = useMahjong(code, nameReady ? playerName : "");
+
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // Pass roomId from create/join to the hook
   useEffect(() => {
@@ -583,7 +587,13 @@ function RoomView({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
         <button
-          onClick={onGoHome}
+          onClick={() => {
+            if (state.status === "playing") {
+              setShowLeaveConfirm(true);
+            } else {
+              onGoHome();
+            }
+          }}
           className="text-sm text-white/60 cursor-pointer active:text-[#f0d68a]"
         >
           離開
@@ -626,6 +636,90 @@ function RoomView({
         doorSeat={state.doorSeat}
         playerScores={state.playerScores}
       />
+
+      {/* Leave confirmation modal (requester side) */}
+      {showLeaveConfirm && !state.leaveRequest && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60] px-4">
+          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[#f0d68a] font-bold text-lg text-center mb-2">離開房間？</h3>
+            <p className="text-white/60 text-sm text-center mb-4">
+              遊戲進行中，需要其他 3 位玩家同意你才能離開。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white/70 font-bold cursor-pointer active:scale-95 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  await requestLeave();
+                  setShowLeaveConfirm(false);
+                }}
+                className="flex-1 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold cursor-pointer active:scale-95 transition-all"
+              >
+                請求離開
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave request active — voter side (not requester) */}
+      {state.leaveRequest && state.leaveRequest.requesterId !== state.myId && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60] px-4">
+          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[#f0d68a] font-bold text-lg text-center mb-2">
+              {state.leaveRequest.requesterName} 想離開
+            </h3>
+            <p className="text-white/60 text-sm text-center mb-1">
+              同意的話遊戲會結束回大廳
+            </p>
+            <p className="text-white/40 text-xs text-center mb-4">
+              已同意: {state.leaveRequest.approvedCount ?? 0} / 3
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => voteLeave(false)}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white/70 font-bold cursor-pointer active:scale-95 transition-all"
+              >
+                不同意
+              </button>
+              <button
+                onClick={() => voteLeave(true)}
+                className="flex-1 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold cursor-pointer active:scale-95 transition-all"
+              >
+                同意
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave request waiting — requester side */}
+      {state.leaveRequest && state.leaveRequest.requesterId === state.myId && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-[60] px-4">
+          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-center">
+            <div className="animate-pulse">
+              <h3 className="text-[#f0d68a] font-bold text-lg mb-2">等待其他玩家同意...</h3>
+              <p className="text-white/60 text-sm mb-1">
+                已同意: {state.leaveRequest.approvedCount ?? 0} / 3
+              </p>
+              {(state.leaveRequest.deniedCount ?? 0) > 0 && (
+                <p className="text-red-400 text-sm">已有玩家不同意</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave denied toast */}
+      {state.leaveResult === "denied" && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-red-900/80 border border-red-500/40 rounded-xl px-4 py-2 text-red-200 text-sm z-[55] fade-in">
+          離開請求被拒絕
+        </div>
+      )}
 
       {/* Game over overlay — stays on the board */}
       {isFinished && state.winner && (

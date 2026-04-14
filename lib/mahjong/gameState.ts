@@ -78,4 +78,12 @@ export interface MahjongGameState {
   doorSeat?: number;               // 開門 seat (門風=東), used for seat wind scoring
   // --- Next-game ready check (下一局四家同意) ---
   nextGameReady?: string[];        // playerIds who have confirmed ready for next game
+  // --- Leave request (離開需他家同意) ---
+  leaveRequest?: {
+    requesterId: string;            // playerId who wants to leave
+    requesterName: string;
+    requesterSeat: number;
+    approvedBy: string[];           // playerIds who voted yes
+    deniedBy: string[];             // playerIds who voted no
+  };
 }
