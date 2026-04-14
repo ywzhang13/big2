@@ -703,29 +703,42 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   }
 
   const winnerSeat = state.winner.seat;
-  // totalFan already includes 連N/拉N from declareWin if dealer won during streak
+  // totalFan already includes 連N/拉N from declareWin if dealer was on streak
   const totalFan = state.winner.score.totalFan;
   const isSelfDraw = state.winner.score.fans.some(f => f.name.includes("自摸"));
-  const payment = basePoints + totalFan * fanPoints;
+  const basePayment = basePoints + totalFan * fanPoints;
+  const dealerSeat = state.dealerSeat;
+
+  // Dealer tai adjustment: whenever dealer and the winner are different,
+  // the dealer (as the loser / 放槍者 / 被自摸者) pays an extra 1 台 (莊家台)
+  // on top of the base payment, corresponding to dealer-bonus.
+  // If dealer is the winner, the dealer-tai is already inside totalFan.
+  const dealerExtra = fanPoints; // extra 1 tai equivalent
 
   if (isSelfDraw) {
     // 自摸: all 3 losers pay
+    // If dealer is a non-winner, dealer pays base + dealer-tai extra.
+    // Winner receives sum of payments from all losers.
+    let winnerCredit = 0;
     for (let i = 0; i < 4; i++) {
-      if (i === winnerSeat) {
-        deltas[i] = payment * 3;
-      } else {
-        deltas[i] = -payment;
-      }
+      if (i === winnerSeat) continue;
+      const thisLoserIsDealer = i === dealerSeat && winnerSeat !== dealerSeat;
+      const pay = basePayment + (thisLoserIsDealer ? dealerExtra : 0);
+      deltas[i] = -pay;
+      winnerCredit += pay;
     }
-    return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: payment };
+    deltas[winnerSeat] = winnerCredit;
+    return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: basePayment };
   } else {
     // 放槍: only the discarder pays
     const loserSeat = state.lastDiscard?.from ?? -1;
     if (loserSeat >= 0) {
-      deltas[winnerSeat] = payment;
-      deltas[loserSeat] = -payment;
+      const loserIsDealer = loserSeat === dealerSeat && winnerSeat !== dealerSeat;
+      const pay = basePayment + (loserIsDealer ? dealerExtra : 0);
+      deltas[winnerSeat] = pay;
+      deltas[loserSeat] = -pay;
     }
-    return { deltas, reason: "win", fanTotal: totalFan, paymentPerPlayer: payment };
+    return { deltas, reason: "win", fanTotal: totalFan, paymentPerPlayer: basePayment };
   }
 }
 
