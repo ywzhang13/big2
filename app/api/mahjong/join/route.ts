@@ -27,11 +27,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 
-    if (room.status !== "waiting") {
-      return Response.json({ error: "房間已開始遊戲，無法加入" }, { status: 400 });
-    }
-
-    // Check existing players
+    // Check existing players first so rejoins (refresh / disconnect) work
+    // even while status==="playing".
     const { data: existingPlayers, error: playersError } = await supabase
       .from("mj_players")
       .select("seat, player_id")
@@ -42,10 +39,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "查詢玩家失敗" }, { status: 500 });
     }
 
-    // Check if player already in room
+    // Player already in room — rejoin allowed regardless of game status
     const existing = existingPlayers?.find((p) => p.player_id === playerId);
     if (existing) {
-      return Response.json({ seat: existing.seat, roomId: room.id });
+      return Response.json({ seat: existing.seat, roomId: room.id, rejoined: true });
+    }
+
+    // New player — only allow if still in lobby
+    if (room.status !== "waiting") {
+      return Response.json({ error: "房間已開始遊戲，無法加入" }, { status: 400 });
     }
 
     if ((existingPlayers?.length ?? 0) >= 4) {

@@ -829,7 +829,11 @@ export function useMahjong(roomCode: string, playerName: string) {
   const setRoomIdExternal = useCallback((id: string) => {
     setRoomId(id);
     roomIdRef.current = id;
-  }, []);
+    // Fetch state immediately on reconnect — don't wait for 5s polling tick
+    if (id) {
+      fetchState(id);
+    }
+  }, [fetchState]);
 
   const isMyTurn = state.currentTurn === state.mySeat;
   const needsDraw = isMyTurn && !state.hasDrawn && state.status === "playing";
