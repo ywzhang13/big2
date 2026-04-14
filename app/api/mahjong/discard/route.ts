@@ -77,21 +77,26 @@ export async function POST(request: Request) {
       })),
     });
 
-    // Priority: win > pong/kong > chi
-    // Suppress chi only if a DIFFERENT player has pong/kong/win. If the same
-    // player has both options, they should see both and choose.
+    // Priority tiers: 0=win, 1=pong/kong, 2=chi
+    // Only reveal a player's action if no OTHER player has a higher-priority
+    // action pending. Same player may see their own multi-tier options together
+    // (e.g. own pong + own chi).
+    const tierOf = (type: string) =>
+      type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
+
     const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
     for (const actionSeat of playerSeatsWithActions) {
       const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
-      // Check if a *different* seat has higher-priority action pending
-      const otherHasHighPriority = actions.some(
-        (a) =>
-          a.playerSeat !== actionSeat &&
-          (a.type === "win" || a.type === "pong" || a.type === "kong")
+      // Highest-priority tier held by ANOTHER seat
+      const otherTiers = actions
+        .filter((a) => a.playerSeat !== actionSeat)
+        .map((a) => tierOf(a.type));
+      const minOtherTier = otherTiers.length > 0 ? Math.min(...otherTiers) : 999;
+      // Own actions whose tier is <= minOtherTier (meaning no other higher-
+      // priority seat is still in control) are revealable now.
+      const filtered = playerActions.filter(
+        (a) => tierOf(a.type) <= minOtherTier
       );
-      const filtered = otherHasHighPriority
-        ? playerActions.filter((a) => a.type !== "chi")
-        : playerActions;
       if (filtered.length === 0) continue;
       const targetPlayerId = newState.players[actionSeat].id;
       await mjBroadcast(room.code, "mj_available_actions", {

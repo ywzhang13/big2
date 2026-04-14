@@ -142,30 +142,39 @@ export async function POST(request: Request) {
         });
       }
 
-      // If pending window still open, check whether chi should now be
-      // revealed (all higher-priority players have passed).
+      // If pending window still open, re-reveal next-tier actions as
+      // higher-priority players finish. Uses same tier logic as discard route:
+      //   0=win, 1=pong/kong, 2=chi
       if (newState.pendingActions && state.lastDiscard) {
         const remainingActions = getAvailableActions(newState);
         const passedSet = new Set(newState.pendingActions.passedActors);
-        const highPriorityStillWaiting = remainingActions.some(
-          (a) =>
-            (a.type === "win" || a.type === "pong" || a.type === "kong") &&
-            !passedSet.has(a.playerSeat)
+        const tierOf = (type: string) =>
+          type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
+
+        const unpassedActions = remainingActions.filter(
+          (a) => !passedSet.has(a.playerSeat)
         );
-        if (!highPriorityStillWaiting) {
-          // Reveal chi to any seats that have chi available and haven't passed
-          const chiActions = remainingActions.filter(
-            (a) => a.type === "chi" && !passedSet.has(a.playerSeat)
+        const playerSeatsWithActions = new Set(
+          unpassedActions.map((a) => a.playerSeat)
+        );
+        for (const actionSeat of playerSeatsWithActions) {
+          const playerActions = unpassedActions.filter(
+            (a) => a.playerSeat === actionSeat
           );
-          const chiSeats = new Set(chiActions.map((a) => a.playerSeat));
-          for (const chiSeat of chiSeats) {
-            const playerActions = chiActions.filter((a) => a.playerSeat === chiSeat);
-            const targetPlayerId = newState.players[chiSeat].id;
-            await mjBroadcast(room.code, "mj_available_actions", {
-              playerId: targetPlayerId,
-              actions: playerActions,
-            });
-          }
+          const otherTiers = unpassedActions
+            .filter((a) => a.playerSeat !== actionSeat)
+            .map((a) => tierOf(a.type));
+          const minOtherTier =
+            otherTiers.length > 0 ? Math.min(...otherTiers) : 999;
+          const filtered = playerActions.filter(
+            (a) => tierOf(a.type) <= minOtherTier
+          );
+          if (filtered.length === 0) continue;
+          const targetPlayerId = newState.players[actionSeat].id;
+          await mjBroadcast(room.code, "mj_available_actions", {
+            playerId: targetPlayerId,
+            actions: filtered,
+          });
         }
       }
 
@@ -185,23 +194,25 @@ export async function POST(request: Request) {
       return Response.json({ error: "沒有可以吃碰槓的牌" }, { status: 400 });
     }
 
-    // Priority: win > pong/kong > chi
-    // If this is a chi, check no one else has a pending pong/kong/win that
-    // hasn't passed yet. Pong/kong/win can execute immediately (higher priority
-    // than chi, and they short-circuit the action window).
-    if (actionType === "chi") {
+    // Priority tiers: 0=win, 1=pong/kong, 2=chi
+    // Reject this action if another seat has a higher-priority (lower-tier)
+    // action pending and hasn't passed. Win is always highest; pong/kong beat
+    // chi; chi waits for both.
+    if (actionType === "chi" || actionType === "pong" || actionType === "kong") {
+      const tierOf = (type: string) =>
+        type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
+      const myTier = tierOf(actionType);
       const allAvailable = getAvailableActions(state);
       const pending = state.pendingActions;
       const higherPriorityWaiting = allAvailable.some((a) => {
         if (a.playerSeat === seat) return false;
-        if (a.type !== "pong" && a.type !== "kong" && a.type !== "win") return false;
-        // This other seat can pong/kong/win — have they passed yet?
+        if (tierOf(a.type) >= myTier) return false;
         const hasPassed = pending?.passedActors.includes(a.playerSeat) ?? false;
         return !hasPassed;
       });
       if (higherPriorityWaiting) {
         return Response.json(
-          { error: "等待其他玩家決定是否碰/槓/胡" },
+          { error: "等待其他玩家優先決定" },
           { status: 409 }
         );
       }
