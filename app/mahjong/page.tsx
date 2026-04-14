@@ -831,105 +831,88 @@ function RoomView({
               </div>
             )}
 
-            {/* Final hands of OTHER players (winner shown prominently above) */}
+            {/* Combined: each player's hand + settlement delta + cumulative score */}
             {state.winner?.allHands && state.winner.allHands.length > 0 && (
               <div className="mt-4 border-t border-white/10 pt-3">
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">其他玩家手牌</p>
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">各家結算</p>
                 <div className="flex flex-col gap-1.5">
                   {state.winner.allHands
-                    .filter((h) => h.seat !== state.winner!.seat)
                     .sort((a, b) => a.seat - b.seat)
-                    .map((h) => (
-                      <div
-                        key={h.seat}
-                        className="rounded-lg p-2 bg-white/5 border border-white/5"
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] text-white/50 font-bold">
-                            {h.name}
-                            {h.seat === state.mySeat && " (你)"}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-[1px] items-end">
-                          {h.hand.map((t) => (
-                            <MjTile key={`h-${t.id}`} tile={t} tiny />
-                          ))}
-                          {h.revealed.length > 0 && (
-                            <div className="ml-1 flex gap-1 items-end border-l border-white/10 pl-1">
-                              {h.revealed.map((meld, mi) => (
-                                <div key={mi} className="flex gap-0">
-                                  {meld.tiles.map((t) => (
-                                    <MjTile
-                                      key={`r-${mi}-${t.id}`}
-                                      tile={t}
-                                      tiny
-                                      faceDown={meld.type === "concealed_kong"}
-                                    />
-                                  ))}
-                                </div>
-                              ))}
+                    .map((h) => {
+                      const delta = state.settlement?.deltas[h.seat] ?? 0;
+                      const cumulative = state.playerScores?.[h.seat] ?? 0;
+                      const isWin = state.winner!.seat === h.seat;
+                      return (
+                        <div
+                          key={h.seat}
+                          className={`rounded-lg p-2 ${
+                            isWin
+                              ? "bg-[#C9A96E]/15 border border-[#C9A96E]/30"
+                              : "bg-white/5 border border-white/5"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[11px] text-white/70 font-bold">
+                              {h.name}
+                              {h.seat === state.mySeat && " (你)"}
+                              {isWin && <span className="text-[#f0d68a] ml-1">胡</span>}
+                            </span>
+                            <div className="flex items-baseline gap-2">
+                              {state.settlement && state.roomSettings && (
+                                <span className={`text-sm font-bold ${
+                                  delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-white/40"
+                                }`}>
+                                  {delta > 0 ? "+" : ""}{delta}
+                                </span>
+                              )}
+                              {state.playerScores && state.roomSettings && (
+                                <span className="text-[10px] text-white/40">
+                                  總{cumulative >= 0 ? "+" : ""}{cumulative}
+                                </span>
+                              )}
                             </div>
-                          )}
-                          {h.flowers.length > 0 && (
-                            <div className="ml-1 flex gap-[1px] items-end border-l border-white/10 pl-1">
-                              {h.flowers.map((f) => (
-                                <MjTile key={`f-${f.id}`} tile={f} tiny />
-                              ))}
-                            </div>
-                          )}
+                          </div>
+                          <div className="flex flex-wrap gap-[1px] items-end">
+                            {h.hand.map((t) => (
+                              <MjTile key={`h-${t.id}`} tile={t} tiny />
+                            ))}
+                            {h.revealed.length > 0 && (
+                              <div className="ml-1 flex gap-1 items-end border-l border-white/10 pl-1">
+                                {h.revealed.map((meld, mi) => (
+                                  <div key={mi} className="flex gap-0">
+                                    {meld.tiles.map((t) => (
+                                      <MjTile
+                                        key={`r-${mi}-${t.id}`}
+                                        tile={t}
+                                        tiny
+                                        faceDown={meld.type === "concealed_kong"}
+                                      />
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {h.flowers.length > 0 && (
+                              <div className="ml-1 flex gap-[1px] items-end border-l border-white/10 pl-1">
+                                {h.flowers.map((f) => (
+                                  <MjTile key={`f-${f.id}`} tile={f} tiny />
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
+                {state.settlement && state.roomSettings && state.settlement.fanTotal > 0 && (
+                  <p className="text-white/30 text-xs text-center mt-2">
+                    底{state.roomSettings.basePoints} + {state.settlement.fanTotal}台 × {state.roomSettings.fanPoints} = {state.settlement.paymentPerPlayer}
+                    {state.settlement.reason === "self_draw" ? " (×3)" : ""}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Settlement breakdown (底台制) */}
-            {state.settlement && state.roomSettings && (
-              <div className="mt-4 border-t border-white/10 pt-3">
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">積分結算</p>
-                <div className="bg-white/5 rounded-xl overflow-hidden">
-                  {state.players.map((p) => {
-                    const delta = state.settlement!.deltas[p.seat];
-                    return (
-                      <div key={p.seat} className="flex items-center justify-between px-3 py-2 border-b border-white/5 last:border-b-0">
-                        <span className="text-white/70 text-sm">
-                          {p.name}
-                          {p.seat === state.mySeat && " (你)"}
-                        </span>
-                        <span className={`font-bold text-sm ${delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-white/40"}`}>
-                          {delta > 0 ? "+" : ""}{delta}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-white/30 text-xs text-center mt-1">
-                  底{state.roomSettings.basePoints} + {state.settlement.fanTotal}台 × {state.roomSettings.fanPoints} = {state.settlement.paymentPerPlayer}
-                  {state.settlement.reason === "self_draw" ? " (×3)" : ""}
-                </p>
-              </div>
-            )}
-
-            {/* Running scores */}
-            {state.playerScores && state.roomSettings && (
-              <div className="mt-3 border-t border-white/10 pt-3">
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">累計積分</p>
-                <div className="grid grid-cols-4 gap-1">
-                  {state.players.map((p) => (
-                    <div key={p.seat} className="text-center bg-white/5 rounded-lg py-2 px-1">
-                      <p className="text-[10px] text-white/40 truncate">{p.name}</p>
-                      <p className={`font-bold text-sm ${
-                        state.playerScores![p.seat] > 0 ? "text-green-400" :
-                        state.playerScores![p.seat] < 0 ? "text-red-400" : "text-white/50"
-                      }`}>
-                        {state.playerScores![p.seat] > 0 ? "+" : ""}{state.playerScores![p.seat]}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Action buttons */}
             <div className="flex flex-col gap-3 mt-4">
