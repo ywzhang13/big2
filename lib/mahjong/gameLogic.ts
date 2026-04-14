@@ -635,9 +635,21 @@ export function declareWin(
 
   const score = calculateScore(scoringCtx);
 
-  // 連N / 拉N bonus apply whenever the dealer was on a consecutive streak.
-  // Awarded to the winner regardless of whether winner is dealer or not —
-  // i.e. 莊家胡 (continue), 莊家放槍 or 莊家被自摸 (streak broken) both count.
+  // --- Dealer-related台 (awarded to winner, shown in 台數明細) ---
+  // 1. 莊家 1 台: added when dealer is involved in the hand result.
+  //    - Winner is dealer: scoring.ts already added 莊家
+  //    - Winner is non-dealer + dealer is loser (放槍 or 被自摸):
+  //      add 莊家 1 台 to winner so settlement reflects it
+  const isDealerWinner = player.isDealer;
+  const dealerIsLoser =
+    !isDealerWinner &&
+    (isSelfDraw || s.lastDiscard?.from === s.dealerSeat);
+  if (dealerIsLoser) {
+    score.fans.push({ name: "莊家", value: 1 });
+    score.totalFan += 1;
+  }
+  // 2. 連 N + 拉 N: dealer was on a consecutive streak.
+  //    Applies regardless of who wins (continues or breaks the streak).
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
   if (consecutive > 0) {
     score.fans.push({ name: `連${consecutive}`, value: consecutive });
@@ -703,42 +715,30 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   }
 
   const winnerSeat = state.winner.seat;
-  // totalFan already includes 連N/拉N from declareWin if dealer was on streak
+  // totalFan already includes 莊家 (dealer-bonus) and 連/拉 when applicable,
+  // so all losers pay the same amount (based on full totalFan).
   const totalFan = state.winner.score.totalFan;
   const isSelfDraw = state.winner.score.fans.some(f => f.name.includes("自摸"));
-  const basePayment = basePoints + totalFan * fanPoints;
-  const dealerSeat = state.dealerSeat;
-
-  // Dealer tai adjustment: whenever dealer and the winner are different,
-  // the dealer (as the loser / 放槍者 / 被自摸者) pays an extra 1 台 (莊家台)
-  // on top of the base payment, corresponding to dealer-bonus.
-  // If dealer is the winner, the dealer-tai is already inside totalFan.
-  const dealerExtra = fanPoints; // extra 1 tai equivalent
+  const payment = basePoints + totalFan * fanPoints;
 
   if (isSelfDraw) {
     // 自摸: all 3 losers pay
-    // If dealer is a non-winner, dealer pays base + dealer-tai extra.
-    // Winner receives sum of payments from all losers.
-    let winnerCredit = 0;
     for (let i = 0; i < 4; i++) {
-      if (i === winnerSeat) continue;
-      const thisLoserIsDealer = i === dealerSeat && winnerSeat !== dealerSeat;
-      const pay = basePayment + (thisLoserIsDealer ? dealerExtra : 0);
-      deltas[i] = -pay;
-      winnerCredit += pay;
+      if (i === winnerSeat) {
+        deltas[i] = payment * 3;
+      } else {
+        deltas[i] = -payment;
+      }
     }
-    deltas[winnerSeat] = winnerCredit;
-    return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: basePayment };
+    return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: payment };
   } else {
     // 放槍: only the discarder pays
     const loserSeat = state.lastDiscard?.from ?? -1;
     if (loserSeat >= 0) {
-      const loserIsDealer = loserSeat === dealerSeat && winnerSeat !== dealerSeat;
-      const pay = basePayment + (loserIsDealer ? dealerExtra : 0);
-      deltas[winnerSeat] = pay;
-      deltas[loserSeat] = -pay;
+      deltas[winnerSeat] = payment;
+      deltas[loserSeat] = -payment;
     }
-    return { deltas, reason: "win", fanTotal: totalFan, paymentPerPlayer: basePayment };
+    return { deltas, reason: "win", fanTotal: totalFan, paymentPerPlayer: payment };
   }
 }
 
