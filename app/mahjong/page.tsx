@@ -24,7 +24,7 @@ export default function MahjongPage() {
   // Room settings
   const [totalRounds, setTotalRounds] = useState(4);
   const [basePoints, setBasePoints] = useState(100);
-  const [fanPoints, setFanPoints] = useState(50);
+  const [fanPoints, setFanPoints] = useState(20);
 
   // Check hash on load
   useEffect(() => {
