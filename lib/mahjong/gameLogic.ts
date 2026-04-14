@@ -15,6 +15,9 @@ import {
   PlayerState,
   MahjongGameState,
   ScoreResult,
+  RoomSettings,
+  RoundInfo,
+  Settlement,
 } from "./gameState";
 import { isWinningHand } from "./winCheck";
 import { calculateScore, ScoringContext } from "./scoring";
@@ -43,7 +46,8 @@ function prevSeat(seat: number): number {
  * Create a new game with 4 players. Dealer is seat 0 by default.
  */
 export function initGame(
-  players: { id: string; name: string }[]
+  players: { id: string; name: string }[],
+  settings?: RoomSettings
 ): MahjongGameState {
   if (players.length !== 4) {
     throw new Error("Exactly 4 players required");
@@ -60,7 +64,7 @@ export function initGame(
     isDealer: i === 0,
   }));
 
-  return {
+  const state: MahjongGameState = {
     roomCode: "",
     status: "waiting",
     players: playerStates,
@@ -74,6 +78,19 @@ export function initGame(
     isFirstRound: true,
     isAfterKong: false,
   };
+
+  if (settings) {
+    state.roomSettings = settings;
+    state.roundInfo = {
+      currentRound: 1,
+      currentGame: 1,
+      dealerConsecutive: 0,
+      initialDealerSeat: 0,
+    };
+    state.playerScores = [0, 0, 0, 0];
+  }
+
+  return state;
 }
 
 // ---------------------------------------------------------------------------
@@ -583,13 +600,17 @@ export function declareWin(
     throw new Error("Not a winning hand");
   }
 
+  // 門風 = relative to dealer. Dealer=東(1), next=南(2), etc.
+  const seatWindOffset = (seat - s.dealerSeat + 4) % 4;
+  const seatWind = seatWindOffset + 1; // 1=東 2=南 3=西 4=北
+
   const scoringCtx: ScoringContext = {
     concealed,
     revealed: player.revealed,
     winTile,
     isSelfDraw,
     isDealer: player.isDealer,
-    seatWind: seat + 1, // seat 0=東(1), 1=南(2), etc.
+    seatWind,
     prevalentWind: s.prevalentWind,
     flowers: player.flowers,
     isLastTile: s.wall.length === 0,
@@ -630,4 +651,144 @@ export function advanceTurn(state: MahjongGameState): MahjongGameState {
  */
 export function isDraw(state: MahjongGameState): boolean {
   return state.wall.length <= 16 && state.status === "playing";
+}
+
+// ---------------------------------------------------------------------------
+// Settlement (結算)
+// ---------------------------------------------------------------------------
+
+/**
+ * Calculate point settlement for a finished game.
+ * 自摸: 三家各付 (底 + 台數 × 台)
+ * 放槍: 放槍者付 (底 + 台數 × 台)
+ * 流局: no payment
+ * 連莊: adds dealerConsecutive as extra 台 (拉莊)
+ */
+export function calculateSettlement(state: MahjongGameState): Settlement {
+  const settings = state.roomSettings;
+  if (!settings) {
+    return { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 };
+  }
+
+  const { basePoints, fanPoints } = settings;
+  const deltas = [0, 0, 0, 0];
+  const consecutive = state.roundInfo?.dealerConsecutive ?? 0;
+
+  if (!state.winner || state.winner.seat < 0) {
+    // 流局
+    return { deltas, reason: "draw", fanTotal: 0, paymentPerPlayer: 0 };
+  }
+
+  const winnerSeat = state.winner.seat;
+  const totalFan = state.winner.score.totalFan + consecutive; // 連莊拉台
+  const isSelfDraw = state.winner.score.fans.some(f => f.name.includes("自摸"));
+  const payment = basePoints + totalFan * fanPoints;
+
+  if (isSelfDraw) {
+    // 自摸: all 3 losers pay
+    for (let i = 0; i < 4; i++) {
+      if (i === winnerSeat) {
+        deltas[i] = payment * 3;
+      } else {
+        deltas[i] = -payment;
+      }
+    }
+    return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: payment };
+  } else {
+    // 放槍: only the discarder pays
+    const loserSeat = state.lastDiscard?.from ?? -1;
+    if (loserSeat >= 0) {
+      deltas[winnerSeat] = payment;
+      deltas[loserSeat] = -payment;
+    }
+    return { deltas, reason: "win", fanTotal: totalFan, paymentPerPlayer: payment };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Next Game (下一局)
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine if all rounds are complete.
+ */
+export function isAllRoundsComplete(state: MahjongGameState): boolean {
+  if (!state.roomSettings || !state.roundInfo) return true;
+  const { totalRounds } = state.roomSettings;
+  const { currentRound, currentGame } = state.roundInfo;
+  const totalGames = totalRounds * 4;
+  const currentGameNumber = (currentRound - 1) * 4 + currentGame;
+  return currentGameNumber >= totalGames;
+}
+
+/**
+ * Prepare state for the next game in a multi-round session.
+ * - 莊家胡 or 流局 → 連莊 (dealer stays)
+ * - Otherwise → dealer rotates to next seat
+ * - When dealer rotates past initial dealer → next 圈
+ * - Deals new tiles automatically
+ */
+export function startNextGame(state: MahjongGameState): MahjongGameState {
+  if (!state.roomSettings || !state.roundInfo) {
+    throw new Error("No round settings");
+  }
+
+  let s = cloneState(state);
+  const ri = { ...s.roundInfo! };
+  const winnerSeat = s.winner?.seat ?? -1;
+  const isDealerWin = winnerSeat === s.dealerSeat;
+  const isDrawGame = winnerSeat < 0;
+
+  // Determine if dealer stays
+  const dealerStays = isDealerWin || isDrawGame;
+
+  if (dealerStays) {
+    ri.dealerConsecutive++;
+  } else {
+    // Dealer rotates
+    ri.dealerConsecutive = 0;
+    const newDealer = nextSeat(s.dealerSeat);
+    s.dealerSeat = newDealer;
+
+    // Check if we've gone around (new dealer is back to initialDealerSeat)
+    if (newDealer === ri.initialDealerSeat) {
+      // Next 圈
+      ri.currentRound++;
+      ri.currentGame = 1;
+    } else {
+      ri.currentGame++;
+    }
+  }
+
+  s.roundInfo = ri;
+
+  // Update prevalent wind based on current round
+  // 第1圈=東風圈(1), 第2圈=南風圈(2), etc.
+  s.prevalentWind = ((ri.currentRound - 1) % 4) + 1;
+
+  // Reset game state for new deal
+  s.status = "playing";
+  s.winner = undefined;
+  s.settlement = undefined;
+  s.lastDiscard = null;
+  s.turnCount = 0;
+  s.isFirstRound = true;
+  s.isAfterKong = false;
+  s.hasDrawn = false;
+  s.pendingActions = undefined;
+  s.gameOver = false;
+
+  // Reset players
+  for (const p of s.players) {
+    p.hand = [];
+    p.revealed = [];
+    p.flowers = [];
+    p.discards = [];
+    p.isDealer = p.seat === s.dealerSeat;
+  }
+
+  // Deal new tiles
+  s = dealTiles(s);
+
+  return s;
 }

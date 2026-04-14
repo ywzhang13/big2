@@ -24,6 +24,26 @@ export interface ScoreResult {
   totalFan: number;
 }
 
+export interface RoomSettings {
+  totalRounds: number;   // 圈數: 1/2/4/8
+  basePoints: number;    // 底 (base payment per game)
+  fanPoints: number;     // 台 (payment per fan)
+}
+
+export interface RoundInfo {
+  currentRound: number;       // 第幾圈 (1-based)
+  currentGame: number;        // 圈內第幾局 (1-4)
+  dealerConsecutive: number;  // 連莊次數 (0 = first time dealer)
+  initialDealerSeat: number;  // 第一圈的起莊座位
+}
+
+export interface Settlement {
+  deltas: number[];           // point change per seat this game
+  reason: "win" | "self_draw" | "draw"; // how the game ended
+  fanTotal: number;           // total fans (0 for draw)
+  paymentPerPlayer: number;   // how much each loser pays (for display)
+}
+
 export interface MahjongGameState {
   roomCode: string;
   status: "waiting" | "playing" | "finished";
@@ -47,4 +67,10 @@ export interface MahjongGameState {
     potentialActors: number[];   // seats that can act
     passedActors: number[];      // seats that already passed
   };
+  // --- Round system (圈數系統) ---
+  roomSettings?: RoomSettings;
+  roundInfo?: RoundInfo;
+  playerScores?: number[];       // running total points per seat
+  settlement?: Settlement;       // settlement for the just-finished game
+  gameOver?: boolean;            // true when all rounds are complete
 }

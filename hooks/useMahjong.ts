@@ -20,7 +20,7 @@ function safeHand(tiles: Tile[]): Tile[] {
   }
   return sortTiles(filtered);
 }
-import type { Meld, ScoreResult } from "@/lib/mahjong/gameState";
+import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 function getMjId(): string {
@@ -83,6 +83,12 @@ export interface MjClientState {
   hasDrawn: boolean;
   drawnTileId: number | null;
   actionNotice: { seat: number; type: string } | null;
+  // Round system
+  roomSettings?: RoomSettings;
+  roundInfo?: RoundInfo;
+  playerScores?: number[];
+  settlement?: Settlement;
+  gameOver?: boolean;
 }
 
 export { getMjId };
@@ -151,8 +157,10 @@ export function useMahjong(roomCode: string, playerName: string) {
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
         // Update players from DB
-        const lobbyPlayers = (data as { lobbyPlayers?: { id: string; name: string; seat: number }[]; hostId?: string }).lobbyPlayers || [];
-        const hostId = (data as { hostId?: string }).hostId || "";
+        const lobbyData = data as { lobbyPlayers?: { id: string; name: string; seat: number }[]; hostId?: string; roomSettings?: RoomSettings };
+        const lobbyPlayers = lobbyData.lobbyPlayers || [];
+        const hostId = lobbyData.hostId || "";
+        const lobbySettings = lobbyData.roomSettings;
         if (lobbyPlayers.length > 0) {
           setState((prev) => {
             const players: MjPlayer[] = lobbyPlayers.map((p) => ({
@@ -160,7 +168,13 @@ export function useMahjong(roomCode: string, playerName: string) {
               tileCount: 0, flowers: [], discards: [], revealed: [], isDealer: false,
             }));
             const mySeat = players.find((p) => p.id === myId)?.seat ?? prev.mySeat;
-            return { ...prev, players, mySeat, hostId };
+            return {
+              ...prev,
+              players,
+              mySeat,
+              hostId,
+              ...(lobbySettings ? { roomSettings: lobbySettings } : {}),
+            };
           });
         }
         return;
@@ -199,6 +213,12 @@ export function useMahjong(roomCode: string, playerName: string) {
               score: gs.winner.score,
             }
           : prev.winner,
+        // Round system fields from polling
+        roomSettings: (gs as Record<string, unknown>).roomSettings as RoomSettings | undefined ?? prev.roomSettings,
+        roundInfo: (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined ?? prev.roundInfo,
+        playerScores: (gs as Record<string, unknown>).playerScores as number[] | undefined ?? prev.playerScores,
+        settlement: (gs as Record<string, unknown>).settlement as Settlement | undefined ?? prev.settlement,
+        gameOver: (gs as Record<string, unknown>).gameOver as boolean | undefined ?? prev.gameOver,
       }));
     } catch (err) {
       console.error("[mj] fetchState failed:", err);
@@ -273,6 +293,8 @@ export function useMahjong(roomCode: string, playerName: string) {
           discards: Tile[];
           isDealer: boolean;
         }[];
+        roundInfo?: RoundInfo;
+        playerScores?: number[];
       };
       const mySeat = msg.players.find((p) => p.id === myId)?.seat ?? -1;
       setState((prev) => ({
@@ -296,6 +318,10 @@ export function useMahjong(roomCode: string, playerName: string) {
           isDealer: p.isDealer,
         })),
         winner: undefined,
+        settlement: undefined,
+        gameOver: false,
+        ...(msg.roundInfo ? { roundInfo: msg.roundInfo } : {}),
+        ...(msg.playerScores ? { playerScores: msg.playerScores } : {}),
       }));
     });
 
@@ -500,6 +526,10 @@ export function useMahjong(roomCode: string, playerName: string) {
           revealed: Meld[];
           flowers: Tile[];
         }[];
+        settlement?: Settlement;
+        playerScores?: number[];
+        roundInfo?: RoundInfo;
+        gameOver?: boolean;
       };
       setState((prev) => ({
         ...prev,
@@ -519,6 +549,10 @@ export function useMahjong(roomCode: string, playerName: string) {
                 score: { fans: [], totalFan: 0 },
                 allHands: msg.allHands,
               },
+        settlement: msg.settlement,
+        playerScores: msg.playerScores ?? prev.playerScores,
+        roundInfo: msg.roundInfo ?? prev.roundInfo,
+        gameOver: msg.gameOver ?? false,
       }));
     });
 
@@ -648,6 +682,19 @@ export function useMahjong(roomCode: string, playerName: string) {
     [myId, fetchState]
   );
 
+  const nextGame = useCallback(async () => {
+    const rid = roomIdRef.current;
+    if (!rid) return;
+    try {
+      await api("POST", "/api/mahjong/next-game", {
+        roomId: rid,
+        playerId: myId,
+      });
+    } catch (err) {
+      console.error("[mj] next-game failed:", err);
+    }
+  }, [myId]);
+
   const setRoomIdExternal = useCallback((id: string) => {
     setRoomId(id);
     roomIdRef.current = id;
@@ -675,6 +722,7 @@ export function useMahjong(roomCode: string, playerName: string) {
     needsDraw,
     needsDiscard,
     startGame,
+    nextGame,
     drawTile: drawTileAction,
     discardTile,
     doAction,

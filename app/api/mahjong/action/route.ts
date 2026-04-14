@@ -10,6 +10,8 @@ import {
   declareWin,
   advanceTurn,
   drawTile,
+  calculateSettlement,
+  isAllRoundsComplete,
   AvailableAction,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
@@ -53,6 +55,21 @@ export async function POST(request: Request) {
       newState = declareWin(state, seat, isSelfDraw);
       newState.pendingActions = undefined;
 
+      // Calculate settlement if round system is active
+      let settlement = undefined;
+      if (newState.roomSettings) {
+        settlement = calculateSettlement(newState);
+        newState.settlement = settlement;
+        // Update running scores
+        if (newState.playerScores) {
+          newState.playerScores = newState.playerScores.map(
+            (s, i) => s + settlement!.deltas[i]
+          );
+        }
+        // Check if all rounds complete
+        newState.gameOver = isAllRoundsComplete(newState);
+      }
+
       await saveGameState(roomId, newState, "finished");
 
       // Broadcast game over with all hands revealed
@@ -67,6 +84,10 @@ export async function POST(request: Request) {
           revealed: p.revealed,
           flowers: p.flowers,
         })),
+        settlement,
+        playerScores: newState.playerScores,
+        roundInfo: newState.roundInfo,
+        gameOver: newState.gameOver,
       });
 
       return Response.json({ success: true });

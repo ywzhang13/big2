@@ -121,6 +121,12 @@ export interface PublicGameState {
   turnCount: number;
   hasDrawn: boolean;
   winner?: MahjongGameState["winner"];
+  // Round system
+  roomSettings?: MahjongGameState["roomSettings"];
+  roundInfo?: MahjongGameState["roundInfo"];
+  playerScores?: MahjongGameState["playerScores"];
+  settlement?: MahjongGameState["settlement"];
+  gameOver?: MahjongGameState["gameOver"];
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
@@ -136,6 +142,11 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     turnCount: state.turnCount,
     hasDrawn: state.hasDrawn,
     winner: state.winner,
+    roomSettings: state.roomSettings,
+    roundInfo: state.roundInfo,
+    playerScores: state.playerScores,
+    settlement: state.settlement,
+    gameOver: state.gameOver,
   };
 }
 

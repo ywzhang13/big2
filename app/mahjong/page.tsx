@@ -21,6 +21,10 @@ export default function MahjongPage() {
   const [nameReady, setNameReady] = useState(false);
   const [error, setError] = useState("");
   const [createdRoomId, setCreatedRoomId] = useState("");
+  // Room settings
+  const [totalRounds, setTotalRounds] = useState(4);
+  const [basePoints, setBasePoints] = useState(10);
+  const [fanPoints, setFanPoints] = useState(10);
 
   // Check hash on load
   useEffect(() => {
@@ -61,7 +65,7 @@ export default function MahjongPage() {
       const res = await fetch("/api/mahjong/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostId: myId }),
+        body: JSON.stringify({ hostId: myId, totalRounds, basePoints, fanPoints }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -182,6 +186,60 @@ export default function MahjongPage() {
                 className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg
                            placeholder:text-white/30 outline-none focus:ring-2 focus:ring-[#C9A96E]/50 transition-all"
               />
+
+              {/* 圈數設定 */}
+              <div className="bg-white/5 rounded-2xl p-4 flex flex-col gap-3">
+                <p className="text-white/50 text-xs font-bold tracking-wider text-center">房間設定</p>
+
+                {/* 圈數 */}
+                <div className="flex items-center justify-between">
+                  <span className="text-white/70 text-sm">圈數</span>
+                  <div className="flex gap-1.5">
+                    {[1, 2, 4, 8].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setTotalRounds(n)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all
+                          ${totalRounds === n
+                            ? "bg-[#C9A96E] text-[#0f2a1a]"
+                            : "bg-white/10 text-white/50 hover:bg-white/15"
+                          }`}
+                      >
+                        {n}圈
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 底 */}
+                <div className="flex items-center justify-between">
+                  <span className="text-white/70 text-sm">底</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setBasePoints(Math.max(1, basePoints - 5))}
+                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">-</button>
+                    <span className="text-[#C9A96E] font-bold text-lg w-10 text-center">{basePoints}</span>
+                    <button onClick={() => setBasePoints(basePoints + 5)}
+                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">+</button>
+                  </div>
+                </div>
+
+                {/* 台 */}
+                <div className="flex items-center justify-between">
+                  <span className="text-white/70 text-sm">每台</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setFanPoints(Math.max(1, fanPoints - 5))}
+                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">-</button>
+                    <span className="text-[#C9A96E] font-bold text-lg w-10 text-center">{fanPoints}</span>
+                    <button onClick={() => setFanPoints(fanPoints + 5)}
+                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">+</button>
+                  </div>
+                </div>
+
+                <p className="text-white/30 text-xs text-center">
+                  每局結算 = 底{basePoints} + 台數 × {fanPoints}
+                </p>
+              </div>
+
               <button
                 onClick={handleCreate}
                 className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
@@ -290,6 +348,7 @@ function RoomView({
     needsDraw,
     needsDiscard,
     startGame,
+    nextGame,
     drawTile,
     discardTile,
     doAction,
@@ -393,6 +452,17 @@ function RoomView({
             </button>
           </div>
 
+          {/* Room settings display */}
+          {state.roomSettings && (
+            <div className="bg-white/5 rounded-xl px-4 py-2.5 w-full">
+              <div className="flex justify-center gap-6 text-sm">
+                <span className="text-white/40">{state.roomSettings.totalRounds}圈</span>
+                <span className="text-white/40">底{state.roomSettings.basePoints}</span>
+                <span className="text-white/40">台{state.roomSettings.fanPoints}</span>
+              </div>
+            </div>
+          )}
+
           {/* Player seats */}
           <div className="grid grid-cols-2 gap-3 w-full">
             {[0, 1, 2, 3].map((seat) => {
@@ -471,9 +541,18 @@ function RoomView({
         >
           離開
         </button>
-        <h1 className="text-sm font-bold text-[#f0d68a] font-heading">
-          台灣麻將 · {code}
-        </h1>
+        <div className="text-center">
+          <h1 className="text-sm font-bold text-[#f0d68a] font-heading">
+            台灣麻將 · {code}
+          </h1>
+          {state.roundInfo && state.roomSettings && (
+            <p className="text-[10px] text-white/40">
+              {["東", "南", "西", "北"][(state.roundInfo.currentRound - 1) % 4]}風圈
+              {" "}第{state.roundInfo.currentGame}局
+              {state.roundInfo.dealerConsecutive > 0 && ` · 連${state.roundInfo.dealerConsecutive}莊`}
+            </p>
+          )}
+        </div>
         <div className="w-10" />
       </div>
 
@@ -500,8 +579,8 @@ function RoomView({
 
       {/* Game over overlay — stays on the board */}
       {isFinished && state.winner && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm w-full mx-4 my-4 shadow-2xl">
             {state.winner.seat < 0 ? (
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/5 flex items-center justify-center text-2xl">
@@ -546,13 +625,105 @@ function RoomView({
                 )}
               </div>
             )}
-            <button
-              onClick={onGoHome}
-              className="w-full mt-4 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold
-                cursor-pointer active:scale-95 transition-all"
-            >
-              回大廳
-            </button>
+
+            {/* Settlement breakdown (底台制) */}
+            {state.settlement && state.roomSettings && (
+              <div className="mt-4 border-t border-white/10 pt-3">
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">積分結算</p>
+                <div className="bg-white/5 rounded-xl overflow-hidden">
+                  {state.players.map((p) => {
+                    const delta = state.settlement!.deltas[p.seat];
+                    return (
+                      <div key={p.seat} className="flex items-center justify-between px-3 py-2 border-b border-white/5 last:border-b-0">
+                        <span className="text-white/70 text-sm">
+                          {p.name}
+                          {p.seat === state.mySeat && " (你)"}
+                        </span>
+                        <span className={`font-bold text-sm ${delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-white/40"}`}>
+                          {delta > 0 ? "+" : ""}{delta}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-white/30 text-xs text-center mt-1">
+                  底{state.roomSettings.basePoints} + {state.settlement.fanTotal}台 × {state.roomSettings.fanPoints} = {state.settlement.paymentPerPlayer}
+                  {state.settlement.reason === "self_draw" ? " (×3)" : ""}
+                </p>
+              </div>
+            )}
+
+            {/* Running scores */}
+            {state.playerScores && state.roomSettings && (
+              <div className="mt-3 border-t border-white/10 pt-3">
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">累計積分</p>
+                <div className="grid grid-cols-4 gap-1">
+                  {state.players.map((p) => (
+                    <div key={p.seat} className="text-center bg-white/5 rounded-lg py-2 px-1">
+                      <p className="text-[10px] text-white/40 truncate">{p.name}</p>
+                      <p className={`font-bold text-sm ${
+                        state.playerScores![p.seat] > 0 ? "text-green-400" :
+                        state.playerScores![p.seat] < 0 ? "text-red-400" : "text-white/50"
+                      }`}>
+                        {state.playerScores![p.seat] > 0 ? "+" : ""}{state.playerScores![p.seat]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 mt-4">
+              {state.roomSettings && !state.gameOver && isHost ? (
+                <button
+                  onClick={nextGame}
+                  className="flex-1 py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold
+                    cursor-pointer active:scale-95 transition-all"
+                >
+                  下一局
+                </button>
+              ) : state.roomSettings && !state.gameOver ? (
+                <div className="flex-1 py-3 rounded-xl bg-white/10 text-center">
+                  <p className="text-white/50 text-sm">等待房主開始下一局</p>
+                </div>
+              ) : null}
+              <button
+                onClick={onGoHome}
+                className={`${state.roomSettings && !state.gameOver ? "flex-1" : "w-full"} py-3 rounded-xl font-bold
+                  cursor-pointer active:scale-95 transition-all
+                  ${state.gameOver ? "bg-[#C9A96E] text-[#0f2a1a]" : "border border-white/15 text-white/60"}`}
+              >
+                {state.gameOver ? "結束 · 回大廳" : "回大廳"}
+              </button>
+            </div>
+
+            {/* Game over final standings */}
+            {state.gameOver && state.playerScores && (
+              <div className="mt-4 border-t border-[#C9A96E]/30 pt-3">
+                <p className="text-[#f0d68a] text-sm font-bold text-center mb-2">
+                  {state.roomSettings?.totalRounds}圈結束 — 最終排名
+                </p>
+                <div className="flex flex-col gap-1">
+                  {[...state.players]
+                    .sort((a, b) => (state.playerScores![b.seat]) - (state.playerScores![a.seat]))
+                    .map((p, rank) => (
+                      <div key={p.seat} className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg">
+                        <span className="text-white/70 text-sm">
+                          <span className="text-[#C9A96E] font-bold mr-2">#{rank + 1}</span>
+                          {p.name}
+                        </span>
+                        <span className={`font-bold ${
+                          state.playerScores![p.seat] > 0 ? "text-green-400" :
+                          state.playerScores![p.seat] < 0 ? "text-red-400" : "text-white/50"
+                        }`}>
+                          {state.playerScores![p.seat] > 0 ? "+" : ""}{state.playerScores![p.seat]}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

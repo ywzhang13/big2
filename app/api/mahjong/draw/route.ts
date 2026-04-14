@@ -7,6 +7,8 @@ import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import {
   drawTile,
   canConcealedKong,
+  calculateSettlement,
+  isAllRoundsComplete,
 } from "@/lib/mahjong/gameLogic";
 import { isWinningHand } from "@/lib/mahjong/winCheck";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
@@ -61,6 +63,14 @@ export async function POST(request: Request) {
 
     // Check for draw game (wall exhausted)
     if (newState.status === "finished") {
+      // Calculate settlement for draw (流局)
+      let settlement = undefined;
+      if (newState.roomSettings) {
+        settlement = calculateSettlement(newState);
+        newState.settlement = settlement;
+        newState.gameOver = isAllRoundsComplete(newState);
+      }
+
       await saveGameState(roomId, newState, "finished");
 
       await mjBroadcast(room.code, "mj_game_over", {
@@ -74,6 +84,10 @@ export async function POST(request: Request) {
           revealed: p.revealed,
           flowers: p.flowers,
         })),
+        settlement,
+        playerScores: newState.playerScores,
+        roundInfo: newState.roundInfo,
+        gameOver: newState.gameOver,
       });
 
       return Response.json({ success: true, draw: true });

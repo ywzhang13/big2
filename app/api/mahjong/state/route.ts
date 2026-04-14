@@ -17,8 +17,10 @@ export async function GET(request: Request) {
     }
 
     // If no game state yet (still in lobby), return players from DB
-    if (!room.game_state) {
+    if (!room.game_state || !(room.game_state as unknown as Record<string, unknown>).status) {
       const dbPlayers = await loadPlayers(roomId);
+      // Extract roomSettings if they were saved at room creation
+      const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings;
       return Response.json({
         roomId: room.id,
         code: room.code,
@@ -29,6 +31,7 @@ export async function GET(request: Request) {
           name: p.name,
           seat: p.seat,
         })),
+        roomSettings: savedSettings ?? null,
         gameState: null,
       });
     }
