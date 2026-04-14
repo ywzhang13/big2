@@ -436,8 +436,8 @@ export function useMahjong(roomCode: string, playerName: string) {
       setState((prev) => ({
         ...prev,
         lastDiscard: { tile, from: seat },
-        // Don't change hasDrawn here — wait for mj_pass/mj_draw to set it properly
-        // This prevents the brief "輪到你摸牌" flash
+        // Clear actions — new mj_available_actions will re-populate after this
+        // arrives (server sends mj_discard first, action broadcasts second).
         availableActions: [],
         drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
         players: prev.players.map((p) =>

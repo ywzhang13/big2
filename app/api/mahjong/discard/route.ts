@@ -66,25 +66,23 @@ export async function POST(request: Request) {
     // Save state
     await saveGameState(roomId, newState);
 
-    // Prepare all broadcasts
+    // Step 1: broadcast mj_discard first so clients have lastDiscard set
+    // before they receive action buttons or turn advance events.
     const discardedTile = newState.lastDiscard!.tile;
-    const broadcasts: Promise<void>[] = [];
+    await mjBroadcast(room.code, "mj_discard", {
+      seat,
+      tile: discardedTile,
+      availableActions: actions.map((a) => ({
+        type: a.type,
+        playerSeat: a.playerSeat,
+      })),
+    });
 
-    broadcasts.push(
-      mjBroadcast(room.code, "mj_discard", {
-        seat,
-        tile: discardedTile,
-        availableActions: actions.map((a) => ({
-          type: a.type,
-          playerSeat: a.playerSeat,
-        })),
-      })
-    );
-
-    // Priority tiers: 0=win, 1=pong/kong, 2=chi
+    // Step 2: after mj_discard settled, fire follow-ups in parallel.
     const tierOf = (type: string) =>
       type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
 
+    const followups: Promise<void>[] = [];
     const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
     for (const actionSeat of playerSeatsWithActions) {
       const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
@@ -97,26 +95,24 @@ export async function POST(request: Request) {
       );
       if (filtered.length === 0) continue;
       const targetPlayerId = newState.players[actionSeat].id;
-      broadcasts.push(
+      followups.push(
         mjBroadcast(room.code, "mj_available_actions", {
           playerId: targetPlayerId,
           actions: filtered,
         })
       );
     }
-
-    // Turn advance (when no pending actions) — include in parallel
     if (!newState.pendingActions) {
-      broadcasts.push(
+      followups.push(
         mjBroadcast(room.code, "mj_turn_advance", {
           currentTurn: newState.currentTurn,
           hasDrawn: newState.hasDrawn,
         })
       );
     }
-
-    // Fire all broadcasts in parallel for minimal latency
-    await Promise.all(broadcasts);
+    if (followups.length > 0) {
+      await Promise.all(followups);
+    }
 
     return Response.json({
       success: true,
