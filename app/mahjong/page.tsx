@@ -662,6 +662,49 @@ function RoomView({
                     <span>共 <span className="text-[#C9A96E] font-bold text-lg">{state.winner.score.totalFan}</span> 台</span>
                   )}
                 </p>
+                {/* Winner's final hand — prominently featured */}
+                {(() => {
+                  const wh = state.winner?.allHands?.find(h => h.seat === state.winner!.seat);
+                  if (!wh) return null;
+                  return (
+                    <div className="mt-3 rounded-xl p-2.5"
+                      style={{
+                        background: "linear-gradient(145deg, rgba(201,169,110,0.18) 0%, rgba(201,169,110,0.05) 100%)",
+                        border: "1px solid rgba(201,169,110,0.35)",
+                      }}>
+                      <p className="text-[10px] text-[#f0d68a]/70 font-bold tracking-wider text-center mb-1.5">胡牌牌型</p>
+                      <div className="flex flex-wrap justify-center gap-[1px] items-end">
+                        {wh.hand.map((t) => (
+                          <MjTile key={`win-${t.id}`} tile={t} small />
+                        ))}
+                        {wh.revealed.length > 0 && (
+                          <div className="ml-1 flex gap-1 items-end border-l border-[#C9A96E]/30 pl-1">
+                            {wh.revealed.map((meld, mi) => (
+                              <div key={mi} className="flex gap-0">
+                                {meld.tiles.map((t) => (
+                                  <MjTile
+                                    key={`winr-${mi}-${t.id}`}
+                                    tile={t}
+                                    small
+                                    faceDown={meld.type === "concealed_kong"}
+                                  />
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {wh.flowers.length > 0 && (
+                        <div className="flex justify-center gap-[1px] mt-1 pt-1 border-t border-[#C9A96E]/20">
+                          {wh.flowers.map((f) => (
+                            <MjTile key={`winf-${f.id}`} tile={f} small />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Fan breakdown */}
                 {state.winner.score.fans.length > 0 && (
                   <div className="mt-3 border-t border-white/10 pt-3">
@@ -676,27 +719,23 @@ function RoomView({
               </div>
             )}
 
-            {/* Final hands of all players */}
+            {/* Final hands of OTHER players (winner shown prominently above) */}
             {state.winner?.allHands && state.winner.allHands.length > 0 && (
               <div className="mt-4 border-t border-white/10 pt-3">
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">各家手牌</p>
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">其他玩家手牌</p>
                 <div className="flex flex-col gap-1.5">
                   {state.winner.allHands
+                    .filter((h) => h.seat !== state.winner!.seat)
                     .sort((a, b) => a.seat - b.seat)
                     .map((h) => (
                       <div
                         key={h.seat}
-                        className={`rounded-lg p-2 ${
-                          h.seat === state.winner!.seat
-                            ? "bg-[#C9A96E]/15 border border-[#C9A96E]/30"
-                            : "bg-white/5 border border-white/5"
-                        }`}
+                        className="rounded-lg p-2 bg-white/5 border border-white/5"
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[10px] text-white/50 font-bold">
                             {h.name}
                             {h.seat === state.mySeat && " (你)"}
-                            {h.seat === state.winner!.seat && " 胡"}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-[1px] items-end">
