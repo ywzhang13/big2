@@ -965,6 +965,10 @@ function RoomView({
                   rgba(201, 169, 110, 0.8) 100%
                 );
               }
+              @keyframes zimo-pulse {
+                0%, 100% { opacity: 0.6; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.1); }
+              }
             `}</style>
             {state.winner.seat < 0 ? (
               <div className="text-center">
@@ -1031,18 +1035,6 @@ function RoomView({
                     <span className="text-[#C9A96E]">自摸</span>
                   )}
                 </p>
-                <style jsx>{`
-                  @keyframes zimo-pulse {
-                    0%, 100% {
-                      opacity: 0.6;
-                      transform: scale(1);
-                    }
-                    50% {
-                      opacity: 1;
-                      transform: scale(1.1);
-                    }
-                  }
-                `}</style>
                 <p className="text-white/50 text-sm mt-1">
                   {state.winner.score.totalFan > 0 && (
                     <span>共 <span className="text-[#C9A96E] font-bold text-lg">{state.winner.score.totalFan}</span> 台</span>
