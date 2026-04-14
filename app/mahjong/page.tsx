@@ -22,6 +22,7 @@ export default function MahjongPage() {
   const [nameReady, setNameReady] = useState(false);
   const [error, setError] = useState("");
   const [createdRoomId, setCreatedRoomId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   // Room settings
   const [totalRounds, setTotalRounds] = useState(1);
   const [basePoints, setBasePoints] = useState(100);
@@ -55,14 +56,18 @@ export default function MahjongPage() {
   }, []);
 
   async function handleCreate() {
+    if (isSubmitting) return; // prevent double-click
     if (!name.trim()) {
       setError("請輸入暱稱");
       return;
     }
+    setIsSubmitting(true);
+    setError("");
     localStorage.setItem("mj_name", name.trim());
     setNameReady(true);
     try {
       const myId = getMjId();
+      // Create room and join in parallel-safe sequence
       const res = await fetch("/api/mahjong/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,22 +78,25 @@ export default function MahjongPage() {
         setError(data.error || "建立房間失敗");
         return;
       }
-      // Host also joins
-      await fetch("/api/mahjong/join", {
+      // Host auto-joins (fire and forget — join is idempotent, can also happen on room enter)
+      fetch("/api/mahjong/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: data.code, playerId: myId, name: name.trim() }),
-      });
+      }).catch(() => {});
       setRoomCode(data.code);
       setCreatedRoomId(data.roomId);
       setScreen("room");
       window.location.hash = `room=${data.code}`;
     } catch {
       setError("網路錯誤，請重試");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   async function handleJoin() {
+    if (isSubmitting) return;
     if (!joinCode || joinCode.length !== 4) {
       setError("請輸入4位數房間碼");
       return;
@@ -97,6 +105,8 @@ export default function MahjongPage() {
       setError("請輸入暱稱");
       return;
     }
+    setIsSubmitting(true);
+    setError("");
     localStorage.setItem("mj_name", name.trim());
     setNameReady(true);
     try {
@@ -117,6 +127,8 @@ export default function MahjongPage() {
       window.location.hash = `room=${joinCode}`;
     } catch {
       setError("網路錯誤，請重試");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -289,11 +301,12 @@ export default function MahjongPage() {
 
               <button
                 onClick={handleCreate}
+                disabled={isSubmitting}
                 className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
                            cursor-pointer active:scale-95 transition-all duration-150
-                           hover:brightness-110"
+                           hover:brightness-110 disabled:opacity-60 disabled:cursor-wait"
               >
-                建立房間
+                {isSubmitting ? "建立中..." : "建立房間"}
               </button>
               <button
                 onClick={() => {
@@ -329,11 +342,12 @@ export default function MahjongPage() {
               />
               <button
                 onClick={handleJoin}
+                disabled={isSubmitting}
                 className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
                            cursor-pointer active:scale-95 transition-all duration-150
-                           hover:brightness-110"
+                           hover:brightness-110 disabled:opacity-60 disabled:cursor-wait"
               >
-                加入遊戲
+                {isSubmitting ? "加入中..." : "加入遊戲"}
               </button>
               <button
                 onClick={() => {
