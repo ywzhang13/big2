@@ -22,7 +22,7 @@ export default function MahjongPage() {
   const [error, setError] = useState("");
   const [createdRoomId, setCreatedRoomId] = useState("");
   // Room settings
-  const [totalRounds, setTotalRounds] = useState(4);
+  const [totalRounds, setTotalRounds] = useState(1);
   const [basePoints, setBasePoints] = useState(100);
   const [fanPoints, setFanPoints] = useState(20);
 

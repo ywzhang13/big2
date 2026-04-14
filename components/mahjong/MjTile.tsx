@@ -33,9 +33,13 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
   const w = tiny ? 22 : small ? 30 : 40;
   const h = tiny ? 30 : small ? 42 : 54;
 
-  const src = faceDown
-    ? "/tiles/Back.png"
-    : `/tiles/${getTileSvg(tile)}.png`;
+  const characterSrc = faceDown
+    ? null
+    : `/tiles/${getTileSvg(tile)}.svg`;
+
+  const backdropSrc = faceDown
+    ? "/tiles/Back.svg"
+    : "/tiles/Front.svg";
 
   return (
     <button
@@ -55,13 +59,16 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
         border: "none",
       }}
     >
+      {/* Backdrop (tile face/back) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
-        alt={faceDown ? "" : tile.display}
+        src={backdropSrc}
+        alt=""
         width={w}
         height={h}
         style={{
+          position: "absolute",
+          inset: 0,
           width: w,
           height: h,
           objectFit: "contain",
@@ -70,7 +77,26 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
         }}
         draggable={false}
       />
-
+      {/* Character overlay (on top of Front.svg) */}
+      {characterSrc && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={characterSrc}
+          alt={tile.display}
+          width={w}
+          height={h}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: w,
+            height: h,
+            objectFit: "contain",
+            display: "block",
+            pointerEvents: "none",
+          }}
+          draggable={false}
+        />
+      )}
     </button>
   );
 }
