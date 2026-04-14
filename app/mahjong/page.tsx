@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useMahjong, getMjId } from "@/hooks/useMahjong";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjGameOver from "@/components/mahjong/MjGameOver";
+import MjTile from "@/components/mahjong/MjTile";
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -672,6 +673,63 @@ function RoomView({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Final hands of all players */}
+            {state.winner?.allHands && state.winner.allHands.length > 0 && (
+              <div className="mt-4 border-t border-white/10 pt-3">
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">各家手牌</p>
+                <div className="flex flex-col gap-1.5">
+                  {state.winner.allHands
+                    .sort((a, b) => a.seat - b.seat)
+                    .map((h) => (
+                      <div
+                        key={h.seat}
+                        className={`rounded-lg p-2 ${
+                          h.seat === state.winner!.seat
+                            ? "bg-[#C9A96E]/15 border border-[#C9A96E]/30"
+                            : "bg-white/5 border border-white/5"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] text-white/50 font-bold">
+                            {h.name}
+                            {h.seat === state.mySeat && " (你)"}
+                            {h.seat === state.winner!.seat && " 胡"}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-[1px] items-end">
+                          {h.hand.map((t) => (
+                            <MjTile key={`h-${t.id}`} tile={t} tiny />
+                          ))}
+                          {h.revealed.length > 0 && (
+                            <div className="ml-1 flex gap-1 items-end border-l border-white/10 pl-1">
+                              {h.revealed.map((meld, mi) => (
+                                <div key={mi} className="flex gap-0">
+                                  {meld.tiles.map((t) => (
+                                    <MjTile
+                                      key={`r-${mi}-${t.id}`}
+                                      tile={t}
+                                      tiny
+                                      faceDown={meld.type === "concealed_kong"}
+                                    />
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {h.flowers.length > 0 && (
+                            <div className="ml-1 flex gap-[1px] items-end border-l border-white/10 pl-1">
+                              {h.flowers.map((f) => (
+                                <MjTile key={`f-${f.id}`} tile={f} tiny />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
               </div>
             )}
 
