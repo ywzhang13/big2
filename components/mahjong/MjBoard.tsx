@@ -167,10 +167,8 @@ function PlayerPanel({
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
-          // Inter-meld gap (unchanged):
-          //   top (horizontal): 10px — slightly larger for 對家
-          //   left/right (vertical): 2px
-          style={{ gap: isHorizontal ? 10 : 2 }}
+          // Inter-meld gap (same 10px for top and left/right)
+          style={{ gap: 10 }}
         >
           {/* Each meld is a tight group */}
           {player.revealed.map((meld, mi) => (
@@ -193,7 +191,8 @@ function PlayerPanel({
                     rotStyle
                       ? {
                           transform: rotStyle,
-                          marginTop: isHorizontal ? 0 : -8,
+                          // Intra-group tighter: tiles overlap more (-8 → -12, ~50% tighter)
+                          marginTop: isHorizontal ? 0 : -12,
                         }
                       : undefined
                   }
@@ -213,7 +212,8 @@ function PlayerPanel({
                     rotStyle
                       ? {
                           transform: rotStyle,
-                          marginTop: isHorizontal ? 0 : -8,
+                          // Intra-group tighter: tiles overlap more (-8 → -12, ~50% tighter)
+                          marginTop: isHorizontal ? 0 : -12,
                         }
                       : undefined
                   }
