@@ -116,7 +116,7 @@ function PlayerPanel({
   const rotStyle = position === "left" ? "rotate(90deg)" : position === "right" ? "rotate(-90deg)" : undefined;
 
   return (
-    <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center ${isHorizontal ? "gap-1.5" : "gap-3"} transition-all duration-300
+    <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
       <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
@@ -193,19 +193,12 @@ function PlayerPanel({
                     rotStyle
                       ? {
                           transform: rotStyle,
-                          // Strong overlap for left/right vertical stack so
-                          // rotated tiles visually touch
-                          marginTop: isHorizontal ? 0 : -13,
+                          marginTop: isHorizontal ? 0 : -8,
                         }
                       : undefined
                   }
                 >
-                  <MjTile
-                    tile={t}
-                    tiny={isHorizontal}
-                    small={!isHorizontal}
-                    faceDown={meld.type === "concealed_kong"}
-                  />
+                  <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
                 </div>
               ))}
             </div>
@@ -220,12 +213,12 @@ function PlayerPanel({
                     rotStyle
                       ? {
                           transform: rotStyle,
-                          marginTop: isHorizontal ? 0 : -13,
+                          marginTop: isHorizontal ? 0 : -8,
                         }
                       : undefined
                   }
                 >
-                  <MjTile tile={f} tiny={isHorizontal} small={!isHorizontal} />
+                  <MjTile tile={f} tiny />
                 </div>
               ))}
             </div>
