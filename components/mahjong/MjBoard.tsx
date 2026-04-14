@@ -167,8 +167,8 @@ function PlayerPanel({
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
-          // Inter-meld gap (same 10px for top and left/right)
-          style={{ gap: 10 }}
+          // Inter-meld gap: top 10px, left/right 16px (slightly more for stacked look)
+          style={{ gap: isHorizontal ? 10 : 16 }}
         >
           {/* Each meld is a tight group */}
           {player.revealed.map((meld, mi) => (
