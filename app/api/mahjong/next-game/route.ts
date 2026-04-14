@@ -61,7 +61,14 @@ export async function POST(request: Request) {
       return Response.json({ success: true, ready: readyList.length, total: 4 });
     }
 
-    // All 4 ready — actually start the next game
+    // All 4 ready — give everyone a moment to see the settlement before
+    // transitioning. Broadcast "all ready" first, wait 3s, then start.
+    await mjBroadcast(room.code, "mj_next_game_ready", {
+      readyIds: readyList,
+      allReady: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
     const clearedState: MahjongGameState = {
       ...state,
       nextGameReady: [],

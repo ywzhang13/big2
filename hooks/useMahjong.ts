@@ -94,6 +94,7 @@ export interface MjClientState {
   doorSeat?: number;
   // Next-game ready check
   nextGameReady?: string[];
+  nextGameAllReady?: boolean;
   // Leave request (離開需他家同意)
   leaveRequest?: {
     requesterId: string;
@@ -344,6 +345,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         ...(msg.dice ? { dice: msg.dice } : {}),
         ...(msg.doorSeat != null ? { doorSeat: msg.doorSeat } : {}),
         nextGameReady: [],
+        nextGameAllReady: false,
       }));
     });
 
@@ -602,10 +604,14 @@ export function useMahjong(roomCode: string, playerName: string) {
       }));
     });
 
-    // --- mj_next_game_ready (partial readiness) ---
+    // --- mj_next_game_ready (partial readiness or all ready) ---
     channel.on("broadcast", { event: "mj_next_game_ready" }, ({ payload }) => {
-      const { readyIds } = payload as { readyIds: string[] };
-      setState((prev) => ({ ...prev, nextGameReady: readyIds }));
+      const { readyIds, allReady } = payload as { readyIds: string[]; allReady?: boolean };
+      setState((prev) => ({
+        ...prev,
+        nextGameReady: readyIds,
+        nextGameAllReady: allReady === true,
+      }));
     });
 
     // --- mj_game_over ---

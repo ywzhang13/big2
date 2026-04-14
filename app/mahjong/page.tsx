@@ -371,6 +371,29 @@ export default function MahjongPage() {
 }
 
 // ─── Room Component ───
+// Countdown shown after all 4 players agree to next game
+function NextGameCountdown() {
+  const [n, setN] = useState(3);
+  useEffect(() => {
+    if (n <= 0) return;
+    const t = setTimeout(() => setN((x) => x - 1), 1000);
+    return () => clearTimeout(t);
+  }, [n]);
+  return (
+    <div
+      className="py-3 rounded-xl text-center"
+      style={{
+        background: "linear-gradient(90deg, rgba(201,169,110,0.25) 0%, rgba(201,169,110,0.1) 100%)",
+        border: "1px solid rgba(201,169,110,0.35)",
+      }}
+    >
+      <p className="text-[#f0d68a] text-sm font-bold">
+        下一局準備中... {n > 0 ? n : ""}
+      </p>
+    </div>
+  );
+}
+
 function RoomView({
   code,
   playerName,
@@ -1076,8 +1099,10 @@ function RoomView({
                     </div>
                   </div>
 
-                  {/* My ready button */}
-                  {state.nextGameReady?.includes(state.myId) ? (
+                  {/* My ready button / countdown */}
+                  {state.nextGameAllReady ? (
+                    <NextGameCountdown />
+                  ) : state.nextGameReady?.includes(state.myId) ? (
                     <div className="py-3 rounded-xl bg-white/10 text-center">
                       <p className="text-white/50 text-sm">已確認，等待其他玩家...</p>
                     </div>
