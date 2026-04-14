@@ -113,6 +113,15 @@ export function dealTiles(state: MahjongGameState): MahjongGameState {
   s.isFirstRound = true;
   s.isAfterKong = false;
 
+  // Roll 3 dice, compute door seat (開門)
+  // 骰子從自己(莊家)=1 開始往右(CCW)算
+  const d1 = 1 + Math.floor(Math.random() * 6);
+  const d2 = 1 + Math.floor(Math.random() * 6);
+  const d3 = 1 + Math.floor(Math.random() * 6);
+  const sum = d1 + d2 + d3;
+  s.dice = [d1, d2, d3];
+  s.doorSeat = (s.dealerSeat + ((sum - 1) % 4)) % 4;
+
   // Reset players
   for (const p of s.players) {
     p.hand = [];
@@ -600,8 +609,10 @@ export function declareWin(
     throw new Error("Not a winning hand");
   }
 
-  // 門風 = relative to dealer. Dealer=東(1), next=南(2), etc.
-  const seatWindOffset = (seat - s.dealerSeat + 4) % 4;
+  // 門風 = relative to 開門 seat (door opener). Door=東(1), next CCW=南(2), etc.
+  // Fallback to dealerSeat if dice haven't been rolled yet.
+  const refSeat = s.doorSeat ?? s.dealerSeat;
+  const seatWindOffset = (seat - refSeat + 4) % 4;
   const seatWind = seatWindOffset + 1; // 1=東 2=南 3=西 4=北
 
   const scoringCtx: ScoringContext = {

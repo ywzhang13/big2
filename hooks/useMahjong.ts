@@ -89,6 +89,9 @@ export interface MjClientState {
   playerScores?: number[];
   settlement?: Settlement;
   gameOver?: boolean;
+  // Dice / door
+  dice?: [number, number, number];
+  doorSeat?: number;
 }
 
 export { getMjId };
@@ -219,6 +222,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         playerScores: (gs as Record<string, unknown>).playerScores as number[] | undefined ?? prev.playerScores,
         settlement: (gs as Record<string, unknown>).settlement as Settlement | undefined ?? prev.settlement,
         gameOver: (gs as Record<string, unknown>).gameOver as boolean | undefined ?? prev.gameOver,
+        dice: (gs as Record<string, unknown>).dice as [number, number, number] | undefined ?? prev.dice,
+        doorSeat: (gs as Record<string, unknown>).doorSeat as number | undefined ?? prev.doorSeat,
       }));
     } catch (err) {
       console.error("[mj] fetchState failed:", err);
@@ -295,6 +300,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         }[];
         roundInfo?: RoundInfo;
         playerScores?: number[];
+        dice?: [number, number, number];
+        doorSeat?: number;
       };
       const mySeat = msg.players.find((p) => p.id === myId)?.seat ?? -1;
       setState((prev) => ({
@@ -322,6 +329,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         gameOver: false,
         ...(msg.roundInfo ? { roundInfo: msg.roundInfo } : {}),
         ...(msg.playerScores ? { playerScores: msg.playerScores } : {}),
+        ...(msg.dice ? { dice: msg.dice } : {}),
+        ...(msg.doorSeat != null ? { doorSeat: msg.doorSeat } : {}),
       }));
     });
 

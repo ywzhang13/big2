@@ -62,6 +62,8 @@ export async function POST(request: Request) {
       players: publicState.players,
       roundInfo: state.roundInfo,
       playerScores: state.playerScores,
+      dice: state.dice,
+      doorSeat: state.doorSeat,
     });
 
     // Send each player their hand privately (defensive: filter flowers from hand)

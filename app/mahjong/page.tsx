@@ -621,6 +621,8 @@ function RoomView({
         onDraw={drawTile}
         onDiscard={discardTile}
         onAction={doAction}
+        dice={state.dice}
+        doorSeat={state.doorSeat}
       />
 
       {/* Game over overlay — stays on the board */}

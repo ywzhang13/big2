@@ -73,4 +73,7 @@ export interface MahjongGameState {
   playerScores?: number[];       // running total points per seat
   settlement?: Settlement;       // settlement for the just-finished game
   gameOver?: boolean;            // true when all rounds are complete
+  // --- Dice / door (骰子開門) ---
+  dice?: [number, number, number]; // 3 dice rolled at game start
+  doorSeat?: number;               // 開門 seat (門風=東), used for seat wind scoring
 }

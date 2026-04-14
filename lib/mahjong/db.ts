@@ -127,6 +127,9 @@ export interface PublicGameState {
   playerScores?: MahjongGameState["playerScores"];
   settlement?: MahjongGameState["settlement"];
   gameOver?: MahjongGameState["gameOver"];
+  // Dice / door
+  dice?: MahjongGameState["dice"];
+  doorSeat?: MahjongGameState["doorSeat"];
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
@@ -147,6 +150,8 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     playerScores: state.playerScores,
     settlement: state.settlement,
     gameOver: state.gameOver,
+    dice: state.dice,
+    doorSeat: state.doorSeat,
   };
 }
 

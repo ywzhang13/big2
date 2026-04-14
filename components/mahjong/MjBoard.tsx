@@ -25,9 +25,59 @@ interface MjBoardProps {
   onDraw: () => void;
   onDiscard: (tileId: number) => void;
   onAction: (type: string, tiles?: Tile[]) => void;
+  dice?: [number, number, number];
+  doorSeat?: number;
 }
 
 const WIND_CHARS = ["東", "南", "西", "北"];
+
+/** Single die face (1-6) rendered with pips */
+function DieFace({ value, size = 22 }: { value: number; size?: number }) {
+  const dot = (
+    <div
+      style={{
+        width: Math.max(3, size * 0.18),
+        height: Math.max(3, size * 0.18),
+        borderRadius: "50%",
+        background: "radial-gradient(circle at 30% 30%, #7f1d1d 0%, #450a0a 100%)",
+        boxShadow: "inset 0 1px 1px rgba(0,0,0,0.4)",
+      }}
+    />
+  );
+  // Pip positions for values 1-6 using a 3x3 grid
+  const pipMap: Record<number, boolean[]> = {
+    1: [false, false, false, false, true, false, false, false, false],
+    2: [true, false, false, false, false, false, false, false, true],
+    3: [true, false, false, false, true, false, false, false, true],
+    4: [true, false, true, false, false, false, true, false, true],
+    5: [true, false, true, false, true, false, true, false, true],
+    6: [true, false, true, true, false, true, true, false, true],
+  };
+  const pips = pipMap[value] || pipMap[1];
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.max(3, size * 0.18),
+        background: "linear-gradient(145deg, #fefcf5 0%, #f1e9cf 100%)",
+        border: "1px solid rgba(140,110,60,0.5)",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 1px rgba(120,90,40,0.3)",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
+        gridTemplateRows: "1fr 1fr 1fr",
+        padding: Math.max(1, size * 0.1),
+        gap: Math.max(1, size * 0.04),
+      }}
+    >
+      {pips.map((show, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {show && dot}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function ActionName(type: string): string {
   const m: Record<string, string> = {
@@ -138,10 +188,12 @@ function WindDial({
   currentTurn,
   mySeat,
   wallRemaining,
+  doorSeat,
 }: {
   currentTurn: number;
   mySeat: number;
   wallRemaining: number;
+  doorSeat?: number;
 }) {
   // Position winds relative to player's seat
   const winds = [0, 1, 2, 3].map((offset) => {
@@ -149,6 +201,7 @@ function WindDial({
     return {
       char: WIND_CHARS[seat],
       isActive: seat === currentTurn,
+      isDoor: doorSeat != null && seat === doorSeat,
       position: offset, // 0=bottom, 1=right, 2=top, 3=left
     };
   });
@@ -178,16 +231,20 @@ function WindDial({
       {winds.map((w) => (
         <div
           key={w.position}
-          className={`absolute text-[10px] font-bold transition-all duration-300
+          className={`absolute flex items-center gap-[2px] text-[10px] font-bold transition-all duration-300
             ${w.isActive
               ? "text-[#f0d68a] scale-110"
-              : "text-white/20"
+              : w.isDoor
+                ? "text-[#dc2626]"
+                : "text-white/20"
             }`}
           style={{
             ...posStyle[w.position] as React.CSSProperties,
             ...(w.isActive ? { textShadow: "0 0 6px rgba(240,214,138,0.6)" } : {}),
+            ...(w.isDoor && !w.isActive ? { textShadow: "0 0 6px rgba(220,38,38,0.7)" } : {}),
           }}
         >
+          {w.isDoor && <span className="text-[7px] font-black" style={{ color: "#dc2626" }}>門</span>}
           {w.char}
         </div>
       ))}
@@ -214,6 +271,8 @@ export default function MjBoard({
   onDraw,
   onDiscard,
   onAction,
+  dice,
+  doorSeat,
 }: MjBoardProps) {
   const getOpponent = (offset: number) => {
     const seat = (mySeat + offset) % 4;
@@ -322,7 +381,20 @@ export default function MjBoard({
 
                 {/* Center: wind dial + last discard */}
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} />
+                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} />
+                  {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
+                  {dice && !lastDiscard && (
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex gap-1">
+                        <DieFace value={dice[0]} size={20} />
+                        <DieFace value={dice[1]} size={20} />
+                        <DieFace value={dice[2]} size={20} />
+                      </div>
+                      <span className="text-[9px] text-[#C9A96E]/60 font-bold tracking-wider">
+                        {dice[0] + dice[1] + dice[2]} 點開門
+                      </span>
+                    </div>
+                  )}
                   {lastDiscard && (
                     <div className="flex flex-col items-center gap-1">
                       <div className="rounded-lg overflow-hidden shadow-xl"
