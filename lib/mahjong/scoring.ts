@@ -243,6 +243,30 @@ function scoreDecomposition(
     return true;
   });
 
+  // --- 中洞 / 邊張 ---
+  // 中洞  — winTile is the MIDDLE rank of a concealed chi meld (e.g. 3-5 win 4)
+  // 邊張 — winTile completes 1-2-3 as rank 3 (held 1-2) or 7-8-9 as rank 7
+  //        (held 8-9). Only these two edge shapes qualify.
+  const winRankNum = ctx.winTile.rank;
+  for (const m of allMelds) {
+    if (!isChi(m) || !m.isConcealed) continue;
+    if (!m.tileKeys.includes(winTileKey)) continue;
+    const ranks = m.tileKeys
+      .map((k) => parseInt(k.slice(1), 10))
+      .sort((a, b) => a - b);
+    if (winRankNum === ranks[1]) {
+      fans.push({ name: "中洞", value: 1 });
+      break;
+    }
+    if (
+      (ranks[0] === 1 && ranks[2] === 3 && winRankNum === 3) ||
+      (ranks[0] === 7 && ranks[2] === 9 && winRankNum === 7)
+    ) {
+      fans.push({ name: "邊張", value: 1 });
+      break;
+    }
+  }
+
   // --- 平胡: all chi + pair, no 字牌 ---
   const allTileKeys = [
     ...allMelds.flatMap((m) => m.tileKeys),

@@ -10,6 +10,7 @@ import {
   executeConcealedKong,
   executeAddKong,
   declareWin,
+  applyWinnerOrderRule,
   advanceTurn,
   drawTile,
   calculateSettlement,
@@ -55,7 +56,63 @@ export async function POST(request: Request) {
     if (actionType === "win") {
       // Determine if self-draw or from discard
       const isSelfDraw = state.currentTurn === seat && state.hasDrawn;
+
+      // Prevent duplicate wins by the same seat (idempotent)
+      if (state.winners?.some((w) => w.seat === seat)) {
+        return Response.json({ error: "你已經胡過了" }, { status: 400 });
+      }
+
       newState = declareWin(state, seat, isSelfDraw);
+
+      // For self-draw or no pending actions, finalize immediately.
+      // For ron (胡別家): check if other potential winners are still undecided
+      // to support 一炮多響 (all who can win get to win on the same discard).
+      let waitForMoreWinners = false;
+      if (!isSelfDraw && state.pendingActions) {
+        const pending = { ...state.pendingActions };
+        // Mark this seat as decided (won = removed from pending consideration)
+        pending.passedActors = Array.from(new Set([...pending.passedActors, seat]));
+        // Any remaining seats (in potentialActors, not yet decided) who could win?
+        const remaining = pending.potentialActors.filter(
+          (s) => !pending.passedActors.includes(s) && s !== seat
+        );
+        // Check if any remaining seat has a winning hand on the same discard
+        const discTile = state.lastDiscard?.tile;
+        if (discTile && remaining.length > 0) {
+          for (const rs of remaining) {
+            const p = state.players[rs];
+            const testHand = [...p.hand, discTile];
+            // Import isWinningHand lazily via existing getAvailableActions of state
+            // Simpler: reuse getAvailableActions which filters by lastDiscard.
+            const actionsForRs = getAvailableActions(state).filter(
+              (a) => a.playerSeat === rs && a.type === "win"
+            );
+            if (actionsForRs.length > 0) {
+              waitForMoreWinners = true;
+              break;
+            }
+            // suppress unused var lint
+            void testHand;
+          }
+        }
+        newState.pendingActions = pending;
+      }
+
+      if (waitForMoreWinners) {
+        // Keep game in "playing" status; broadcast a partial-win event so UIs
+        // know someone has won but settlement waits. Others can still win or pass.
+        await saveGameState(roomId, newState);
+        await mjBroadcast(room.code, "mj_partial_win", {
+          seat,
+          winnerName: newState.players[seat].name,
+          score: newState.winners![newState.winners!.length - 1].score,
+        });
+        return Response.json({ success: true, partial: true });
+      }
+
+      // Finalize game. Apply 雙響/三響 order rule to winners first.
+      newState = applyWinnerOrderRule(newState);
+      newState.status = "finished";
       newState.pendingActions = undefined;
 
       // Calculate settlement if round system is active
@@ -63,23 +120,27 @@ export async function POST(request: Request) {
       if (newState.roomSettings) {
         settlement = calculateSettlement(newState);
         newState.settlement = settlement;
-        // Update running scores
         if (newState.playerScores) {
           newState.playerScores = newState.playerScores.map(
             (s, i) => s + settlement!.deltas[i]
           );
         }
-        // Check if all rounds complete
         newState.gameOver = isAllRoundsComplete(newState);
       }
 
       await saveGameState(roomId, newState, "finished");
 
       // Broadcast game over with all hands revealed
+      const winnersPayload = (newState.winners ?? []).map((w) => ({
+        seat: w.seat,
+        name: newState.players[w.seat].name,
+        score: w.score,
+      }));
       await mjBroadcast(room.code, "mj_game_over", {
-        winnerSeat: seat,
-        winnerName: newState.players[seat].name,
+        winnerSeat: newState.winner!.seat,
+        winnerName: newState.players[newState.winner!.seat].name,
         score: newState.winner!.score,
+        winners: winnersPayload,
         allHands: newState.players.map((p) => ({
           seat: p.seat,
           name: p.name,
@@ -113,6 +174,48 @@ export async function POST(request: Request) {
         );
 
         if (allPassed) {
+          // Everyone passed. If there are collected winners (一炮多響),
+          // finalize the game instead of advancing the turn.
+          if (state.winners && state.winners.length > 0) {
+            newState = { ...state, pendingActions: undefined } as MahjongGameState;
+            newState = applyWinnerOrderRule(newState);
+            newState.status = "finished";
+            let settlement = undefined;
+            if (newState.roomSettings) {
+              settlement = calculateSettlement(newState);
+              newState.settlement = settlement;
+              if (newState.playerScores) {
+                newState.playerScores = newState.playerScores.map(
+                  (v, i) => v + settlement!.deltas[i]
+                );
+              }
+              newState.gameOver = isAllRoundsComplete(newState);
+            }
+            await saveGameState(roomId, newState, "finished");
+            const winnersPayload = (newState.winners ?? []).map((w) => ({
+              seat: w.seat,
+              name: newState.players[w.seat].name,
+              score: w.score,
+            }));
+            await mjBroadcast(room.code, "mj_game_over", {
+              winnerSeat: newState.winner!.seat,
+              winnerName: newState.players[newState.winner!.seat].name,
+              score: newState.winner!.score,
+              winners: winnersPayload,
+              allHands: newState.players.map((p) => ({
+                seat: p.seat,
+                name: p.name,
+                hand: p.hand,
+                revealed: p.revealed,
+                flowers: p.flowers,
+              })),
+              settlement,
+              playerScores: newState.playerScores,
+              roundInfo: newState.roundInfo,
+              gameOver: newState.gameOver,
+            });
+            return Response.json({ success: true, finalized: true });
+          }
           // Everyone passed — advance turn, clear pending
           newState = advanceTurn(state);
           newState.pendingActions = undefined;

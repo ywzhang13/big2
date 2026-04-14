@@ -55,6 +55,10 @@ export interface MahjongGameState {
   prevalentWind: number; // 1=東 2=南 3=西 4=北
   turnCount: number;
   winner?: { seat: number; score: ScoreResult };
+  // 一炮三響: all winners on the same discard (populated incrementally as
+  // each player declares win). The legacy `winner` field stays set to the
+  // first (nearest to discarder) entry for display back-compat.
+  winners?: { seat: number; score: ScoreResult }[];
   // Track if the current player just drew (for discard validation)
   hasDrawn: boolean;
   // Track if this is the very first draw of the round (for 天/地胡)

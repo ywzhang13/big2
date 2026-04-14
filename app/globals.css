@@ -9,15 +9,20 @@
   --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Force landscape for mahjong game */
+/* Force landscape for mahjong game. Use vh/vw as first declaration so older
+   iOS Safari (<15.4) that doesn't understand dvh still gets a working value;
+   modern browsers override with dvh/dvw for better URL-bar handling. */
 @media (orientation: portrait) {
   .mj-landscape {
     transform: rotate(90deg);
     transform-origin: top left;
+    width: 100vh;
+    height: 100vw;
     width: 100dvh;
     height: 100dvw;
     position: absolute;
     top: 0;
+    left: 100vw;
     left: 100dvw;
     overflow: hidden;
   }

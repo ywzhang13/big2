@@ -121,6 +121,7 @@ export interface PublicGameState {
   turnCount: number;
   hasDrawn: boolean;
   winner?: MahjongGameState["winner"];
+  winners?: MahjongGameState["winners"];
   // Round system
   roomSettings?: MahjongGameState["roomSettings"];
   roundInfo?: MahjongGameState["roundInfo"];
@@ -131,6 +132,7 @@ export interface PublicGameState {
   dice?: MahjongGameState["dice"];
   doorSeat?: MahjongGameState["doorSeat"];
   nextGameReady?: MahjongGameState["nextGameReady"];
+  pendingActions?: MahjongGameState["pendingActions"];
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
@@ -146,6 +148,7 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     turnCount: state.turnCount,
     hasDrawn: state.hasDrawn,
     winner: state.winner,
+    winners: state.winners,
     roomSettings: state.roomSettings,
     roundInfo: state.roundInfo,
     playerScores: state.playerScores,
@@ -154,6 +157,7 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     dice: state.dice,
     doorSeat: state.doorSeat,
     nextGameReady: state.nextGameReady,
+    pendingActions: state.pendingActions,
   };
 }
 

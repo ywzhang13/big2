@@ -343,7 +343,8 @@ export default function MjBoard({
   return (
     <div className="mj-landscape flex flex-col flex-1 overflow-hidden relative"
          style={{
-           minHeight: "100dvh",
+           height: "100%",
+           maxHeight: "100%",
            background: "radial-gradient(ellipse at center, #1a3f25 0%, #0f2a1a 60%, #091a10 100%)",
          }}>
 

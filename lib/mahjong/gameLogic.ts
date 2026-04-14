@@ -646,8 +646,11 @@ export function declareWin(
     score.totalFan += consecutive * 2;
   }
 
-  s.winner = { seat, score };
-  s.status = "finished";
+  // Append to winners array (一炮三響 support). Keep `winner` as the first
+  // entry for UI back-compat. Caller is responsible for status finalization.
+  const entry = { seat, score };
+  s.winners = [...(s.winners ?? []), entry];
+  if (!s.winner) s.winner = entry;
 
   return s;
 }
@@ -678,6 +681,31 @@ export function isDraw(state: MahjongGameState): boolean {
   return state.wall.length <= 16 && state.status === "playing";
 }
 
+/**
+ * Apply 雙響/三響 rule to state.winners in place:
+ *   1 winner → unchanged
+ *   2 winners (ron) → keep only the highest-priority seat (closest CCW to
+ *                     the discarder); the other forfeits their hu.
+ *   3 winners → unchanged (一炮三響, all win simultaneously).
+ * Also resyncs state.winner to winners[0] after filtering.
+ */
+export function applyWinnerOrderRule(state: MahjongGameState): MahjongGameState {
+  const s = cloneState(state);
+  const winners = s.winners ?? [];
+  if (winners.length !== 2) {
+    if (winners.length > 0) s.winner = winners[0];
+    return s;
+  }
+  // Self-draw scenarios never have length 2; only ron can have multi-winners.
+  const discarder = s.lastDiscard?.from ?? -1;
+  const priority = (seat: number) =>
+    discarder >= 0 ? ((seat - discarder - 1 + 4) % 4) : seat;
+  const sorted = [...winners].sort((a, b) => priority(a.seat) - priority(b.seat));
+  s.winners = [sorted[0]];
+  s.winner = sorted[0];
+  return s;
+}
+
 // ---------------------------------------------------------------------------
 // Settlement (結算)
 // ---------------------------------------------------------------------------
@@ -698,37 +726,63 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   const { basePoints, fanPoints } = settings;
   const deltas = [0, 0, 0, 0];
 
-  if (!state.winner || state.winner.seat < 0) {
+  let winners = state.winners && state.winners.length > 0
+    ? state.winners.slice()
+    : state.winner ? [state.winner] : [];
+
+  if (winners.length === 0 || winners[0].seat < 0) {
     // 流局
     return { deltas, reason: "draw", fanTotal: 0, paymentPerPlayer: 0 };
   }
 
-  const winnerSeat = state.winner.seat;
-  // totalFan already includes 莊家 (dealer-bonus) and 連/拉 when applicable,
-  // so all losers pay the same amount (based on full totalFan).
-  const totalFan = state.winner.score.totalFan;
-  const isSelfDraw = state.winner.score.fans.some(f => f.name.includes("自摸"));
-  const payment = basePoints + totalFan * fanPoints;
+  // Rule: only 三響 (3 winners) may all hu simultaneously. With exactly 2
+  // winners on a single discard (雙響), only the highest-priority seat —
+  // closest in CCW order to the discarder — actually gets the hu; the other
+  // forfeits. (Self-draw can only have 1 winner, so length === 2 implies ron.)
+  const isSelfDrawMulti = winners.length === 1 &&
+    winners[0].score.fans.some(f => f.name.includes("自摸"));
+  if (winners.length === 2 && !isSelfDrawMulti) {
+    const discarder = state.lastDiscard?.from ?? -1;
+    const priority = (seat: number) =>
+      discarder >= 0 ? ((seat - discarder - 1 + 4) % 4) : seat;
+    winners.sort((a, b) => priority(a.seat) - priority(b.seat));
+    winners = winners.slice(0, 1);
+  }
+
+  // Self-draw can only be a single winner.
+  const isSelfDraw = winners.length === 1 &&
+    winners[0].score.fans.some(f => f.name.includes("自摸"));
 
   if (isSelfDraw) {
-    // 自摸: all 3 losers pay
+    const winnerSeat = winners[0].seat;
+    const totalFan = winners[0].score.totalFan;
+    const payment = basePoints + totalFan * fanPoints;
     for (let i = 0; i < 4; i++) {
-      if (i === winnerSeat) {
-        deltas[i] = payment * 3;
-      } else {
-        deltas[i] = -payment;
-      }
+      if (i === winnerSeat) deltas[i] = payment * 3;
+      else deltas[i] = -payment;
     }
     return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: payment };
-  } else {
-    // 放槍: only the discarder pays
-    const loserSeat = state.lastDiscard?.from ?? -1;
-    if (loserSeat >= 0) {
-      deltas[winnerSeat] = payment;
-      deltas[loserSeat] = -payment;
-    }
-    return { deltas, reason: "win", fanTotal: totalFan, paymentPerPlayer: payment };
   }
+
+  // 放槍 / 一炮多響: discarder pays each winner their individual (底+台×台)
+  const loserSeat = state.lastDiscard?.from ?? -1;
+  let totalFanSum = 0;
+  let paymentSum = 0;
+  if (loserSeat >= 0) {
+    for (const w of winners) {
+      const payment = basePoints + w.score.totalFan * fanPoints;
+      deltas[w.seat] += payment;
+      deltas[loserSeat] -= payment;
+      totalFanSum += w.score.totalFan;
+      paymentSum += payment;
+    }
+  }
+  return {
+    deltas,
+    reason: "win",
+    fanTotal: totalFanSum,
+    paymentPerPlayer: winners.length === 1 ? paymentSum : Math.round(paymentSum / winners.length),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -761,11 +815,13 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
 
   let s = cloneState(state);
   const ri = { ...s.roundInfo! };
-  const winnerSeat = s.winner?.seat ?? -1;
-  const isDealerWin = winnerSeat === s.dealerSeat;
-  const isDrawGame = winnerSeat < 0;
+  const winnerSeats = (s.winners && s.winners.length > 0
+    ? s.winners.map(w => w.seat)
+    : s.winner ? [s.winner.seat] : []);
+  const isDealerWin = winnerSeats.includes(s.dealerSeat);
+  const isDrawGame = winnerSeats.length === 0 || winnerSeats[0] < 0;
 
-  // Determine if dealer stays
+  // Determine if dealer stays (dealer wins as part of multi-winner also counts)
   const dealerStays = isDealerWin || isDrawGame;
 
   if (dealerStays) {
@@ -795,6 +851,7 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
   // Reset game state for new deal
   s.status = "playing";
   s.winner = undefined;
+  s.winners = undefined;
   s.settlement = undefined;
   s.lastDiscard = null;
   s.turnCount = 0;

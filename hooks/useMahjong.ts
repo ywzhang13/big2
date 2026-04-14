@@ -78,6 +78,9 @@ export interface MjClientState {
       flowers: Tile[];
     }[];
   };
+  // 一炮多響: all winners of this round (seat/name/score per winner).
+  // Populated alongside `winner` when multiple players hu on the same discard.
+  winners?: { seat: number; name: string; score: ScoreResult }[];
   wallRemaining: number;
   hostId: string;
   hasDrawn: boolean;
@@ -562,9 +565,13 @@ export function useMahjong(roomCode: string, playerName: string) {
       };
       setState((prev) => ({
         ...prev,
-        // Clear actions for the passing player; clear for everyone if all passed
+        // Only clear my own action buttons if *I* was the one passing. Do not
+        // clear based on `allPassed` — in edge cases (stale broadcasts, out-of-
+        // order delivery) that can hide my still-valid chi/pong button before
+        // I've had a chance to decide. A legitimate allPassed=true always
+        // implies my own pass already cleared them earlier.
         availableActions:
-          prev.mySeat === _seat || allPassed ? [] : prev.availableActions,
+          prev.mySeat === _seat ? [] : prev.availableActions,
         // When allPassed, server sends authoritative turn state so currentTurn
         // + hasDrawn update together (no "輪到你摸牌" flash).
         ...(allPassed && newTurn != null && newHasDrawn != null
@@ -633,6 +640,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         winnerSeat: number;
         winnerName: string | null;
         score: ScoreResult | null;
+        winners?: { seat: number; name: string; score: ScoreResult }[];
         allHands: {
           seat: number;
           name: string;
@@ -663,6 +671,7 @@ export function useMahjong(roomCode: string, playerName: string) {
                 score: { fans: [], totalFan: 0 },
                 allHands: msg.allHands,
               },
+        winners: msg.winners && msg.winners.length > 0 ? msg.winners : undefined,
         settlement: msg.settlement,
         playerScores: msg.playerScores ?? prev.playerScores,
         roundInfo: msg.roundInfo ?? prev.roundInfo,
@@ -737,6 +746,11 @@ export function useMahjong(roomCode: string, playerName: string) {
         playerId: myId,
       });
     } catch (err) {
+      // Race: auto-draw effect can fire before the mj_action broadcast
+      // flips hasDrawn to true after chi/pong/kong. Server will reject with
+      // "已經摸過牌了" — safe to ignore; the next discard path will proceed.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("已經摸過牌了") || msg.includes("等待其他玩家動作中")) return;
       console.error("[mj] draw failed:", err);
     }
   }, [myId]);
