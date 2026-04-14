@@ -214,24 +214,40 @@ export default function MahjongPage() {
                 {/* 底 */}
                 <div className="flex items-center justify-between">
                   <span className="text-white/70 text-sm">底</span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setBasePoints(Math.max(1, basePoints - 5))}
-                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">-</button>
-                    <span className="text-[#C9A96E] font-bold text-lg w-10 text-center">{basePoints}</span>
-                    <button onClick={() => setBasePoints(basePoints + 5)}
-                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">+</button>
+                  <div className="flex gap-1.5">
+                    {[5, 10, 20, 50, 100].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setBasePoints(n)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[44px]
+                          ${basePoints === n
+                            ? "bg-[#C9A96E] text-[#0f2a1a]"
+                            : "bg-white/10 text-white/50 hover:bg-white/15"
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 {/* 台 */}
                 <div className="flex items-center justify-between">
                   <span className="text-white/70 text-sm">每台</span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setFanPoints(Math.max(1, fanPoints - 5))}
-                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">-</button>
-                    <span className="text-[#C9A96E] font-bold text-lg w-10 text-center">{fanPoints}</span>
-                    <button onClick={() => setFanPoints(fanPoints + 5)}
-                      className="w-8 h-8 rounded-lg bg-white/10 text-white/60 font-bold cursor-pointer hover:bg-white/15">+</button>
+                  <div className="flex gap-1.5">
+                    {[5, 10, 20, 50, 100].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setFanPoints(n)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[44px]
+                          ${fanPoints === n
+                            ? "bg-[#C9A96E] text-[#0f2a1a]"
+                            : "bg-white/10 text-white/50 hover:bg-white/15"
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
