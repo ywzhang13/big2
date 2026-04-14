@@ -741,8 +741,13 @@ function RoomView({
 
       {/* Game over overlay — stays on the board */}
       {isFinished && state.winner && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm w-full mx-4 my-4 shadow-2xl">
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div
+            className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl max-w-md w-full shadow-2xl flex flex-col"
+            style={{ maxHeight: "92vh" }}
+          >
+          {/* Scrollable content */}
+          <div className="overflow-y-auto p-5 flex-1">
             {state.winner.seat < 0 ? (
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/5 flex items-center justify-center text-2xl">
@@ -914,8 +919,12 @@ function RoomView({
             )}
 
 
-            {/* Action buttons */}
-            <div className="flex flex-col gap-3 mt-4">
+          </div>
+          {/* Sticky bottom: Action buttons + Ready check (always visible) */}
+          <div
+            className="flex flex-col gap-3 p-4 border-t border-[#C9A96E]/20"
+            style={{ background: "linear-gradient(180deg, rgba(26,20,8,0.7) 0%, rgba(26,20,8,1) 100%)" }}
+          >
               {state.roomSettings && !state.gameOver && (
                 <>
                   {/* Ready check — 4 player consent */}
