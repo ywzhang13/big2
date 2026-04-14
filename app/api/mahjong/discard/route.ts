@@ -77,14 +77,25 @@ export async function POST(request: Request) {
       })),
     });
 
-    // Send targeted available actions to each player who can act
+    // Priority: win > pong/kong > chi
+    // If any player has win/pong/kong, suppress chi broadcasts until those
+    // higher-priority players have passed (handled in action route pass).
+    const hasHighPriority = actions.some(
+      (a) => a.type === "win" || a.type === "pong" || a.type === "kong"
+    );
+
     const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
     for (const actionSeat of playerSeatsWithActions) {
       const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
+      // Suppress chi if there's any higher-priority action from anyone
+      const filtered = hasHighPriority
+        ? playerActions.filter((a) => a.type !== "chi")
+        : playerActions;
+      if (filtered.length === 0) continue;
       const targetPlayerId = newState.players[actionSeat].id;
       await mjBroadcast(room.code, "mj_available_actions", {
         playerId: targetPlayerId,
-        actions: playerActions,
+        actions: filtered,
       });
     }
 

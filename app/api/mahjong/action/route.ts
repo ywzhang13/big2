@@ -12,6 +12,7 @@ import {
   drawTile,
   calculateSettlement,
   isAllRoundsComplete,
+  getAvailableActions,
   AvailableAction,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
@@ -130,12 +131,61 @@ export async function POST(request: Request) {
         allPassed: !newState.pendingActions, // true if turn advanced
       });
 
+      // If pending window still open, check whether chi should now be
+      // revealed (all higher-priority players have passed).
+      if (newState.pendingActions && state.lastDiscard) {
+        const remainingActions = getAvailableActions(newState);
+        const passedSet = new Set(newState.pendingActions.passedActors);
+        const highPriorityStillWaiting = remainingActions.some(
+          (a) =>
+            (a.type === "win" || a.type === "pong" || a.type === "kong") &&
+            !passedSet.has(a.playerSeat)
+        );
+        if (!highPriorityStillWaiting) {
+          // Reveal chi to any seats that have chi available and haven't passed
+          const chiActions = remainingActions.filter(
+            (a) => a.type === "chi" && !passedSet.has(a.playerSeat)
+          );
+          const chiSeats = new Set(chiActions.map((a) => a.playerSeat));
+          for (const chiSeat of chiSeats) {
+            const playerActions = chiActions.filter((a) => a.playerSeat === chiSeat);
+            const targetPlayerId = newState.players[chiSeat].id;
+            await mjBroadcast(room.code, "mj_available_actions", {
+              playerId: targetPlayerId,
+              actions: playerActions,
+            });
+          }
+        }
+      }
+
       return Response.json({ success: true });
     }
 
     // chi / pong / kong
     if (!state.lastDiscard) {
       return Response.json({ error: "沒有可以吃碰槓的牌" }, { status: 400 });
+    }
+
+    // Priority: win > pong/kong > chi
+    // If this is a chi, check no one else has a pending pong/kong/win that
+    // hasn't passed yet. Pong/kong/win can execute immediately (higher priority
+    // than chi, and they short-circuit the action window).
+    if (actionType === "chi") {
+      const allAvailable = getAvailableActions(state);
+      const pending = state.pendingActions;
+      const higherPriorityWaiting = allAvailable.some((a) => {
+        if (a.playerSeat === seat) return false;
+        if (a.type !== "pong" && a.type !== "kong" && a.type !== "win") return false;
+        // This other seat can pong/kong/win — have they passed yet?
+        const hasPassed = pending?.passedActors.includes(a.playerSeat) ?? false;
+        return !hasPassed;
+      });
+      if (higherPriorityWaiting) {
+        return Response.json(
+          { error: "等待其他玩家決定是否碰/槓/胡" },
+          { status: 409 }
+        );
+      }
     }
 
     // Resolve tile objects from IDs
