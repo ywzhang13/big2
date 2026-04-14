@@ -167,8 +167,8 @@ function PlayerPanel({
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
-          // Inter-meld gap: top 10px, left/right 16px (slightly more for stacked look)
-          style={{ gap: isHorizontal ? 10 : 16 }}
+          // Inter-meld gap: 10px for both top and left/right
+          style={{ gap: 10 }}
         >
           {/* Each meld is a tight group */}
           {player.revealed.map((meld, mi) => (
@@ -192,7 +192,7 @@ function PlayerPanel({
                       ? {
                           transform: rotStyle,
                           // Intra-group overlap — -10 keeps tiles tight but separate
-                          marginTop: isHorizontal ? 0 : -10,
+                          marginTop: isHorizontal ? 0 : -6,
                         }
                       : undefined
                   }
@@ -213,7 +213,7 @@ function PlayerPanel({
                       ? {
                           transform: rotStyle,
                           // Intra-group overlap — -10 keeps tiles tight but separate
-                          marginTop: isHorizontal ? 0 : -10,
+                          marginTop: isHorizontal ? 0 : -6,
                         }
                       : undefined
                   }
