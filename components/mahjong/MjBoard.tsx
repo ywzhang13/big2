@@ -342,26 +342,6 @@ export default function MjBoard({
            background: "radial-gradient(ellipse at center, #1a3f25 0%, #0f2a1a 60%, #091a10 100%)",
          }}>
 
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-black/30 border-b border-[#C9A96E]/20">
-        <button
-          onClick={() => window.location.href = "/mahjong"}
-          className="text-white/50 text-xs hover:text-white/80 cursor-pointer transition-colors"
-        >
-          離開
-        </button>
-        <h1 className="text-[#C9A96E] font-bold text-sm tracking-wider font-heading">
-          台灣麻將
-        </h1>
-        <div className="flex items-center gap-2 text-[10px] text-white/40">
-          {isMyTurn && (
-            <span className="text-[#f0d68a] font-bold animate-pulse text-xs">
-              {needsDraw ? "摸牌" : "打牌"}
-            </span>
-          )}
-        </div>
-      </div>
-
       {/* Top opponent */}
       <div className="flex justify-center px-4 py-2">
         <PlayerPanel
