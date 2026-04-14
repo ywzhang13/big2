@@ -7,6 +7,8 @@ import {
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import {
   executeAction,
+  executeConcealedKong,
+  executeAddKong,
   declareWin,
   advanceTurn,
   drawTile,
@@ -171,7 +173,15 @@ export async function POST(request: Request) {
     }
 
     // chi / pong / kong
-    if (!state.lastDiscard) {
+    // Concealed kong (暗槓) is triggered from own hand after drawing — no lastDiscard.
+    // Add kong (加槓) may also be triggered on own turn with lastDiscard absent.
+    const isConcealedKong =
+      actionType === "kong" &&
+      state.currentTurn === seat &&
+      state.hasDrawn &&
+      !state.lastDiscard;
+
+    if (!state.lastDiscard && !isConcealedKong) {
       return Response.json({ error: "沒有可以吃碰槓的牌" }, { status: 400 });
     }
 
@@ -208,23 +218,32 @@ export async function POST(request: Request) {
       });
     }
 
-    const action: AvailableAction = {
-      type: actionType as "chi" | "pong" | "kong",
-      playerSeat: seat,
-      tiles: actionTiles,
-    };
-
-    newState = executeAction(state, action);
+    if (isConcealedKong) {
+      // 暗槓: 4 tiles from own hand, no discard involved
+      if (!actionTiles || actionTiles.length !== 4) {
+        return Response.json({ error: "暗槓需要 4 張相同的牌" }, { status: 400 });
+      }
+      newState = executeConcealedKong(state, actionTiles);
+    } else {
+      const action: AvailableAction = {
+        type: actionType as "chi" | "pong" | "kong",
+        playerSeat: seat,
+        tiles: actionTiles,
+      };
+      newState = executeAction(state, action);
+    }
     // Clear pendingActions after a successful chi/pong/kong
     newState.pendingActions = undefined;
 
     await saveGameState(roomId, newState);
 
     // Broadcast the action (revealed meld) with tileCount
+    // Use lastMeld.type so "concealed_kong" (暗槓) is correctly conveyed
+    // to clients (for faceDown rendering and scoring).
     const updatedPlayer = newState.players[seat];
     const lastMeld = updatedPlayer.revealed[updatedPlayer.revealed.length - 1];
     await mjBroadcast(room.code, "mj_action", {
-      type: actionType,
+      type: lastMeld.type,
       seat,
       tiles: lastMeld.tiles,
       tileCount: updatedPlayer.hand.length,
