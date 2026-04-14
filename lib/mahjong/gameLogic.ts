@@ -635,23 +635,12 @@ export function declareWin(
 
   const score = calculateScore(scoringCtx);
 
-  // --- Dealer-related台 (awarded to winner, shown in 台數明細) ---
-  // 1. 莊家 1 台: added when dealer is involved in the hand result.
-  //    - Winner is dealer: scoring.ts already added 莊家
-  //    - Winner is non-dealer + dealer is loser (放槍 or 被自摸):
-  //      add 莊家 1 台 to winner so settlement reflects it
-  const isDealerWinner = player.isDealer;
-  const dealerIsLoser =
-    !isDealerWinner &&
-    (isSelfDraw || s.lastDiscard?.from === s.dealerSeat);
-  if (dealerIsLoser) {
-    score.fans.push({ name: "莊家", value: 1 });
-    score.totalFan += 1;
-  }
-  // 2. 連 N + 拉 N: dealer was on a consecutive streak.
-  //    Applies regardless of who wins (continues or breaks the streak).
+  // 連 N + 拉 N: only awarded when the dealer wins (continuing the streak).
+  // Non-dealer winners do NOT get this bonus, per standard Taiwan rules.
+  // (If dealer放槍 or 被自摸, the streak is broken, no bonus.)
+  // 莊家 1 台 is already added in scoring.ts when ctx.isDealer is true.
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
-  if (consecutive > 0) {
+  if (player.isDealer && consecutive > 0) {
     score.fans.push({ name: `連${consecutive}`, value: consecutive });
     score.fans.push({ name: `拉${consecutive}`, value: consecutive });
     score.totalFan += consecutive * 2;
