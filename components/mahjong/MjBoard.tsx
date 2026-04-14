@@ -176,10 +176,10 @@ function PlayerPanel({
               key={mi}
               className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`}
               // Intra-group:
-              //   top: 3px (larger, more readable for 對家)
+              //   top: 1px (reduced 50% from 3px per user request)
               //   left/right: 0 (tight — tile wrappers handle overlap via negative margin)
               style={{
-                gap: isHorizontal ? 3 : 0,
+                gap: isHorizontal ? 1 : 0,
                 border: "1px solid rgba(255,255,255,0.08)",
                 borderRadius: 3,
               }}
@@ -191,8 +191,8 @@ function PlayerPanel({
                     rotStyle
                       ? {
                           transform: rotStyle,
-                          // Intra-group tighter: tiles overlap more (-8 → -12, ~50% tighter)
-                          marginTop: isHorizontal ? 0 : -12,
+                          // Intra-group overlap — -10 keeps tiles tight but separate
+                          marginTop: isHorizontal ? 0 : -10,
                         }
                       : undefined
                   }
@@ -204,7 +204,7 @@ function PlayerPanel({
           ))}
           {/* Flowers as a group */}
           {player.flowers.length > 0 && (
-            <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`} style={{ gap: isHorizontal ? 3 : 0 }}>
+            <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`} style={{ gap: isHorizontal ? 1 : 0 }}>
               {player.flowers.map((f) => (
                 <div
                   key={f.id}
@@ -212,8 +212,8 @@ function PlayerPanel({
                     rotStyle
                       ? {
                           transform: rotStyle,
-                          // Intra-group tighter: tiles overlap more (-8 → -12, ~50% tighter)
-                          marginTop: isHorizontal ? 0 : -12,
+                          // Intra-group overlap — -10 keeps tiles tight but separate
+                          marginTop: isHorizontal ? 0 : -10,
                         }
                       : undefined
                   }

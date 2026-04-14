@@ -534,13 +534,14 @@ export function useMahjong(roomCode: string, playerName: string) {
         seat: number;
         allPassed?: boolean;
       };
+      // Note: do NOT reset hasDrawn here — mj_turn_advance (sent right after
+      // this pass when allPassed=true) will update currentTurn + hasDrawn
+      // together atomically, preventing the "輪到你摸牌" flash between events.
       setState((prev) => ({
         ...prev,
         // Always clear actions for the passing player; clear for everyone if all passed
         availableActions:
           prev.mySeat === _seat || allPassed ? [] : prev.availableActions,
-        // When all passed, reset hasDrawn so next player can draw
-        ...(allPassed ? { hasDrawn: false } : {}),
       }));
     });
 
