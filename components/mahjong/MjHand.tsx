@@ -43,8 +43,8 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId }: Mj
 
   return (
     <div className="flex flex-col items-center gap-2">
-      {/* Tiles row */}
-      <div className="flex justify-center items-end px-1 max-w-full overflow-x-auto">
+      {/* Tiles row — pt-5 reserves space for the -translate-y-3 selected-lift */}
+      <div className="flex justify-center items-end px-1 pt-5 max-w-full">
         {/* Main hand */}
         <div className="flex gap-[2px]">
           {mainTiles.map((t) => (

@@ -502,11 +502,16 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_hand_update (private, after action) ---
     channel.on("broadcast", { event: "mj_hand_update" }, ({ payload }) => {
-      const { playerId, hand } = payload as { playerId: string; hand: Tile[] };
+      const { playerId, hand, drawnTileId } = payload as {
+        playerId: string;
+        hand: Tile[];
+        drawnTileId?: number;
+      };
       if (playerId !== myId) return;
       setState((prev) => ({
         ...prev,
         myHand: safeHand(hand),
+        ...(drawnTileId != null ? { drawnTileId } : {}),
       }));
     });
 
