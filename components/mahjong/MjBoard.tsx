@@ -410,17 +410,17 @@ export default function MjBoard({
 
               {/* Middle: left | center | right */}
               <div className="flex-1 flex items-center min-h-0">
-                {/* Left discards (tiles rotated 90° facing center, in rows) */}
-                <div className="flex-shrink-0 flex flex-col gap-[1px] items-end" style={{ maxWidth: 100 }}>
+                {/* Left discards: vertical columns (5 per column), rotated facing center */}
+                <div className="flex-shrink-0 flex flex-row-reverse gap-[1px] items-start" style={{ maxWidth: 100 }}>
                   {(() => {
                     const tiles = (left?.discards || []);
-                    const rows: typeof tiles[] = [];
-                    for (let i = 0; i < tiles.length; i += 6) {
-                      rows.push(tiles.slice(i, i + 6));
+                    const cols: typeof tiles[] = [];
+                    for (let i = 0; i < tiles.length; i += 5) {
+                      cols.push(tiles.slice(i, i + 5));
                     }
-                    return rows.map((row, ri) => (
-                      <div key={ri} className="flex gap-[1px]">
-                        {row.map((t, ti) => (
+                    return cols.map((col, ci) => (
+                      <div key={ci} className="flex flex-col gap-[1px]">
+                        {col.map((t, ti) => (
                           <div key={`left-${t.id}-${ti}`} style={{ transform: "rotate(90deg)", width: 22, height: 22 }}>
                             <MjTile tile={t} tiny />
                           </div>
@@ -461,17 +461,17 @@ export default function MjBoard({
                   )}
                 </div>
 
-                {/* Right discards (tiles rotated -90° facing center, in rows) */}
-                <div className="flex-shrink-0 flex flex-col gap-[1px] items-start" style={{ maxWidth: 100 }}>
+                {/* Right discards: vertical columns (5 per column), rotated facing center */}
+                <div className="flex-shrink-0 flex flex-row gap-[1px] items-start" style={{ maxWidth: 100 }}>
                   {(() => {
                     const tiles = (right?.discards || []);
-                    const rows: typeof tiles[] = [];
-                    for (let i = 0; i < tiles.length; i += 6) {
-                      rows.push(tiles.slice(i, i + 6));
+                    const cols: typeof tiles[] = [];
+                    for (let i = 0; i < tiles.length; i += 5) {
+                      cols.push(tiles.slice(i, i + 5));
                     }
-                    return rows.map((row, ri) => (
-                      <div key={ri} className="flex gap-[1px]">
-                        {row.map((t, ti) => (
+                    return cols.map((col, ci) => (
+                      <div key={ci} className="flex flex-col gap-[1px]">
+                        {col.map((t, ti) => (
                           <div key={`right-${t.id}-${ti}`} style={{ transform: "rotate(-90deg)", width: 22, height: 22 }}>
                             <MjTile tile={t} tiny />
                           </div>
