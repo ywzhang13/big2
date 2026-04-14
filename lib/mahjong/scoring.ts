@@ -232,7 +232,16 @@ function scoreDecomposition(
   const allMelds = hand.melds;
   const pongMelds = allMelds.filter(isPong);
   const chiMelds = allMelds.filter(isChi);
-  const concealedPongs = pongMelds.filter((m) => m.isConcealed);
+  // 暗刻 only counts triplets that are truly concealed:
+  //   - Must come from concealed hand (isConcealed=true)
+  //   - If winning by ron (not self-draw), the triplet containing the
+  //     winning tile does NOT count (that tile was taken from a discard)
+  const winTileKey = tileKey(ctx.winTile);
+  const concealedPongs = pongMelds.filter((m) => {
+    if (!m.isConcealed) return false;
+    if (!ctx.isSelfDraw && m.tileKeys[0] === winTileKey) return false;
+    return true;
+  });
 
   // --- 平胡: all chi + pair, no 字牌 ---
   const allTileKeys = [
