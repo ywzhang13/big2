@@ -187,22 +187,28 @@ export default function MahjongPage() {
                            placeholder:text-white/30 outline-none focus:ring-2 focus:ring-[#C9A96E]/50 transition-all"
               />
 
-              {/* 圈數設定 */}
-              <div className="bg-white/5 rounded-2xl p-4 flex flex-col gap-3">
-                <p className="text-white/50 text-xs font-bold tracking-wider text-center">房間設定</p>
+              {/* 房間設定 */}
+              <div className="flex flex-col gap-3">
 
-                {/* 圈數 */}
-                <div className="flex items-center justify-between">
-                  <span className="text-white/70 text-sm">圈數</span>
-                  <div className="flex gap-1.5">
+                {/* 圈數 Card */}
+                <div className="rounded-2xl p-4"
+                  style={{
+                    background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+                    border: "1px solid rgba(201,169,110,0.15)",
+                  }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[#f0d68a] text-sm font-bold">圈數</span>
+                    <span className="text-white/40 text-xs">每圈4局</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
                     {[1, 2, 4, 8].map((n) => (
                       <button
                         key={n}
                         onClick={() => setTotalRounds(n)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all
+                        className={`py-2.5 rounded-xl text-base font-bold cursor-pointer transition-all duration-150 active:scale-95
                           ${totalRounds === n
-                            ? "bg-[#C9A96E] text-[#0f2a1a]"
-                            : "bg-white/10 text-white/50 hover:bg-white/15"
+                            ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
                           }`}
                       >
                         {n}圈
@@ -211,18 +217,25 @@ export default function MahjongPage() {
                   </div>
                 </div>
 
-                {/* 底 */}
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-white/70 text-sm">底</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                {/* 底 Card */}
+                <div className="rounded-2xl p-4"
+                  style={{
+                    background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+                    border: "1px solid rgba(201,169,110,0.15)",
+                  }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[#f0d68a] text-sm font-bold">底</span>
+                    <span className="text-white/40 text-xs">基本分</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
                     {[30, 50, 100, 200, 300, 500, 600, 1000].map((n) => (
                       <button
                         key={n}
                         onClick={() => setBasePoints(n)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[50px]
+                        className={`py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
                           ${basePoints === n
-                            ? "bg-[#C9A96E] text-[#0f2a1a]"
-                            : "bg-white/10 text-white/50 hover:bg-white/15"
+                            ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
                           }`}
                       >
                         {n}
@@ -231,18 +244,25 @@ export default function MahjongPage() {
                   </div>
                 </div>
 
-                {/* 台 */}
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-white/70 text-sm">每台</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                {/* 每台 Card */}
+                <div className="rounded-2xl p-4"
+                  style={{
+                    background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+                    border: "1px solid rgba(201,169,110,0.15)",
+                  }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[#f0d68a] text-sm font-bold">每台</span>
+                    <span className="text-white/40 text-xs">台數加成</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
                     {[10, 20, 30, 50, 100, 200].map((n) => (
                       <button
                         key={n}
                         onClick={() => setFanPoints(n)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[50px]
+                        className={`py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
                           ${fanPoints === n
-                            ? "bg-[#C9A96E] text-[#0f2a1a]"
-                            : "bg-white/10 text-white/50 hover:bg-white/15"
+                            ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
                           }`}
                       >
                         {n}
@@ -251,9 +271,19 @@ export default function MahjongPage() {
                   </div>
                 </div>
 
-                <p className="text-white/30 text-xs text-center">
-                  每局結算 = 底{basePoints} + 台數 × {fanPoints}
-                </p>
+                {/* 結算公式預覽 */}
+                <div className="rounded-xl px-4 py-3 flex items-center justify-center gap-2"
+                  style={{
+                    background: "rgba(0,0,0,0.25)",
+                    border: "1px dashed rgba(201,169,110,0.2)",
+                  }}>
+                  <span className="text-white/40 text-xs">每局</span>
+                  <span className="text-[#C9A96E] font-bold text-sm">{basePoints}</span>
+                  <span className="text-white/30 text-xs">+</span>
+                  <span className="text-white/60 text-xs">台數</span>
+                  <span className="text-white/30 text-xs">×</span>
+                  <span className="text-[#C9A96E] font-bold text-sm">{fanPoints}</span>
+                </div>
               </div>
 
               <button
