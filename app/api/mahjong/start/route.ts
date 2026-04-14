@@ -47,6 +47,20 @@ export async function POST(request: Request) {
 
     let state = initGame(playerInfos, savedSettings);
     state.roomCode = room.code;
+
+    // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
+    const hostSeat = state.players.findIndex((p) => p.id === room.host_id);
+    const baseSeat = hostSeat >= 0 ? hostSeat : 0;
+    const d1 = 1 + Math.floor(Math.random() * 6);
+    const d2 = 1 + Math.floor(Math.random() * 6);
+    const d3 = 1 + Math.floor(Math.random() * 6);
+    const sum = d1 + d2 + d3;
+    const firstDealerSeat = (baseSeat + ((sum - 1) % 4)) % 4;
+    state.dealerSeat = firstDealerSeat;
+    if (state.roundInfo) {
+      state.roundInfo.initialDealerSeat = firstDealerSeat;
+    }
+
     state = dealTiles(state);
 
     // Save full state to DB
