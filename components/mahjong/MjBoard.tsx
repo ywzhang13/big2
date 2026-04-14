@@ -28,6 +28,7 @@ interface MjBoardProps {
   dice?: [number, number, number];
   doorSeat?: number;
   playerScores?: number[];
+  dealerConsecutive?: number;
 }
 
 const WIND_CHARS = ["東", "南", "西", "北"];
@@ -323,6 +324,7 @@ export default function MjBoard({
   dice,
   doorSeat,
   playerScores,
+  dealerConsecutive,
 }: MjBoardProps) {
   const getOpponent = (offset: number) => {
     const seat = (mySeat + offset) % 4;
@@ -414,6 +416,20 @@ export default function MjBoard({
                 {/* Center: wind dial + last discard */}
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
                   <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} />
+                  {/* 連莊 badge — show when dealer is on streak */}
+                  {dealerConsecutive && dealerConsecutive > 0 && (
+                    <div
+                      className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider"
+                      style={{
+                        background: "linear-gradient(90deg, rgba(220,38,38,0.35) 0%, rgba(201,169,110,0.35) 100%)",
+                        border: "1px solid rgba(240,214,138,0.45)",
+                        color: "#fff8dc",
+                        textShadow: "0 0 8px rgba(255,140,0,0.5)",
+                      }}
+                    >
+                      連{dealerConsecutive} · 拉{dealerConsecutive}
+                    </div>
+                  )}
                   {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
                   {dice && !lastDiscard && (
                     <div className="flex flex-col items-center gap-1">

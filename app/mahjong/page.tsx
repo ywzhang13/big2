@@ -717,6 +717,7 @@ function RoomView({
         dice={state.dice}
         doorSeat={state.doorSeat}
         playerScores={state.playerScores}
+        dealerConsecutive={state.roundInfo?.dealerConsecutive}
       />
 
       {/* Leave confirmation modal (requester side) */}
