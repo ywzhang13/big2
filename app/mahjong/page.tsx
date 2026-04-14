@@ -414,6 +414,25 @@ function RoomView({
     }
   }, [state.leaveResult, onGoHome]);
 
+  // Detect self-draw (自摸) and trigger celebration overlay
+  const [showZimo, setShowZimo] = useState(false);
+  const lastWinnerSeatRef = useRef<number | null>(null);
+  useEffect(() => {
+    const w = state.winner;
+    if (!w || w.seat < 0) {
+      lastWinnerSeatRef.current = null;
+      return;
+    }
+    if (lastWinnerSeatRef.current === w.seat) return;
+    lastWinnerSeatRef.current = w.seat;
+    const isZimo = w.score.fans.some((f) => f.name.includes("自摸"));
+    if (isZimo) {
+      setShowZimo(true);
+      const t = setTimeout(() => setShowZimo(false), 3200);
+      return () => clearTimeout(t);
+    }
+  }, [state.winner]);
+
   // Pass roomId from create/join to the hook
   useEffect(() => {
     if (initialRoomId) {
@@ -743,6 +762,149 @@ function RoomView({
         </div>
       )}
 
+      {/* 自摸 celebration overlay — shows briefly before settlement */}
+      {showZimo && state.winner && state.winner.seat >= 0 && (
+        <div
+          className="absolute inset-0 z-[65] flex items-center justify-center overflow-hidden pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, rgba(255,215,0,0.35) 0%, rgba(0,0,0,0.9) 70%)",
+            animation: "zimo-flash 3200ms ease-out both",
+          }}
+        >
+          {/* Radiating rays */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(255,215,0,0.25) 15deg, transparent 30deg, transparent 45deg, rgba(255,215,0,0.25) 60deg, transparent 75deg, transparent 90deg, rgba(255,215,0,0.25) 105deg, transparent 120deg, transparent 135deg, rgba(255,215,0,0.25) 150deg, transparent 165deg, transparent 180deg, rgba(255,215,0,0.25) 195deg, transparent 210deg, transparent 225deg, rgba(255,215,0,0.25) 240deg, transparent 255deg, transparent 270deg, rgba(255,215,0,0.25) 285deg, transparent 300deg, transparent 315deg, rgba(255,215,0,0.25) 330deg, transparent 345deg, transparent 360deg)",
+              animation: "zimo-rotate 3200ms linear",
+              transformOrigin: "center",
+            }}
+          />
+          {/* Glowing confetti particles */}
+          {Array.from({ length: 24 }).map((_, i) => {
+            const angle = (i * 15 * Math.PI) / 180;
+            const dist = 40 + (i % 5) * 10;
+            const tx = Math.cos(angle) * dist;
+            const ty = Math.sin(angle) * dist;
+            return (
+              <div
+                key={i}
+                className="absolute"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background:
+                    i % 3 === 0 ? "#fbbf24" : i % 3 === 1 ? "#fde68a" : "#FFD700",
+                  boxShadow: "0 0 16px rgba(255,215,0,0.9)",
+                  animation: `zimo-sparkle 1800ms ease-out ${i * 40}ms infinite`,
+                  transform: `translate(${tx}vw, ${ty}vh)`,
+                }}
+              />
+            );
+          })}
+          {/* Main "自摸" text */}
+          <div
+            className="relative text-center"
+            style={{ animation: "zimo-zoom 1200ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both" }}
+          >
+            <p
+              className="text-[10vw] font-black tracking-[0.3em] leading-none"
+              style={{
+                color: "#fff8dc",
+                textShadow:
+                  "0 0 40px #FFD700, 0 0 80px #FFA500, 0 0 120px #FF6347, 0 4px 8px rgba(0,0,0,0.5)",
+                fontFamily: "serif",
+              }}
+            >
+              自摸
+            </p>
+            <p
+              className="mt-4 text-2xl font-bold"
+              style={{
+                color: "#f0d68a",
+                textShadow: "0 0 20px rgba(240,214,138,0.8)",
+                animation: "zimo-fade-in 800ms ease-out 400ms both",
+              }}
+            >
+              {state.winner.name}
+            </p>
+            <p
+              className="mt-1 text-sm font-bold tracking-wider"
+              style={{
+                color: "#fde68a",
+                animation: "zimo-fade-in 800ms ease-out 700ms both",
+              }}
+            >
+              共 {state.winner.score.totalFan} 台
+            </p>
+          </div>
+          <style jsx>{`
+            @keyframes zimo-flash {
+              0% {
+                opacity: 0;
+              }
+              10% {
+                opacity: 1;
+              }
+              85% {
+                opacity: 1;
+              }
+              100% {
+                opacity: 0;
+              }
+            }
+            @keyframes zimo-rotate {
+              from {
+                transform: rotate(0deg);
+              }
+              to {
+                transform: rotate(360deg);
+              }
+            }
+            @keyframes zimo-zoom {
+              0% {
+                transform: scale(0) rotate(-15deg);
+                opacity: 0;
+              }
+              60% {
+                transform: scale(1.15) rotate(3deg);
+                opacity: 1;
+              }
+              100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+              }
+            }
+            @keyframes zimo-sparkle {
+              0% {
+                transform: translate(0, 0) scale(0);
+                opacity: 0;
+              }
+              30% {
+                opacity: 1;
+              }
+              100% {
+                transform: translate(var(--tx, 20vw), var(--ty, -20vh)) scale(1.5);
+                opacity: 0;
+              }
+            }
+            @keyframes zimo-fade-in {
+              from {
+                opacity: 0;
+                transform: translateY(10px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Game over overlay — stays on the board */}
       {isFinished && state.winner && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -783,60 +945,6 @@ function RoomView({
                     <span>共 <span className="text-[#C9A96E] font-bold text-lg">{state.winner.score.totalFan}</span> 台</span>
                   )}
                 </p>
-                {/* Winner's final hand — prominently featured */}
-                {(() => {
-                  const wh = state.winner?.allHands?.find(h => h.seat === state.winner!.seat);
-                  if (!wh) return null;
-                  return (
-                    <div className="mt-3 rounded-xl p-2.5"
-                      style={{
-                        background: "linear-gradient(145deg, rgba(201,169,110,0.18) 0%, rgba(201,169,110,0.05) 100%)",
-                        border: "1px solid rgba(201,169,110,0.35)",
-                      }}>
-                      <p className="text-[10px] text-[#f0d68a]/70 font-bold tracking-wider text-center mb-1.5">胡牌牌型</p>
-                      <div className="flex flex-wrap justify-center gap-[1px] items-end">
-                        {wh.hand.map((t) => (
-                          <MjTile key={`win-${t.id}`} tile={t} small />
-                        ))}
-                        {wh.revealed.length > 0 && (
-                          <div className="ml-1 flex gap-1 items-end border-l border-[#C9A96E]/30 pl-1">
-                            {wh.revealed.map((meld, mi) => (
-                              <div key={mi} className="flex gap-0">
-                                {meld.tiles.map((t) => (
-                                  <MjTile
-                                    key={`winr-${mi}-${t.id}`}
-                                    tile={t}
-                                    small
-                                    faceDown={meld.type === "concealed_kong"}
-                                  />
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {wh.flowers.length > 0 && (
-                        <div className="flex justify-center gap-[1px] mt-1 pt-1 border-t border-[#C9A96E]/20">
-                          {wh.flowers.map((f) => (
-                            <MjTile key={`winf-${f.id}`} tile={f} small />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Fan breakdown */}
-                {state.winner.score.fans.length > 0 && (
-                  <div className="mt-3 border-t border-white/10 pt-3">
-                    {state.winner.score.fans.map((fan, i) => (
-                      <div key={i} className="flex justify-between text-sm px-2 py-1">
-                        <span className="text-white/70">{fan.name}</span>
-                        <span className="text-[#C9A96E] font-bold">{fan.value} 台</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -922,6 +1030,18 @@ function RoomView({
               </div>
             )}
 
+            {/* Fan breakdown — below 各家結算 */}
+            {state.winner && state.winner.seat >= 0 && state.winner.score.fans.length > 0 && (
+              <div className="mt-3 border-t border-white/10 pt-3">
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">台數明細</p>
+                {state.winner.score.fans.map((fan, i) => (
+                  <div key={i} className="flex justify-between text-sm px-2 py-1">
+                    <span className="text-white/70">{fan.name}</span>
+                    <span className="text-[#C9A96E] font-bold">{fan.value} 台</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
           </div>
           {/* Sticky bottom: Action buttons + Ready check (always visible) */}
