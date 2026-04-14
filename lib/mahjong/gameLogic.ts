@@ -383,9 +383,12 @@ export function executeAction(
       if (idx === -1) throw new Error("Chi tile not in hand");
       player.hand.splice(idx, 1);
     }
+    // Display order: put the taken (discarded) tile in the middle,
+    // flanked by the two hand tiles (traditional 台灣麻將 convention).
+    const [t1, t2] = action.tiles;
     const meld: Meld = {
       type: "chi",
-      tiles: sortTiles([...action.tiles, disc]),
+      tiles: [t1, disc, t2],
       from: s.lastDiscard.from,
     };
     player.revealed.push(meld);
