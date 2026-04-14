@@ -78,17 +78,18 @@ export async function POST(request: Request) {
     });
 
     // Priority: win > pong/kong > chi
-    // If any player has win/pong/kong, suppress chi broadcasts until those
-    // higher-priority players have passed (handled in action route pass).
-    const hasHighPriority = actions.some(
-      (a) => a.type === "win" || a.type === "pong" || a.type === "kong"
-    );
-
+    // Suppress chi only if a DIFFERENT player has pong/kong/win. If the same
+    // player has both options, they should see both and choose.
     const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
     for (const actionSeat of playerSeatsWithActions) {
       const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
-      // Suppress chi if there's any higher-priority action from anyone
-      const filtered = hasHighPriority
+      // Check if a *different* seat has higher-priority action pending
+      const otherHasHighPriority = actions.some(
+        (a) =>
+          a.playerSeat !== actionSeat &&
+          (a.type === "win" || a.type === "pong" || a.type === "kong")
+      );
+      const filtered = otherHasHighPriority
         ? playerActions.filter((a) => a.type !== "chi")
         : playerActions;
       if (filtered.length === 0) continue;
