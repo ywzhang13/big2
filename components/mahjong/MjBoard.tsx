@@ -27,6 +27,7 @@ interface MjBoardProps {
   onAction: (type: string, tiles?: Tile[]) => void;
   dice?: [number, number, number];
   doorSeat?: number;
+  playerScores?: number[];
 }
 
 const WIND_CHARS = ["東", "南", "西", "北"];
@@ -96,11 +97,13 @@ function PlayerPanel({
   position,
   isCurrent,
   windChar,
+  score,
 }: {
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
   isCurrent: boolean;
   windChar: string;
+  score?: number;
 }) {
   if (!player) return null;
 
@@ -132,6 +135,13 @@ function PlayerPanel({
           <span className="text-[8px] text-white/30">
             {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
           </span>
+          {score != null && (
+            <span className={`text-[9px] font-bold leading-tight ${
+              score > 0 ? "text-green-400" : score < 0 ? "text-red-400" : "text-white/40"
+            }`}>
+              {score > 0 ? "+" : ""}{score}
+            </span>
+          )}
         </div>
       </div>
 
@@ -289,6 +299,7 @@ export default function MjBoard({
   onAction,
   dice,
   doorSeat,
+  playerScores,
 }: MjBoardProps) {
   const getOpponent = (offset: number) => {
     const seat = (mySeat + offset) % 4;
@@ -338,6 +349,7 @@ export default function MjBoard({
           position="top"
           isCurrent={top?.seat === currentTurn}
           windChar={getWindChar(top?.seat ?? 2)}
+          score={top && playerScores ? playerScores[top.seat] : undefined}
         />
       </div>
 
@@ -350,6 +362,7 @@ export default function MjBoard({
             position="left"
             isCurrent={left?.seat === currentTurn}
             windChar={getWindChar(left?.seat ?? 3)}
+            score={left && playerScores ? playerScores[left.seat] : undefined}
           />
         </div>
 
@@ -515,6 +528,7 @@ export default function MjBoard({
             position="right"
             isCurrent={right?.seat === currentTurn}
             windChar={getWindChar(right?.seat ?? 1)}
+            score={right && playerScores ? playerScores[right.seat] : undefined}
           />
         </div>
       </div>
@@ -532,6 +546,14 @@ export default function MjBoard({
           </div>
           <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
           {me?.isDealer && <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">莊</span>}
+          {playerScores && mySeat >= 0 && (
+            <span className={`text-[11px] font-bold ${
+              playerScores[mySeat] > 0 ? "text-green-400" :
+              playerScores[mySeat] < 0 ? "text-red-400" : "text-white/40"
+            }`}>
+              {playerScores[mySeat] > 0 ? "+" : ""}{playerScores[mySeat]}
+            </span>
+          )}
           <span className="text-[10px] text-white/30 ml-auto">{myHand.length} 張</span>
 
           {/* Flowers */}

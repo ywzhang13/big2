@@ -623,6 +623,7 @@ function RoomView({
         onAction={doAction}
         dice={state.dice}
         doorSeat={state.doorSeat}
+        playerScores={state.playerScores}
       />
 
       {/* Game over overlay — stays on the board */}
