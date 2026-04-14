@@ -127,20 +127,15 @@ export async function POST(request: Request) {
 
       await saveGameState(roomId, newState);
 
-      // Broadcast that the turn advances (no action taken)
+      const turnAdvanced = !newState.pendingActions;
+      // Broadcast pass + authoritative turn state in one payload so clients
+      // can update currentTurn + hasDrawn atomically (no flash).
       await mjBroadcast(room.code, "mj_pass", {
         seat,
-        allPassed: !newState.pendingActions, // true if turn advanced
+        allPassed: turnAdvanced,
+        currentTurn: newState.currentTurn,
+        hasDrawn: newState.hasDrawn,
       });
-
-      // When all passed and turn advanced, send mj_turn_advance so clients
-      // can update currentTurn immediately (avoid 5s polling lag).
-      if (!newState.pendingActions) {
-        await mjBroadcast(room.code, "mj_turn_advance", {
-          currentTurn: newState.currentTurn,
-          hasDrawn: newState.hasDrawn,
-        });
-      }
 
       // If pending window still open, re-reveal next-tier actions as
       // higher-priority players finish. Uses same tier logic as discard route:
