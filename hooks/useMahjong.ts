@@ -682,12 +682,12 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     channelRef.current = channel;
 
-    // Periodic state poll for recovery
+    // Periodic state poll for recovery — 2s for snappy stuck-state detection
     const pollTimer = setInterval(() => {
       const rid = roomIdRef.current;
       if (!rid) return;
       fetchState(rid);
-    }, 5000);
+    }, 2000);
 
     return () => {
       clearInterval(pollTimer);
@@ -767,6 +767,12 @@ export function useMahjong(roomCode: string, playerName: string) {
           playerId: myId,
           tileId,
         });
+        // After discard API succeeds, do a quick state fetch after 500ms in
+        // case broadcasts were delayed/dropped — keeps UI in sync.
+        setTimeout(() => {
+          const rid2 = roomIdRef.current;
+          if (rid2) fetchState(rid2);
+        }, 500);
       } catch (err) {
         console.error("[mj] discard failed:", err);
         // Revert on failure — poll will fix state
