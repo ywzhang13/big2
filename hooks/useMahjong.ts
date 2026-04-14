@@ -487,6 +487,14 @@ export function useMahjong(roomCode: string, playerName: string) {
           tiles: msg.tiles,
           from: prev.lastDiscard?.from,
         };
+        // If I'm the one who did chi/pong/kong, immediately remove the used
+        // tiles from my hand to avoid a brief window where stale tiles are
+        // clickable before mj_hand_update arrives (causes "卡住" feel).
+        const meldTileIds = new Set(msg.tiles.map((t) => t.id));
+        const updatedHand =
+          msg.seat === prev.mySeat
+            ? prev.myHand.filter((t) => !meldTileIds.has(t.id))
+            : prev.myHand;
         return {
           ...prev,
           currentTurn: msg.seat,
@@ -494,6 +502,7 @@ export function useMahjong(roomCode: string, playerName: string) {
           availableActions: [],
           hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
           actionNotice: { seat: msg.seat, type: msg.type },
+          myHand: updatedHand,
           players: prev.players.map((p) =>
             p.seat === msg.seat
               ? {
