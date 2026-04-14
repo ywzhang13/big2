@@ -1099,9 +1099,19 @@ function RoomView({
                     </div>
                   </div>
 
-                  {/* My ready button / countdown */}
+                  {/* My ready button / start next game */}
                   {state.nextGameAllReady ? (
-                    <NextGameCountdown />
+                    <button
+                      onClick={nextGame}
+                      className="py-3 rounded-xl font-bold cursor-pointer active:scale-95 transition-all"
+                      style={{
+                        background: "linear-gradient(90deg, #C9A96E 0%, #e8c97a 50%, #C9A96E 100%)",
+                        color: "#0f2a1a",
+                        boxShadow: "0 4px 20px rgba(201,169,110,0.4)",
+                      }}
+                    >
+                      ▶ 開始下一局
+                    </button>
                   ) : state.nextGameReady?.includes(state.myId) ? (
                     <div className="py-3 rounded-xl bg-white/10 text-center">
                       <p className="text-white/50 text-sm">已確認，等待其他玩家...</p>

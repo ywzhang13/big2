@@ -40,35 +40,47 @@ export async function POST(request: Request) {
       return Response.json({ error: "玩家不在此房間" }, { status: 403 });
     }
 
-    // Mark this player as ready
+    // Two-phase flow:
+    //   Phase 1: first click by each player → add to readyList
+    //            when readyList hits 4, broadcast allReady (do NOT start yet)
+    //   Phase 2: second click by anyone already in readyList → actually start
     const ready = new Set(state.nextGameReady ?? []);
+    const alreadyReady = ready.has(playerId);
     ready.add(playerId);
     const readyList = Array.from(ready);
+    const allReady = readyList.length >= 4;
 
-    // Need all 4 players ready before starting the next game
-    if (readyList.length < 4) {
-      // Save partial ready state
+    // Phase 1: still collecting votes
+    if (!allReady) {
       const partialState: MahjongGameState = {
         ...state,
         nextGameReady: readyList,
       };
       await saveGameState(roomId, partialState);
-
       await mjBroadcast(room.code, "mj_next_game_ready", {
         readyIds: readyList,
+        allReady: false,
       });
-
       return Response.json({ success: true, ready: readyList.length, total: 4 });
     }
 
-    // All 4 ready — give everyone a moment to see the settlement before
-    // transitioning. Broadcast "all ready" first, wait 3s, then start.
-    await mjBroadcast(room.code, "mj_next_game_ready", {
-      readyIds: readyList,
-      allReady: true,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // All 4 ready: if this is the player's first click (fourth approval)
+    // just broadcast allReady and keep the settlement visible. Anyone can
+    // click "開始下一局" afterwards to actually transition.
+    if (!alreadyReady) {
+      const partialState: MahjongGameState = {
+        ...state,
+        nextGameReady: readyList,
+      };
+      await saveGameState(roomId, partialState);
+      await mjBroadcast(room.code, "mj_next_game_ready", {
+        readyIds: readyList,
+        allReady: true,
+      });
+      return Response.json({ success: true, ready: 4, total: 4, allReady: true });
+    }
 
+    // Phase 2: player already in ready list + all ready → actually start
     const clearedState: MahjongGameState = {
       ...state,
       nextGameReady: [],
