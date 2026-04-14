@@ -23,8 +23,8 @@ export default function MahjongPage() {
   const [createdRoomId, setCreatedRoomId] = useState("");
   // Room settings
   const [totalRounds, setTotalRounds] = useState(4);
-  const [basePoints, setBasePoints] = useState(10);
-  const [fanPoints, setFanPoints] = useState(10);
+  const [basePoints, setBasePoints] = useState(100);
+  const [fanPoints, setFanPoints] = useState(50);
 
   // Check hash on load
   useEffect(() => {
@@ -212,14 +212,14 @@ export default function MahjongPage() {
                 </div>
 
                 {/* 底 */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-white/70 text-sm">底</span>
-                  <div className="flex gap-1.5">
-                    {[5, 10, 20, 50, 100].map((n) => (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[30, 50, 100, 200, 300, 500, 600, 1000].map((n) => (
                       <button
                         key={n}
                         onClick={() => setBasePoints(n)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[44px]
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[50px]
                           ${basePoints === n
                             ? "bg-[#C9A96E] text-[#0f2a1a]"
                             : "bg-white/10 text-white/50 hover:bg-white/15"
@@ -232,14 +232,14 @@ export default function MahjongPage() {
                 </div>
 
                 {/* 台 */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-white/70 text-sm">每台</span>
-                  <div className="flex gap-1.5">
-                    {[5, 10, 20, 50, 100].map((n) => (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[10, 20, 30, 50, 100, 200].map((n) => (
                       <button
                         key={n}
                         onClick={() => setFanPoints(n)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[44px]
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-all min-w-[50px]
                           ${fanPoints === n
                             ? "bg-[#C9A96E] text-[#0f2a1a]"
                             : "bg-white/10 text-white/50 hover:bg-white/15"
