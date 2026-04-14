@@ -836,29 +836,81 @@ function RoomView({
               </button>
             </div>
 
-            {/* Game over final standings */}
+            {/* Game over final standings — 總積分榜 */}
             {state.gameOver && state.playerScores && (
-              <div className="mt-4 border-t border-[#C9A96E]/30 pt-3">
-                <p className="text-[#f0d68a] text-sm font-bold text-center mb-2">
-                  {state.roomSettings?.totalRounds}圈結束 — 最終排名
-                </p>
-                <div className="flex flex-col gap-1">
+              <div
+                className="mt-4 rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(145deg, rgba(201,169,110,0.15) 0%, rgba(201,169,110,0.03) 100%)",
+                  border: "1.5px solid rgba(201,169,110,0.4)",
+                  boxShadow: "0 4px 20px rgba(201,169,110,0.15)",
+                }}
+              >
+                <div className="text-center mb-3">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full"
+                    style={{ background: "rgba(201,169,110,0.2)" }}>
+                    <span className="text-[#f0d68a] text-xs font-bold tracking-wider">
+                      {state.roomSettings?.totalRounds}圈結束
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-bold mt-2" style={{
+                    color: "#f0d68a",
+                    textShadow: "0 0 20px rgba(240,214,138,0.4)",
+                  }}>
+                    總積分榜
+                  </h2>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
                   {[...state.players]
                     .sort((a, b) => (state.playerScores![b.seat]) - (state.playerScores![a.seat]))
-                    .map((p, rank) => (
-                      <div key={p.seat} className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg">
-                        <span className="text-white/70 text-sm">
-                          <span className="text-[#C9A96E] font-bold mr-2">#{rank + 1}</span>
-                          {p.name}
-                        </span>
-                        <span className={`font-bold ${
-                          state.playerScores![p.seat] > 0 ? "text-green-400" :
-                          state.playerScores![p.seat] < 0 ? "text-red-400" : "text-white/50"
-                        }`}>
-                          {state.playerScores![p.seat] > 0 ? "+" : ""}{state.playerScores![p.seat]}
-                        </span>
-                      </div>
-                    ))}
+                    .map((p, rank) => {
+                      const score = state.playerScores![p.seat];
+                      const rankColors = [
+                        { bg: "linear-gradient(90deg, rgba(255,215,0,0.25) 0%, rgba(255,215,0,0.08) 100%)", border: "rgba(255,215,0,0.5)", label: "#FFD700", icon: "冠" },
+                        { bg: "linear-gradient(90deg, rgba(192,192,192,0.2) 0%, rgba(192,192,192,0.05) 100%)", border: "rgba(192,192,192,0.45)", label: "#C0C0C0", icon: "亞" },
+                        { bg: "linear-gradient(90deg, rgba(205,127,50,0.22) 0%, rgba(205,127,50,0.05) 100%)", border: "rgba(205,127,50,0.45)", label: "#CD7F32", icon: "季" },
+                        { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)", label: "#6b7280", icon: "殿" },
+                      ];
+                      const c = rankColors[rank] || rankColors[3];
+                      return (
+                        <div
+                          key={p.seat}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                          style={{
+                            background: c.bg,
+                            border: `1px solid ${c.border}`,
+                          }}
+                        >
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0"
+                            style={{
+                              background: c.label,
+                              color: rank < 3 ? "#1a1408" : "#fff",
+                              boxShadow: rank === 0 ? "0 0 12px rgba(255,215,0,0.5)" : "none",
+                            }}
+                          >
+                            {c.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-white truncate">
+                              {p.name}
+                              {p.seat === state.mySeat && <span className="text-white/40 text-xs ml-1">(你)</span>}
+                            </p>
+                            <p className="text-[10px] text-white/40">
+                              第 {rank + 1} 名
+                            </p>
+                          </div>
+                          <span
+                            className={`text-lg font-black ${
+                              score > 0 ? "text-green-400" : score < 0 ? "text-red-400" : "text-white/50"
+                            }`}
+                          >
+                            {score > 0 ? "+" : ""}{score}
+                          </span>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
