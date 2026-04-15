@@ -450,7 +450,18 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
       roundScore: roundScores[p.id] || 0,
       score: (state.scores[p.id] || 0) + (roundScores[p.id] || 0),
     }));
-    return <GameOver results={results} winnerLastPlay={state.winnerLastPlay} onGoHome={onGoHome} onPlayAgain={isHost ? continueGame : undefined} />;
+    return (
+      <GameOver
+        results={results}
+        winnerLastPlay={state.winnerLastPlay}
+        onGoHome={onGoHome}
+        // 任何玩家都能按「同意下一局」（改為四家同意制，跟麻將一致）
+        onPlayAgain={continueGame}
+        myId={state.myId}
+        readyIds={state.readyPlayers}
+        totalPlayers={state.players.length}
+      />
+    );
   }
 
   // Playing

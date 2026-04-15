@@ -161,6 +161,12 @@ export function useGame(roomCode: string, playerName: string) {
       });
     });
 
+    // Next-game 四家同意制（繼續下一局）
+    channel.on("broadcast", { event: "next_game_ready" }, ({ payload }) => {
+      const { readyIds } = payload as { readyIds: string[] };
+      setState((prev) => ({ ...prev, readyPlayers: new Set(readyIds) }));
+    });
+
     channel.on("broadcast", { event: "game_start" }, ({ payload }) => {
       const msg = payload as {
         currentTurn: number;

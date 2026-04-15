@@ -17,6 +17,10 @@ interface GameOverProps {
   winnerLastPlay?: { cards: string[]; comboType: string; playerName: string };
   onGoHome: () => void;
   onPlayAgain?: () => void;
+  // 四家同意制：myId + readyIds 傳入後，按鈕顯示進度並只觸發一次 agree
+  myId?: string;
+  readyIds?: Set<string>;
+  totalPlayers?: number;
 }
 
 const COMBO_NAMES: Record<string, string> = {
@@ -24,7 +28,17 @@ const COMBO_NAMES: Record<string, string> = {
   fullHouse: "葫蘆", fourOfAKind: "鐵支", straightFlush: "同花順",
 };
 
-export default function GameOver({ results, winnerLastPlay, onGoHome, onPlayAgain }: GameOverProps) {
+export default function GameOver({
+  results,
+  winnerLastPlay,
+  onGoHome,
+  onPlayAgain,
+  myId,
+  readyIds,
+  totalPlayers = 4,
+}: GameOverProps) {
+  const iAgreed = !!(myId && readyIds?.has(myId));
+  const readyCount = readyIds?.size ?? 0;
   // Sort: winner first, then by remaining cards (fewer = better)
   const sorted = [...results].sort((a, b) => {
     if (a.finishOrder === 1) return -1;
@@ -125,11 +139,20 @@ export default function GameOver({ results, winnerLastPlay, onGoHome, onPlayAgai
       <div className="flex flex-col gap-3 w-full max-w-sm mt-2">
         {onPlayAgain && (
           <button
-            onClick={onPlayAgain}
-            className="w-full px-8 py-3.5 rounded-2xl bg-gold text-felt font-bold text-lg
-                       cursor-pointer active:scale-95 transition-transform"
+            onClick={iAgreed ? undefined : onPlayAgain}
+            disabled={iAgreed}
+            className={`w-full px-8 py-3.5 rounded-2xl font-bold text-lg
+                       cursor-pointer active:scale-95 transition-transform
+                       ${iAgreed
+                         ? "bg-white/10 text-white/60 cursor-not-allowed"
+                         : "bg-gold text-felt"
+                       }`}
           >
-            繼續遊戲
+            {iAgreed
+              ? `等待其他玩家同意… ${readyCount}/${totalPlayers}`
+              : readyCount > 0
+                ? `同意下一局 (${readyCount}/${totalPlayers})`
+                : "同意下一局"}
           </button>
         )}
         <button
