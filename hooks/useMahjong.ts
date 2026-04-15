@@ -169,6 +169,7 @@ export function useMahjong(roomCode: string, playerName: string) {
           hasDrawn: boolean;
           winner?: { seat: number; score: ScoreResult };
           hand?: Tile[];
+          myAvailableActions?: { type: string; tiles?: Tile[] }[];
         } | null;
       }>("GET", `/api/mahjong/state?roomId=${rid}&playerId=${myId}`);
 
@@ -222,8 +223,12 @@ export function useMahjong(roomCode: string, playerName: string) {
         lastDiscard: gs.lastDiscard,
         wallRemaining: gs.wallCount,
         hasDrawn: gs.hasDrawn,
-        // Keep availableActions from broadcast — polling doesn't provide them
-        availableActions: prev.availableActions,
+        // availableActions: prefer broadcast-delivered value (fresh), but
+        // fall back to polled myAvailableActions if the broadcast was missed
+        // so chi/pong/kong buttons appear even after realtime drops.
+        availableActions: prev.availableActions.length > 0
+          ? prev.availableActions
+          : (gs.myAvailableActions ?? []),
         // Preserve allHands from mj_game_over broadcast — polling state
         // doesn't include allHands, so we don't want to overwrite it.
         winner: gs.winner

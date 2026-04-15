@@ -30,8 +30,9 @@ function getTileSvg(tile: Tile): string {
 }
 
 export default function MjTile({ tile, selected, onClick, small, tiny, faceDown }: MjTileProps) {
-  const w = tiny ? 20 : small ? 27 : 36;
-  const h = tiny ? 27 : small ? 38 : 49;
+  // tiny bumped +30% so discard pool is easier to read (26×35 instead of 20×27)
+  const w = tiny ? 26 : small ? 27 : 36;
+  const h = tiny ? 35 : small ? 38 : 49;
 
   const characterSrc = faceDown
     ? null

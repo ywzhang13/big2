@@ -385,8 +385,10 @@ export default function MjBoard({
 
             {/* 4-sided discard pool using tiny tiles — no overflow hidden */}
             <div className="absolute inset-0 flex flex-col p-3">
-              {/* Top discards (10 per row, auto wrap) */}
-              <div className="flex flex-wrap justify-center gap-[1px] mx-auto" style={{ maxWidth: 240 }}>
+              {/* Top discards — top player faces down, so their right is
+                  screen LEFT. Row-reverse + justify-start puts first tile at
+                  screen RIGHT and grows leftward (toward their right). */}
+              <div className="flex flex-wrap flex-row-reverse justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
                 {(top?.discards || []).map((t, i) => (
                   <MjTile key={`top-${t.id}-${i}`} tile={t} tiny />
                 ))}
@@ -394,8 +396,9 @@ export default function MjBoard({
 
               {/* Middle: left | center | right */}
               <div className="flex-1 flex items-center min-h-0">
-                {/* Left discards: vertical columns (5 per column), rotated facing center */}
-                <div className="flex-shrink-0 flex flex-row-reverse gap-[1px] items-start" style={{ maxWidth: 100 }}>
+                {/* Left discards — left player faces right, so their right is
+                    screen UP. Each column fills bottom→top (flex-col-reverse). */}
+                <div className="flex-shrink-0 flex flex-row-reverse gap-[1px] items-end" style={{ maxWidth: 130 }}>
                   {(() => {
                     const tiles = (left?.discards || []);
                     const cols: typeof tiles[] = [];
@@ -403,9 +406,9 @@ export default function MjBoard({
                       cols.push(tiles.slice(i, i + 5));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col gap-[1px]">
+                      <div key={ci} className="flex flex-col-reverse gap-[1px]">
                         {col.map((t, ti) => (
-                          <div key={`left-${t.id}-${ti}`} style={{ transform: "rotate(90deg)", width: 22, height: 22 }}>
+                          <div key={`left-${t.id}-${ti}`} style={{ transform: "rotate(90deg)", width: 29, height: 29 }}>
                             <MjTile tile={t} tiny />
                           </div>
                         ))}
@@ -459,8 +462,9 @@ export default function MjBoard({
                   )}
                 </div>
 
-                {/* Right discards: vertical columns (5 per column), rotated facing center */}
-                <div className="flex-shrink-0 flex flex-row gap-[1px] items-start" style={{ maxWidth: 100 }}>
+                {/* Right discards — right player faces left, so their right is
+                    screen DOWN. Each column fills top→down (default flex-col). */}
+                <div className="flex-shrink-0 flex flex-row gap-[1px] items-start" style={{ maxWidth: 130 }}>
                   {(() => {
                     const tiles = (right?.discards || []);
                     const cols: typeof tiles[] = [];
@@ -470,7 +474,7 @@ export default function MjBoard({
                     return cols.map((col, ci) => (
                       <div key={ci} className="flex flex-col gap-[1px]">
                         {col.map((t, ti) => (
-                          <div key={`right-${t.id}-${ti}`} style={{ transform: "rotate(-90deg)", width: 22, height: 22 }}>
+                          <div key={`right-${t.id}-${ti}`} style={{ transform: "rotate(-90deg)", width: 29, height: 29 }}>
                             <MjTile tile={t} tiny />
                           </div>
                         ))}
@@ -480,8 +484,10 @@ export default function MjBoard({
                 </div>
               </div>
 
-              {/* Bottom discards (10 per row, auto wrap) */}
-              <div className="flex flex-wrap justify-center gap-[1px] mx-auto" style={{ maxWidth: 240 }}>
+              {/* Bottom (me) discards — I face up, my right is screen RIGHT.
+                  justify-start puts first tile at screen left, new tiles
+                  appended to the right (toward my right side). */}
+              <div className="flex flex-wrap justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
                 {(me?.discards || []).map((t, i) => (
                   <MjTile key={`me-${t.id}-${i}`} tile={t} tiny />
                 ))}

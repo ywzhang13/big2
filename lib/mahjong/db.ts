@@ -186,18 +186,56 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
   };
 }
 
-/** Build state view for a specific player (includes their hand) */
+/** Build state view for a specific player (includes their hand and any
+ *  actions they can currently take). `myAvailableActions` is a recovery
+ *  path: if the realtime mj_available_actions broadcast was missed or the
+ *  client reloaded, the polled state can still surface the chi/pong/kong/
+ *  win buttons. */
 export function toPlayerGameState(
   state: MahjongGameState,
   playerId: string
-): PublicGameState & { hand?: Tile[] } {
+): PublicGameState & {
+  hand?: Tile[];
+  myAvailableActions?: { type: string; tiles?: Tile[] }[];
+} {
   const pub = toPublicGameState(state);
   const player = state.players.find((p) => p.id === playerId);
   // Defensive: filter out any flower tiles that shouldn't be in hand
   const hand = player?.hand.filter((t) => t.suit !== "f");
+
+  // Compute my available actions if this player is a potential actor on the
+  // current pending discard and hasn't passed yet. Lazy-load to avoid
+  // circular import.
+  let myAvailableActions: { type: string; tiles?: Tile[] }[] | undefined;
+  if (player && state.pendingActions && state.lastDiscard) {
+    const mySeat = player.seat;
+    const isPending =
+      state.pendingActions.potentialActors.includes(mySeat) &&
+      !state.pendingActions.passedActors.includes(mySeat);
+    if (isPending) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAvailableActions } = require("./gameLogic") as typeof import("./gameLogic");
+      const all = getAvailableActions(state);
+      // Apply the same priority filter the broadcast uses
+      const tierOf = (type: string) =>
+        type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
+      const passedSet = new Set(state.pendingActions.passedActors);
+      const unpassed = all.filter((a) => !passedSet.has(a.playerSeat));
+      const mine = unpassed.filter((a) => a.playerSeat === mySeat);
+      const otherTiers = unpassed
+        .filter((a) => a.playerSeat !== mySeat)
+        .map((a) => tierOf(a.type));
+      const minOtherTier = otherTiers.length > 0 ? Math.min(...otherTiers) : 999;
+      myAvailableActions = mine
+        .filter((a) => tierOf(a.type) <= minOtherTier)
+        .map((a) => ({ type: a.type, tiles: a.tiles }));
+    }
+  }
+
   return {
     ...pub,
     hand,
+    myAvailableActions,
   };
 }
 
