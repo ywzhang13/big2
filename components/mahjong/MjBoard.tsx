@@ -122,36 +122,36 @@ function PlayerPanel({
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
-      <div className={`relative flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
+      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
         ${isCurrent
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
         }`}>
-        {/* 連N pill — sits fully above the badge (bottom-full + mb-1) so it
-            doesn't overlap the name. */}
-        {player.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
-          <span
-            className="absolute bottom-full right-0 mb-1 px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
-            style={{
-              background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
-              color: "#fff8dc",
-              border: "1px solid rgba(240,214,138,0.6)",
-              boxShadow: "0 0 8px rgba(255,140,0,0.5)",
-              textShadow: "0 1px 2px rgba(0,0,0,0.6)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            連{dealerConsecutive}·拉{dealerConsecutive}
-          </span>
-        )}
         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
           ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
           {windChar}
         </div>
         <div className="flex flex-col">
-          <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
-            {player.name}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
+              {player.name}
+            </span>
+            {/* 連N pill — inline next to the name, no absolute positioning so
+                it never clips against viewport edges. */}
+            {player.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
+              <span
+                className="px-1 py-[1px] rounded-full text-[8px] font-black tracking-wider"
+                style={{
+                  background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
+                  color: "#fff8dc",
+                  border: "1px solid rgba(240,214,138,0.6)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                連{dealerConsecutive}
+              </span>
+            )}
+          </div>
           <span className="text-[8px] text-white/30">
             {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
           </span>
@@ -402,11 +402,15 @@ export default function MjBoard({
           />
         </div>
 
-        {/* Center table area */}
+        {/* Center table area — auto-scales with viewport via clamp() */}
         <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0 overflow-hidden">
-          {/* Table surface with wood-frame border — 30% larger */}
-          <div className="relative w-full max-w-[624px] max-h-[416px] rounded-xl overflow-hidden"
+          {/* Table surface with wood-frame border — size driven by viewport:
+              max-width up to 900px (or 78vw on narrower screens), max-height
+              up to 600px (or 62vh). Aspect ratio 3:2 locked. */}
+          <div className="relative w-full rounded-xl overflow-hidden"
             style={{
+              maxWidth: "min(900px, 78vw)",
+              maxHeight: "min(600px, 62vh)",
               aspectRatio: "3 / 2",
               background: "linear-gradient(145deg, #1e4a2e 0%, #153a22 50%, #0f2a1a 100%)",
               border: "3px solid #8B6914",
@@ -427,8 +431,10 @@ export default function MjBoard({
               {/* Middle: left | center | right */}
               <div className="flex-1 flex items-center min-h-0">
                 {/* Left discards — left player faces right, so their right is
-                    screen UP. Each column fills bottom→top (flex-col-reverse). */}
-                <div className="flex-shrink-0 flex flex-row-reverse gap-[1px] items-end" style={{ maxWidth: 130 }}>
+                    screen UP. Each column fills bottom→top (flex-col-reverse).
+                    Wrapper dims (35×26) match the rotated tile's visual
+                    bounding box so sibling columns don't overlap. */}
+                <div className="flex-shrink-0 flex flex-row-reverse gap-[2px] items-end" style={{ maxWidth: 160 }}>
                   {(() => {
                     const tiles = (left?.discards || []);
                     const cols: typeof tiles[] = [];
@@ -436,10 +442,21 @@ export default function MjBoard({
                       cols.push(tiles.slice(i, i + 5));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col-reverse gap-[1px]">
+                      <div key={ci} className="flex flex-col-reverse gap-[1px]" style={{ width: 35 }}>
                         {col.map((t, ti) => (
-                          <div key={`left-${t.id}-${ti}`} style={{ transform: "rotate(90deg)", width: 29, height: 29 }}>
-                            <MjTile tile={t} tiny />
+                          <div
+                            key={`left-${t.id}-${ti}`}
+                            style={{
+                              width: 35,
+                              height: 26,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <div style={{ transform: "rotate(90deg)" }}>
+                              <MjTile tile={t} tiny />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -480,8 +497,9 @@ export default function MjBoard({
                 </div>
 
                 {/* Right discards — right player faces left, so their right is
-                    screen DOWN. Each column fills top→down (default flex-col). */}
-                <div className="flex-shrink-0 flex flex-row gap-[1px] items-start" style={{ maxWidth: 130 }}>
+                    screen DOWN. Each column fills top→down (default flex-col).
+                    Wrapper dims match rotated bounding box (35×26). */}
+                <div className="flex-shrink-0 flex flex-row gap-[2px] items-start" style={{ maxWidth: 160 }}>
                   {(() => {
                     const tiles = (right?.discards || []);
                     const cols: typeof tiles[] = [];
@@ -489,10 +507,21 @@ export default function MjBoard({
                       cols.push(tiles.slice(i, i + 5));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col gap-[1px]">
+                      <div key={ci} className="flex flex-col gap-[1px]" style={{ width: 35 }}>
                         {col.map((t, ti) => (
-                          <div key={`right-${t.id}-${ti}`} style={{ transform: "rotate(-90deg)", width: 29, height: 29 }}>
-                            <MjTile tile={t} tiny />
+                          <div
+                            key={`right-${t.id}-${ti}`}
+                            style={{
+                              width: 35,
+                              height: 26,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <div style={{ transform: "rotate(-90deg)" }}>
+                              <MjTile tile={t} tiny />
+                            </div>
                           </div>
                         ))}
                       </div>
