@@ -1,6 +1,7 @@
 import { getSupabaseServer } from "../supabase-server";
 import { MahjongGameState, PlayerState } from "./gameState";
 import { Tile } from "./tiles";
+import { cacheGameState, getCachedGameState } from "./cache";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows
@@ -27,7 +28,22 @@ export interface MjPlayer {
 // ---------------------------------------------------------------------------
 
 export async function loadRoom(roomId: string): Promise<MjRoom | null> {
+  // Redis-first: if the room's game_state is cached, short-circuit Postgres.
+  // We still need code/status/host_id from DB for correctness, so fetch a
+  // lightweight row when cache hits.
+  const cached = await getCachedGameState(roomId);
   const supabase = getSupabaseServer();
+  if (cached) {
+    const { data, error } = await supabase
+      .from("mj_rooms")
+      .select("id, code, status, host_id")
+      .eq("id", roomId)
+      .single();
+    if (!error && data) {
+      return { ...data, game_state: cached } as MjRoom;
+    }
+    // fall through on cache/DB row miss
+  }
   const { data, error } = await supabase
     .from("mj_rooms")
     .select("id, code, status, host_id, game_state")
@@ -35,7 +51,12 @@ export async function loadRoom(roomId: string): Promise<MjRoom | null> {
     .single();
 
   if (error || !data) return null;
-  return data as MjRoom;
+  const room = data as MjRoom;
+  // Populate cache so subsequent reads stay fast
+  if (room.game_state) {
+    await cacheGameState(roomId, room.game_state);
+  }
+  return room;
 }
 
 export async function loadRoomByCode(code: string): Promise<MjRoom | null> {
@@ -67,6 +88,10 @@ export async function saveGameState(
   if (error) {
     throw new Error(`Failed to save game state: ${error.message}`);
   }
+  // Write-through to Redis so the next loadRoom gets the latest state
+  // without re-reading Postgres. Failure here is non-fatal (DB is source
+  // of truth) but logged inside cacheGameState.
+  await cacheGameState(roomId, state);
 }
 
 export async function loadPlayers(roomId: string): Promise<MjPlayer[]> {
