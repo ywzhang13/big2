@@ -5,6 +5,7 @@ import { useMahjong, getMjId } from "@/hooks/useMahjong";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjTile from "@/components/mahjong/MjTile";
+import { sortTiles } from "@/lib/mahjong/tiles";
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -1105,34 +1106,50 @@ function RoomView({
                               )}
                             </div>
                           </div>
+                          {/* Concealed hand — sorted for readability */}
                           <div className="flex flex-wrap gap-[1px] items-end">
-                            {h.hand.map((t) => (
+                            {sortTiles(h.hand).map((t) => (
                               <MjTile key={`h-${t.id}`} tile={t} tiny />
                             ))}
-                            {h.revealed.length > 0 && (
-                              <div className="ml-1 flex gap-1 items-end border-l border-white/10 pl-1">
-                                {h.revealed.map((meld, mi) => (
-                                  <div key={mi} className="flex gap-0">
-                                    {meld.tiles.map((t) => (
-                                      <MjTile
-                                        key={`r-${mi}-${t.id}`}
-                                        tile={t}
-                                        tiny
-                                        faceDown={meld.type === "concealed_kong"}
-                                      />
-                                    ))}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {h.flowers.length > 0 && (
-                              <div className="ml-1 flex gap-[1px] items-end border-l border-white/10 pl-1">
-                                {h.flowers.map((f) => (
-                                  <MjTile key={`f-${f.id}`} tile={f} tiny />
-                                ))}
-                              </div>
-                            )}
                           </div>
+                          {/* Chi/pong/kong + flowers — visually separated row,
+                              scaled to 90% so it's clearly a secondary group. */}
+                          {(h.revealed.length > 0 || h.flowers.length > 0) && (
+                            <div
+                              className="mt-1.5 pt-1.5 border-t border-dashed border-white/10 flex flex-wrap gap-2 items-end origin-top-left"
+                              style={{
+                                transform: "scale(0.9)",
+                                width: "111.111%", // compensate so scaled width fills the row
+                              }}
+                            >
+                              {h.revealed.map((meld, mi) => (
+                                <div key={mi} className="flex gap-0">
+                                  {meld.tiles.map((t) => (
+                                    <MjTile
+                                      key={`r-${mi}-${t.id}`}
+                                      tile={t}
+                                      tiny
+                                      faceDown={meld.type === "concealed_kong"}
+                                    />
+                                  ))}
+                                </div>
+                              ))}
+                              {h.flowers.length > 0 && (
+                                <div
+                                  className="flex gap-[1px] items-end"
+                                  style={{
+                                    marginLeft: h.revealed.length > 0 ? 8 : 0,
+                                    paddingLeft: h.revealed.length > 0 ? 8 : 0,
+                                    borderLeft: h.revealed.length > 0 ? "1px solid rgba(255,255,255,0.1)" : "none",
+                                  }}
+                                >
+                                  {sortTiles(h.flowers).map((f) => (
+                                    <MjTile key={`f-${f.id}`} tile={f} tiny />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
