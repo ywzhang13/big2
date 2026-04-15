@@ -25,21 +25,29 @@ function baseState(): MahjongGameState {
 }
 
 // Non-dealer 自摸 (seat 2 wins, dealer=0) with dealerConsecutive=3
-// streakFan = 6 (連3 拉3)
-// Say winner's totalFan = 2 (自摸) + 6 (連/拉) = 8 total
-// baseFans (excluding streak) = 2
-// nonDealerPayment = 100 + 2*20 = 140
-// dealerPayment = 140 + 6*20 = 260
-// winner gain = 260 (dealer) + 140 (seat1) + 140 (seat3) = 540
-// deltas = [-260, -140, 540, -140]
+// streakFan = 1 (莊家) + 6 (連3 拉3) = 7
+// winner totalFan = 自摸(1) + 莊家(斷)(1) + 連3(3) + 拉3(3) = 8
+// baseFans = 8 - 7 = 1  (just 自摸)
+// nonDealerPayment = 100 + 1*20 = 120
+// dealerPayment = 120 + 7*20 = 260
+// winner gain = 260 + 120 + 120 = 500
+// deltas = [-260, -120, 500, -120]
 
 const s = baseState();
-s.winners = [{ seat: 2, score: { fans: [{name:"自摸",value:1},{name:"連3",value:3},{name:"拉3",value:3}], totalFan: 8 } }];
+s.winners = [{
+  seat: 2,
+  score: { fans: [
+    {name:"自摸",value:1},
+    {name:"莊家(斷)",value:1},
+    {name:"連3",value:3},
+    {name:"拉3",value:3},
+  ], totalFan: 8 },
+}];
 s.winner = s.winners[0];
 const r = calculateSettlement(s);
 console.log("non-dealer 自摸 w/ streak deltas:", r.deltas);
-console.log("expected: [-260, -140, 540, -140]");
-const ok = JSON.stringify(r.deltas) === JSON.stringify([-260,-140,540,-140]);
+console.log("expected: [-260, -120, 500, -120]");
+const ok = JSON.stringify(r.deltas) === JSON.stringify([-260,-120,500,-120]);
 console.log(ok ? "✅ PASS" : "❌ FAIL");
 
 // Dealer 自摸 continuing streak

@@ -635,16 +635,26 @@ export function declareWin(
 
   const score = calculateScore(scoringCtx);
 
-  // 連 N + 拉 N 台：
-  //   - 莊家自己續莊胡：加到 totalFan，三家均攤付
-  //   - 非莊家胡：也加到 totalFan，但在 settlement 這部分只由「被斷莊的
-  //     莊家」單獨多付（扣除莊家分、加到贏家分），其他兩家不付這段
-  //   (莊家 1 台已由 scoring.ts 內處理)
+  // 莊家 / 連 N / 拉 N 台：
+  //   - 莊家胡：莊家 1 台已由 scoring.ts 處理；若 consecutive>0 再加 連/拉
+  //   - 非莊家胡：額外加 莊家 1 台 + 連N + 拉N 到 totalFan，這部分在
+  //     settlement 只由莊家單獨支付（斷莊罰），其他閒家不付這段
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
-  if (consecutive > 0) {
-    score.fans.push({ name: `連${consecutive}`, value: consecutive });
-    score.fans.push({ name: `拉${consecutive}`, value: consecutive });
-    score.totalFan += consecutive * 2;
+  if (player.isDealer) {
+    if (consecutive > 0) {
+      score.fans.push({ name: `連${consecutive}`, value: consecutive });
+      score.fans.push({ name: `拉${consecutive}`, value: consecutive });
+      score.totalFan += consecutive * 2;
+    }
+  } else {
+    // 斷莊罰：莊家 1 台 + 連N + 拉N — 只由莊家付
+    score.fans.push({ name: "莊家(斷)", value: 1 });
+    score.totalFan += 1;
+    if (consecutive > 0) {
+      score.fans.push({ name: `連${consecutive}`, value: consecutive });
+      score.fans.push({ name: `拉${consecutive}`, value: consecutive });
+      score.totalFan += consecutive * 2;
+    }
   }
 
   // Append to winners array (一炮三響 support). Keep `winner` as the first
@@ -752,8 +762,9 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
 
   const dealerSeat = state.dealerSeat;
   const consecutive = state.roundInfo?.dealerConsecutive ?? 0;
-  // "連N·拉N" 折算回台數：非莊家贏時由莊家單獨支付這段
-  const streakFan = consecutive > 0 ? consecutive * 2 : 0;
+  // 斷莊罰 (只在非莊家贏時由莊家單獨支付)：
+  //   莊家 1 台 + 連N 台 + 拉N 台 = 1 + 2*consecutive
+  const streakFan = 1 + consecutive * 2;
 
   // Self-draw can only be a single winner.
   const isSelfDraw = winners.length === 1 &&

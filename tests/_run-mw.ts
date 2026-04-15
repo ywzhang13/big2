@@ -38,7 +38,11 @@ function eq(actual: unknown, expected: unknown, msg: string) {
   else fail(msg + " expected=" + JSON.stringify(expected) + " actual=" + JSON.stringify(actual));
 }
 
-// --- Case 1: single-winner ron, no filter ---
+// --- Case 1: single-winner ron, non-dealer winner & discarder ---
+// dealer=seat 0 (consecutive=0). 斷莊罰 = 1 台 → dealer 多付 20.
+// seat 3 discards to seat 1, totalFan=2 (含 莊家(斷) 1 台).
+// baseFans = 2-1 = 1. shooterPay=100+20=120. dealerPay=20.
+// Winner gets 140. Dealer pays 20. Discarder pays 120.
 {
   const s = baseState(3); // seat 3 discards
   s.winners = [fakeWinner(1, 2)];
@@ -46,7 +50,7 @@ function eq(actual: unknown, expected: unknown, msg: string) {
   const filtered = applyWinnerOrderRule(s);
   eq(filtered.winners!.length, 1, "single ron: 1 winner remains");
   const settle = calculateSettlement(filtered);
-  eq(settle.deltas, [0, 140, 0, -140], "single ron: deltas (底100 + 台2×20=40 → 140 each)");
+  eq(settle.deltas, [-20, 140, 0, -120], "single ron: dealer 多付 20 (斷莊罰) + 放槍者付 120");
 }
 
 // --- Case 2: 雙響 — seats 0 and 2 both win off seat 3's discard ---
@@ -81,6 +85,14 @@ function eq(actual: unknown, expected: unknown, msg: string) {
 }
 
 // --- Case 4: 三響 — seats 0, 1, 2 all win off seat 3's discard ---
+// seat 0 = dealer.
+// Winner 0 (dealer): discarderIsDealer=false，但 winnerIsDealer=true，
+//   走 full-totalFan path: payment=100+2*20=140. deltas[0]+=140, deltas[3]-=140.
+// Winner 1 (non-dealer): baseFans=3-1=2, shooterPay=140, dealerPay=20.
+//   deltas[1]+=160, deltas[3]-=140, deltas[0]-=20.
+// Winner 2 (non-dealer): baseFans=4-1=3, shooterPay=160, dealerPay=20.
+//   deltas[2]+=180, deltas[3]-=160, deltas[0]-=20.
+// Totals: [140-20-20, 160, 180, -140-140-160] = [100, 160, 180, -440]
 {
   const s = baseState(3);
   s.winners = [fakeWinner(0, 2), fakeWinner(1, 3), fakeWinner(2, 4)];
@@ -88,24 +100,24 @@ function eq(actual: unknown, expected: unknown, msg: string) {
   const filtered = applyWinnerOrderRule(s);
   eq(filtered.winners!.length, 3, "三響: all 3 winners kept");
   const settle = calculateSettlement(filtered);
-  // seat 3 pays each: (100+2*20) + (100+3*20) + (100+4*20) = 140+160+180 = 480
-  eq(settle.deltas, [140, 160, 180, -480], "三響: seat 3 pays each winner separately");
+  eq(settle.deltas, [100, 160, 180, -440], "三響: 各家分別結算，dealer 再被扣兩次斷莊罰");
   eq(settle.fanTotal, 9, "三響: fan total sums to 9");
 }
 
-// --- Case 5: self-draw (single winner) unchanged ---
+// --- Case 5: non-dealer self-draw (dealer=0, consecutive=0) ---
+// streakFan = 1 (just 莊家斷), baseFans=1, nonDealerPay=120, dealerPay=140
+// winner += 140+120+120=380
 {
   const s = baseState(0);
   s.currentTurn = 2;
   s.hasDrawn = true;
   s.lastDiscard = null;
-  s.winners = [{ seat: 2, score: { fans: [{ name: "自摸", value: 1 }, { name: "莊家", value: 1 }], totalFan: 2 } }];
+  s.winners = [{ seat: 2, score: { fans: [{ name: "自摸", value: 1 }, { name: "莊家(斷)", value: 1 }], totalFan: 2 } }];
   s.winner = s.winners[0];
   const filtered = applyWinnerOrderRule(s);
   eq(filtered.winners!.length, 1, "self-draw: 1 winner unchanged");
   const settle = calculateSettlement(filtered);
-  // self-draw: all 3 losers pay 140 each, winner gets 420
-  eq(settle.deltas, [-140, -140, 420, -140], "self-draw: 3 losers pay 140 each");
+  eq(settle.deltas, [-140, -120, 380, -120], "self-draw: dealer 多付 20 (斷莊罰)");
   eq(settle.reason, "self_draw", "self-draw: reason=self_draw");
 }
 

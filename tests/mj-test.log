@@ -1,72 +1,33 @@
-=== Test run 2026-04-14T15:18:16.282Z ===
-Room created: code=2977 id=893573c2-0f06-4808-9bef-4bb369dc9455 rounds=1
+=== Test run 2026-04-15T02:47:49.899Z ===
+Room created: code=1771 id=bd0c9111-169d-4063-b7ad-fcdb8f0cbd62 rounds=1
 All 4 players joined
 Game started
 --- Game 1 (target seat=0) ---
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  seat 0 claims PONG on 7條
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  seat 0 claims PONG on 5萬
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  seat 0 claims CHI on 7條
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  seat 0 claims CHI on 7筒
+  seat 0 claims CHI on 6筒
+  seat 0 claims PONG on 2萬
   [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
   seat 0 claims CHI on 3條
   [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  [browser console.error] Blocked call to navigator.vibrate because user hasn't tapped on the frame or any embedded frame yet: https://www.chromestatus.com/feature/5644273861001216.
-  🏆 seat 0 WINS on discard 4條
-  winner seat: 0, score: 0台, fans: []
-  scores: [100,0,-100,0] settlement: {"deltas":[100,0,-100,0],"reason":"win","fanTotal":0,"paymentPerPlayer":100}
-  seat 0 flowers: 春
-  seat 1 flowers: 菊
-  seat 2 flowers: 梅
-  seat 3 flowers: 竹 夏 蘭
-  roundInfo: {"currentGame":1,"currentRound":1,"dealerConsecutive":0,"initialDealerSeat":1}
-  target(seat 0) final hand (1 tiles, triples=0 pairs=0): 4條
---- Game 2 (target seat=0) ---
-  seat 0 claims CHI on 3條
   seat 0 claims PONG on 4條
-  seat 0 claims PONG on 3筒
-  seat 0 claims CHI on 3萬
-  🏆 seat 0 WINS on discard 6條
-  winner seat: 0, score: 0台, fans: []
-  scores: [200,-100,-100,0] settlement: {"deltas":[100,-100,0,0],"reason":"win","fanTotal":0,"paymentPerPlayer":100}
-  seat 0 flowers: 梅 冬
-  seat 1 flowers: 秋
-  seat 2 flowers: 夏 蘭
-  seat 3 flowers: 竹
-  roundInfo: {"currentGame":2,"currentRound":1,"dealerConsecutive":0,"initialDealerSeat":1}
-  target(seat 0) final hand (4 tiles, triples=1 pairs=0): 1筒 1筒 1筒 6條
---- Game 3 (target seat=0) ---
-  seat 0 claims CHI on 5條
-  seat 0 claims PONG on 6條
-  seat 0 claims PONG on 8筒
-  seat 0 claims CHI on 8條
-  🏆 seat 0 WINS on discard 3條
+  🏆 seat 0 WINS on discard 9條
   winner seat: 0, score: 1台, fans: [{"name":"正花","value":1}]
-  scores: [320,-100,-100,-120] settlement: {"deltas":[120,0,0,-120],"reason":"win","fanTotal":1,"paymentPerPlayer":120}
-  seat 0 flowers: 竹 春
-  seat 1 flowers: 梅
-  seat 3 flowers: 蘭
-  roundInfo: {"currentGame":3,"currentRound":1,"dealerConsecutive":0,"initialDealerSeat":1}
-  target(seat 0) final hand (4 tiles, triples=0 pairs=1): 1條 2條 北 北
---- Game 4 (target seat=0) ---
+  scores: [120,0,-120,0] settlement: {"deltas":[120,0,-120,0],"reason":"win","fanTotal":1,"paymentPerPlayer":120}
+  seat 0 flowers: 菊 春
+  seat 2 flowers: 竹 冬
+  seat 3 flowers: 夏 蘭
+  roundInfo: {"currentGame":1,"currentRound":1,"dealerConsecutive":0,"initialDealerSeat":1}
+  target(seat 0) final hand (4 tiles, triples=0 pairs=1): 7條 8條 白 白
+--- Game 2 (target seat=0) ---
+  seat 0 claims PONG on 2筒
+  seat 0 claims PONG on 2條
   seat 0 claims CHI on 8筒
-  seat 0 claims CHI on 5條
-  seat 0 claims PONG on 9筒
-  seat 0 claims CHI on 9萬
-  seat 0 claims PONG on 6條
-  🏆 seat 0 WINS on discard 2條
-  winner seat: 0, score: 2台, fans: [{"name":"莊家","value":1},{"name":"正花","value":1}]
-  scores: [460,-100,-100,-260] settlement: {"deltas":[140,0,0,-140],"reason":"win","fanTotal":2,"paymentPerPlayer":140}
-  seat 0 flowers: 夏
-  seat 1 flowers: 蘭
-  seat 2 flowers: 竹
-  seat 3 flowers: 菊 秋 梅 冬
-  roundInfo: {"currentGame":4,"currentRound":1,"dealerConsecutive":0,"initialDealerSeat":1}
-  target(seat 0) final hand (1 tiles, triples=0 pairs=0): 2條
-All rounds complete
-✅ Done
+  seat 0 claims CHI on 5萬
+  🏆 seat 0 WINS on discard 7筒
+  winner seat: 0, score: 1台, fans: [{"name":"邊張","value":1}]
+  scores: [240,-120,-120,0] settlement: {"deltas":[120,-120,0,0],"reason":"win","fanTotal":1,"paymentPerPlayer":120}
+  seat 2 flowers: 菊
+  seat 3 flowers: 春
+  roundInfo: {"currentGame":2,"currentRound":1,"dealerConsecutive":0,"initialDealerSeat":1}
+  target(seat 0) final hand (4 tiles, triples=0 pairs=1): 5條 5條 8筒 9筒
+--- Game 3 (target seat=0) ---
+  seat 0 claims CHI on 3筒
