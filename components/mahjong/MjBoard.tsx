@@ -122,11 +122,28 @@ function PlayerPanel({
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
-      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
+      <div className={`relative flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
         ${isCurrent
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
         }`}>
+        {/* 連N pill — anchored top-right of this dealer's badge so it's
+            unmistakable whose streak it is. */}
+        {player.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
+          <span
+            className="absolute -top-1.5 -right-1.5 px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
+            style={{
+              background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
+              color: "#fff8dc",
+              border: "1px solid rgba(240,214,138,0.6)",
+              boxShadow: "0 0 8px rgba(255,140,0,0.5)",
+              textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            連{dealerConsecutive}·拉{dealerConsecutive}
+          </span>
+        )}
         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
           ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
           {windChar}
@@ -136,7 +153,7 @@ function PlayerPanel({
             {player.name}
           </span>
           <span className="text-[8px] text-white/30">
-            {player.tileCount} 張{player.isDealer ? ` · 莊${dealerConsecutive && dealerConsecutive > 0 ? `·連${dealerConsecutive}` : ""}` : ""}
+            {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
           </span>
           {score != null && (
             <span className={`text-[9px] font-bold leading-tight ${
@@ -433,29 +450,7 @@ export default function MjBoard({
                 {/* Center: wind dial + last discard */}
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
                   <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} />
-                  {/* 連莊 badge — show dealer name so it's clear who's on streak */}
-                  {dealerConsecutive && dealerConsecutive > 0 && (
-                    <div
-                      className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider flex items-center gap-1.5"
-                      style={{
-                        background: "linear-gradient(90deg, rgba(220,38,38,0.35) 0%, rgba(201,169,110,0.35) 100%)",
-                        border: "1px solid rgba(240,214,138,0.45)",
-                        color: "#fff8dc",
-                        textShadow: "0 0 8px rgba(255,140,0,0.5)",
-                      }}
-                    >
-                      <span
-                        className="px-1.5 py-[1px] rounded text-[9px]"
-                        style={{
-                          background: "rgba(0,0,0,0.35)",
-                          color: "#f0d68a",
-                        }}
-                      >
-                        莊 {players.find((p) => p.seat === dealerSeat)?.name ?? ""}
-                      </span>
-                      <span>連{dealerConsecutive} · 拉{dealerConsecutive}</span>
-                    </div>
-                  )}
+                  {/* 中央徽章移除，改以各家 PlayerPanel 上的 連N 小標顯示 */}
                   {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
                   {dice && !lastDiscard && (
                     <div className="flex flex-col items-center gap-1">
@@ -614,7 +609,20 @@ export default function MjBoard({
           <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
           {me?.isDealer && (
             <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">
-              莊{dealerConsecutive && dealerConsecutive > 0 ? `·連${dealerConsecutive}` : ""}
+              莊
+            </span>
+          )}
+          {me?.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
+            <span
+              className="px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
+              style={{
+                background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
+                color: "#fff8dc",
+                border: "1px solid rgba(240,214,138,0.6)",
+                boxShadow: "0 0 8px rgba(255,140,0,0.5)",
+              }}
+            >
+              連{dealerConsecutive}·拉{dealerConsecutive}
             </span>
           )}
           {playerScores && mySeat >= 0 && (
