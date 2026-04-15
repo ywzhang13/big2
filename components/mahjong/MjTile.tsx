@@ -38,9 +38,9 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
     ? null
     : `/tiles/${getTileSvg(tile)}.svg`;
 
-  const backdropSrc = faceDown
-    ? "/tiles/Back.svg"
-    : "/tiles/Front.svg";
+  // faceDown → render a green-felt gradient div matching the rest of the
+  // board, rather than the bundled red Back.svg which clashes visually.
+  const backdropSrc = faceDown ? null : "/tiles/Front.svg";
 
   // Use <button> when clickable, <div> otherwise, to avoid nested <button>
   // issues when MjTile is rendered inside another button (e.g. chi action button).
@@ -66,24 +66,42 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
         padding: 0,
       }}
     >
-      {/* Backdrop (tile face/back) */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={backdropSrc}
-        alt=""
-        width={w}
-        height={h}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: w,
-          height: h,
-          objectFit: "contain",
-          display: "block",
-          pointerEvents: "none",
-        }}
-        draggable={false}
-      />
+      {/* Backdrop — Front.svg when face-up, inline green gradient when
+          face-down (matches felt-style opponent tile backs). */}
+      {backdropSrc ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={backdropSrc}
+          alt=""
+          width={w}
+          height={h}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: w,
+            height: h,
+            objectFit: "contain",
+            display: "block",
+            pointerEvents: "none",
+          }}
+          draggable={false}
+        />
+      ) : (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: w,
+            height: h,
+            borderRadius: Math.round(w * 0.12),
+            background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.35)",
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {/* Character overlay (on top of Front.svg) */}
       {characterSrc && (
         /* eslint-disable-next-line @next/next/no-img-element */

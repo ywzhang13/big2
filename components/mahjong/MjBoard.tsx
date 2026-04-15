@@ -86,6 +86,8 @@ function ActionName(type: string): string {
     chi: "吃",
     pong: "碰",
     kong: "槓",
+    concealed_kong: "暗槓",
+    add_kong: "加槓",
     win: "胡",
     pass: "過",
   };
@@ -206,26 +208,31 @@ function PlayerPanel({
                 boxShadow: "inset 0 1px 2px rgba(0,0,0,0.4)",
               }}
             >
-              {meld.tiles.map((t) => (
-                <div
-                  key={t.id}
-                  style={
-                    rotStyle
-                      ? {
-                          width: 35,
-                          height: 26,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }
-                      : undefined
-                  }
-                >
-                  <div style={rotStyle ? { transform: rotStyle } : undefined}>
-                    <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
+              {meld.tiles.map((t, ti) => {
+                // 暗槓慣例：只有中間兩張 (索引 1、2) 面朝下，外側兩張面朝上
+                const isConcealedFaceDown =
+                  meld.type === "concealed_kong" && (ti === 1 || ti === 2);
+                return (
+                  <div
+                    key={t.id}
+                    style={
+                      rotStyle
+                        ? {
+                            width: 35,
+                            height: 26,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }
+                        : undefined
+                    }
+                  >
+                    <div style={rotStyle ? { transform: rotStyle } : undefined}>
+                      <MjTile tile={t} tiny faceDown={isConcealedFaceDown} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))}
           {player.flowers.length > 0 && (
@@ -678,8 +685,13 @@ export default function MjBoard({
             <div className="flex gap-2 items-center ml-2">
               {me.revealed.map((meld, mi) => (
                 <div key={mi} className="flex gap-[1px]">
-                  {meld.tiles.map((t) => (
-                    <MjTile key={t.id} tile={t} small faceDown={meld.type === "concealed_kong"} />
+                  {meld.tiles.map((t, ti) => (
+                    <MjTile
+                      key={t.id}
+                      tile={t}
+                      small
+                      faceDown={meld.type === "concealed_kong" && (ti === 1 || ti === 2)}
+                    />
                   ))}
                 </div>
               ))}
