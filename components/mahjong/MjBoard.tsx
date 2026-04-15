@@ -164,23 +164,22 @@ function PlayerPanel({
         ))}
       </div>
 
-      {/* Flowers + Revealed melds (closer to center for left/right) */}
+      {/* Flowers + Revealed melds — same visual spec for all three opponents:
+          1px gap inside each meld, 10px gap between melds, thin bordered
+          group background. Left/right rotate each tile to face center; to
+          stop rotation from fighting flex layout we wrap each rotated tile
+          in a swapped-dim container (35×26) so the column packs cleanly. */}
       {(player.flowers.length > 0 || player.revealed.length > 0) && (
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
-          // Inter-meld gap: 10px for both top and left/right
           style={{ gap: 10 }}
         >
-          {/* Each meld is a tight group */}
           {player.revealed.map((meld, mi) => (
             <div
               key={mi}
               className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`}
-              // Intra-group:
-              //   top: 1px (reduced 50% from 3px per user request)
-              //   left/right: 0 (tight — tile wrappers handle overlap via negative margin)
               style={{
-                gap: isHorizontal ? 1 : 0,
+                gap: 1,
                 border: "1px solid rgba(0,0,0,0.5)",
                 borderRadius: 4,
                 padding: 2,
@@ -194,35 +193,45 @@ function PlayerPanel({
                   style={
                     rotStyle
                       ? {
-                          transform: rotStyle,
-                          // Intra-group overlap — -10 keeps tiles tight but separate
-                          marginTop: isHorizontal ? 0 : -6,
+                          width: 35,
+                          height: 26,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }
                       : undefined
                   }
                 >
-                  <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
+                  <div style={rotStyle ? { transform: rotStyle } : undefined}>
+                    <MjTile tile={t} tiny faceDown={meld.type === "concealed_kong"} />
+                  </div>
                 </div>
               ))}
             </div>
           ))}
-          {/* Flowers as a group */}
           {player.flowers.length > 0 && (
-            <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`} style={{ gap: isHorizontal ? 1 : 0 }}>
+            <div
+              className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`}
+              style={{ gap: 1 }}
+            >
               {player.flowers.map((f) => (
                 <div
                   key={f.id}
                   style={
                     rotStyle
                       ? {
-                          transform: rotStyle,
-                          // Intra-group overlap — -10 keeps tiles tight but separate
-                          marginTop: isHorizontal ? 0 : -6,
+                          width: 35,
+                          height: 26,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }
                       : undefined
                   }
                 >
-                  <MjTile tile={f} tiny />
+                  <div style={rotStyle ? { transform: rotStyle } : undefined}>
+                    <MjTile tile={f} tiny />
+                  </div>
                 </div>
               ))}
             </div>
