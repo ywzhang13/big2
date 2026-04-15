@@ -127,11 +127,11 @@ function PlayerPanel({
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
         }`}>
-        {/* 連N pill — anchored top-right of this dealer's badge so it's
-            unmistakable whose streak it is. */}
+        {/* 連N pill — sits fully above the badge (bottom-full + mb-1) so it
+            doesn't overlap the name. */}
         {player.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
           <span
-            className="absolute -top-1.5 -right-1.5 px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
+            className="absolute bottom-full right-0 mb-1 px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
             style={{
               background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
               color: "#fff8dc",
