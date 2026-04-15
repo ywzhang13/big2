@@ -1,7 +1,6 @@
 import { loadRoom, loadPlayers, saveGameState, toPublicGameState } from "@/lib/mahjong/db";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { initGame, dealTiles } from "@/lib/mahjong/gameLogic";
-import { withRoomLock } from "@/lib/mahjong/cache";
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +14,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
 
-    return await withRoomLock(roomId, async () => {
     // Load room
     const room = await loadRoom(roomId);
     if (!room) {
@@ -97,7 +95,6 @@ export async function POST(request: Request) {
     }
 
     return Response.json({ success: true });
-    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "伺服器錯誤";
     return Response.json({ error: message }, { status: 500 });

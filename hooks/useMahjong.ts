@@ -419,6 +419,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         }
       }
       const drawnTile = payload.tile as Tile;
+      console.log("[mj] mj_draw_tile", { drawnTileId: drawnTile?.id, drawnDisplay: drawnTile?.display, handLen: hand.length });
       setState((prev) => ({
         ...prev,
         myHand: safeHand(hand),

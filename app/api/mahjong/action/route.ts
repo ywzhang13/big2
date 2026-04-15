@@ -20,7 +20,6 @@ import {
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { Tile } from "@/lib/mahjong/tiles";
-import { withRoomLock } from "@/lib/mahjong/cache";
 
 export async function POST(request: Request) {
   try {
@@ -36,7 +35,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
 
-    return await withRoomLock(roomId, async () => {
     // Load room and state
     const room = await loadRoom(roomId);
     if (!room || !room.game_state) {
@@ -376,7 +374,6 @@ export async function POST(request: Request) {
     ]);
 
     return Response.json({ success: true });
-    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "伺服器錯誤";
     return Response.json({ error: message }, { status: 500 });

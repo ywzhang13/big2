@@ -88,10 +88,10 @@ export async function saveGameState(
   if (error) {
     throw new Error(`Failed to save game state: ${error.message}`);
   }
-  // Write-through to Redis so the next loadRoom gets the latest state
-  // without re-reading Postgres. Failure here is non-fatal (DB is source
-  // of truth) but logged inside cacheGameState.
-  await cacheGameState(roomId, state);
+  // Fire-and-forget cache write: Postgres is already authoritative, and we
+  // don't want to add HTTP latency to the critical path of every action.
+  // A dropped cache write just means the next read falls back to Postgres.
+  void cacheGameState(roomId, state).catch(() => {});
 }
 
 export async function loadPlayers(roomId: string): Promise<MjPlayer[]> {

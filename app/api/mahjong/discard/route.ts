@@ -7,7 +7,6 @@ import {
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { discardTile, getAvailableActions, advanceTurn } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
-import { withRoomLock } from "@/lib/mahjong/cache";
 
 export async function POST(request: Request) {
   try {
@@ -22,9 +21,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
 
-    // Serialize per-room mutations so concurrent passes / discards don't race
-    // each other through read-modify-write on pendingActions.
-    return await withRoomLock(roomId, async () => {
     // Load room and state
     const room = await loadRoom(roomId);
     if (!room || !room.game_state) {
@@ -120,7 +116,6 @@ export async function POST(request: Request) {
         type: a.type,
         playerSeat: a.playerSeat,
       })),
-    });
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "伺服器錯誤";
