@@ -99,12 +99,14 @@ function PlayerPanel({
   isCurrent,
   windChar,
   score,
+  dealerConsecutive,
 }: {
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
   isCurrent: boolean;
   windChar: string;
   score?: number;
+  dealerConsecutive?: number;
 }) {
   if (!player) return null;
 
@@ -134,7 +136,7 @@ function PlayerPanel({
             {player.name}
           </span>
           <span className="text-[8px] text-white/30">
-            {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
+            {player.tileCount} 張{player.isDealer ? ` · 莊${dealerConsecutive && dealerConsecutive > 0 ? `·連${dealerConsecutive}` : ""}` : ""}
           </span>
           {score != null && (
             <span className={`text-[9px] font-bold leading-tight ${
@@ -365,6 +367,7 @@ export default function MjBoard({
           isCurrent={top?.seat === currentTurn}
           windChar={getWindChar(top?.seat ?? 2)}
           score={top && playerScores ? playerScores[top.seat] : undefined}
+          dealerConsecutive={dealerConsecutive}
         />
       </div>
 
@@ -378,6 +381,7 @@ export default function MjBoard({
             isCurrent={left?.seat === currentTurn}
             windChar={getWindChar(left?.seat ?? 3)}
             score={left && playerScores ? playerScores[left.seat] : undefined}
+            dealerConsecutive={dealerConsecutive}
           />
         </div>
 
@@ -429,10 +433,10 @@ export default function MjBoard({
                 {/* Center: wind dial + last discard */}
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
                   <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} />
-                  {/* 連莊 badge — show when dealer is on streak */}
+                  {/* 連莊 badge — show dealer name so it's clear who's on streak */}
                   {dealerConsecutive && dealerConsecutive > 0 && (
                     <div
-                      className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider"
+                      className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider flex items-center gap-1.5"
                       style={{
                         background: "linear-gradient(90deg, rgba(220,38,38,0.35) 0%, rgba(201,169,110,0.35) 100%)",
                         border: "1px solid rgba(240,214,138,0.45)",
@@ -440,7 +444,16 @@ export default function MjBoard({
                         textShadow: "0 0 8px rgba(255,140,0,0.5)",
                       }}
                     >
-                      連{dealerConsecutive} · 拉{dealerConsecutive}
+                      <span
+                        className="px-1.5 py-[1px] rounded text-[9px]"
+                        style={{
+                          background: "rgba(0,0,0,0.35)",
+                          color: "#f0d68a",
+                        }}
+                      >
+                        莊 {players.find((p) => p.seat === dealerSeat)?.name ?? ""}
+                      </span>
+                      <span>連{dealerConsecutive} · 拉{dealerConsecutive}</span>
                     </div>
                   )}
                   {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
@@ -582,6 +595,7 @@ export default function MjBoard({
             isCurrent={right?.seat === currentTurn}
             windChar={getWindChar(right?.seat ?? 1)}
             score={right && playerScores ? playerScores[right.seat] : undefined}
+            dealerConsecutive={dealerConsecutive}
           />
         </div>
       </div>
@@ -598,7 +612,11 @@ export default function MjBoard({
             {getWindChar(mySeat)}
           </div>
           <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
-          {me?.isDealer && <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">莊</span>}
+          {me?.isDealer && (
+            <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">
+              莊{dealerConsecutive && dealerConsecutive > 0 ? `·連${dealerConsecutive}` : ""}
+            </span>
+          )}
           {playerScores && mySeat >= 0 && (
             <span className={`text-[11px] font-bold ${
               playerScores[mySeat] > 0 ? "text-green-400" :
