@@ -635,12 +635,13 @@ export function declareWin(
 
   const score = calculateScore(scoringCtx);
 
-  // 連 N + 拉 N: only awarded when the dealer wins (continuing the streak).
-  // Non-dealer winners do NOT get this bonus, per standard Taiwan rules.
-  // (If dealer放槍 or 被自摸, the streak is broken, no bonus.)
-  // 莊家 1 台 is already added in scoring.ts when ctx.isDealer is true.
+  // 連 N + 拉 N 台：
+  //   - 莊家自己續莊胡：加到 totalFan，三家均攤付
+  //   - 非莊家胡：也加到 totalFan，但在 settlement 這部分只由「被斷莊的
+  //     莊家」單獨多付（扣除莊家分、加到贏家分），其他兩家不付這段
+  //   (莊家 1 台已由 scoring.ts 內處理)
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
-  if (player.isDealer && consecutive > 0) {
+  if (consecutive > 0) {
     score.fans.push({ name: `連${consecutive}`, value: consecutive });
     score.fans.push({ name: `拉${consecutive}`, value: consecutive });
     score.totalFan += consecutive * 2;
@@ -749,6 +750,11 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
     winners = winners.slice(0, 1);
   }
 
+  const dealerSeat = state.dealerSeat;
+  const consecutive = state.roundInfo?.dealerConsecutive ?? 0;
+  // "連N·拉N" 折算回台數：非莊家贏時由莊家單獨支付這段
+  const streakFan = consecutive > 0 ? consecutive * 2 : 0;
+
   // Self-draw can only be a single winner.
   const isSelfDraw = winners.length === 1 &&
     winners[0].score.fans.some(f => f.name.includes("自摸"));
@@ -756,12 +762,34 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   if (isSelfDraw) {
     const winnerSeat = winners[0].seat;
     const totalFan = winners[0].score.totalFan;
-    const payment = basePoints + totalFan * fanPoints;
-    for (let i = 0; i < 4; i++) {
-      if (i === winnerSeat) deltas[i] = payment * 3;
-      else deltas[i] = -payment;
+    const isDealerWin = winnerSeat === dealerSeat;
+    if (isDealerWin) {
+      // 莊家自摸：三家各付 (底+台×台)
+      const payment = basePoints + totalFan * fanPoints;
+      for (let i = 0; i < 4; i++) {
+        if (i === winnerSeat) deltas[i] = payment * 3;
+        else deltas[i] = -payment;
+      }
+      return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: payment };
     }
-    return { deltas, reason: "self_draw", fanTotal: totalFan, paymentPerPlayer: payment };
+    // 非莊家自摸：兩家閒家各付 baseFans 部分；莊家額外多付 streakFan 部分
+    const baseFans = Math.max(0, totalFan - streakFan);
+    const nonDealerPayment = basePoints + baseFans * fanPoints;
+    const dealerPayment = nonDealerPayment + streakFan * fanPoints;
+    let winnerGain = 0;
+    for (let i = 0; i < 4; i++) {
+      if (i === winnerSeat) continue;
+      const pay = i === dealerSeat ? dealerPayment : nonDealerPayment;
+      deltas[i] = -pay;
+      winnerGain += pay;
+    }
+    deltas[winnerSeat] = winnerGain;
+    return {
+      deltas,
+      reason: "self_draw",
+      fanTotal: totalFan,
+      paymentPerPlayer: nonDealerPayment, // representative non-dealer share
+    };
   }
 
   // 放槍 / 一炮多響: discarder pays each winner their individual (底+台×台)
@@ -770,9 +798,25 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   let paymentSum = 0;
   if (loserSeat >= 0) {
     for (const w of winners) {
-      const payment = basePoints + w.score.totalFan * fanPoints;
-      deltas[w.seat] += payment;
-      deltas[loserSeat] -= payment;
+      const winnerIsDealer = w.seat === dealerSeat;
+      const discarderIsDealer = loserSeat === dealerSeat;
+      let payment: number;
+      if (winnerIsDealer || discarderIsDealer) {
+        // 莊家贏：放槍者付全部（含連/拉）
+        // 莊家放槍：莊家付全部（含連/拉，自己斷自己的莊）
+        payment = basePoints + w.score.totalFan * fanPoints;
+        deltas[w.seat] += payment;
+        deltas[loserSeat] -= payment;
+      } else {
+        // 非莊家放槍給非莊家：放槍者付 baseFans 部分；莊家另外被扣 streakFan
+        const baseFans = Math.max(0, w.score.totalFan - streakFan);
+        const shooterPay = basePoints + baseFans * fanPoints;
+        const dealerPay = streakFan * fanPoints;
+        deltas[w.seat] += shooterPay + dealerPay;
+        deltas[loserSeat] -= shooterPay;
+        deltas[dealerSeat] -= dealerPay;
+        payment = shooterPay + dealerPay;
+      }
       totalFanSum += w.score.totalFan;
       paymentSum += payment;
     }
