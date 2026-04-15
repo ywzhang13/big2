@@ -1124,16 +1124,9 @@ function RoomView({
                             >
                               {h.revealed.map((meld, mi) => (
                                 <div key={mi} className="flex gap-0">
-                                  {meld.tiles.map((t, ti) => (
-                                    <MjTile
-                                      key={`r-${mi}-${t.id}`}
-                                      tile={t}
-                                      tiny
-                                      faceDown={
-                                        meld.type === "concealed_kong" &&
-                                        (ti === 1 || ti === 2)
-                                      }
-                                    />
+                                  {/* 結算畫面全部揭露，暗槓也顯示牌面 */}
+                                  {meld.tiles.map((t) => (
+                                    <MjTile key={`r-${mi}-${t.id}`} tile={t} tiny />
                                   ))}
                                 </div>
                               ))}

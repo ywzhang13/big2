@@ -209,9 +209,10 @@ function PlayerPanel({
               }}
             >
               {meld.tiles.map((t, ti) => {
-                // 暗槓慣例：只有中間兩張 (索引 1、2) 面朝下，外側兩張面朝上
-                const isConcealedFaceDown =
-                  meld.type === "concealed_kong" && (ti === 1 || ti === 2);
+                // 暗槓：對家無法看牌面，全部 4 張面朝下。自己的暗槓顯示
+                // 邏輯在 "Bottom: my area" 區段單獨處理（那邊看得到牌面）。
+                void ti;
+                const isConcealedFaceDown = meld.type === "concealed_kong";
                 return (
                   <div
                     key={t.id}
@@ -685,13 +686,9 @@ export default function MjBoard({
             <div className="flex gap-2 items-center ml-2">
               {me.revealed.map((meld, mi) => (
                 <div key={mi} className="flex gap-[1px]">
-                  {meld.tiles.map((t, ti) => (
-                    <MjTile
-                      key={t.id}
-                      tile={t}
-                      small
-                      faceDown={meld.type === "concealed_kong" && (ti === 1 || ti === 2)}
-                    />
+                  {/* 自己的暗槓顯示全部牌面（其他家 PlayerPanel 則全部面朝下） */}
+                  {meld.tiles.map((t) => (
+                    <MjTile key={t.id} tile={t} small />
                   ))}
                 </div>
               ))}
