@@ -336,19 +336,20 @@ export function useGame(roomCode: string, playerName: string) {
   // Host = seat 0 player
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
-  // Start game - sends ready check (host only)
+  // Start game — host clicks and we deal directly (no ready-check gating,
+  // matches mahjong's flow per user request 2026-04-15).
   const startGame = useCallback(async () => {
     const s = stateRef.current;
     if (s.players.length !== 4) return;
-    if (s.status !== "waiting" || s.readyCheck) return;
+    if (s.status !== "waiting") return;
     if (s.hostId !== myId) return;
     try {
-      await api("POST", "/api/game/ready-check", {
+      await api("POST", "/api/game/deal", {
         roomId: roomIdRef.current,
         playerId: myId,
       });
     } catch (err) {
-      console.error("[big2] ready-check failed:", err);
+      console.error("[big2] deal failed:", err);
     }
   }, [myId]);
 
