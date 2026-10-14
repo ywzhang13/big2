@@ -2,6 +2,7 @@ import { getSupabaseServer } from "../supabase-server";
 import { MahjongGameState, PlayerState } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
+import { getAvailableActions, ownTurnActions } from "./gameLogic";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows
@@ -27,11 +28,16 @@ export interface MjPlayer {
 // Room helpers
 // ---------------------------------------------------------------------------
 
-export async function loadRoom(roomId: string): Promise<MjRoom | null> {
+export async function loadRoom(
+  roomId: string,
+  opts?: { fresh?: boolean }
+): Promise<MjRoom | null> {
   // Redis-first: if the room's game_state is cached, short-circuit Postgres.
   // We still need code/status/host_id from DB for correctness, so fetch a
   // lightweight row when cache hits.
-  const cached = await getCachedGameState(roomId);
+  // fresh=true skips the cache (used when retrying after a write conflict,
+  // since the cache may be behind Postgres).
+  const cached = opts?.fresh ? null : await getCachedGameState(roomId);
   const supabase = getSupabaseServer();
   if (cached) {
     const { data, error } = await supabase
@@ -77,6 +83,7 @@ export async function saveGameState(
   status?: string
 ): Promise<void> {
   const supabase = getSupabaseServer();
+  state.stateVersion = (state.stateVersion ?? 0) + 1;
   const update: Record<string, unknown> = { game_state: state };
   if (status) update.status = status;
 
@@ -92,6 +99,66 @@ export async function saveGameState(
   // don't want to add HTTP latency to the critical path of every action.
   // A dropped cache write just means the next read falls back to Postgres.
   void cacheGameState(roomId, state).catch(() => {});
+}
+
+/** 條件寫入失敗：讀出後已經有人先寫了，呼叫端要重新讀取再做一次 */
+export class StateConflictError extends Error {
+  constructor() {
+    super("牌局狀態已被其他動作更新");
+  }
+}
+
+/**
+ * 樂觀鎖寫入：只有資料庫裡的 stateVersion 仍是 baseVersion（讀出時的版本）
+ * 才寫入，寫入時版本 +1；否則丟 StateConflictError，不寫任何東西。
+ */
+export async function saveGameStateIfUnchanged(
+  roomId: string,
+  baseVersion: number | undefined,
+  state: MahjongGameState,
+  status?: string
+): Promise<void> {
+  const supabase = getSupabaseServer();
+  state.stateVersion = (baseVersion ?? 0) + 1;
+  const update: Record<string, unknown> = { game_state: state };
+  if (status) update.status = status;
+
+  let query = supabase.from("mj_rooms").update(update).eq("id", roomId);
+  query =
+    baseVersion === undefined
+      ? query.is("game_state->stateVersion", null)
+      : query.eq("game_state->>stateVersion", String(baseVersion));
+  const { data, error } = await query.select("id");
+
+  if (error) {
+    throw new Error(`Failed to save game state: ${error.message}`);
+  }
+  if (!data || data.length === 0) {
+    throw new StateConflictError();
+  }
+  void cacheGameState(roomId, state).catch(() => {});
+}
+
+// 樂觀鎖寫入衝突時最多重做幾次（每次都重新從 Postgres 讀最新狀態）
+const MAX_ATTEMPTS = 5;
+
+/**
+ * 跑一個「讀 → 改 → 條件寫入」的處理函式；遇到 StateConflictError 就以
+ * fresh=true（不走快取）重新讀取、整個重做。其他錯誤回 500。
+ */
+export async function retryOnConflict(
+  handler: (fresh: boolean) => Promise<Response>
+): Promise<Response> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      return await handler(attempt > 0);
+    } catch (err) {
+      if (err instanceof StateConflictError) continue;
+      const message = err instanceof Error ? err.message : "伺服器錯誤";
+      return Response.json({ error: message }, { status: 500 });
+    }
+  }
+  return Response.json({ error: "同時有太多動作，請再試一次" }, { status: 409 });
 }
 
 export async function loadPlayers(roomId: string): Promise<MjPlayer[]> {
@@ -158,6 +225,8 @@ export interface PublicGameState {
   doorSeat?: MahjongGameState["doorSeat"];
   nextGameReady?: MahjongGameState["nextGameReady"];
   pendingActions?: MahjongGameState["pendingActions"];
+  pendingAddKong?: MahjongGameState["pendingAddKong"];
+  pendingFlowerRob?: MahjongGameState["pendingFlowerRob"];
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
@@ -183,6 +252,8 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     doorSeat: state.doorSeat,
     nextGameReady: state.nextGameReady,
     pendingActions: state.pendingActions,
+    pendingAddKong: state.pendingAddKong,
+    pendingFlowerRob: state.pendingFlowerRob,
   };
 }
 
@@ -197,6 +268,7 @@ export function toPlayerGameState(
 ): PublicGameState & {
   hand?: Tile[];
   myAvailableActions?: { type: string; tiles?: Tile[] }[];
+  myDrawnTileId?: number;
 } {
   const pub = toPublicGameState(state);
   const player = state.players.find((p) => p.id === playerId);
@@ -204,8 +276,7 @@ export function toPlayerGameState(
   const hand = player?.hand.filter((t) => t.suit !== "f");
 
   // Compute my available actions if this player is a potential actor on the
-  // current pending discard and hasn't passed yet. Lazy-load to avoid
-  // circular import.
+  // current pending discard and hasn't passed yet.
   let myAvailableActions: { type: string; tiles?: Tile[] }[] | undefined;
   if (player && state.pendingActions && state.lastDiscard) {
     const mySeat = player.seat;
@@ -213,8 +284,6 @@ export function toPlayerGameState(
       state.pendingActions.potentialActors.includes(mySeat) &&
       !state.pendingActions.passedActors.includes(mySeat);
     if (isPending) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getAvailableActions } = require("./gameLogic") as typeof import("./gameLogic");
       const all = getAvailableActions(state);
       // Apply the same priority filter the broadcast uses
       const tierOf = (type: string) =>
@@ -232,10 +301,23 @@ export function toPlayerGameState(
     }
   }
 
+  // 輪到自己且剛摸完牌：恢復自摸胡／暗槓／加槓按鈕（重新整理後不會消失）
+  let myDrawnTileId: number | undefined;
+  if (player && state.currentTurn === player.seat && state.drawnTileId !== undefined) {
+    const own = ownTurnActions(state, player.seat);
+    if (own.length > 0) myAvailableActions = own;
+    myDrawnTileId = state.drawnTileId;
+  }
+  // 七搶一：等我決定要不要搶
+  if (player && state.pendingFlowerRob?.robberSeat === player.seat) {
+    myAvailableActions = [{ type: "win" }];
+  }
+
   return {
     ...pub,
     hand,
     myAvailableActions,
+    myDrawnTileId,
   };
 }
 

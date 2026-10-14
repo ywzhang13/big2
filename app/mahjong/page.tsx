@@ -1,11 +1,29 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { useMahjong, getMjId } from "@/hooks/useMahjong";
 import MjBoard from "@/components/mahjong/MjBoard";
+import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
+import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjTile from "@/components/mahjong/MjTile";
 import { sortTiles } from "@/lib/mahjong/tiles";
+
+// 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
+const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
+function useMobileLandscape(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mql = window.matchMedia(MOBILE_LANDSCAPE_QUERY);
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(MOBILE_LANDSCAPE_QUERY).matches,
+    () => false
+  );
+}
+
+const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -443,6 +461,7 @@ function RoomView({
   } = useMahjong(code, nameReady ? playerName : "");
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const isMobileLandscape = useMobileLandscape();
 
   // When leave request is granted, all 4 players auto-return to lobby
   useEffect(() => {
@@ -461,6 +480,8 @@ function RoomView({
     state.winner != null &&
     state.winner.seat >= 0 &&
     !isZimoWin;
+  // 八仙過海／七搶一：花牌立刻胡，沒有自摸或放槍
+  const flowerWinName = state.winner?.score.fans.find((f) => FLOWER_WIN_NAMES.includes(f.name))?.name;
 
   // Celebration overlay (shown briefly on all players' screens)
   const [celebrationMode, setCelebrationMode] = useState<"zimo" | "ron" | null>(null);
@@ -661,22 +682,82 @@ function RoomView({
   // Playing (or finished — show board with result overlay)
   const isFinished = state.status === "finished" && state.winner;
 
+  const handleLeave = () => {
+    // Mid-session (game active or finished-but-not-all-rounds-done) needs consent
+    const inSession =
+      state.status === "playing" ||
+      (state.status === "finished" && state.roomSettings && !state.gameOver);
+    if (inSession) {
+      setShowLeaveConfirm(true);
+    } else {
+      onGoHome();
+    }
+  };
+
+  const roundLabel = state.roundInfo && state.roomSettings
+    ? `${["東", "南", "西", "北"][(state.roundInfo.currentRound - 1) % 4]}風圈 第${state.roundInfo.currentGame}局`
+    : undefined;
+
+  const boardProps = {
+    players: state.players,
+    mySeat: state.mySeat,
+    myHand: state.myHand,
+    currentTurn: state.currentTurn,
+    dealerSeat: state.dealerSeat,
+    lastDiscard: state.lastDiscard,
+    availableActions: state.availableActions,
+    pendingAddKong: state.pendingAddKong,
+    robKong: state.robKong,
+    pendingFlowerRob: state.pendingFlowerRob,
+    robFlower: state.robFlower,
+    wallRemaining: state.wallRemaining,
+    hasDrawn: state.hasDrawn,
+    needsDraw,
+    needsDiscard,
+    isMyTurn,
+    playerName,
+    drawnTileId: state.drawnTileId,
+    actionNotice: state.actionNotice,
+    onDraw: drawTile,
+    onDiscard: discardTile,
+    onAction: doAction,
+    dice: state.dice,
+    doorSeat: state.doorSeat,
+    playerScores: state.playerScores,
+    dealerConsecutive: state.roundInfo?.dealerConsecutive,
+  };
+
   return (
     <div className="flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative">
+      {/* 手機直向：蓋轉向提示（牌桌照常掛著，連線不中斷） */}
+      <div className="mjm-portrait">
+        <div className="pair">
+          <div className="ph up" />
+          <span className="arrow">↻</span>
+          <div className="ph land" />
+        </div>
+        <p className="ttl">請把手機轉成橫向</p>
+        <p className="hint">轉了沒反應？請關閉「螢幕方向鎖定」</p>
+        <div className="foot">
+          <button type="button" className="leave" onClick={handleLeave}>離開房間</button>
+        </div>
+      </div>
+
+      {isMobileLandscape ? (
+        <MjBoardMobile
+          {...boardProps}
+          roomCode={code}
+          roundLabel={roundLabel}
+          basePoints={state.roomSettings?.basePoints}
+          fanPoints={state.roomSettings?.fanPoints}
+          onLeave={handleLeave}
+        />
+      ) : (
+      <>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
         <button
-          onClick={() => {
-            // Mid-session (game active or finished-but-not-all-rounds-done) needs consent
-            const inSession =
-              state.status === "playing" ||
-              (state.status === "finished" && state.roomSettings && !state.gameOver);
-            if (inSession) {
-              setShowLeaveConfirm(true);
-            } else {
-              onGoHome();
-            }
-          }}
+          onClick={handleLeave}
           className="text-sm text-white/60 cursor-pointer active:text-[#f0d68a]"
         >
           離開
@@ -696,30 +777,9 @@ function RoomView({
         <div className="w-10" />
       </div>
 
-      <MjBoard
-        players={state.players}
-        mySeat={state.mySeat}
-        myHand={state.myHand}
-        currentTurn={state.currentTurn}
-        dealerSeat={state.dealerSeat}
-        lastDiscard={state.lastDiscard}
-        availableActions={state.availableActions}
-        wallRemaining={state.wallRemaining}
-        hasDrawn={state.hasDrawn}
-        needsDraw={needsDraw}
-        needsDiscard={needsDiscard}
-        isMyTurn={isMyTurn}
-        playerName={playerName}
-        drawnTileId={state.drawnTileId}
-        actionNotice={state.actionNotice}
-        onDraw={drawTile}
-        onDiscard={discardTile}
-        onAction={doAction}
-        dice={state.dice}
-        doorSeat={state.doorSeat}
-        playerScores={state.playerScores}
-        dealerConsecutive={state.roundInfo?.dealerConsecutive}
-      />
+      <MjBoard {...boardProps} />
+      </>
+      )}
 
       {/* Leave confirmation modal (requester side) */}
       {showLeaveConfirm && !state.leaveRequest && (
@@ -899,7 +959,7 @@ function RoomView({
                 fontFamily: "serif",
               }}
             >
-              {celebrationMode === "zimo" ? "自摸" : "胡"}
+              {flowerWinName ?? (celebrationMode === "zimo" ? "自摸" : "胡")}
             </p>
             <p
               className="mt-4 text-2xl font-bold"
@@ -950,8 +1010,31 @@ function RoomView({
         </div>
       )}
 
+      {/* 手機橫向的結算浮層 */}
+      {isMobileLandscape && isFinished && state.winner && (
+        <MjResultMobile
+          winner={state.winner}
+          winners={state.winners}
+          players={state.players}
+          mySeat={state.mySeat}
+          myId={state.myId}
+          fromName={state.lastDiscard ? state.players.find((p) => p.seat === state.lastDiscard?.from)?.name : undefined}
+          isZimo={isZimoWin}
+          settlement={state.settlement}
+          playerScores={state.playerScores}
+          hasRounds={!!state.roomSettings}
+          gameOver={state.gameOver}
+          nextGameReady={state.nextGameReady}
+          onNextGame={nextGame}
+          onLeave={() => {
+            if (state.gameOver || !state.roomSettings) onGoHome();
+            else setShowLeaveConfirm(true);
+          }}
+        />
+      )}
+
       {/* Game over overlay — stays on the board */}
-      {isFinished && state.winner && (
+      {!isMobileLandscape && isFinished && state.winner && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div
             className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl max-w-md w-full shadow-2xl flex flex-col"
@@ -1039,8 +1122,12 @@ function RoomView({
                   {state.winner.name} 胡牌！
                 </h2>
                 {/* 自摸 / 放槍 indicator with emphasis for 自摸 */}
-                <p className={`mt-1 ${isZimoWin ? "text-xl font-black tracking-[0.4em]" : "text-sm"}`}>
-                  {isZimoWin ? (
+                <p className={`mt-1 ${isZimoWin || flowerWinName ? "text-xl font-black tracking-[0.4em]" : "text-sm"}`}>
+                  {flowerWinName ? (
+                    <span style={{ color: "#fbbf24", textShadow: "0 0 16px rgba(255,215,0,0.7)" }}>
+                      {flowerWinName}
+                    </span>
+                  ) : isZimoWin ? (
                     <span
                       style={{
                         color: "#fbbf24",

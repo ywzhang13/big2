@@ -1,102 +1,126 @@
-import { loadRoom, loadPlayers, saveGameState, toPublicGameState } from "@/lib/mahjong/db";
-import { mjBroadcast } from "@/lib/mahjong/broadcast";
+import {
+  loadRoom,
+  loadPlayers,
+  saveGameStateIfUnchanged,
+  toPublicGameState,
+  retryOnConflict,
+} from "@/lib/mahjong/db";
+import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { initGame, dealTiles } from "@/lib/mahjong/gameLogic";
+import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
 
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await request.json();
-    const { roomId, playerId } = body as {
-      roomId?: string;
-      playerId?: string;
-    };
-
-    if (!roomId || !playerId) {
-      return Response.json({ error: "缺少必要欄位" }, { status: 400 });
-    }
-
-    // Load room
-    const room = await loadRoom(roomId);
-    if (!room) {
-      return Response.json({ error: "找不到房間" }, { status: 404 });
-    }
-
-    // Verify host
-    if (room.host_id !== playerId) {
-      return Response.json({ error: "只有房主可以開始遊戲" }, { status: 403 });
-    }
-
-    if (room.status !== "waiting") {
-      return Response.json({ error: "遊戲已開始" }, { status: 400 });
-    }
-
-    // Load players
-    const players = await loadPlayers(roomId);
-    if (players.length !== 4) {
-      return Response.json({ error: "需要 4 位玩家才能開始" }, { status: 400 });
-    }
-
-    // Initialize game — pass room settings if present
-    const playerInfos = players.map((p) => ({
-      id: p.player_id,
-      name: p.name,
-    }));
-
-    const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings as
-      | { totalRounds: number; basePoints: number; fanPoints: number }
-      | undefined;
-
-    let state = initGame(playerInfos, savedSettings);
-    state.roomCode = room.code;
-
-    // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
-    // 起莊者 = 開門者（第一局同一顆骰子）
-    const hostSeat = state.players.findIndex((p) => p.id === room.host_id);
-    const baseSeat = hostSeat >= 0 ? hostSeat : 0;
-    const d1 = 1 + Math.floor(Math.random() * 6);
-    const d2 = 1 + Math.floor(Math.random() * 6);
-    const d3 = 1 + Math.floor(Math.random() * 6);
-    const sum = d1 + d2 + d3;
-    const firstDealerSeat = (baseSeat + ((sum - 1) % 4)) % 4;
-    state.dealerSeat = firstDealerSeat;
-    if (state.roundInfo) {
-      state.roundInfo.initialDealerSeat = firstDealerSeat;
-    }
-
-    state = dealTiles(state);
-
-    // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
-    state.dice = [d1, d2, d3];
-    state.doorSeat = firstDealerSeat;
-
-    // Save full state to DB
-    await saveGameState(roomId, state, "playing");
-
-    // Broadcast public game start (no hands)
-    const publicState = toPublicGameState(state);
-    await mjBroadcast(room.code, "mj_game_start", {
-      currentTurn: publicState.currentTurn,
-      dealerSeat: publicState.dealerSeat,
-      prevalentWind: publicState.prevalentWind,
-      wallCount: publicState.wallCount,
-      players: publicState.players,
-      roundInfo: state.roundInfo,
-      playerScores: state.playerScores,
-      dice: state.dice,
-      doorSeat: state.doorSeat,
-    });
-
-    // Send each player their hand privately (defensive: filter flowers from hand)
-    for (const player of state.players) {
-      await mjBroadcast(room.code, "mj_deal_hand", {
-        playerId: player.id,
-        hand: player.hand.filter((t) => t.suit !== "f"),
-        flowers: player.flowers,
-      });
-    }
-
-    return Response.json({ success: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "伺服器錯誤";
-    return Response.json({ error: message }, { status: 500 });
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
+  return retryOnConflict((fresh) => handleStart(body, fresh));
+}
+
+/**
+ * 開局。條件寫入：只有房間狀態還是讀出時的版本才寫入（同一筆 update 也把
+ * status 改成 playing／finished），所以同時送兩次開局時，晚到的那次會衝突、
+ * 重新讀到 status 已不是 waiting 而被擋下，不會蓋掉已開的局、也不會重複廣播。
+ */
+async function handleStart(body: unknown, fresh: boolean): Promise<Response> {
+  const { roomId, playerId } = body as {
+    roomId?: string;
+    playerId?: string;
+  };
+
+  if (!roomId || !playerId) {
+    return Response.json({ error: "缺少必要欄位" }, { status: 400 });
+  }
+
+  // Load room
+  const room = await loadRoom(roomId, { fresh });
+  if (!room) {
+    return Response.json({ error: "找不到房間" }, { status: 404 });
+  }
+
+  // Verify host
+  if (room.host_id !== playerId) {
+    return Response.json({ error: "只有房主可以開始遊戲" }, { status: 403 });
+  }
+
+  if (room.status !== "waiting") {
+    return Response.json({ error: "遊戲已開始" }, { status: 400 });
+  }
+
+  // Load players
+  const players = await loadPlayers(roomId);
+  if (players.length !== 4) {
+    return Response.json({ error: "需要 4 位玩家才能開始" }, { status: 400 });
+  }
+
+  // Initialize game — pass room settings if present
+  const playerInfos = players.map((p) => ({
+    id: p.player_id,
+    name: p.name,
+  }));
+
+  const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings as
+    | { totalRounds: number; basePoints: number; fanPoints: number }
+    | undefined;
+
+  let state = initGame(playerInfos, savedSettings);
+  state.roomCode = room.code;
+
+  // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
+  // 起莊者 = 開門者（第一局同一顆骰子）
+  const hostSeat = state.players.findIndex((p) => p.id === room.host_id);
+  const baseSeat = hostSeat >= 0 ? hostSeat : 0;
+  const d1 = 1 + Math.floor(Math.random() * 6);
+  const d2 = 1 + Math.floor(Math.random() * 6);
+  const d3 = 1 + Math.floor(Math.random() * 6);
+  const sum = d1 + d2 + d3;
+  const firstDealerSeat = (baseSeat + ((sum - 1) % 4)) % 4;
+  state.dealerSeat = firstDealerSeat;
+  if (state.roundInfo) {
+    state.roundInfo.initialDealerSeat = firstDealerSeat;
+  }
+
+  state = dealTiles(state);
+
+  // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
+  state.dice = [d1, d2, d3];
+  state.doorSeat = firstDealerSeat;
+
+  // 開局補花就八仙過海：這局直接結束（先照常送開局事件，最後送 mj_game_over）
+  const endedAtDeal = state.status === "finished";
+  if (endedAtDeal) applySettlement(state);
+
+  // Save full state to DB
+  const baseVersion = (room.game_state as { stateVersion?: number } | null)?.stateVersion;
+  await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
+
+  // Broadcast public game start (no hands)
+  const publicState = toPublicGameState(state);
+  await mjBroadcast(room.code, "mj_game_start", {
+    currentTurn: publicState.currentTurn,
+    dealerSeat: publicState.dealerSeat,
+    prevalentWind: publicState.prevalentWind,
+    wallCount: publicState.wallCount,
+    players: publicState.players,
+    roundInfo: state.roundInfo,
+    playerScores: state.playerScores,
+    dice: state.dice,
+    doorSeat: state.doorSeat,
+  });
+
+  // Send each player their hand privately (defensive: filter flowers from hand)
+  for (const player of state.players) {
+    await mjBroadcast(room.code, "mj_deal_hand", {
+      playerId: player.id,
+      hand: player.hand.filter((t) => t.suit !== "f"),
+      flowers: player.flowers,
+    });
+  }
+
+  // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
+  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(state)] : flowerRobEvents(state));
+
+  return Response.json({ success: true });
 }

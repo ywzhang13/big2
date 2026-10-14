@@ -71,6 +71,16 @@ export interface MahjongGameState {
     potentialActors: number[];   // seats that can act
     passedActors: number[];      // seats that already passed
   };
+  // 加槓等待搶槓：加槓的牌暫時放在 lastDiscard（from=加槓者），
+  // pendingActions 只列能胡這張的人；全部 pass 後才真正完成加槓。
+  pendingAddKong?: { seat: number; tile: Tile };
+  // 樂觀鎖版本號：每次寫入 +1；條件寫入時版本不符代表別人先寫了
+  stateVersion?: number;
+  // 輪到的人這回合摸進（或補進）的牌；吃、碰後和打牌後清掉。
+  // 用來判斷「現在可以自摸／暗槓／加槓」（重新整理時恢復按鈕）。不公開給其他人。
+  drawnTileId?: number;
+  // 七搶一：fromSeat 摸到第 8 張花，robberSeat 已有 7 張花，可以搶這張直接胡
+  pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
   // --- Round system (圈數系統) ---
   roomSettings?: RoomSettings;
   roundInfo?: RoundInfo;

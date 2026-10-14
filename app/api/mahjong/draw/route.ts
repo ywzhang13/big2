@@ -1,145 +1,89 @@
 import {
   loadRoom,
-  saveGameState,
+  saveGameStateIfUnchanged,
   findSeatByPlayerId,
+  retryOnConflict,
 } from "@/lib/mahjong/db";
-import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import {
-  drawTile,
-  canConcealedKong,
-  calculateSettlement,
-  isAllRoundsComplete,
-} from "@/lib/mahjong/gameLogic";
-import { isWinningHand } from "@/lib/mahjong/winCheck";
+import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
+import { drawTile, ownTurnActions } from "@/lib/mahjong/gameLogic";
+import { applySettlement, drawEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await request.json();
-    const { roomId, playerId } = body as {
-      roomId?: string;
-      playerId?: string;
-    };
-
-    if (!roomId || !playerId) {
-      return Response.json({ error: "缺少必要欄位" }, { status: 400 });
-    }
-
-    // Load room and state
-    const room = await loadRoom(roomId);
-    if (!room || !room.game_state) {
-      return Response.json({ error: "找不到遊戲" }, { status: 404 });
-    }
-
-    const state = room.game_state as MahjongGameState;
-    if (state.status !== "playing") {
-      return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
-    }
-
-    // Verify turn
-    const seat = findSeatByPlayerId(state, playerId);
-    if (seat === -1) {
-      return Response.json({ error: "玩家不在此房間" }, { status: 403 });
-    }
-    if (state.currentTurn !== seat) {
-      return Response.json({ error: "還沒輪到你" }, { status: 400 });
-    }
-    if (state.hasDrawn) {
-      return Response.json({ error: "已經摸過牌了" }, { status: 400 });
-    }
-
-    // Don't allow draw if there are pending actions (chi/pong/kong in progress)
-    if (state.pendingActions && state.pendingActions.potentialActors.length > 0) {
-      const allPassed = state.pendingActions.potentialActors.every(
-        (s) => state.pendingActions!.passedActors.includes(s)
-      );
-      if (!allPassed) {
-        return Response.json({ error: "等待其他玩家動作中" }, { status: 400 });
-      }
-    }
-
-    // Draw tile
-    const newState = drawTile(state);
-
-    // Check for draw game (wall exhausted)
-    if (newState.status === "finished") {
-      // Calculate settlement for draw (流局)
-      let settlement = undefined;
-      if (newState.roomSettings) {
-        settlement = calculateSettlement(newState);
-        newState.settlement = settlement;
-        newState.gameOver = isAllRoundsComplete(newState);
-      }
-
-      await saveGameState(roomId, newState, "finished");
-
-      await mjBroadcast(room.code, "mj_game_over", {
-        winnerSeat: -1,
-        winnerName: null,
-        score: null,
-        allHands: newState.players.map((p) => ({
-          seat: p.seat,
-          name: p.name,
-          hand: p.hand,
-          revealed: p.revealed,
-          flowers: p.flowers,
-        })),
-        settlement,
-        playerScores: newState.playerScores,
-        roundInfo: newState.roundInfo,
-        gameOver: newState.gameOver,
-      });
-
-      return Response.json({ success: true, draw: true });
-    }
-
-    const player = newState.players[seat];
-    const drawnTile = player.hand[player.hand.length - 1];
-
-    // Check self-draw win (自摸)
-    const canWin = isWinningHand(player.hand, player.revealed.length);
-
-    // Check concealed kong (暗槓)
-    const kongOptions = canConcealedKong(player.hand);
-    const canKong = kongOptions.length > 0;
-
-    // Save state
-    await saveGameState(roomId, newState);
-
-    await mjBroadcastBatch(room.code, [
-      {
-        event: "mj_draw",
-        payload: {
-          seat,
-          tileCount: player.hand.length,
-          wallCount: newState.wall.length,
-          flowers: player.flowers,
-        },
-      },
-      {
-        event: "mj_draw_tile",
-        payload: {
-          playerId,
-          tile: drawnTile,
-          hand: player.hand.filter((t) => t.suit !== "f"),
-          flowers: player.flowers,
-          canWin,
-          canKong,
-          kongOptions: canKong
-            ? kongOptions.map((group) => group.map((t) => t.id))
-            : [],
-        },
-      },
-    ]);
-
-    return Response.json({
-      success: true,
-      drawnTile,
-      canWin,
-      canKong,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "伺服器錯誤";
-    return Response.json({ error: message }, { status: 500 });
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
+  return retryOnConflict((fresh) => handleDraw(body, fresh));
+}
+
+async function handleDraw(body: unknown, fresh: boolean): Promise<Response> {
+  const { roomId, playerId } = body as {
+    roomId?: string;
+    playerId?: string;
+  };
+
+  if (!roomId || !playerId) {
+    return Response.json({ error: "缺少必要欄位" }, { status: 400 });
+  }
+
+  // Load room and state
+  const room = await loadRoom(roomId, { fresh });
+  if (!room || !room.game_state) {
+    return Response.json({ error: "找不到遊戲" }, { status: 404 });
+  }
+
+  const state = room.game_state as MahjongGameState;
+  if (state.status !== "playing") {
+    return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
+  }
+
+  // Verify turn
+  const seat = findSeatByPlayerId(state, playerId);
+  if (seat === -1) {
+    return Response.json({ error: "玩家不在此房間" }, { status: 403 });
+  }
+  if (state.currentTurn !== seat) {
+    return Response.json({ error: "還沒輪到你" }, { status: 400 });
+  }
+  if (state.hasDrawn) {
+    return Response.json({ error: "已經摸過牌了" }, { status: 400 });
+  }
+
+  // Don't allow draw if there are pending actions (chi/pong/kong in progress)
+  if (state.pendingActions && state.pendingActions.potentialActors.length > 0) {
+    const allPassed = state.pendingActions.potentialActors.every(
+      (s) => state.pendingActions!.passedActors.includes(s)
+    );
+    if (!allPassed) {
+      return Response.json({ error: "等待其他玩家動作中" }, { status: 400 });
+    }
+  }
+
+  // Draw tile（含補花；可能流局、八仙過海，或進入七搶一等待）
+  const newState = drawTile(state);
+
+  if (newState.status === "finished") {
+    applySettlement(newState);
+    await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, "finished");
+    await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+    return Response.json({ success: true, draw: !newState.winners?.length });
+  }
+
+  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState);
+  const events = drawEvents(newState, seat);
+  await mjBroadcastBatch(room.code, events);
+
+  const player = newState.players[seat];
+  const actions = ownTurnActions(newState, seat);
+  return Response.json({
+    success: true,
+    drawnTile: player.hand[player.hand.length - 1],
+    canWin: actions.some((a) => a.type === "win"),
+    canKong: actions.some((a) => a.type === "kong"),
+    addKongOptions: actions.filter((a) => a.type === "add_kong").map((a) => a.tiles![0].id),
+    flowerRob: !!newState.pendingFlowerRob,
+  });
 }

@@ -214,18 +214,22 @@ function scoreDecomposition(
   }
 
   // --- 獨聽 (single wait) ---
-  // Build the hand without the winTile and check how many tiles it waits on
+  // 只聽一種牌就算 1 台；中洞、邊張、單吊都屬於獨聽，只算一次。
+  // concealed always includes winTile (both 自摸 and 放槍), so remove it
+  // before checking how many tiles the hand was waiting on.
   const handWithoutWin = ctx.concealed.filter((t) => t.id !== ctx.winTile.id);
-  // If not self-draw, winTile may not be in concealed — build test hand
-  let testHand: Tile[];
-  if (ctx.isSelfDraw) {
-    testHand = handWithoutWin;
-  } else {
-    testHand = [...ctx.concealed]; // concealed does NOT include winTile for ron
-  }
-  const waits = findWaitingTiles(testHand, ctx.revealed.length);
+  const waits = findWaitingTiles(handWithoutWin, ctx.revealed.length);
   if (waits.length === 1) {
     fans.push({ name: "獨聽", value: 1 });
+  }
+
+  // --- 全求人: 5 組都是吃碰明槓（無暗槓），手上只剩一張單吊，胡別人打的牌 ---
+  if (
+    ctx.revealed.length === 5 &&
+    ctx.revealed.every((m) => m.type !== "concealed_kong") &&
+    !ctx.isSelfDraw
+  ) {
+    fans.push({ name: "全求人", value: 1 });
   }
 
   // --- Analyze melds ---
@@ -242,30 +246,6 @@ function scoreDecomposition(
     if (!ctx.isSelfDraw && m.tileKeys[0] === winTileKey) return false;
     return true;
   });
-
-  // --- 中洞 / 邊張 ---
-  // 中洞  — winTile is the MIDDLE rank of a concealed chi meld (e.g. 3-5 win 4)
-  // 邊張 — winTile completes 1-2-3 as rank 3 (held 1-2) or 7-8-9 as rank 7
-  //        (held 8-9). Only these two edge shapes qualify.
-  const winRankNum = ctx.winTile.rank;
-  for (const m of allMelds) {
-    if (!isChi(m) || !m.isConcealed) continue;
-    if (!m.tileKeys.includes(winTileKey)) continue;
-    const ranks = m.tileKeys
-      .map((k) => parseInt(k.slice(1), 10))
-      .sort((a, b) => a - b);
-    if (winRankNum === ranks[1]) {
-      fans.push({ name: "中洞", value: 1 });
-      break;
-    }
-    if (
-      (ranks[0] === 1 && ranks[2] === 3 && winRankNum === 3) ||
-      (ranks[0] === 7 && ranks[2] === 9 && winRankNum === 7)
-    ) {
-      fans.push({ name: "邊張", value: 1 });
-      break;
-    }
-  }
 
   // --- 平胡: all chi + pair, no 字牌 ---
   const allTileKeys = [
@@ -305,6 +285,10 @@ function scoreDecomposition(
   else if (numericSuits.size === 1 && hasZ) {
     fans.push({ name: "混一色", value: 4 });
   }
+  // 字一色: 全部都是字牌（風牌、箭牌）
+  else if (numericSuits.size === 0 && hasZ) {
+    fans.push({ name: "字一色", value: 16 });
+  }
 
   // --- 三元牌 & 大三元 & 小三元 ---
   const dragonKeys = ["z5", "z6", "z7"]; // 中發白
@@ -329,12 +313,17 @@ function scoreDecomposition(
 
   // --- 風牌 (seat wind / prevalent wind pong) ---
   const windKeys = ["z1", "z2", "z3", "z4"]; // 東南西北
-  let windPongCount = 0;
-  let windPairCount = 0;
+  const windPongCount = windKeys.filter((wk) =>
+    pongMelds.some((m) => m.tileKeys[0] === wk)
+  ).length;
+  const windPairCount = windKeys.includes(hand.pair) ? 1 : 0;
+  const hasSiXi =
+    windPongCount === 4 || (windPongCount === 3 && windPairCount === 1);
+  // 有大四喜或小四喜時（任何牌型）不另外加風牌台
+  const skipWindFans = hasSiXi;
 
   for (const wk of windKeys) {
-    if (pongMelds.some((m) => m.tileKeys[0] === wk)) {
-      windPongCount++;
+    if (!skipWindFans && pongMelds.some((m) => m.tileKeys[0] === wk)) {
       const windRank = parseInt(wk[1], 10);
       if (windRank === ctx.seatWind) {
         fans.push({ name: "風牌", value: 1 });
@@ -350,9 +339,6 @@ function scoreDecomposition(
         fans.push({ name: "風牌", value: 1 });
       }
     }
-  }
-  for (const wk of windKeys) {
-    if (hand.pair === wk) windPairCount++;
   }
 
   // 大四喜: all 4 winds are pong/kong
@@ -393,11 +379,12 @@ function scoreDecomposition(
   const hasSpring = [1, 2, 3, 4].every((r) => flowerRanks.has(r));
   const hasPlum = [5, 6, 7, 8].every((r) => flowerRanks.has(r));
 
+  // 花槓：湊齊一組各 1 台，本花另外照算
   if (hasSpring) {
-    fans.push({ name: "春夏秋冬", value: 2 });
+    fans.push({ name: "春夏秋冬", value: 1 });
   }
   if (hasPlum) {
-    fans.push({ name: "梅蘭竹菊", value: 2 });
+    fans.push({ name: "梅蘭竹菊", value: 1 });
   }
   // 八仙過海
   if (ctx.flowers.length === 8) {

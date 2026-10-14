@@ -40,9 +40,10 @@ function ctxFor(concealed: Tile[], winTile: Tile, isSelfDraw: boolean): ScoringC
   const winTile = tile("p", 2, id());
   // ron: concealed = hand + winTile
   const score = calculateScore(ctxFor([...hand, winTile], winTile, false));
-  const has = score.fans.some(f => f.name === "中洞");
-  if (has) pass(`中洞 detected (hand held 1p+3p, win 2p). Fans: ${JSON.stringify(score.fans)}`);
-  else fail(`中洞 NOT detected. Fans: ${JSON.stringify(score.fans)}`);
+  const n = score.fans.filter(f => ["獨聽", "中洞", "邊張"].includes(f.name)).length;
+  const ok = n === 1 && score.fans.some(f => f.name === "獨聽");
+  if (ok) pass(`中洞 算獨聽 1 次 (hand held 1p+3p, win 2p). Fans: ${JSON.stringify(score.fans)}`);
+  else fail(`中洞 應只算獨聽 1 台. Fans: ${JSON.stringify(score.fans)}`);
 }
 
 // Case 2: 邊張 — held 1p 2p, win 3p
@@ -58,9 +59,10 @@ function ctxFor(concealed: Tile[], winTile: Tile, isSelfDraw: boolean): ScoringC
   ];
   const winTile = tile("p", 3, id());
   const score = calculateScore(ctxFor([...hand, winTile], winTile, false));
-  const has = score.fans.some(f => f.name === "邊張");
-  if (has) pass(`邊張 detected (hand held 1p+2p, win 3p). Fans: ${JSON.stringify(score.fans)}`);
-  else fail(`邊張 NOT detected. Fans: ${JSON.stringify(score.fans)}`);
+  const n = score.fans.filter(f => ["獨聽", "中洞", "邊張"].includes(f.name)).length;
+  const ok = n === 1 && score.fans.some(f => f.name === "獨聽");
+  if (ok) pass(`邊張 算獨聽 1 次 (hand held 1p+2p, win 3p). Fans: ${JSON.stringify(score.fans)}`);
+  else fail(`邊張 應只算獨聽 1 台. Fans: ${JSON.stringify(score.fans)}`);
 }
 
 // Case 3: 邊張 — held 8p 9p, win 7p
@@ -76,9 +78,10 @@ function ctxFor(concealed: Tile[], winTile: Tile, isSelfDraw: boolean): ScoringC
   ];
   const winTile = tile("p", 7, id());
   const score = calculateScore(ctxFor([...hand, winTile], winTile, false));
-  const has = score.fans.some(f => f.name === "邊張");
-  if (has) pass(`邊張 detected (hand held 8p+9p, win 7p). Fans: ${JSON.stringify(score.fans)}`);
-  else fail(`邊張 NOT detected. Fans: ${JSON.stringify(score.fans)}`);
+  const n = score.fans.filter(f => ["獨聽", "中洞", "邊張"].includes(f.name)).length;
+  const ok = n === 1 && score.fans.some(f => f.name === "獨聽");
+  if (ok) pass(`邊張 算獨聽 1 次 (hand held 8p+9p, win 7p). Fans: ${JSON.stringify(score.fans)}`);
+  else fail(`邊張 應只算獨聽 1 台. Fans: ${JSON.stringify(score.fans)}`);
 }
 
 // Case 4: 兩面 — held 2p 3p, win 4p → NO 邊張/中洞
@@ -94,9 +97,9 @@ function ctxFor(concealed: Tile[], winTile: Tile, isSelfDraw: boolean): ScoringC
   ];
   const winTile = tile("p", 4, id());
   const score = calculateScore(ctxFor([...hand, winTile], winTile, false));
-  const hasEdge = score.fans.some(f => f.name === "邊張" || f.name === "中洞");
-  if (!hasEdge) pass(`兩面 wait (2p+3p wait 1p/4p, win 4p): no 邊張/中洞. Fans: ${JSON.stringify(score.fans)}`);
-  else fail(`兩面 wait should not have 邊張/中洞. Fans: ${JSON.stringify(score.fans)}`);
+  const hasEdge = score.fans.some(f => ["獨聽", "中洞", "邊張"].includes(f.name));
+  if (!hasEdge) pass(`兩面 wait (2p+3p wait 1p/4p, win 4p): no 獨聽. Fans: ${JSON.stringify(score.fans)}`);
+  else fail(`兩面 wait should not have 獨聽. Fans: ${JSON.stringify(score.fans)}`);
 }
 
 console.log(results.join("\n"));

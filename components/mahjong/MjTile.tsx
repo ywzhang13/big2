@@ -9,6 +9,9 @@ interface MjTileProps {
   small?: boolean;
   tiny?: boolean; // even smaller for discard pool
   faceDown?: boolean;
+  // 指定尺寸（手機橫向用 CSS 變數，例如 "var(--tile-hand-w)"），覆蓋 tiny/small
+  width?: number | string;
+  height?: number | string;
 }
 
 // Map tile to SVG filename
@@ -29,10 +32,10 @@ function getTileSvg(tile: Tile): string {
   return "Blank";
 }
 
-export default function MjTile({ tile, selected, onClick, small, tiny, faceDown }: MjTileProps) {
+export default function MjTile({ tile, selected, onClick, small, tiny, faceDown, width, height }: MjTileProps) {
   // tiny bumped +30% so discard pool is easier to read (26×35 instead of 20×27)
-  const w = tiny ? 26 : small ? 27 : 36;
-  const h = tiny ? 35 : small ? 38 : 49;
+  const w = width ?? (tiny ? 26 : small ? 27 : 36);
+  const h = height ?? (tiny ? 35 : small ? 38 : 49);
 
   const characterSrc = faceDown
     ? null
@@ -73,8 +76,8 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
         <img
           src={backdropSrc}
           alt=""
-          width={w}
-          height={h}
+          width={typeof w === "number" ? w : undefined}
+          height={typeof h === "number" ? h : undefined}
           style={{
             position: "absolute",
             inset: 0,
@@ -94,7 +97,7 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
             inset: 0,
             width: w,
             height: h,
-            borderRadius: Math.round(w * 0.12),
+            borderRadius: typeof w === "number" ? Math.round(w * 0.12) : "12%",
             background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
             border: "1px solid rgba(255,255,255,0.08)",
             boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.35)",
@@ -108,8 +111,8 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown 
         <img
           src={characterSrc}
           alt={tile.display}
-          width={w}
-          height={h}
+          width={typeof w === "number" ? w : undefined}
+          height={typeof h === "number" ? h : undefined}
           style={{
             position: "absolute",
             inset: 0,

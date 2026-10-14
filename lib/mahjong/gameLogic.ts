@@ -38,6 +38,17 @@ function prevSeat(seat: number): number {
   return (seat + 3) % 4;
 }
 
+/** 牌牆剩 16 張（海底）時不能再槓：暗槓、明槓、加槓都不行 */
+export function canKongNow(state: MahjongGameState): boolean {
+  return state.wall.length > 16;
+}
+
+/** 剛摸進（或補進）手牌的那張：hand 最後一張（補花後也是最後補進的那張） */
+function markDrawn(s: MahjongGameState, seat: number): void {
+  const hand = s.players[seat].hand;
+  s.drawnTileId = hand.length > 0 ? hand[hand.length - 1].id : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Initialize
 // ---------------------------------------------------------------------------
@@ -155,7 +166,25 @@ export function dealTiles(state: MahjongGameState): MahjongGameState {
 
   s.currentTurn = s.dealerSeat;
   s.hasDrawn = true; // Dealer already has 17 tiles, so they should discard
+  markDrawn(s, s.dealerSeat);
 
+  return checkDealFlowerWin(s);
+}
+
+/**
+ * 開局補花完就湊成花牌立刻胡（和打牌中同規則）：
+ *   - 一家 8 張花 → 八仙過海，立刻結束
+ *   - 一家 7 張、另一家 1 張 → 設 pendingFlowerRob（fromSeat＝拿到那 1 張的人），
+ *     等有 7 張的人決定要不要七搶一；莊家照樣先等這個決定才能打牌
+ */
+export function checkDealFlowerWin(s: MahjongGameState): MahjongGameState {
+  const eight = s.players.find((p) => p.flowers.length === 8);
+  if (eight) return finishFlowerWin(s, eight.seat, "八仙過海");
+  const robber = s.players.find((p) => p.flowers.length === 7);
+  const holder = s.players.find((p) => p.flowers.length === 1);
+  if (robber && holder) {
+    s.pendingFlowerRob = { robberSeat: robber.seat, fromSeat: holder.seat, tile: holder.flowers[0] };
+  }
   return s;
 }
 
@@ -201,6 +230,115 @@ export function handleFlowers(
 }
 
 // ---------------------------------------------------------------------------
+// 八仙過海 / 七搶一（花牌立刻胡）
+// ---------------------------------------------------------------------------
+
+export const FLOWER_WIN_FAN = 8;
+const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
+
+/** 這組贏家是不是花牌立刻胡（八仙過海／七搶一） */
+export function isFlowerWin(w: { score: ScoreResult }): boolean {
+  return w.score.fans.some((f) => FLOWER_WIN_NAMES.includes(f.name));
+}
+
+/**
+ * 直接以八仙過海／七搶一結束這局：8 台，不加其他牌型台；
+ * 莊家台照自摸的原則（莊家胡三家都加，閒家胡只有莊家那份加），結算走自摸的算法。
+ */
+function finishFlowerWin(
+  s: MahjongGameState,
+  seat: number,
+  name: "八仙過海" | "七搶一"
+): MahjongGameState {
+  const fans: { name: string; value: number }[] = [{ name, value: FLOWER_WIN_FAN }];
+  const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
+  fans.push({ name: seat === s.dealerSeat ? "莊家" : "莊家(斷)", value: 1 });
+  if (consecutive > 0) {
+    fans.push({ name: `連${consecutive}`, value: consecutive });
+    fans.push({ name: `拉${consecutive}`, value: consecutive });
+  }
+  const totalFan = fans.reduce((n, f) => n + f.value, 0);
+  const entry = { seat, score: { fans, totalFan } };
+  s.winners = [entry];
+  s.winner = entry;
+  s.status = "finished";
+  s.pendingActions = undefined;
+  s.pendingAddKong = undefined;
+  s.pendingFlowerRob = undefined;
+  return s;
+}
+
+/**
+ * 摸牌／補牌後檢查花牌：
+ *   - 摸的人湊滿 8 張花 → 八仙過海，立刻結束
+ *   - 摸的人摸到第 8 張花、另一家已有 7 張 → 設 pendingFlowerRob，等那家決定要不要七搶一
+ * prev 是摸牌前的狀態（用來判斷這次有沒有摸到花）。
+ */
+export function checkFlowerWin(
+  prev: MahjongGameState,
+  s: MahjongGameState,
+  seat: number
+): MahjongGameState {
+  const before = prev.players[seat].flowers.length;
+  const mine = s.players[seat].flowers;
+  if (mine.length === before) return s;
+  if (mine.length === 8) return finishFlowerWin(s, seat, "八仙過海");
+  const total = s.players.reduce((n, p) => n + p.flowers.length, 0);
+  const robber = s.players.find((p) => p.seat !== seat && p.flowers.length === 7);
+  if (total === 8 && robber) {
+    s.pendingFlowerRob = { robberSeat: robber.seat, fromSeat: seat, tile: mine[mine.length - 1] };
+  }
+  return s;
+}
+
+/** 七搶一：有 7 張花的人搶走第 8 張花，直接胡 */
+export function robFlower(state: MahjongGameState): MahjongGameState {
+  if (!state.pendingFlowerRob) throw new Error("沒有可以搶的花");
+  const { robberSeat, fromSeat, tile } = state.pendingFlowerRob;
+  const s = cloneState(state);
+  s.players[fromSeat].flowers = s.players[fromSeat].flowers.filter((f) => f.id !== tile.id);
+  s.players[robberSeat].flowers.push(tile);
+  return finishFlowerWin(s, robberSeat, "七搶一");
+}
+
+/** 七搶一不搶：清掉等待，摸到花的人照常繼續 */
+export function passFlowerRob(state: MahjongGameState): MahjongGameState {
+  if (!state.pendingFlowerRob) throw new Error("沒有可以搶的花");
+  const s = cloneState(state);
+  s.pendingFlowerRob = undefined;
+  return s;
+}
+
+/**
+ * 輪到自己、摸牌後可以做的動作（自摸胡、暗槓、加槓）。
+ * 沒摸牌（吃碰後、等待別人決定時）回空陣列。牌牆剩 16 張時不給槓。
+ */
+export function ownTurnActions(
+  state: MahjongGameState,
+  seat: number
+): { type: "win" | "kong" | "add_kong"; tiles?: Tile[] }[] {
+  if (
+    state.status !== "playing" ||
+    state.currentTurn !== seat ||
+    !state.hasDrawn ||
+    state.drawnTileId === undefined ||
+    state.lastDiscard ||
+    state.pendingAddKong ||
+    state.pendingFlowerRob
+  ) {
+    return [];
+  }
+  const p = state.players[seat];
+  const actions: { type: "win" | "kong" | "add_kong"; tiles?: Tile[] }[] = [];
+  if (isWinningHand(p.hand, p.revealed.length)) actions.push({ type: "win" });
+  if (canKongNow(state)) {
+    for (const group of canConcealedKong(p.hand)) actions.push({ type: "kong", tiles: group });
+    for (const t of canAddKong(p)) actions.push({ type: "add_kong", tiles: [t] });
+  }
+  return actions;
+}
+
+// ---------------------------------------------------------------------------
 // Draw
 // ---------------------------------------------------------------------------
 
@@ -230,8 +368,9 @@ export function drawTile(state: MahjongGameState): MahjongGameState {
   if (isFlower(tile)) {
     s = handleFlowers(s, s.currentTurn);
   }
+  markDrawn(s, s.currentTurn);
 
-  return s;
+  return checkFlowerWin(state, s, s.currentTurn);
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +400,7 @@ export function discardTile(
   player.discards.push(discarded);
   s.lastDiscard = { tile: discarded, from: s.currentTurn };
   s.hasDrawn = false;
+  s.drawnTileId = undefined;
   s.isAfterKong = false;
   s.isFirstRound = false;
   s.turnCount++;
@@ -306,7 +446,7 @@ export function getAvailableActions(
 
     // --- Kong (明槓): player has 3 of the discarded tile ---
     const matchCount = handKeys.filter((k) => k === discKey).length;
-    if (matchCount >= 3) {
+    if (matchCount >= 3 && canKongNow(state)) {
       const kongTiles = player.hand.filter((t) => tileKey(t) === discKey);
       actions.push({ type: "kong", playerSeat: seat, tiles: kongTiles });
     }
@@ -344,6 +484,11 @@ export function getAvailableActions(
         }
       }
     }
+  }
+
+  // 搶槓窗口：加槓那張牌只能拿來胡，不能吃碰槓
+  if (state.pendingAddKong) {
+    return actions.filter((a) => a.type === "win");
   }
 
   // Sort by priority: win > kong > pong > chi
@@ -394,6 +539,7 @@ export function executeAction(
     player.revealed.push(meld);
     s.currentTurn = action.playerSeat;
     s.hasDrawn = true; // After chi, player must discard (no draw)
+    s.drawnTileId = undefined;
     s.lastDiscard = null;
     s.isAfterKong = false;
   } else if (action.type === "pong") {
@@ -414,9 +560,13 @@ export function executeAction(
     player.revealed.push(meld);
     s.currentTurn = action.playerSeat;
     s.hasDrawn = true; // After pong, player must discard
+    s.drawnTileId = undefined;
     s.lastDiscard = null;
     s.isAfterKong = false;
   } else if (action.type === "kong") {
+    if (!canKongNow(s)) {
+      throw new Error("牌牆剩 16 張，不能再槓");
+    }
     if (!action.tiles || action.tiles.length < 3) {
       throw new Error("Kong requires at least 3 tiles from hand");
     }
@@ -446,6 +596,8 @@ export function executeAction(
       if (isFlower(replacement)) {
         s = handleFlowers(s, action.playerSeat);
       }
+      markDrawn(s, action.playerSeat);
+      return checkFlowerWin(state, s, action.playerSeat);
     } else {
       s.status = "finished"; // wall exhausted
       s.hasDrawn = false;
@@ -494,6 +646,9 @@ export function executeConcealedKong(
   if (tiles.length !== 4) {
     throw new Error("Concealed kong requires exactly 4 tiles");
   }
+  if (!canKongNow(s)) {
+    throw new Error("牌牆剩 16 張，不能再槓");
+  }
 
   // Verify all tiles are in hand and are the same
   const key = tileKey(tiles[0]);
@@ -520,6 +675,8 @@ export function executeConcealedKong(
     if (isFlower(replacement)) {
       s = handleFlowers(s, s.currentTurn);
     }
+    markDrawn(s, s.currentTurn);
+    return checkFlowerWin(state, s, s.currentTurn);
   } else {
     s.status = "finished";
     s.hasDrawn = false;
@@ -566,6 +723,8 @@ export function executeAddKong(
     if (isFlower(replacement)) {
       s = handleFlowers(s, s.currentTurn);
     }
+    markDrawn(s, s.currentTurn);
+    return checkFlowerWin(state, s, s.currentTurn);
   } else {
     s.status = "finished";
     s.hasDrawn = false;
@@ -574,9 +733,90 @@ export function executeAddKong(
   return s;
 }
 
+/**
+ * 手上可以加槓的牌：和自己已碰的刻子同一種牌。
+ */
+export function canAddKong(player: PlayerState): Tile[] {
+  const pongKeys = new Set(
+    player.revealed.filter((m) => m.type === "pong").map((m) => tileKey(m.tiles[0]))
+  );
+  return player.hand.filter((t) => pongKeys.has(tileKey(t)));
+}
+
+/**
+ * 宣告加槓（當前玩家）。
+ * - 沒人能搶：直接完成加槓並補摸一張（同 executeAddKong）
+ * - 有人能胡這張：先不完成，把牌放進 lastDiscard（from=加槓者）、
+ *   設 pendingAddKong，pendingActions 只列能胡的人，等他們胡或 pass
+ */
+export function startAddKong(
+  state: MahjongGameState,
+  tile: Tile
+): MahjongGameState {
+  const seat = state.currentTurn;
+  const player = state.players[seat];
+  if (!state.hasDrawn || state.lastDiscard || state.pendingAddKong || state.pendingFlowerRob) {
+    throw new Error("現在不能加槓");
+  }
+  if (!canKongNow(state)) {
+    throw new Error("牌牆剩 16 張，不能再槓");
+  }
+  if (!canAddKong(player).some((t) => t.id === tile.id)) {
+    throw new Error("這張牌不能加槓");
+  }
+
+  const s = cloneState(state);
+  const p = s.players[seat];
+  p.hand = p.hand.filter((t) => t.id !== tile.id);
+  s.lastDiscard = { tile, from: seat };
+  s.pendingAddKong = { seat, tile };
+
+  const robbers = [...new Set(getAvailableActions(s).map((a) => a.playerSeat))];
+  if (robbers.length === 0) {
+    return executeAddKong(state, tile);
+  }
+  s.pendingActions = { discardFrom: seat, potentialActors: robbers, passedActors: [] };
+  return s;
+}
+
+/**
+ * 搶槓窗口裡沒人胡（全部 pass）：把牌還給加槓者並完成加槓、補摸一張。
+ */
+export function completeAddKong(state: MahjongGameState): MahjongGameState {
+  if (!state.pendingAddKong) throw new Error("沒有等待中的加槓");
+  const { seat, tile } = state.pendingAddKong;
+  const s = cloneState(state);
+  s.players[seat].hand.push(tile);
+  s.currentTurn = seat;
+  s.lastDiscard = null;
+  s.pendingAddKong = undefined;
+  s.pendingActions = undefined;
+  return executeAddKong(s, tile);
+}
+
 // ---------------------------------------------------------------------------
 // Declare Win
 // ---------------------------------------------------------------------------
+
+// 地胡的條件，改這兩個常數即可：
+//   DIHU_CHI_BREAKS：有人「吃」過是否也破地胡（老闆確認：吃、碰、槓都破）
+//   DIHU_RON_FROM_ANY：胡其他閒家第一輪打的牌是否也算（目前：只有胡莊家打的牌算）
+const DIHU_CHI_BREAKS = true;
+const DIHU_RON_FROM_ANY = false;
+
+/**
+ * 地胡：閒家在自己第一次摸牌（還沒打過牌）時胡，自摸或胡莊家打的牌都算；
+ * 在那之前只要任何人吃、碰、明槓、暗槓過就不算。
+ */
+function isDiHu(s: MahjongGameState, player: PlayerState, isSelfDraw: boolean): boolean {
+  if (player.isDealer || player.discards.length > 0) return false;
+  const broken = s.players.some((p) =>
+    p.revealed.some((m) => m.type !== "chi" || DIHU_CHI_BREAKS)
+  );
+  if (broken) return false;
+  if (isSelfDraw) return true;
+  return DIHU_RON_FROM_ANY || s.lastDiscard?.from === s.dealerSeat;
+}
 
 /**
  * A player declares win.
@@ -629,25 +869,28 @@ export function declareWin(
     flowers: player.flowers,
     isLastTile: s.wall.length === 0,
     isAfterKong: s.isAfterKong,
-    isRobbingKong: false, // set externally if applicable
-    isFirstDraw: s.isFirstRound,
+    isRobbingKong: !isSelfDraw && !!s.pendingAddKong,
+    // 天胡：莊家在打出第一張牌前胡（isFirstRound 會在第一次打牌時關掉）。
+    isFirstDraw: player.isDealer ? s.isFirstRound : isDiHu(s, player, isSelfDraw),
   };
 
   const score = calculateScore(scoringCtx);
 
-  // 莊家 / 連 N / 拉 N 台：
+  // 莊家 / 連 N / 拉 N 台：只有「付錢或收錢其中一方是莊家」的那筆才算。
   //   - 莊家胡：莊家 1 台已由 scoring.ts 處理；若 consecutive>0 再加 連/拉
-  //   - 非莊家胡：額外加 莊家 1 台 + 連N + 拉N 到 totalFan，這部分在
-  //     settlement 只由莊家單獨支付（斷莊罰），其他閒家不付這段
+  //   - 非莊家自摸：加 莊家(斷) 1 台 + 連N + 拉N，settlement 只向莊家收這段
+  //   - 非莊家胡莊家放的槍：加 莊家(斷) 1 台 + 連N + 拉N，莊家全付
+  //   - 非莊家胡非莊家放的槍：不加，莊家也不用付
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
+  const dealerPays = isSelfDraw || s.lastDiscard?.from === s.dealerSeat;
   if (player.isDealer) {
     if (consecutive > 0) {
       score.fans.push({ name: `連${consecutive}`, value: consecutive });
       score.fans.push({ name: `拉${consecutive}`, value: consecutive });
       score.totalFan += consecutive * 2;
     }
-  } else {
-    // 斷莊罰：莊家 1 台 + 連N + 拉N — 只由莊家付
+  } else if (dealerPays) {
+    // 斷莊：莊家 1 台 + 連N + 拉N — 只由莊家付
     score.fans.push({ name: "莊家(斷)", value: 1 });
     score.totalFan += 1;
     if (consecutive > 0) {
@@ -767,8 +1010,9 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   const streakFan = 1 + consecutive * 2;
 
   // Self-draw can only be a single winner.
+  // 八仙過海／七搶一也是三家都付，照自摸算（莊家台已在 finishFlowerWin 加好）
   const isSelfDraw = winners.length === 1 &&
-    winners[0].score.fans.some(f => f.name.includes("自摸"));
+    (winners[0].score.fans.some(f => f.name.includes("自摸")) || isFlowerWin(winners[0]));
 
   if (isSelfDraw) {
     const winnerSeat = winners[0].seat;
@@ -803,31 +1047,17 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
     };
   }
 
-  // 放槍 / 一炮多響: discarder pays each winner their individual (底+台×台)
+  // 放槍 / 一炮多響: discarder pays each winner their individual (底+台×台).
+  // 莊家台只在這筆的一方是莊家時才有，已由 declareWin 依此加進 totalFan
+  // （莊家胡、或莊家放槍），所以這裡一律由放槍者照 totalFan 付，莊家不另付。
   const loserSeat = state.lastDiscard?.from ?? -1;
   let totalFanSum = 0;
   let paymentSum = 0;
   if (loserSeat >= 0) {
     for (const w of winners) {
-      const winnerIsDealer = w.seat === dealerSeat;
-      const discarderIsDealer = loserSeat === dealerSeat;
-      let payment: number;
-      if (winnerIsDealer || discarderIsDealer) {
-        // 莊家贏：放槍者付全部（含連/拉）
-        // 莊家放槍：莊家付全部（含連/拉，自己斷自己的莊）
-        payment = basePoints + w.score.totalFan * fanPoints;
-        deltas[w.seat] += payment;
-        deltas[loserSeat] -= payment;
-      } else {
-        // 非莊家放槍給非莊家：放槍者付 baseFans 部分；莊家另外被扣 streakFan
-        const baseFans = Math.max(0, w.score.totalFan - streakFan);
-        const shooterPay = basePoints + baseFans * fanPoints;
-        const dealerPay = streakFan * fanPoints;
-        deltas[w.seat] += shooterPay + dealerPay;
-        deltas[loserSeat] -= shooterPay;
-        deltas[dealerSeat] -= dealerPay;
-        payment = shooterPay + dealerPay;
-      }
+      const payment = basePoints + w.score.totalFan * fanPoints;
+      deltas[w.seat] += payment;
+      deltas[loserSeat] -= payment;
       totalFanSum += w.score.totalFan;
       paymentSum += payment;
     }
@@ -914,6 +1144,8 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
   s.isAfterKong = false;
   s.hasDrawn = false;
   s.pendingActions = undefined;
+  s.pendingAddKong = undefined;
+  s.pendingFlowerRob = undefined;
   s.gameOver = false;
 
   // Reset players

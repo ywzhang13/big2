@@ -6,7 +6,7 @@ import type { MjPlayer } from "@/hooks/useMahjong";
 import MjTile from "./MjTile";
 import MjHand from "./MjHand";
 
-interface MjBoardProps {
+export interface MjBoardProps {
   players: MjPlayer[];
   mySeat: number;
   myHand: Tile[];
@@ -14,6 +14,10 @@ interface MjBoardProps {
   dealerSeat: number;
   lastDiscard: { tile: Tile; from: number } | null;
   availableActions: { type: string; tiles?: Tile[] }[];
+  pendingAddKong: { seat: number; tile: Tile } | null;
+  robKong: boolean;
+  pendingFlowerRob: { robberSeat: number; fromSeat: number; tile: Tile } | null;
+  robFlower: boolean;
   wallRemaining: number;
   hasDrawn: boolean;
   needsDraw: boolean;
@@ -346,6 +350,10 @@ export default function MjBoard({
   dealerSeat,
   lastDiscard,
   availableActions,
+  pendingAddKong,
+  robKong,
+  pendingFlowerRob,
+  robFlower,
   wallRemaining,
   hasDrawn,
   needsDraw,
@@ -377,7 +385,7 @@ export default function MjBoard({
   const getWindChar = (seat: number) => WIND_CHARS[seat] || "?";
 
   return (
-    <div className="mj-landscape flex flex-col flex-1 overflow-hidden relative"
+    <div className="flex flex-col flex-1 overflow-hidden relative"
          style={{
            height: "100%",
            maxHeight: "100%",
@@ -477,7 +485,7 @@ export default function MjBoard({
                   <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} />
                   {/* 中央徽章移除，改以各家 PlayerPanel 上的 連N 小標顯示 */}
                   {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
-                  {dice && !lastDiscard && (
+                  {dice && !lastDiscard && !pendingAddKong && !pendingFlowerRob && (
                     <div className="flex flex-col items-center gap-1">
                       <div className="flex gap-1">
                         <DieFace value={dice[0]} size={20} />
@@ -487,6 +495,32 @@ export default function MjBoard({
                       <span className="text-[9px] text-[#C9A96E]/60 font-bold tracking-wider">
                         {dice[0] + dice[1] + dice[2]} 點開門
                       </span>
+                    </div>
+                  )}
+                  {/* 加槓中的牌：不是打出去的牌，只在中央提示，不進棄牌區 */}
+                  {pendingAddKong && (
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="rounded-lg overflow-hidden shadow-xl"
+                        style={{
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 0 2px rgba(220,38,38,0.6)",
+                        }}>
+                        <MjTile tile={pendingAddKong.tile} />
+                      </div>
+                      <span className="text-[9px] text-[#f0d68a] font-bold">
+                        {players.find(p => p.seat === pendingAddKong.seat)?.name} 加槓中
+                      </span>
+                    </div>
+                  )}
+                  {/* 七搶一：摸到的第 8 張花 */}
+                  {pendingFlowerRob && (
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="rounded-lg overflow-hidden shadow-xl"
+                        style={{
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 0 2px rgba(220,38,38,0.6)",
+                        }}>
+                        <MjTile tile={pendingFlowerRob.tile} />
+                      </div>
+                      <span className="text-[9px] text-[#fca5a5] font-bold">七搶一</span>
                     </div>
                   )}
                   {lastDiscard && (
@@ -563,6 +597,20 @@ export default function MjBoard({
           {/* Turn status */}
           <div className="text-center">
             {(() => {
+              if (pendingAddKong) {
+                return (
+                  <span className="text-[#f0d68a] font-bold text-sm">
+                    {players.find((p) => p.seat === pendingAddKong.seat)?.name} 加槓中
+                  </span>
+                );
+              }
+              if (pendingFlowerRob) {
+                return robFlower ? null : (
+                  <span className="text-white/40 text-xs">
+                    等待 {players.find((p) => p.seat === pendingFlowerRob.robberSeat)?.name}
+                  </span>
+                );
+              }
               const iJustDiscarded = lastDiscard != null && lastDiscard.from === mySeat && currentTurn === mySeat;
               if (iJustDiscarded) {
                 return <span className="text-white/40 text-xs">等待其他玩家...</span>;
@@ -597,9 +645,15 @@ export default function MjBoard({
                       : "bg-gradient-to-r from-[#C9A96E] to-[#e8c97a] text-[#0f2a1a] shadow-[#C9A96E]/20"
                     }`}
                 >
-                  <span>{ActionName(action.type)}</span>
-                  {/* Show the chi tile pair so multiple chi options are distinguishable */}
-                  {action.type === "chi" && action.tiles && (
+                  <span>
+                    {action.type === "win" && robFlower
+                      ? "七搶一"
+                      : action.type === "win" && robKong
+                        ? "搶槓胡"
+                        : ActionName(action.type)}
+                  </span>
+                  {/* Show the chi tile pair / add-kong tile so multiple options are distinguishable */}
+                  {(action.type === "chi" || action.type === "add_kong") && action.tiles && (
                     <span className="flex gap-[1px]">
                       {action.tiles.map((t) => (
                         <MjTile key={t.id} tile={t} tiny />
@@ -613,7 +667,7 @@ export default function MjBoard({
                 className="px-5 py-2 rounded-xl bg-white/10 text-white/70 font-bold text-sm border border-white/10
                   cursor-pointer active:scale-95 transition-all duration-150"
               >
-                過
+                {robKong || robFlower ? "不搶" : "過"}
               </button>
             </div>
           )}

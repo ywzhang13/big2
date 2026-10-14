@@ -1,0 +1,12 @@
+import { retryOnConflict, StateConflictError } from "../../lib/mahjong/db";
+const out: string[] = [];
+const ok = (c: boolean, m: string) => out.push(`${c ? "✅" : "❌"} ${m}`);
+let calls: boolean[] = [];
+let r = await retryOnConflict(async (fresh) => { calls.push(fresh); if (calls.length < 3) throw new StateConflictError(); return Response.json({ ok: 1 }); });
+ok(r.status === 200 && JSON.stringify(calls) === "[false,true,true]", `衝突兩次後成功：第 1 次走快取、重試都 fresh（${JSON.stringify(calls)}）`);
+calls = [];
+r = await retryOnConflict(async (fresh) => { calls.push(fresh); throw new StateConflictError(); });
+ok(r.status === 409 && calls.length === 5, `一直衝突：重試 5 次後回 409（${calls.length} 次）`);
+r = await retryOnConflict(async () => { throw new Error("Not a winning hand"); });
+ok(r.status === 500 && (await r.json()).error === "Not a winning hand", "其他錯誤：照舊回 500 和原訊息，不重試");
+console.log(out.join("\n")); if (out.some((l) => l.startsWith("❌"))) process.exit(1);
