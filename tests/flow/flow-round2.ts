@@ -155,7 +155,8 @@ async function race(unsafe: boolean) {
     setup((s) => { s.leaveRequest = { requesterId: "p0", requesterName: "P0", requesterSeat: 0, approvedBy: [], deniedBy: [] }; });
     const lv = await Promise.all([1, 2, 3].map((k) => call(leaveVote, { playerId: "p" + k, approve: true })));
     const granted = sent.filter((e) => e.event === "mj_leave_vote" && e.payload.result === "granted").length;
-    if (!(lv.every((r) => r.status === 200) && st().status === "finished" && granted === 1)) fail.leaveVote++;
+    // 通過後這場解散、房間會被刪掉（2026-10 對局紀錄：解散就關房）
+    if (!(lv.every((r) => r.status === 200) && !rooms.R && granted === 1)) fail.leaveVote++;
     // 摸牌連點兩下 → 只摸一張
     setup();
     const dr = await Promise.all([call(draw, { playerId: "p1" }), call(draw, { playerId: "p1" })]);

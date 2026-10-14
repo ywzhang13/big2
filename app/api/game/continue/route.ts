@@ -1,6 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase-server";
 import { broadcast } from "@/lib/broadcast";
-import { calculateScore } from "@/lib/scoring";
+import { big2RoundScores } from "@/lib/scoring";
 import { dealAndStart } from "@/lib/deal-and-start";
 import type { Card } from "@/lib/constants";
 
@@ -84,23 +84,9 @@ export async function POST(request: Request) {
 
     const existingScores: Record<string, number> =
       (room.scores as Record<string, number>) ?? {};
-    const roundScores: Record<string, number> = {};
-    let loserTotal = 0;
-    let winnerId: string | null = null;
-
-    for (const p of players) {
-      const hand = p.hand as Card[];
-      const score = calculateScore(hand);
-      roundScores[p.player_id] = score;
-      if (score === 0) {
-        winnerId = p.player_id;
-      } else {
-        loserTotal += score;
-      }
-    }
-    if (winnerId) {
-      roundScores[winnerId] = Math.abs(loserTotal);
-    }
+    const roundScores = big2RoundScores(
+      players.map((p) => ({ player_id: p.player_id, hand: p.hand as Card[] }))
+    );
     for (const p of players) {
       existingScores[p.player_id] =
         (existingScores[p.player_id] ?? 0) + (roundScores[p.player_id] ?? 0);

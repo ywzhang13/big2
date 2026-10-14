@@ -7,6 +7,7 @@ import type { Card } from "@/lib/constants";
 import type { GameState, Player } from "@/lib/gameState";
 import type { Combo } from "@/lib/combo";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 
 function getMyId(): string {
   if (typeof window === "undefined") return "";
@@ -24,7 +25,9 @@ async function api<T>(method: "GET" | "POST", path: string, body?: Record<string
   const res = await fetch(path, opts);
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API error ${res.status}`);
+    const err = new Error(text || `API error ${res.status}`) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -54,10 +57,18 @@ export function useGame(roomCode: string, playerName: string) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const roomIdRef = useRef(roomId);
+  // 房間已關閉（閒置清除後刪房）：顯示「這場已結束」，不再輪詢
+  const [closed, setClosed] = useState<RoomClosedInfo | null>(null);
+  const closedRef = useRef(false);
+  const markClosed = useCallback((info: RoomClosedInfo) => {
+    closedRef.current = true;
+    setClosed((prev) => (prev && prev.players.length > 0 && info.players.length === 0 ? prev : info));
+  }, []);
   roomIdRef.current = roomId;
 
   // Fetch full state from API (for reconnection)
   const fetchState = useCallback(async (rid: string) => {
+    if (closedRef.current) return;
     try {
       const data = await api<{
         status: string;
@@ -110,9 +121,17 @@ export function useGame(roomCode: string, playerName: string) {
         readyPlayers: new Set(data.readyPlayers || []),
       }));
     } catch (err) {
+      // 房間已刪：410 附總結算；404 表示房間不在了但沒有紀錄
+      const status = (err as { status?: number }).status;
+      if (status === 410 || status === 404) {
+        let body: unknown = null;
+        try { body = JSON.parse((err as Error).message); } catch {}
+        markClosed(status === 410 ? closedFromResponse(body) : { players: [] });
+        return;
+      }
       console.error("[big2] fetchState failed:", err);
     }
-  }, [myId]);
+  }, [myId, markClosed]);
 
   // Subscribe to Supabase Realtime
   useEffect(() => {
@@ -304,6 +323,11 @@ export function useGame(roomCode: string, playerName: string) {
       }));
     });
 
+    // --- room_closed：這場已寫紀錄並刪房 ---
+    channel.on("broadcast", { event: "room_closed" }, ({ payload }) => {
+      markClosed(closedFromEvent(payload));
+    });
+
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         console.log("[big2] connected to room", roomCode);
@@ -321,7 +345,7 @@ export function useGame(roomCode: string, playerName: string) {
     const pollTimer = setInterval(() => {
       const s = stateRef.current;
       const rid = roomIdRef.current;
-      if (!rid) return;
+      if (!rid || closedRef.current) return;
       // During gameplay, poll if it's NOT our turn (we might have missed a broadcast)
       if (s.status === "playing" && s.currentTurn !== s.mySeat) {
         fetchState(rid);
@@ -337,7 +361,7 @@ export function useGame(roomCode: string, playerName: string) {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId, fetchState]);
+  }, [roomCode, playerName, myId, fetchState, markClosed]);
 
   // Host = seat 0 player
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
@@ -465,5 +489,7 @@ export function useGame(roomCode: string, playerName: string) {
     isMyTurn: state.currentTurn === state.mySeat,
     canPass: state.lastPlay !== null && state.currentTurn === state.mySeat,
     setRoomId: setRoomIdExternal,
+    closed,
+    markClosed,
   };
 }

@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase-server";
+import { endedResponse } from "@/lib/records/close";
 import type { Card } from "@/lib/constants";
 
 export async function GET(request: NextRequest) {
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (roomError || !room) {
+      const ended = await endedResponse("big2", { roomId });
+      if (ended) return ended;
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 

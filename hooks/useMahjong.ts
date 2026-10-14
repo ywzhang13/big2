@@ -22,6 +22,7 @@ function safeHand(tiles: Tile[]): Tile[] {
 }
 import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 
 function getMjId(): string {
   if (typeof window === "undefined") return "";
@@ -47,7 +48,9 @@ async function api<T>(method: "GET" | "POST", path: string, body?: Record<string
   const res = await fetch(path, opts);
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API error ${res.status}`);
+    const err = new Error(text || `API error ${res.status}`) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -173,12 +176,21 @@ export function useMahjong(roomCode: string, playerName: string) {
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
   const discardingRef = useRef(false);
+  // 房間已關閉（整場打完或解散後刪房）：顯示「這場已結束」，不再輪詢
+  const [closed, setClosed] = useState<RoomClosedInfo | null>(null);
+  const closedRef = useRef(false);
+  const markClosed = useCallback((info: RoomClosedInfo) => {
+    closedRef.current = true;
+    // 已經有總分的就不要被沒有總分的蓋掉（例如先收到事件、之後輪詢回 404）
+    setClosed((prev) => (prev && prev.players.length > 0 && info.players.length === 0 ? prev : info));
+  }, []);
   // 自己回合按「過」收起自摸胡／暗槓／加槓按鈕：記下是哪一張摸牌時收起的，輪詢就不再補回。
   // 只對「這一回合」有效：換局、別人出牌／吃碰槓、我重新摸牌都會清掉（牌 id 每局會重複使用）
   const dismissedOwnActionsRef = useRef<string | null>(null);
 
   // Fetch full state from API (for reconnection / polling)
   const fetchState = useCallback(async (rid: string) => {
+    if (closedRef.current) return;
     try {
       const data = await api<{
         roomId: string;
@@ -325,9 +337,17 @@ export function useMahjong(roomCode: string, playerName: string) {
         nextGameReady: (gs as Record<string, unknown>).nextGameReady as string[] | undefined ?? prev.nextGameReady,
       }));
     } catch (err) {
+      // 房間已刪：410 附總結算；404 表示房間不在了但沒有紀錄（例如一局都沒打完就解散）
+      const status = (err as { status?: number }).status;
+      if (status === 410 || status === 404) {
+        let body: unknown = null;
+        try { body = JSON.parse((err as Error).message); } catch {}
+        markClosed(status === 410 ? closedFromResponse(body) : { players: [] });
+        return;
+      }
       console.error("[mj] fetchState failed:", err);
     }
-  }, [myId]);
+  }, [myId, markClosed]);
 
   // Subscribe to Supabase Realtime
   useEffect(() => {
@@ -787,6 +807,11 @@ export function useMahjong(roomCode: string, playerName: string) {
     });
 
     // --- mj_leave_vote ---
+    // --- mj_room_closed：這場已寫紀錄並刪房（最終結算照常顯示） ---
+    channel.on("broadcast", { event: "mj_room_closed" }, ({ payload }) => {
+      markClosed(closedFromEvent(payload));
+    });
+
     channel.on("broadcast", { event: "mj_leave_vote" }, ({ payload }) => {
       const { approvedCount, deniedCount, result, requesterSeat, requesterName } = payload as {
         voterId: string;
@@ -798,6 +823,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         requesterSeat: number;
         requesterName: string;
       };
+      // 四家同意解散：房間會被關掉，先停在「這場已結束」，總分等 mj_room_closed 帶來
+      if (result === "granted") markClosed({ endReason: "dissolved", players: [] });
       setState((prev) => ({
         ...prev,
         leaveRequest:
@@ -890,7 +917,7 @@ export function useMahjong(roomCode: string, playerName: string) {
     // Periodic state poll for recovery
     const pollTimer = setInterval(() => {
       const rid = roomIdRef.current;
-      if (!rid) return;
+      if (!rid || closedRef.current) return;
       fetchState(rid);
     }, 5000);
 
@@ -899,7 +926,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId, fetchState]);
+  }, [roomCode, playerName, myId, fetchState, markClosed]);
 
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
@@ -1130,6 +1157,8 @@ export function useMahjong(roomCode: string, playerName: string) {
     discardTile,
     doAction,
     setRoomId: setRoomIdExternal,
+    closed,
+    markClosed,
     createRoom,
     joinRoom,
   };

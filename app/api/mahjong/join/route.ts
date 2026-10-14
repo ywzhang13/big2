@@ -1,5 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase-server";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
+import { endedResponse } from "@/lib/records/close";
 
 export async function POST(request: Request) {
   try {
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
       .single();
 
     if (roomError || !room) {
+      // 這個房號剛結束、房間已刪（例如結算後重新整理）：回「這場已結束」（410）
+      const ended = await endedResponse("mahjong", { code });
+      if (ended) return ended;
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 

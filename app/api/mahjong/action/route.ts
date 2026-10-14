@@ -18,12 +18,11 @@ import {
   applyWinnerOrderRule,
   advanceTurn,
   drawTile,
-  calculateSettlement,
-  isAllRoundsComplete,
   getAvailableActions,
   AvailableAction,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
+import { closeMahjongIfOver } from "@/lib/records/close";
 import { Tile } from "@/lib/mahjong/tiles";
 import {
   applySettlement,
@@ -110,6 +109,7 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
       applySettlement(newState);
       await save(newState, "finished");
       await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+      await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
       return Response.json({ success: true });
     }
     newState = passFlowerRob(state);
@@ -177,6 +177,7 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
       const events = addKongDoneEvents(newState, seat, tile);
       await save(newState, newState.status === "finished" ? "finished" : undefined);
       await mjBroadcastBatch(room.code, events);
+      await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
       return Response.json({ success: true, robWindow: false });
     }
     await save(newState);
@@ -265,22 +266,13 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
     newState.pendingAddKong = undefined;
 
     // Calculate settlement if round system is active
-    let settlement = undefined;
-    if (newState.roomSettings) {
-      settlement = calculateSettlement(newState);
-      newState.settlement = settlement;
-      if (newState.playerScores) {
-        newState.playerScores = newState.playerScores.map(
-          (s, i) => s + settlement!.deltas[i]
-        );
-      }
-      newState.gameOver = isAllRoundsComplete(newState);
-    }
+    applySettlement(newState);
 
     await save(newState, "finished");
 
     // Broadcast game over with all hands revealed（含 winTile／from／waits）
     await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+    await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
     return Response.json({ success: true });
   }
@@ -308,19 +300,10 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
           newState = { ...state, pendingActions: undefined, pendingAddKong: undefined } as MahjongGameState;
           newState = applyWinnerOrderRule(newState);
           newState.status = "finished";
-          let settlement = undefined;
-          if (newState.roomSettings) {
-            settlement = calculateSettlement(newState);
-            newState.settlement = settlement;
-            if (newState.playerScores) {
-              newState.playerScores = newState.playerScores.map(
-                (v, i) => v + settlement!.deltas[i]
-              );
-            }
-            newState.gameOver = isAllRoundsComplete(newState);
-          }
+          applySettlement(newState);
           await save(newState, "finished");
           await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+          await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
           return Response.json({ success: true, finalized: true });
         }
         if (state.pendingAddKong) {
@@ -336,6 +319,7 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
             },
             ...events,
           ]);
+          await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
           return Response.json({ success: true });
         }
         // Everyone passed — advance turn, clear pending
@@ -479,6 +463,7 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
       { event: "mj_action", payload: { type: m.type, seat, tiles: m.tiles, tileCount: newState.players[seat].hand.length } },
       gameOverEvent(newState),
     ]);
+    await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
     return Response.json({ success: true });
   }
 

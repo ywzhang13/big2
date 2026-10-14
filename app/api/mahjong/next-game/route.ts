@@ -8,6 +8,7 @@ import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { startNextGame, isAllRoundsComplete, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
+import { closeMahjongIfOver } from "@/lib/records/close";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -112,6 +113,7 @@ async function handleNextGame(body: unknown, fresh: boolean): Promise<Response> 
 
   // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
   await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(newState)] : flowerRobEvents(newState));
+  if (endedAtDeal) await closeMahjongIfOver(roomId, room.code, newState); // 最後一局開局就八仙：整場打完
 
   return Response.json({ success: true, ready: 4, total: 4, started: true });
 }

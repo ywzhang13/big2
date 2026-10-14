@@ -8,6 +8,7 @@ import {
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { initGame, dealTiles, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
+import { closeMahjongIfOver } from "@/lib/records/close";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -82,6 +83,9 @@ async function handleStart(body: unknown, fresh: boolean): Promise<Response> {
     state.roundInfo.initialDealerSeat = firstDealerSeat;
   }
 
+  // 對局紀錄：記開局時間；打完幾局從 0 開始算（applySettlement 會加）
+  state.startedAt = new Date().toISOString();
+  state.handsCompleted = 0;
   state = dealTiles(state);
 
   // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
@@ -123,6 +127,7 @@ async function handleStart(body: unknown, fresh: boolean): Promise<Response> {
 
   // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
   await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(state)] : flowerRobEvents(state));
+  if (endedAtDeal) await closeMahjongIfOver(roomId, room.code, state); // 只有一局又開局八仙：整場打完
 
   return Response.json({ success: true });
 }

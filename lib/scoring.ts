@@ -54,3 +54,23 @@ export function scoreBreakdown(hand: Card[]): { base: number; multiplier: number
 
   return { base, multiplier, total: base * multiplier, reasons };
 }
+
+/**
+ * 大老二一局的分數：沒出完的人照手牌算負分，出完的人（0 分）拿走其他三家負分的總和。
+ * /api/game/continue 和對局紀錄共用。
+ */
+export function big2RoundScores(
+  players: { player_id: string; hand: Card[] }[]
+): Record<string, number> {
+  const round: Record<string, number> = {};
+  let loserTotal = 0;
+  let winnerId: string | null = null;
+  for (const p of players) {
+    const score = calculateScore(p.hand);
+    round[p.player_id] = score;
+    if (score === 0) winnerId = p.player_id;
+    else loserTotal += score;
+  }
+  if (winnerId) round[winnerId] = Math.abs(loserTotal);
+  return round;
+}

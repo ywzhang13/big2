@@ -8,6 +8,8 @@ import Hand from "@/components/Hand";
 import PlayArea from "@/components/PlayArea";
 import PlayerSlot from "@/components/PlayerSlot";
 import GameOver from "@/components/GameOver";
+import RoomClosed from "@/components/RoomClosed";
+import { closedFromResponse } from "@/hooks/roomClosed";
 import type { Card as CardType } from "@/lib/constants";
 import { calculateScore } from "@/lib/scoring";
 
@@ -99,9 +101,10 @@ export default function Home() {
         body: JSON.stringify({ code: joinCode, playerId: getMyId(), name: name.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "加入房間失敗"); return; }
+      // 410＝這場已結束：照樣進房間畫面，由房間顯示總結算
+      if (!res.ok && res.status !== 410) { setError(data.error || "加入房間失敗"); return; }
       setRoomCode(joinCode);
-      setCreatedRoomId(data.roomId);
+      setCreatedRoomId(data.roomId ?? "");
       setScreen("room");
       window.location.hash = `room=${joinCode}`;
     } catch {
@@ -206,7 +209,7 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId } = useGame(
+  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed } = useGame(
     code, nameReady ? playerName : ""
   );
 
@@ -226,13 +229,14 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, playerId: pid, name: playerName }),
       })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.roomId) setRoomId(data.roomId);
+        .then(async (res) => {
+          const data = await res.json();
+          if (res.status === 410) markClosed(closedFromResponse(data));
+          else if (data.roomId) setRoomId(data.roomId);
         })
         .catch((err) => console.error("[big2] auto-join failed:", err));
     }
-  }, [nameReady, playerName, code, initialRoomId, setRoomId]);
+  }, [nameReady, playerName, code, initialRoomId, setRoomId, markClosed]);
 
   // Auto-deal when all 4 players are ready is now handled by the backend
   // (the last confirmReady triggers deal automatically)
@@ -288,6 +292,8 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
     const seat = (state.mySeat + offset) % 4;
     return state.players.find((p) => p.seat === seat);
   };
+
+  if (closed) return <RoomClosed info={closed} onGoHome={onGoHome} />;
 
   // Name input
   if (!nameReady) {

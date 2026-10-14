@@ -1,4 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase-server";
+import { after } from "next/server";
+import { sweepIdleRooms } from "@/lib/records/close";
 
 function generateCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
@@ -67,6 +69,9 @@ export async function POST(request: Request) {
     if (!roomId) {
       return Response.json({ error: "無法產生房間代碼，請重試" }, { status: 500 });
     }
+
+    // 建房時順便清閒置太久的房間（打過牌的先記成中途解散）；回應送出後才跑，不拖慢建房
+    after(() => sweepIdleRooms().then(() => undefined));
 
     return Response.json({ code, roomId, roomSettings });
   } catch {

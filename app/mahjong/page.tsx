@@ -6,6 +6,8 @@ import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import { RevealTiles, WaitsList } from "@/components/mahjong/MjReveal";
+import RoomClosed from "@/components/RoomClosed";
+import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
@@ -135,12 +137,12 @@ export default function MahjongPage() {
         body: JSON.stringify({ code: joinCode, playerId: myId, name: name.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok && res.status !== 410) {
         setError(data.error || "加入房間失敗");
         return;
       }
       setRoomCode(joinCode);
-      setCreatedRoomId(data.roomId);
+      setCreatedRoomId(data.roomId ?? "");
       setScreen("room");
       window.location.hash = `room=${joinCode}`;
     } catch {
@@ -457,18 +459,12 @@ function RoomView({
     discardTile,
     doAction,
     setRoomId,
+    closed,
+    markClosed,
   } = useMahjong(code, nameReady ? playerName : "");
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const isMobileLandscape = useMobileLandscape();
-
-  // When leave request is granted, all 4 players auto-return to lobby
-  useEffect(() => {
-    if (state.leaveResult === "granted") {
-      const t = setTimeout(() => onGoHome(), 800);
-      return () => clearTimeout(t);
-    }
-  }, [state.leaveResult, onGoHome]);
 
   // Detect win type for celebration overlay
   const isZimoWin =
@@ -521,13 +517,15 @@ function RoomView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, playerId: pid, name: playerName }),
       })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.roomId) setRoomId(data.roomId);
+        .then(async (res) => {
+          const data = await res.json();
+          // 這場已結束、房間已刪：顯示總結算
+          if (res.status === 410) markClosed(closedFromResponse(data));
+          else if (data.roomId) setRoomId(data.roomId);
         })
         .catch((err) => console.error("[mj] auto-join failed:", err));
     }
-  }, [nameReady, playerName, code, initialRoomId, setRoomId]);
+  }, [nameReady, playerName, code, initialRoomId, setRoomId, markClosed]);
 
   // Vibrate on my turn
   const prevIsMyTurn = useRef(false);
@@ -539,6 +537,13 @@ function RoomView({
     }
     prevIsMyTurn.current = isMyTurn;
   }, [isMyTurn, state.status]);
+
+  // 房間已關閉：整場打完的最終結算畫面本身就有「回大廳」，其他情況（解散、重新整理、
+  // 用房號加入已刪的房）顯示「這場已結束」
+  const finalOverlayShown = state.status === "finished" && !!state.winner && !!state.gameOver;
+  if (closed && !(closed.endReason === "completed" && finalOverlayShown)) {
+    return <RoomClosed info={closed} onGoHome={onGoHome} />;
+  }
 
   // Name input (when joining via hash)
   if (!nameReady) {
@@ -869,15 +874,6 @@ function RoomView({
         </div>
       )}
 
-      {/* Leave granted — brief overlay before auto return to lobby */}
-      {state.leaveResult === "granted" && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-[70]">
-          <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-6 max-w-sm text-center">
-            <p className="text-[#f0d68a] font-bold text-lg mb-1">遊戲結束</p>
-            <p className="text-white/60 text-sm">玩家已離開，返回大廳...</p>
-          </div>
-        </div>
-      )}
       {/* Celebration overlay — shown briefly on all 4 screens before settlement */}
       {celebrationMode && state.winner && state.winner.seat >= 0 && (
         <div

@@ -1,6 +1,7 @@
 import { loadRoom, saveGameStateIfUnchanged, retryOnConflict } from "@/lib/mahjong/db";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
+import { closeMahjongRoom } from "@/lib/records/close";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -88,6 +89,11 @@ async function handleLeaveVote(body: unknown, fresh: boolean): Promise<Response>
     requesterSeat: lr.requesterSeat,
     requesterName: lr.requesterName,
   });
+
+  // 四家同意解散：打過至少一局就記下當下總分（中途解散），再關房；一局都沒打完的直接刪
+  if (broadcastEvent === "granted") {
+    await closeMahjongRoom(roomId, room.code, newState, "dissolved");
+  }
 
   return Response.json({ success: true, result: broadcastEvent });
 }

@@ -1,4 +1,5 @@
 import { loadRoom, loadPlayers, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
+import { endedResponse } from "@/lib/records/close";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function GET(request: Request) {
@@ -13,6 +14,9 @@ export async function GET(request: Request) {
 
     const room = await loadRoom(roomId);
     if (!room) {
+      // 房間已在這場結束後刪除：回「這場已結束」和總結算（410），前端不要顯示錯誤畫面
+      const ended = await endedResponse("mahjong", { roomId });
+      if (ended) return ended;
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 

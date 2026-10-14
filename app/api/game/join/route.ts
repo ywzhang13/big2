@@ -1,5 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase-server";
 import { broadcast } from "@/lib/broadcast";
+import { endedResponse } from "@/lib/records/close";
 
 export async function POST(request: Request) {
   try {
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
       .single();
 
     if (roomError || !room) {
+      const ended = await endedResponse("big2", { code });
+      if (ended) return ended;
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 

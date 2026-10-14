@@ -25,6 +25,8 @@ export function applySettlement(s: MahjongGameState): void {
     s.playerScores = s.playerScores.map((v, i) => v + settlement.deltas[i]);
   }
   s.gameOver = isAllRoundsComplete(s);
+  // 只有新版開局（有這個欄位）的場次才計數，上線前開局的房間維持沒有 → 不補記紀錄
+  if (s.handsCompleted !== undefined) s.handsCompleted += 1;
 }
 
 /** mj_game_over：有贏家照胡牌格式，沒有贏家就是流局（winnerSeat=-1） */

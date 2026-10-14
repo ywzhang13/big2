@@ -8,6 +8,7 @@ import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { drawTile, ownTurnActions } from "@/lib/mahjong/gameLogic";
 import { applySettlement, drawEvents, gameOverEvent, tingAutoDiscard } from "@/lib/mahjong/events";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
+import { closeMahjongIfOver } from "@/lib/records/close";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -69,6 +70,7 @@ async function handleDraw(body: unknown, fresh: boolean): Promise<Response> {
     applySettlement(newState);
     await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, "finished");
     await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+    await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
     return Response.json({ success: true, draw: !newState.winners?.length });
   }
 

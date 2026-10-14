@@ -39,3 +39,5 @@ export async function retryOnConflict(handler: (fresh: boolean) => Promise<Respo
 export async function loadPlayers(_id: string) {
   return [0, 1, 2, 3].map((seat) => ({ id: "row" + seat, room_id: _id, player_id: "p" + seat, name: "P" + seat, seat }));
 }
+// 純函式（不連資料庫），沿用真的版本：state 路由用
+export { toPlayerGameState } from "../../lib/mahjong/db";
