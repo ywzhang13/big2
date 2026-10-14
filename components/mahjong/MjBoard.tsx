@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer } from "@/hooks/useMahjong";
 import MjTile from "./MjTile";
 import MjHand from "./MjHand";
+import { seatWindChar } from "./seatWind";
 
 export interface MjBoardProps {
   players: MjPlayer[];
@@ -18,6 +20,8 @@ export interface MjBoardProps {
   robKong: boolean;
   pendingFlowerRob: { robberSeat: number; fromSeat: number; tile: Tile } | null;
   robFlower: boolean;
+  tingSeats: number[];
+  tingOptions: number[];
   wallRemaining: number;
   hasDrawn: boolean;
   needsDraw: boolean;
@@ -27,7 +31,7 @@ export interface MjBoardProps {
   drawnTileId: number | null;
   actionNotice: { seat: number; type: string } | null;
   onDraw: () => void;
-  onDiscard: (tileId: number) => void;
+  onDiscard: (tileId: number, declareTing?: boolean) => void;
   onAction: (type: string, tiles?: Tile[]) => void;
   dice?: [number, number, number];
   doorSeat?: number;
@@ -35,7 +39,22 @@ export interface MjBoardProps {
   dealerConsecutive?: number;
 }
 
-const WIND_CHARS = ["東", "南", "西", "北"];
+/** 已宣告地聽的標示（小宜規格的聽牌標） */
+function TingTag() {
+  return (
+    <span
+      className="px-1.5 py-[1px] rounded-full text-[9px] font-black leading-none"
+      style={{
+        background: "linear-gradient(135deg, #059669, #34d399)",
+        color: "#042f1f",
+        border: "1px solid rgba(167,243,208,0.7)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      聽
+    </span>
+  );
+}
 
 /** Single die face (1-6) rendered with pips */
 function DieFace({ value, size = 22 }: { value: number; size?: number }) {
@@ -106,6 +125,7 @@ function PlayerPanel({
   windChar,
   score,
   dealerConsecutive,
+  isTing,
 }: {
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
@@ -113,6 +133,7 @@ function PlayerPanel({
   windChar: string;
   score?: number;
   dealerConsecutive?: number;
+  isTing?: boolean;
 }) {
   if (!player) return null;
 
@@ -142,6 +163,7 @@ function PlayerPanel({
             <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
               {player.name}
             </span>
+            {isTing && <TingTag />}
             {/* 連N pill — inline next to the name, no absolute positioning so
                 it never clips against viewport edges. */}
             {player.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
@@ -279,17 +301,19 @@ function WindDial({
   mySeat,
   wallRemaining,
   doorSeat,
+  dealerSeat,
 }: {
   currentTurn: number;
   mySeat: number;
   wallRemaining: number;
   doorSeat?: number;
+  dealerSeat: number;
 }) {
   // Position winds relative to player's seat
   const winds = [0, 1, 2, 3].map((offset) => {
     const seat = (mySeat + offset) % 4;
     return {
-      char: WIND_CHARS[seat],
+      char: seatWindChar(seat, doorSeat, dealerSeat),
       isActive: seat === currentTurn,
       isDoor: doorSeat != null && seat === doorSeat,
       position: offset, // 0=bottom, 1=right, 2=top, 3=left
@@ -354,6 +378,8 @@ export default function MjBoard({
   robKong,
   pendingFlowerRob,
   robFlower,
+  tingSeats,
+  tingOptions,
   wallRemaining,
   hasDrawn,
   needsDraw,
@@ -381,8 +407,14 @@ export default function MjBoard({
   const me = players.find((p) => p.seat === mySeat);
 
   const hasActions = availableActions.length > 0;
+  const isTing = tingSeats.includes(mySeat);
+  // 地聽：這次打牌可以一起宣告時才有「地聽」鈕；記住是對哪一組選項按下的，換回合自動失效
+  const canTing = needsDiscard && tingOptions.length > 0;
+  const tingKey = tingOptions.join(",");
+  const [tingArmedKey, setTingArmedKey] = useState<string | null>(null);
+  const tingArmed = canTing && tingArmedKey === tingKey;
 
-  const getWindChar = (seat: number) => WIND_CHARS[seat] || "?";
+  const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden relative"
@@ -400,6 +432,7 @@ export default function MjBoard({
           isCurrent={top?.seat === currentTurn}
           windChar={getWindChar(top?.seat ?? 2)}
           score={top && playerScores ? playerScores[top.seat] : undefined}
+            isTing={top != null && tingSeats.includes(top.seat)}
           dealerConsecutive={dealerConsecutive}
         />
       </div>
@@ -414,6 +447,7 @@ export default function MjBoard({
             isCurrent={left?.seat === currentTurn}
             windChar={getWindChar(left?.seat ?? 3)}
             score={left && playerScores ? playerScores[left.seat] : undefined}
+            isTing={left != null && tingSeats.includes(left.seat)}
             dealerConsecutive={dealerConsecutive}
           />
         </div>
@@ -482,7 +516,7 @@ export default function MjBoard({
 
                 {/* Center: wind dial + last discard */}
                 <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} />
+                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} />
                   {/* 中央徽章移除，改以各家 PlayerPanel 上的 連N 小標顯示 */}
                   {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
                   {dice && !lastDiscard && !pendingAddKong && !pendingFlowerRob && (
@@ -630,8 +664,8 @@ export default function MjBoard({
             })()}
           </div>
 
-          {/* Action buttons (碰/槓/胡/過) */}
-          {hasActions && (
+          {/* Action buttons (碰/槓/胡/過/地聽) */}
+          {(hasActions || canTing) && (
             <div className="flex gap-2 justify-center flex-wrap">
               {availableActions.map((action, i) => (
                 <button
@@ -662,13 +696,29 @@ export default function MjBoard({
                   )}
                 </button>
               ))}
-              <button
-                onClick={() => onAction("pass")}
-                className="px-5 py-2 rounded-xl bg-white/10 text-white/70 font-bold text-sm border border-white/10
-                  cursor-pointer active:scale-95 transition-all duration-150"
-              >
-                {robKong || robFlower ? "不搶" : "過"}
-              </button>
+              {hasActions && (
+                <button
+                  onClick={() => onAction("pass")}
+                  className="px-5 py-2 rounded-xl bg-white/10 text-white/70 font-bold text-sm border border-white/10
+                    cursor-pointer active:scale-95 transition-all duration-150"
+                >
+                  {robKong || robFlower ? "不搶" : "過"}
+                </button>
+              )}
+              {canTing && (
+                <button
+                  onClick={() => setTingArmedKey(tingArmed ? null : tingKey)}
+                  aria-pressed={tingArmed}
+                  className={`px-4 py-2 rounded-xl font-bold text-sm cursor-pointer active:scale-95 transition-all duration-150
+                    ${tingArmed
+                      ? "text-[#042f1f] shadow-lg"
+                      : "bg-white/10 text-[#6ee7b7] border border-[#34d399]/40"
+                    }`}
+                  style={tingArmed ? { background: "linear-gradient(135deg, #059669, #34d399)" } : undefined}
+                >
+                  地聽
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -681,6 +731,7 @@ export default function MjBoard({
             isCurrent={right?.seat === currentTurn}
             windChar={getWindChar(right?.seat ?? 1)}
             score={right && playerScores ? playerScores[right.seat] : undefined}
+            isTing={right != null && tingSeats.includes(right.seat)}
             dealerConsecutive={dealerConsecutive}
           />
         </div>
@@ -698,6 +749,7 @@ export default function MjBoard({
             {getWindChar(mySeat)}
           </div>
           <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
+          {isTing && <TingTag />}
           {me?.isDealer && (
             <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">
               莊
@@ -753,7 +805,14 @@ export default function MjBoard({
         {/* Hand — extra top padding for selected tile float */}
         <div className="flex items-end px-1 pt-4 pb-1.5 gap-2">
           <div className="flex-1 min-w-0">
-            <MjHand tiles={myHand} canDiscard={needsDiscard} onDiscard={onDiscard} drawnTileId={drawnTileId ?? undefined} />
+            <MjHand
+              tiles={myHand}
+              canDiscard={needsDiscard && !isTing}
+              onDiscard={onDiscard}
+              drawnTileId={drawnTileId ?? undefined}
+              tingArmed={tingArmed}
+              tingOptionIds={tingOptions}
+            />
           </div>
         </div>
       </div>

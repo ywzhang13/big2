@@ -6,7 +6,7 @@ import {
 } from "@/lib/mahjong/db";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
-import { startNextGame, isAllRoundsComplete } from "@/lib/mahjong/gameLogic";
+import { startNextGame, isAllRoundsComplete, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
@@ -105,6 +105,8 @@ async function handleNextGame(body: unknown, fresh: boolean): Promise<Response> 
       playerId: p.id,
       hand: p.hand.filter((t) => t.suit !== "f"),
       flowers: p.flowers,
+      // 開局莊家打第一張時可以宣告地聽：能宣告的出牌選項（其他人是空陣列）
+      tingOptions: tingDiscardOptions(newState, p.seat).map((t) => t.id),
     });
   }
 

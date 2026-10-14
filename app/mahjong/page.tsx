@@ -5,9 +5,8 @@ import { useMahjong, getMjId } from "@/hooks/useMahjong";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
+import { RevealTiles, WaitsList } from "@/components/mahjong/MjReveal";
 import MjGameOver from "@/components/mahjong/MjGameOver";
-import MjTile from "@/components/mahjong/MjTile";
-import { sortTiles } from "@/lib/mahjong/tiles";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -618,7 +617,6 @@ function RoomView({
           <div className="grid grid-cols-2 gap-3 w-full">
             {[0, 1, 2, 3].map((seat) => {
               const player = state.players.find((p) => p.seat === seat);
-              const windChar = ["東", "南", "西", "北"][seat];
               return (
                 <div
                   key={seat}
@@ -629,7 +627,7 @@ function RoomView({
                   }`}
                 >
                   <p className="text-xs text-white/40 mb-1">
-                    {windChar}風 · 座位 {seat + 1}
+                    座位 {seat + 1}
                   </p>
                   {player ? (
                     <p className="font-bold text-[#f0d68a]">
@@ -698,6 +696,10 @@ function RoomView({
     ? `${["東", "南", "西", "北"][(state.roundInfo.currentRound - 1) % 4]}風圈 第${state.roundInfo.currentGame}局`
     : undefined;
 
+  const nameOfSeat = (seat: number) => state.players.find((p) => p.seat === seat)?.name ?? "";
+  // 這局的所有贏家（三響時三位）；流局是空陣列
+  const resultWinners = state.winners ?? (state.winner && state.winner.seat >= 0 ? [state.winner] : []);
+
   const boardProps = {
     players: state.players,
     mySeat: state.mySeat,
@@ -710,6 +712,8 @@ function RoomView({
     robKong: state.robKong,
     pendingFlowerRob: state.pendingFlowerRob,
     robFlower: state.robFlower,
+    tingSeats: state.tingSeats,
+    tingOptions: state.tingOptions,
     wallRemaining: state.wallRemaining,
     hasDrawn: state.hasDrawn,
     needsDraw,
@@ -1018,7 +1022,7 @@ function RoomView({
           players={state.players}
           mySeat={state.mySeat}
           myId={state.myId}
-          fromName={state.lastDiscard ? state.players.find((p) => p.seat === state.lastDiscard?.from)?.name : undefined}
+          fromName={(state.winner.from ?? state.lastDiscard?.from) != null ? nameOfSeat((state.winner.from ?? state.lastDiscard?.from)!) : undefined}
           isZimo={isZimoWin}
           settlement={state.settlement}
           playerScores={state.playerScores}
@@ -1037,7 +1041,7 @@ function RoomView({
       {!isMobileLandscape && isFinished && state.winner && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div
-            className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl max-w-md w-full shadow-2xl flex flex-col"
+            className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl max-w-5xl w-full shadow-2xl flex flex-col"
             style={{ maxHeight: "92vh" }}
           >
           {/* Scrollable content */}
@@ -1075,6 +1079,9 @@ function RoomView({
                 50% { opacity: 1; transform: scale(1.1); }
               }
             `}</style>
+            <div className="flex gap-5 items-start">
+            {/* 左欄：胡法＋台數明細 */}
+            <div className="w-[240px] flex-shrink-0">
             {state.winner.seat < 0 ? (
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/5 flex items-center justify-center text-2xl">
@@ -1136,9 +1143,9 @@ function RoomView({
                     >
                       自摸
                     </span>
-                  ) : state.lastDiscard ? (
+                  ) : (state.winner.from ?? state.lastDiscard?.from) != null ? (
                     <span className="text-red-400">
-                      {state.players.find((p) => p.seat === state.lastDiscard?.from)?.name} 放槍
+                      {nameOfSeat((state.winner.from ?? state.lastDiscard?.from)!)} 放槍
                     </span>
                   ) : (
                     <span className="text-[#C9A96E]">自摸</span>
@@ -1152,9 +1159,24 @@ function RoomView({
               </div>
             )}
 
-            {/* Combined: each player's hand + settlement delta + cumulative score */}
+            {/* 台數明細（左欄） */}
+            {state.winner && state.winner.seat >= 0 && state.winner.score.fans.length > 0 && (
+              <div className="mt-3 border-t border-white/10 pt-3">
+                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">台數明細</p>
+                {state.winner.score.fans.map((fan, i) => (
+                  <div key={i} className="flex justify-between text-sm px-2 py-1">
+                    <span className="text-white/70">{fan.name}</span>
+                    <span className="text-[#C9A96E] font-bold">{fan.value} 台</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            </div>
+
+            {/* 右欄：四家攤牌＋輸贏 */}
+            <div className="flex-1 min-w-0">
             {state.winner?.allHands && state.winner.allHands.length > 0 && (
-              <div className="mt-4 border-t border-white/10 pt-3">
+              <div>
                 <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">各家結算</p>
                 <div className="flex flex-col gap-1.5">
                   {state.winner.allHands
@@ -1162,7 +1184,8 @@ function RoomView({
                     .map((h) => {
                       const delta = state.settlement?.deltas[h.seat] ?? 0;
                       const cumulative = state.playerScores?.[h.seat] ?? 0;
-                      const isWin = state.winner!.seat === h.seat;
+                      const w = resultWinners.find((x) => x.seat === h.seat);
+                      const isWin = !!w;
                       return (
                         <div
                           key={h.seat}
@@ -1177,7 +1200,14 @@ function RoomView({
                               {h.name}
                               {h.seat === state.mySeat && " (你)"}
                               {isWin && <span className="text-[#f0d68a] ml-1">胡</span>}
+                              {w && resultWinners.length > 1 && (
+                                <span className="text-[#f0d68a]/70 font-normal ml-2">
+                                  {w.score.totalFan}台：{w.score.fans.map((f) => f.name).join("、")}
+                                </span>
+                              )}
                             </span>
+                            <span className="flex-1" />
+                            <WaitsList waits={w?.waits} w={18} ht={24} />
                             <div className="flex items-baseline gap-2">
                               {state.settlement && state.roomSettings && (
                                 <span className={`text-sm font-bold ${
@@ -1193,46 +1223,7 @@ function RoomView({
                               )}
                             </div>
                           </div>
-                          {/* Concealed hand — sorted for readability */}
-                          <div className="flex flex-wrap gap-[1px] items-end">
-                            {sortTiles(h.hand).map((t) => (
-                              <MjTile key={`h-${t.id}`} tile={t} tiny />
-                            ))}
-                          </div>
-                          {/* Chi/pong/kong + flowers — visually separated row,
-                              scaled to 90% so it's clearly a secondary group. */}
-                          {(h.revealed.length > 0 || h.flowers.length > 0) && (
-                            <div
-                              className="mt-1.5 pt-1.5 border-t border-dashed border-white/10 flex flex-wrap gap-2 items-end origin-top-left"
-                              style={{
-                                transform: "scale(0.9)",
-                                width: "111.111%", // compensate so scaled width fills the row
-                              }}
-                            >
-                              {h.revealed.map((meld, mi) => (
-                                <div key={mi} className="flex gap-0">
-                                  {/* 結算畫面全部揭露，暗槓也顯示牌面 */}
-                                  {meld.tiles.map((t) => (
-                                    <MjTile key={`r-${mi}-${t.id}`} tile={t} tiny />
-                                  ))}
-                                </div>
-                              ))}
-                              {h.flowers.length > 0 && (
-                                <div
-                                  className="flex gap-[1px] items-end"
-                                  style={{
-                                    marginLeft: h.revealed.length > 0 ? 8 : 0,
-                                    paddingLeft: h.revealed.length > 0 ? 8 : 0,
-                                    borderLeft: h.revealed.length > 0 ? "1px solid rgba(255,255,255,0.1)" : "none",
-                                  }}
-                                >
-                                  {sortTiles(h.flowers).map((f) => (
-                                    <MjTile key={`f-${f.id}`} tile={f} tiny />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <RevealTiles h={h} winner={w} nameOf={nameOfSeat} w={26} ht={35} />
                         </div>
                       );
                     })}
@@ -1245,19 +1236,8 @@ function RoomView({
                 )}
               </div>
             )}
-
-            {/* Fan breakdown — below 各家結算 */}
-            {state.winner && state.winner.seat >= 0 && state.winner.score.fans.length > 0 && (
-              <div className="mt-3 border-t border-white/10 pt-3">
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">台數明細</p>
-                {state.winner.score.fans.map((fan, i) => (
-                  <div key={i} className="flex justify-between text-sm px-2 py-1">
-                    <span className="text-white/70">{fan.name}</span>
-                    <span className="text-[#C9A96E] font-bold">{fan.value} 台</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            </div>
+            </div>
 
           </div>
           {/* Sticky bottom: Action buttons + Ready check (always visible) */}

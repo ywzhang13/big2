@@ -82,6 +82,7 @@
 .mjm-sc.pos { color: #4ade80; } .mjm-sc.neg { color: #f87171; } .mjm-sc.zero { color: rgba(255,255,255,.4); }
 .mjm-tag { font-size: 9px; font-weight: 900; line-height: 1; padding: 2px 5px; border-radius: 999px; white-space: nowrap; }
 .mjm-tag.dealer { background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; border: 1px solid rgba(240,214,138,.6); }
+.mjm-tag.ting { background: linear-gradient(135deg, #059669, #34d399); color: #042f1f; border: 1px solid rgba(167,243,208,.7); }
 .mjm-plate-v { flex-direction: column; align-items: stretch; width: 68px; height: auto; border-radius: 10px; padding: 3px 4px; gap: 2px; }
 .mjm-plate-v .l1 { display: flex; align-items: center; gap: 4px; }
 .mjm-plate-v .l2 { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
@@ -163,6 +164,8 @@
 .mjm-btn.win { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; box-shadow: 0 2px 12px rgba(220,38,38,.4); }
 .mjm-btn.ghost { background: rgba(255,255,255,.1); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.14); box-shadow: none; padding: 0 20px; }
 .mjm-btn.wide { padding: 0 22px; }
+.mjm-btn.ting { background: rgba(255,255,255,.1); color: #6ee7b7; border: 1px solid rgba(52,211,153,.4); box-shadow: none; }
+.mjm-btn.ting.on { background: linear-gradient(135deg, #059669, #34d399); color: #042f1f; border: none; box-shadow: 0 2px 10px rgba(52,211,153,.35); }
 
 /* 下：我的區 */
 .mjm-me { background: linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.45)); border-top: 1px solid rgba(201,169,110,.18); min-width: 0; }
@@ -213,8 +216,6 @@
 }
 .mjm-result .seat.win { background: rgba(201,169,110,.15); border-color: rgba(201,169,110,.35); }
 .mjm-result .seat .who2 { flex: 0 0 64px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mjm-result .seat .tiles { flex: 1 1 auto; display: flex; gap: 1px; align-items: flex-end; min-width: 0; overflow: hidden; }
-.mjm-result .seat .tiles .gap { width: 5px; flex: 0 0 auto; }
 .mjm-result .seat .delta { flex: 0 0 auto; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; min-width: 48px; }
 .mjm-result .seat .tot { flex: 0 0 auto; font-size: 10px; color: rgba(255,255,255,.4); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 .mjm-result .foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
@@ -224,7 +225,6 @@
   background: rgba(255,255,255,.05); color: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.1);
 }
 .mjm-result .ready span.ok { background: rgba(201,169,110,.3); color: var(--gold-l); border-color: rgba(201,169,110,.5); }
-.mjm-result .flowrow { display: flex; gap: 3px; }
 
 /* 直向轉橫向提示 */
 .mjm-portrait {

@@ -17,6 +17,7 @@ export interface ScoringContext {
   isAfterKong: boolean; // 槓上開花
   isRobbingKong: boolean; // 搶槓
   isFirstDraw: boolean; // 天/地胡
+  isTing?: boolean; // 已宣告地聽
 }
 
 // ---------------------------------------------------------------------------
@@ -187,13 +188,14 @@ function scoreDecomposition(
   const fans: { name: string; value: number }[] = [];
   const isConcealed = ctx.revealed.length === 0; // 門清: no revealed melds
 
-  // --- 天胡 / 地胡 ---
-  if (ctx.isFirstDraw) {
-    if (ctx.isDealer) {
-      fans.push({ name: "天胡", value: 24 });
-    } else {
-      fans.push({ name: "地胡", value: 16 });
-    }
+  // --- 天胡 / 地聽 / 地胡 ---
+  // 天胡 24 只有莊家有；地聽 8、地胡 8 不疊加，同一手最多 8 台
+  if (ctx.isFirstDraw && ctx.isDealer) {
+    fans.push({ name: "天胡", value: 24 });
+  } else if (ctx.isTing) {
+    fans.push({ name: "地聽", value: 8 });
+  } else if (ctx.isFirstDraw) {
+    fans.push({ name: "地胡", value: 8 });
   }
 
   // --- 莊家 ---

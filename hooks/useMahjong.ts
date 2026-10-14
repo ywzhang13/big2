@@ -20,7 +20,7 @@ function safeHand(tiles: Tile[]): Tile[] {
   }
   return sortTiles(filtered);
 }
-import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement } from "@/lib/mahjong/gameState";
+import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 function getMjId(): string {
@@ -63,6 +63,25 @@ export interface MjPlayer {
   isDealer: boolean;
 }
 
+/** 結算攤牌用的一家牌（贏家的 hand 不含胡的那張） */
+export interface MjHandReveal {
+  seat: number;
+  name: string;
+  hand: Tile[];
+  revealed: Meld[];
+  flowers: Tile[];
+}
+
+/** 贏家：winTile／from／waits 是新版後端才有，舊牌局沒有 */
+export interface MjWinner {
+  seat: number;
+  name: string;
+  score: ScoreResult;
+  winTile?: Tile;
+  from?: number | null; // 自摸、八仙過海＝null
+  waits?: WaitTile[];
+}
+
 export interface MjClientState {
   roomCode: string;
   status: "waiting" | "playing" | "finished";
@@ -82,21 +101,14 @@ export interface MjClientState {
   pendingFlowerRob: { robberSeat: number; fromSeat: number; tile: Tile } | null;
   // 我目前的動作按鈕是七搶一（顯示「七搶一／不搶」）
   robFlower: boolean;
-  winner?: {
-    seat: number;
-    name: string;
-    score: ScoreResult;
-    allHands?: {
-      seat: number;
-      name: string;
-      hand: Tile[];
-      revealed: Meld[];
-      flowers: Tile[];
-    }[];
-  };
+  // 已宣告地聽的座位（公開）
+  tingSeats: number[];
+  // 這次打牌可以一起宣告地聽的牌 id（打出後仍聽牌）；空陣列＝現在不能宣告
+  tingOptions: number[];
+  winner?: MjWinner & { allHands?: MjHandReveal[] };
   // 一炮多響: all winners of this round (seat/name/score per winner).
   // Populated alongside `winner` when multiple players hu on the same discard.
-  winners?: { seat: number; name: string; score: ScoreResult }[];
+  winners?: MjWinner[];
   wallRemaining: number;
   hostId: string;
   hasDrawn: boolean;
@@ -145,6 +157,8 @@ export function useMahjong(roomCode: string, playerName: string) {
     robKong: false,
     pendingFlowerRob: null,
     robFlower: false,
+    tingSeats: [],
+    tingOptions: [],
     wallRemaining: 0,
     hostId: "",
     hasDrawn: false,
@@ -190,12 +204,15 @@ export function useMahjong(roomCode: string, playerName: string) {
           prevalentWind: number;
           turnCount: number;
           hasDrawn: boolean;
-          winner?: { seat: number; score: ScoreResult };
+          winner?: Omit<MjWinner, "name">;
+          winners?: Omit<MjWinner, "name">[];
+          allHands?: MjHandReveal[]; // 一局結束後才有
           hand?: Tile[];
           myAvailableActions?: { type: string; tiles?: Tile[] }[];
           pendingAddKong?: { seat: number; tile: Tile };
           pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
           myDrawnTileId?: number;
+          tingSeats?: number[];
         } | null;
       }>("GET", `/api/mahjong/state?roomId=${rid}&playerId=${myId}`);
 
@@ -237,6 +254,10 @@ export function useMahjong(roomCode: string, playerName: string) {
       if (gs.status !== "playing" || gs.currentTurn !== mySeat || turnKey !== dismissedOwnActionsRef.current) {
         dismissedOwnActionsRef.current = null;
       }
+      // 自己回合的動作裡「declare_ting」不是按鈕，拆出來當地聽選項
+      const polledActions = gs.myAvailableActions?.filter((a) => a.type !== "declare_ting");
+      const polledTing = gs.myAvailableActions?.find((a) => a.type === "declare_ting")?.tiles?.map((t) => t.id);
+      const stillMyDiscard = gs.status === "playing" && gs.currentTurn === mySeat && gs.hasDrawn && !gs.lastDiscard;
       const pendingAddKong = gs.pendingAddKong ?? null;
       const pendingFlowerRob = gs.pendingFlowerRob ?? null;
 
@@ -274,17 +295,25 @@ export function useMahjong(roomCode: string, playerName: string) {
           ? prev.availableActions
           : turnKey != null && turnKey === dismissedOwnActionsRef.current
             ? []
-            : (gs.myAvailableActions ?? []),
-        // Preserve allHands from mj_game_over broadcast — polling state
-        // doesn't include allHands, so we don't want to overwrite it.
+            : (polledActions ?? []),
+        tingSeats: gs.tingSeats ?? prev.tingSeats,
+        // 輪詢有帶（摸牌後）就用輪詢的；沒帶時（例如莊家開局沒摸牌）還是我的打牌回合就保留
+        tingOptions: polledTing ?? (gs.myAvailableActions ? [] : stillMyDiscard ? prev.tingOptions : []),
+        // 一局結束後 state 會帶四家手牌（allHands）；舊版沒有就保留廣播收到的
         winner: gs.winner
           ? {
-              seat: gs.winner.seat,
+              ...gs.winner,
               name: gs.players[gs.winner.seat]?.name ?? "",
-              score: gs.winner.score,
-              allHands: prev.winner?.allHands,
+              allHands: gs.allHands ?? prev.winner?.allHands,
             }
-          : prev.winner,
+          : gs.status === "finished" && gs.allHands
+            ? { seat: -1, name: "", score: { fans: [], totalFan: 0 }, allHands: gs.allHands } // 流局
+            : prev.winner,
+        winners: gs.winners
+          ? gs.winners.length > 0
+            ? gs.winners.map((w) => ({ ...w, name: gs.players[w.seat]?.name ?? "" }))
+            : undefined
+          : gs.status === "playing" ? undefined : prev.winners,
         // Round system fields from polling
         roomSettings: (gs as Record<string, unknown>).roomSettings as RoomSettings | undefined ?? prev.roomSettings,
         roundInfo: (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined ?? prev.roundInfo,
@@ -388,6 +417,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         robKong: false,
         pendingFlowerRob: null,
         robFlower: false,
+        tingSeats: [],
+        tingOptions: [],
         hasDrawn: msg.currentTurn === msg.dealerSeat, // dealer starts with 17
         players: msg.players.map((p) => ({
           id: p.id,
@@ -400,6 +431,7 @@ export function useMahjong(roomCode: string, playerName: string) {
           isDealer: p.isDealer,
         })),
         winner: undefined,
+        winners: undefined,
         settlement: undefined,
         gameOver: false,
         ...(msg.roundInfo ? { roundInfo: msg.roundInfo } : {}),
@@ -413,15 +445,17 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_deal_hand (private) ---
     channel.on("broadcast", { event: "mj_deal_hand" }, ({ payload }) => {
-      const { playerId, hand, flowers } = payload as {
+      const { playerId, hand, flowers, tingOptions } = payload as {
         playerId: string;
         hand: Tile[];
         flowers: Tile[];
+        tingOptions?: number[]; // 莊家打第一張時可以一起宣告地聽的牌
       };
       if (playerId !== myId) return;
       setState((prev) => ({
         ...prev,
         myHand: safeHand(hand),
+        tingOptions: tingOptions ?? [],
         // Update my flower count in players list
         players: prev.players.map((p) =>
           p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
@@ -452,7 +486,7 @@ export function useMahjong(roomCode: string, playerName: string) {
 
     // --- mj_draw_tile (private) ---
     channel.on("broadcast", { event: "mj_draw_tile" }, ({ payload }) => {
-      const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions } = payload as {
+      const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions, tingOptions } = payload as {
         playerId: string;
         tile: Tile;
         hand: Tile[];
@@ -461,6 +495,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         canKong: boolean;
         kongOptions: number[][];
         addKongOptions?: number[];
+        tingOptions?: number[];
       };
       if (playerId !== myId) return;
       dismissedOwnActionsRef.current = null; // 新摸的牌（含槓後補牌）重新判斷
@@ -484,6 +519,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         ...prev,
         myHand: safeHand(hand),
         availableActions: actions,
+        tingOptions: tingOptions ?? [],
         robKong: false,
         hasDrawn: true,
         drawnTileId: drawnTile?.id ?? null,
@@ -510,6 +546,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         // Clear actions — new mj_available_actions will re-populate after this
         // arrives (server sends mj_discard first, action broadcasts second).
         availableActions: [],
+        tingOptions: [],
         drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
         players: prev.players.map((p) =>
           p.seat === seat
@@ -614,6 +651,15 @@ export function useMahjong(roomCode: string, playerName: string) {
         players: prev.players.map((p) =>
           p.seat === seat ? { ...p, tileCount } : p
         ),
+      }));
+    });
+
+    // --- mj_ting_declared (public): 有人打牌時一起宣告地聽 ---
+    channel.on("broadcast", { event: "mj_ting_declared" }, ({ payload }) => {
+      const { seat } = payload as { seat: number; tile: Tile };
+      setState((prev) => ({
+        ...prev,
+        tingSeats: prev.tingSeats.includes(seat) ? prev.tingSeats : [...prev.tingSeats, seat],
       }));
     });
 
@@ -787,14 +833,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         winnerSeat: number;
         winnerName: string | null;
         score: ScoreResult | null;
-        winners?: { seat: number; name: string; score: ScoreResult }[];
-        allHands: {
-          seat: number;
-          name: string;
-          hand: Tile[];
-          revealed: Meld[];
-          flowers: Tile[];
-        }[];
+        winners?: MjWinner[];
+        allHands: MjHandReveal[];
         settlement?: Settlement;
         playerScores?: number[];
         roundInfo?: RoundInfo;
@@ -815,6 +855,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         winner:
           msg.winnerSeat >= 0
             ? {
+                ...msg.winners?.find((w) => w.seat === msg.winnerSeat),
                 seat: msg.winnerSeat,
                 name: msg.winnerName || "",
                 score: msg.score || { fans: [], totalFan: 0 },
@@ -911,7 +952,7 @@ export function useMahjong(roomCode: string, playerName: string) {
   }, [myId]);
 
   const discardTile = useCallback(
-    async (tileId: number) => {
+    async (tileId: number, declareTing?: boolean) => {
       const rid = roomIdRef.current;
       if (!rid) return;
       // Bug #16: prevent double-discard race condition
@@ -925,6 +966,7 @@ export function useMahjong(roomCode: string, playerName: string) {
           ...prev,
           myHand: prev.myHand.filter((t) => t.id !== tileId),
           availableActions: [],
+          tingOptions: [],
           drawnTileId: null,
           hasDrawn: false,
           lastDiscard: tile ? { tile, from: prev.mySeat } : prev.lastDiscard,
@@ -935,6 +977,7 @@ export function useMahjong(roomCode: string, playerName: string) {
           roomId: rid,
           playerId: myId,
           tileId,
+          ...(declareTing ? { declareTing: true } : {}),
         });
       } catch (err) {
         console.error("[mj] discard failed:", err);
@@ -964,6 +1007,11 @@ export function useMahjong(roomCode: string, playerName: string) {
         !cur.pendingAddKong &&
         !cur.pendingFlowerRob
       ) {
+        // 地聽後不能換牌：不胡就打出剛摸到的那張
+        if (cur.tingSeats.includes(cur.mySeat) && cur.drawnTileId != null) {
+          await discardTile(cur.drawnTileId);
+          return;
+        }
         dismissedOwnActionsRef.current = ownTurnKey(cur.roundInfo, cur.wallRemaining, cur.drawnTileId);
         setState((prev) => ({ ...prev, availableActions: [] }));
         return;
@@ -984,7 +1032,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         fetchState(rid);
       }
     },
-    [myId, fetchState]
+    [myId, fetchState, discardTile]
   );
 
   const requestLeave = useCallback(async () => {

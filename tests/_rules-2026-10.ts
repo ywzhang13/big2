@@ -191,7 +191,7 @@ const QQR_MELDS = () => [
   s.players[1].hand = tiles(H_TWO_SIDED);
   const r = zimo(s, 1, "s7");
   const fans = r.state.winners![0].score.fans.map((f) => f.name + f.value);
-  eq(fans.includes("地胡16"), true, "⑦a 閒家第一次摸牌自摸：有地胡 16", fanStr(r.state));
+  eq(fans.includes("地胡8"), true, "⑦a 閒家第一次摸牌自摸：有地胡 8（2026-10 老闆：16 台取消，地胡改 8 台）", fanStr(r.state));
 }
 {
   const s = baseState(0); // seat1 已打過 1 張

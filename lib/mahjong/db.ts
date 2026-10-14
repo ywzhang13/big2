@@ -2,7 +2,7 @@ import { getSupabaseServer } from "../supabase-server";
 import { MahjongGameState, PlayerState } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
-import { getAvailableActions, ownTurnActions } from "./gameLogic";
+import { allHands, getAvailableActions, ownTurnActions } from "./gameLogic";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows
@@ -227,6 +227,13 @@ export interface PublicGameState {
   pendingActions?: MahjongGameState["pendingActions"];
   pendingAddKong?: MahjongGameState["pendingAddKong"];
   pendingFlowerRob?: MahjongGameState["pendingFlowerRob"];
+  tingSeats?: MahjongGameState["tingSeats"];
+  // 只有一局結束後（含流局）才有：四家手牌、吃碰槓（暗槓含牌面）、花牌，格式同 mj_game_over 的 allHands
+  allHands?: ReturnType<typeof allHands>;
+}
+
+function publicWinner(w: MahjongGameState["winner"]): MahjongGameState["winner"] {
+  return w ? { seat: w.seat, score: w.score } : undefined;
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
@@ -241,8 +248,10 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     prevalentWind: state.prevalentWind,
     turnCount: state.turnCount,
     hasDrawn: state.hasDrawn,
-    winner: state.winner,
-    winners: state.winners,
+    // 一砲多響還在等其他人決定時（牌局仍進行中），只公開誰胡了幾台；
+    // winTile／from／waits 會透露贏家的手牌，等這局結束才給
+    winner: state.status === "finished" ? state.winner : publicWinner(state.winner),
+    winners: state.status === "finished" ? state.winners : state.winners?.map((w) => publicWinner(w)!),
     roomSettings: state.roomSettings,
     roundInfo: state.roundInfo,
     playerScores: state.playerScores,
@@ -254,6 +263,9 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     pendingActions: state.pendingActions,
     pendingAddKong: state.pendingAddKong,
     pendingFlowerRob: state.pendingFlowerRob,
+    tingSeats: state.tingSeats ?? [],
+    // 牌局進行中絕不帶別家手牌；結束後才攤牌
+    ...(state.status === "finished" ? { allHands: allHands(state) } : {}),
   };
 }
 

@@ -30,6 +30,7 @@ import {
   drawEvents,
   flowerRobEvents,
   gameOverEvent,
+  tingAutoDiscard,
   type MjEvent,
 } from "@/lib/mahjong/events";
 
@@ -112,15 +113,22 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
       return Response.json({ success: true });
     }
     newState = passFlowerRob(state);
-    await save(newState);
-    await mjBroadcastBatch(room.code, [
+    const events: MjEvent[] = [
       {
         event: "mj_pass",
         payload: { seat, allPassed: true, currentTurn: newState.currentTurn, hasDrawn: newState.hasDrawn },
       },
       // 輪到的人繼續（打牌中＝摸到花的人；開局＝莊家），重送他的摸牌事件和可做的動作
       ...drawEvents(newState, newState.currentTurn),
-    ]);
+    ];
+    // 摸到花的人已地聽又不能胡：自動打出摸到的牌
+    const auto = tingAutoDiscard(newState);
+    if (auto) {
+      newState = auto[0];
+      events.push(...auto[1]);
+    }
+    await save(newState);
+    await mjBroadcastBatch(room.code, events);
     return Response.json({ success: true });
   }
 
@@ -271,29 +279,8 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
 
     await save(newState, "finished");
 
-    // Broadcast game over with all hands revealed
-    const winnersPayload = (newState.winners ?? []).map((w) => ({
-      seat: w.seat,
-      name: newState.players[w.seat].name,
-      score: w.score,
-    }));
-    await mjBroadcast(room.code, "mj_game_over", {
-      winnerSeat: newState.winner!.seat,
-      winnerName: newState.players[newState.winner!.seat].name,
-      score: newState.winner!.score,
-      winners: winnersPayload,
-      allHands: newState.players.map((p) => ({
-        seat: p.seat,
-        name: p.name,
-        hand: p.hand,
-        revealed: p.revealed,
-        flowers: p.flowers,
-      })),
-      settlement,
-      playerScores: newState.playerScores,
-      roundInfo: newState.roundInfo,
-      gameOver: newState.gameOver,
-    });
+    // Broadcast game over with all hands revealed（含 winTile／from／waits）
+    await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
 
     return Response.json({ success: true });
   }
@@ -333,28 +320,7 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
             newState.gameOver = isAllRoundsComplete(newState);
           }
           await save(newState, "finished");
-          const winnersPayload = (newState.winners ?? []).map((w) => ({
-            seat: w.seat,
-            name: newState.players[w.seat].name,
-            score: w.score,
-          }));
-          await mjBroadcast(room.code, "mj_game_over", {
-            winnerSeat: newState.winner!.seat,
-            winnerName: newState.players[newState.winner!.seat].name,
-            score: newState.winner!.score,
-            winners: winnersPayload,
-            allHands: newState.players.map((p) => ({
-              seat: p.seat,
-              name: p.name,
-              hand: p.hand,
-              revealed: p.revealed,
-              flowers: p.flowers,
-            })),
-            settlement,
-            playerScores: newState.playerScores,
-            roundInfo: newState.roundInfo,
-            gameOver: newState.gameOver,
-          });
+          await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
           return Response.json({ success: true, finalized: true });
         }
         if (state.pendingAddKong) {

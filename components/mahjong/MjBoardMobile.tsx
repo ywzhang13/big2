@@ -9,8 +9,7 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import MjTile from "./MjTile";
-
-const WIND_CHARS = ["東", "南", "西", "北"];
+import { seatWindChar } from "./seatWind";
 
 const ACTION_NAMES: Record<string, string> = {
   chi: "吃",
@@ -77,6 +76,10 @@ function Melds({ revealed, flowers, w, h, mine }: { revealed: Meld[]; flowers: T
   );
 }
 
+function TingTag({ on }: { on: boolean }) {
+  return on ? <span className="mjm-tag ting">聽</span> : null;
+}
+
 function BackBar({ count, width }: { count: number; width: number }) {
   return (
     <div className="mjm-backbar">
@@ -93,23 +96,28 @@ function SidePanel({
   isDoor,
   score,
   dealerConsecutive,
+  isTing,
+  windChar,
 }: {
   player: MjPlayer | undefined;
   isCurrent: boolean;
   isDoor: boolean;
+  windChar: string;
   score?: number;
   dealerConsecutive?: number;
+  isTing: boolean;
 }) {
   if (!player) return <div className="mjm-side" />;
   return (
     <div className="mjm-side">
       <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""}`}>
         <div className="l1">
-          <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{WIND_CHARS[player.seat]}</span>
+          <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
           <span className="mjm-nm">{player.name}</span>
         </div>
         <div className="l2">
           <DealerTag player={player} consecutive={dealerConsecutive} />
+          <TingTag on={isTing} />
           <Score score={score} />
         </div>
       </div>
@@ -164,12 +172,15 @@ export default function MjBoardMobile({
   mySeat,
   myHand,
   currentTurn,
+  dealerSeat,
   lastDiscard,
   availableActions,
   pendingAddKong,
   robKong,
   pendingFlowerRob,
   robFlower,
+  tingSeats,
+  tingOptions,
   wallRemaining,
   needsDraw,
   needsDiscard,
@@ -191,17 +202,29 @@ export default function MjBoardMobile({
 }: MjBoardMobileProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // 地聽：記住是對哪一組選項按下的，換回合自動失效
+  const [tingArmedKey, setTingArmedKey] = useState<string | null>(null);
 
   const seatPlayer = (offset: number) => players.find((p) => p.seat === (mySeat + offset) % 4);
   const top = seatPlayer(2);
   const left = seatPlayer(3);
   const right = seatPlayer(1);
   const me = players.find((p) => p.seat === mySeat);
+  const windOf = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
   const nameOf = (seat: number) => players.find((p) => p.seat === seat)?.name ?? "";
   const scoreOf = (p?: MjPlayer) => (p && playerScores ? playerScores[p.seat] : undefined);
 
-  // 選取的牌已經不在手上或不能打了 → 視為沒選
-  const selected = needsDiscard ? myHand.find((t) => t.id === selectedId) ?? null : null;
+  const isTing = tingSeats.includes(mySeat);
+  const canTing = needsDiscard && tingOptions.length > 0;
+  const tingKey = tingOptions.join(",");
+  const tingArmed = canTing && tingArmedKey === tingKey;
+  const tingBlocked = (id: number) => tingArmed && !tingOptions.includes(id);
+  // 地聽後由伺服器處理出牌，不能自己選牌
+  const canPick = needsDiscard && !isTing;
+
+  // 選取的牌已經不在手上、不能打、或按了地聽後不能選 → 視為沒選
+  const picked = canPick ? myHand.find((t) => t.id === selectedId) ?? null : null;
+  const selected = picked && !tingBlocked(picked.id) ? picked : null;
 
   // 摸進的那張分開顯示（找不到就把最後一張當摸進的）
   let drawnTile: Tile | null = null;
@@ -217,17 +240,29 @@ export default function MjBoardMobile({
   }
 
   const handTile = (t: Tile) => (
-    <MjTile
-      key={t.id}
-      tile={t}
-      width="var(--tile-hand-w)"
-      height="var(--tile-hand-h)"
-      selected={selected?.id === t.id}
-      onClick={() => {
-        if (!needsDiscard) return;
-        setSelectedId((prev) => (prev === t.id ? null : t.id));
-      }}
-    />
+    <div key={t.id} style={canPick && tingBlocked(t.id) ? { opacity: 0.35 } : undefined}>
+      <MjTile
+        tile={t}
+        width="var(--tile-hand-w)"
+        height="var(--tile-hand-h)"
+        selected={selected?.id === t.id}
+        onClick={() => {
+          if (!canPick || tingBlocked(t.id)) return;
+          setSelectedId((prev) => (prev === t.id ? null : t.id));
+        }}
+      />
+    </div>
+  );
+
+  const tingToggle = canTing && (
+    <button
+      type="button"
+      className={`mjm-btn ting ${tingArmed ? "on" : ""}`}
+      aria-pressed={tingArmed}
+      onClick={() => setTingArmedKey(tingArmed ? null : tingKey)}
+    >
+      地聽
+    </button>
   );
 
   const status = (() => {
@@ -274,9 +309,10 @@ export default function MjBoardMobile({
         {top && (
           <>
             <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""}`}>
-              <span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{WIND_CHARS[top.seat]}</span>
+              <span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>
               <span className="mjm-nm">{top.name}</span>
               <DealerTag player={top} consecutive={dealerConsecutive} />
+              <TingTag on={tingSeats.includes(top.seat)} />
               <Score score={scoreOf(top)} />
             </div>
             <BackBar count={top.tileCount} width={92} />
@@ -293,6 +329,8 @@ export default function MjBoardMobile({
           isDoor={left != null && doorSeat === left.seat}
           score={scoreOf(left)}
           dealerConsecutive={dealerConsecutive}
+          isTing={left != null && tingSeats.includes(left.seat)}
+          windChar={left ? windOf(left.seat) : ""}
         />
 
         <div className="mjm-table">
@@ -360,6 +398,8 @@ export default function MjBoardMobile({
           isDoor={right != null && doorSeat === right.seat}
           score={scoreOf(right)}
           dealerConsecutive={dealerConsecutive}
+          isTing={right != null && tingSeats.includes(right.seat)}
+          windChar={right ? windOf(right.seat) : ""}
         />
       </div>
 
@@ -387,21 +427,28 @@ export default function MjBoardMobile({
             <button type="button" className="mjm-btn ghost" onClick={() => onAction("pass")}>
               {robKong || robFlower ? "不搶" : "過"}
             </button>
+            {tingToggle}
           </>
         ) : selected ? (
           <>
             <span className="mjm-status me">輪到你打牌</span>
+            {tingToggle}
             <button
               type="button"
               className="mjm-btn wide"
               onClick={() => {
-                onDiscard(selected.id);
+                onDiscard(selected.id, tingArmed);
                 setSelectedId(null);
               }}
             >
-              打出
+              {tingArmed ? "打出＋地聽" : "打出"}
               <MjTile tile={selected} width={20} height={27} />
             </button>
+          </>
+        ) : canTing ? (
+          <>
+            <span className="mjm-status me">輪到你打牌</span>
+            {tingToggle}
           </>
         ) : (
           <span className={`mjm-status ${status.me ? "me" : "wait"}`}>{status.text}</span>
@@ -411,9 +458,10 @@ export default function MjBoardMobile({
       {/* 我的資訊列＋手牌 */}
       <div className="mjm-me">
         <div className="mjm-me-info">
-          <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{WIND_CHARS[mySeat] ?? "?"}</span>
+          <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
           <span className="mjm-nm">{playerName}</span>
           {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
+          <TingTag on={isTing} />
           <Score score={scoreOf(me)} />
           {me && <Melds revealed={me.revealed} flowers={me.flowers} w={20} h={27} mine />}
           <span className="cnt">{myHand.length} 張</span>

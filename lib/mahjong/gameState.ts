@@ -1,6 +1,6 @@
 // Taiwan Mahjong game state types
 
-import { Tile } from "./tiles";
+import { Tile, TileSuit } from "./tiles";
 
 export interface Meld {
   type: "chi" | "pong" | "kong" | "concealed_kong";
@@ -22,6 +22,22 @@ export interface PlayerState {
 export interface ScoreResult {
   fans: { name: string; value: number }[];
   totalFan: number;
+}
+
+/** 聽的牌（不是某一張實體牌，所以沒有 id） */
+export interface WaitTile {
+  suit: TileSuit;
+  rank: number;
+  display: string; // 例如 "3萬"、"東"
+}
+
+/** 一位贏家（一砲多響時每位各一筆） */
+export interface WinnerEntry {
+  seat: number;
+  score: ScoreResult;
+  winTile?: Tile;          // 胡的那張牌；八仙過海＝第 8 張花、七搶一＝搶來的花
+  from?: number | null;    // 那張牌來自哪個座位；自摸、八仙過海＝null；放槍、搶槓、七搶一＝那家的座位
+  waits?: WaitTile[];      // 拿掉胡的那張後，手牌原本聽哪些牌；花牌胡＝[]
 }
 
 export interface RoomSettings {
@@ -54,11 +70,11 @@ export interface MahjongGameState {
   dealerSeat: number;
   prevalentWind: number; // 1=東 2=南 3=西 4=北
   turnCount: number;
-  winner?: { seat: number; score: ScoreResult };
+  winner?: WinnerEntry;
   // 一炮三響: all winners on the same discard (populated incrementally as
   // each player declares win). The legacy `winner` field stays set to the
   // first (nearest to discarder) entry for display back-compat.
-  winners?: { seat: number; score: ScoreResult }[];
+  winners?: WinnerEntry[];
   // Track if the current player just drew (for discard validation)
   hasDrawn: boolean;
   // Track if this is the very first draw of the round (for 天/地胡)
@@ -81,6 +97,8 @@ export interface MahjongGameState {
   drawnTileId?: number;
   // 七搶一：fromSeat 摸到第 8 張花，robberSeat 已有 7 張花，可以搶這張直接胡
   pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
+  // 已宣告地聽的座位（公開）。宣告後不能改聽：只能胡，或打出剛摸到的牌（不能胡時由伺服器自動打出）
+  tingSeats?: number[];
   // --- Round system (圈數系統) ---
   roomSettings?: RoomSettings;
   roundInfo?: RoundInfo;

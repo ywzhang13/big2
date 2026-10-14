@@ -6,7 +6,7 @@ import {
 } from "@/lib/mahjong/db";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { drawTile, ownTurnActions } from "@/lib/mahjong/gameLogic";
-import { applySettlement, drawEvents, gameOverEvent } from "@/lib/mahjong/events";
+import { applySettlement, drawEvents, gameOverEvent, tingAutoDiscard } from "@/lib/mahjong/events";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
@@ -72,9 +72,11 @@ async function handleDraw(body: unknown, fresh: boolean): Promise<Response> {
     return Response.json({ success: true, draw: !newState.winners?.length });
   }
 
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState);
   const events = drawEvents(newState, seat);
-  await mjBroadcastBatch(room.code, events);
+  // 地聽的人摸到不能胡的牌：伺服器直接幫他打出這張
+  const auto = tingAutoDiscard(newState);
+  await saveGameStateIfUnchanged(roomId, state.stateVersion, auto ? auto[0] : newState);
+  await mjBroadcastBatch(room.code, auto ? [...events, ...auto[1]] : events);
 
   const player = newState.players[seat];
   const actions = ownTurnActions(newState, seat);
@@ -85,5 +87,6 @@ async function handleDraw(body: unknown, fresh: boolean): Promise<Response> {
     canKong: actions.some((a) => a.type === "kong"),
     addKongOptions: actions.filter((a) => a.type === "add_kong").map((a) => a.tiles![0].id),
     flowerRob: !!newState.pendingFlowerRob,
+    autoDiscarded: auto ? auto[0].lastDiscard!.tile : null,
   });
 }

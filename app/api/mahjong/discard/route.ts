@@ -6,7 +6,8 @@ import {
   toPublicGameState,
 } from "@/lib/mahjong/db";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import { discardTile, getAvailableActions, advanceTurn } from "@/lib/mahjong/gameLogic";
+import { discardTile, declareTingAndDiscard, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
+import { discardEvents } from "@/lib/mahjong/events";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
@@ -20,10 +21,11 @@ export async function POST(request: Request) {
 }
 
 async function handleDiscard(body: unknown, fresh: boolean): Promise<Response> {
-  const { roomId, playerId, tileId } = body as {
+  const { roomId, playerId, tileId, declareTing } = body as {
     roomId?: string;
     playerId?: string;
     tileId?: number;
+    declareTing?: boolean; // 打出這張的同時宣告地聽
   };
 
   if (!roomId || !playerId || tileId === undefined) {
@@ -56,80 +58,24 @@ async function handleDiscard(body: unknown, fresh: boolean): Promise<Response> {
     return Response.json({ error: "等待其他玩家決定是否七搶一" }, { status: 409 });
   }
 
-  // Execute discard
-  const newState = discardTile(state, tileId);
+  if (declareTing && !tingDiscardOptions(state, seat).some((t) => t.id === tileId)) {
+    return Response.json({ error: "現在不能宣告地聽，或打出這張後沒有聽牌" }, { status: 400 });
+  }
+  if (state.tingSeats?.includes(seat) && state.drawnTileId !== undefined && tileId !== state.drawnTileId) {
+    return Response.json({ error: "地聽後只能打出摸到的牌" }, { status: 400 });
+  }
 
-  // Check available actions for other players
-  const actions = getAvailableActions(newState);
-
-  // If there are actions available, save pendingActions so the action
-  // route knows who still needs to pass before the turn advances.
-  if (actions.length > 0) {
-    const potentialActors = [...new Set(actions.map((a) => a.playerSeat))];
-    newState.pendingActions = {
-      discardFrom: seat,
-      potentialActors,
-      passedActors: [],
-    };
-  } else {
-    // No one can act — advance turn to next player
-    const advanced = advanceTurn(newState);
-    Object.assign(newState, advanced);
-    newState.pendingActions = undefined;
+  // Execute discard（declareTing=true：打出這張的同時宣告地聽）
+  const newState = declareTing ? declareTingAndDiscard(state, tileId) : discardTile(state, tileId);
+  const events = discardEvents(newState, seat);
+  if (declareTing) {
+    events.unshift({ event: "mj_ting_declared", payload: { seat, tile: newState.lastDiscard!.tile } });
   }
 
   // Save state
   await saveGameStateIfUnchanged(roomId, state.stateVersion, newState);
-
-  // Build all events; single-channel batch keeps ordering + fast.
-  const discardedTile = newState.lastDiscard!.tile;
-  const events: { event: string; payload: Record<string, unknown> }[] = [
-    {
-      event: "mj_discard",
-      payload: {
-        seat,
-        tile: discardedTile,
-        availableActions: actions.map((a) => ({
-          type: a.type,
-          playerSeat: a.playerSeat,
-        })),
-      },
-    },
-  ];
-
-  const tierOf = (type: string) =>
-    type === "win" ? 0 : type === "pong" || type === "kong" ? 1 : 2;
-  const playerSeatsWithActions = new Set(actions.map((a) => a.playerSeat));
-  for (const actionSeat of playerSeatsWithActions) {
-    const playerActions = actions.filter((a) => a.playerSeat === actionSeat);
-    const otherTiers = actions
-      .filter((a) => a.playerSeat !== actionSeat)
-      .map((a) => tierOf(a.type));
-    const minOtherTier = otherTiers.length > 0 ? Math.min(...otherTiers) : 999;
-    const filtered = playerActions.filter((a) => tierOf(a.type) <= minOtherTier);
-    if (filtered.length === 0) continue;
-    const targetPlayerId = newState.players[actionSeat].id;
-    events.push({
-      event: "mj_available_actions",
-      payload: { playerId: targetPlayerId, actions: filtered },
-    });
-  }
-  if (!newState.pendingActions) {
-    events.push({
-      event: "mj_turn_advance",
-      payload: {
-        currentTurn: newState.currentTurn,
-        hasDrawn: newState.hasDrawn,
-      },
-    });
-  }
   await mjBroadcastBatch(room.code, events);
 
-  return Response.json({
-    success: true,
-    availableActions: actions.map((a) => ({
-      type: a.type,
-      playerSeat: a.playerSeat,
-    })),
-  });
+  const actions = (events[declareTing ? 1 : 0].payload.availableActions ?? []) as { type: string; playerSeat: number }[];
+  return Response.json({ success: true, availableActions: actions, ting: !!declareTing });
 }
