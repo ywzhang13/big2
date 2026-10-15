@@ -1265,8 +1265,19 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
 // Next Game (下一局)
 // ---------------------------------------------------------------------------
 
+/** 這局打完後莊家留莊（連莊）：莊家胡（一砲多響裡有莊家也算）或流局 */
+function dealerStays(state: MahjongGameState): boolean {
+  const winnerSeats = (state.winners && state.winners.length > 0
+    ? state.winners.map(w => w.seat)
+    : state.winner ? [state.winner.seat] : []);
+  const isDealerWin = winnerSeats.includes(state.dealerSeat);
+  const isDrawGame = winnerSeats.length === 0 || winnerSeats[0] < 0;
+  return isDealerWin || isDrawGame;
+}
+
 /**
  * Determine if all rounds are complete.
+ * 最後一局莊家留莊（莊家胡或流局）時還沒結束，照連莊規則繼續打，直到下莊才結束。
  */
 export function isAllRoundsComplete(state: MahjongGameState): boolean {
   if (!state.roomSettings || !state.roundInfo) return true;
@@ -1274,7 +1285,7 @@ export function isAllRoundsComplete(state: MahjongGameState): boolean {
   const { currentRound, currentGame } = state.roundInfo;
   const totalGames = totalRounds * 4;
   const currentGameNumber = (currentRound - 1) * 4 + currentGame;
-  return currentGameNumber >= totalGames;
+  return currentGameNumber >= totalGames && !dealerStays(state);
 }
 
 /**
@@ -1291,16 +1302,9 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
 
   let s = cloneState(state);
   const ri = { ...s.roundInfo! };
-  const winnerSeats = (s.winners && s.winners.length > 0
-    ? s.winners.map(w => w.seat)
-    : s.winner ? [s.winner.seat] : []);
-  const isDealerWin = winnerSeats.includes(s.dealerSeat);
-  const isDrawGame = winnerSeats.length === 0 || winnerSeats[0] < 0;
 
   // Determine if dealer stays (dealer wins as part of multi-winner also counts)
-  const dealerStays = isDealerWin || isDrawGame;
-
-  if (dealerStays) {
+  if (dealerStays(s)) {
     ri.dealerConsecutive++;
   } else {
     // Dealer rotates

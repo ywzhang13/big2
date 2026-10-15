@@ -87,8 +87,9 @@ const brief = (r: (typeof rs.records)[number]) => ({ game: r.game, roomCode: r.r
   const s = mjRoom("B", "1002", { handsCompleted: 3, lastHand: true });
   s.currentTurn = 1; s.hasDrawn = false; s.wall = s.wall.slice(0, 16);
   const d = await call(draw, "B", { playerId: "p1" });
-  eq([d.status, rs.records.map((r) => [r.endReason, r.handsPlayed, r.players.map((p) => p.totalScore)]), rooms.B ?? null],
-    [200, [["completed", 4, [300, -100, -100, -100]]], null], "M5 最後一局流局：一樣記 completed（流局也算打完一局）並刪房");
+  const gB = rooms.B?.game_state;
+  eq([d.status, rs.records.length, !!rooms.B, gB?.status, gB?.gameOver, gB?.handsCompleted],
+    [200, 0, true, "finished", false, 4], "M5 最後一局流局：莊家連莊、整場還沒結束（不寫紀錄、不刪房），打完的局數照實加到 4");
 }
 // --- 寫入失敗：不刪房、遊戲不卡住，之後清理再補 ---
 {
