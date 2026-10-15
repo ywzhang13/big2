@@ -3,7 +3,7 @@
 // 麻將大廳的登入元件（小宜規格 v2）：LINE 登入按鈕、登入閘門、遊客登入（測試用）、右上登入列、直向轉向提示
 
 import { useState } from "react";
-import type { GuestLoginError, MjAuthStatus, MjAuthUser } from "@/hooks/useMjAuth";
+import type { GuestLoginError, MjAuthStatus, MjAuthUser, MjHandoff } from "@/hooks/useMjAuth";
 
 /** LINE 登入按鈕：icon 用官方素材 public/line/btn_base.png，文字用「使用 LINE 登入」 */
 export function LineLoginButton({ onClick }: { onClick: () => void }) {
@@ -29,18 +29,58 @@ function LoggingInPill() {
 
 /**
  * 沒登入時的主欄：只有 LINE 登入。roomCode 有值＝用房號或連結進來（「加入房間 XXXX」、返回大廳）
+ * iPhone 主畫面 App：pairing＝等 Safari 登入完（可取消）；handoff＝Safari 這邊登入完，請使用者回到主畫面的 App
  */
 export function LoginGate({
   status,
   roomCode,
+  errorText,
+  handoff,
   onLogin,
   onBack,
+  onCancelPairing,
+  onContinueHere,
 }: {
   status: Exclude<MjAuthStatus, "in">;
   roomCode: string | null;
+  errorText?: string | null;
+  handoff?: MjHandoff;
   onLogin: () => void;
   onBack: () => void;
+  onCancelPairing?: () => void;
+  onContinueHere?: () => void;
 }) {
+  if (status === "handoff") {
+    return (
+      <div className="mjl-col mjl-gate fade-in">
+        {!handoff ? (
+          <LoggingInPill />
+        ) : handoff.ok ? (
+          <div className="mjl-done" role="status">
+            <b>登入完成{handoff.name ? `：${handoff.name}` : ""}</b>
+            <span>請回到主畫面的「阿瑋娛樂城」</span>
+          </div>
+        ) : (
+          <>
+            <div className="mjl-err" role="alert">交接逾時，請回到主畫面的 App 再按一次 LINE 登入</div>
+            <button type="button" className="mjl-foot" onClick={onContinueHere}>在這裡繼續</button>
+          </>
+        )}
+      </div>
+    );
+  }
+  if (status === "pairing") {
+    return (
+      <div className="mjl-col mjl-gate fade-in">
+        <div className="mjl-pill" role="status">
+          <span className="mjl-spin" />
+          等待 LINE 登入…
+        </div>
+        <p className="mjl-hint">在 Safari 登入完，回到這裡就會自動登入</p>
+        <button type="button" className="mjl-foot" onClick={onCancelPairing}>取消</button>
+      </div>
+    );
+  }
   const back = (
     <button type="button" className="mjl-foot" onClick={onBack}>
       {roomCode ? "返回大廳" : "返回首頁"}
@@ -64,7 +104,7 @@ export function LoginGate({
         <>
           {status === "error" && (
             <div className="mjl-err" role="alert">
-              登入沒有完成
+              {errorText ?? "登入沒有完成"}
               <button type="button" onClick={onLogin}>再試一次</button>
             </div>
           )}
@@ -151,6 +191,17 @@ export function Avatar({ user }: { user: MjAuthUser }) {
     return <img className="mjl-ava" src={user.pictureUrl} alt="" onError={() => setBroken(true)} />;
   }
   return <span className="mjl-ava">{Array.from(user.displayName)[0] ?? ""}</span>;
+}
+
+/** 主畫面 App 剛從 Safari 領回登入：讓使用者確認是自己的帳號，不是就登出。inline＝進房前的確認畫面（放在主欄，不浮在上方） */
+export function PairedNotice({ name, onOk, onNotMe, inline }: { name: string; onOk: () => void; onNotMe: () => void; inline?: boolean }) {
+  return (
+    <div className={`mjl-paired fade-in${inline ? " inline" : ""}`} role="status">
+      <span>已用 <b>{name || "LINE 帳號"}</b> 登入</span>
+      <button type="button" onClick={onOk}>好</button>
+      <button type="button" className="not" onClick={onNotMe}>不是我</button>
+    </div>
+  );
 }
 
 /** 已登入時右上角：頭像＋LINE 名稱＋登出 */

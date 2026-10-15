@@ -16,7 +16,7 @@ export function guestLoginEnabled(): boolean {
 }
 
 /** Vercel 會把真正的來源 IP 放在 x-forwarded-for 的第一個 */
-function clientIp(request: Request): string {
+export function clientIp(request: Request): string {
   const xff = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return xff || request.headers.get("x-real-ip")?.trim() || "unknown";
 }

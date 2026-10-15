@@ -507,6 +507,21 @@
 }
 .mjl-err button { color: var(--gold-l); font-weight: 700; text-decoration: underline; cursor: pointer; }
 
+/* iPhone 主畫面 App 的登入交接：等待提示、Safari 登入完成、主畫面 App 領回後確認帳號 */
+.mjl-hint { font-size: 13px; color: rgba(255,255,255,.55); text-align: center; }
+.mjl-done { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.mjl-done b { font-size: 20px; color: var(--gold-l); }
+.mjl-done span { font-size: 14px; color: rgba(255,255,255,.7); }
+.mjl-paired {
+  position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 21;
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: 999px; white-space: nowrap;
+  background: rgba(0,0,0,.6); border: 1px solid rgba(201,169,110,.5); font-size: 13px; color: rgba(255,255,255,.85);
+}
+.mjl-paired b { color: var(--gold-l); }
+.mjl-paired.inline { position: static; transform: none; }
+.mjl-paired button { height: 28px; padding: 0 12px; border-radius: 999px; font-weight: 700; background: var(--gold); color: var(--felt-1); cursor: pointer; }
+.mjl-paired button.not { background: transparent; color: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.2); }
+
 /* 右上登入列（只有已登入才有） */
 .mjl-authbar {
   position: absolute; top: calc(12px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right));

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "
 import { useMahjong, getMjId, type MjJoinInfo } from "@/hooks/useMahjong";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import { isGuestTab, mjFetch, mjStorage, ROOM_CODE_RE } from "@/lib/mahjong/clientAuth";
-import { AuthBar, GuestGate, LoginGate, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
+import { AuthBar, GuestGate, LoginGate, PairedNotice, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
 import MjRecords from "@/components/mahjong/MjRecords";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
@@ -304,6 +304,10 @@ export default function MahjongPage() {
         <LoginGate
           status={auth.status === "in" ? "checking" : auth.status}
           roomCode={inRoom ? roomCode : null}
+          errorText={auth.errorText}
+          handoff={auth.handoff}
+          onCancelPairing={auth.cancelPairing}
+          onContinueHere={auth.continueHere}
           onLogin={() => auth.signIn(inRoom ? roomCode : null)}
           onBack={() => {
             if (inRoom) window.location.hash = "";
@@ -321,6 +325,7 @@ export default function MahjongPage() {
       <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]">
         <PortraitHint label="返回首頁" onClick={goHome} />
         <AuthBar user={auth.user} onSignOut={auth.signOut} />
+        {auth.pairedAs !== null && <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} />}
         <Brand />
         <div className={`mjl-col${screen === "create" ? " mjl-form" : ""}`}>
           {screen === "home" ? (
@@ -527,6 +532,22 @@ export default function MahjongPage() {
             onUnauthorized={expire}
           />
         )}
+      </div>
+    );
+  }
+
+  // 主畫面 App 剛領回登入、要進房：先確認帳號，按「好」才進房；「不是我」＝登出，回到保留房號的登入閘門
+  if (auth.pairedAs !== null) {
+    return (
+      <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]">
+        <PortraitHint label="返回首頁" onClick={goHome} />
+        <Brand />
+        <div className="mjl-col mjl-gate fade-in">
+          <h2 className="mjl-join-ttl">
+            加入房間 <b>{roomCode}</b>
+          </h2>
+          <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} inline />
+        </div>
       </div>
     );
   }
