@@ -232,7 +232,18 @@ export interface PublicPlayerState {
   isDealer: boolean;
 }
 
-export function toPublicPlayerState(player: PlayerState): PublicPlayerState {
+/**
+ * 已經被拿走、不該再顯示在海底的牌：被吃、碰、明槓的那張（在別人的吃碰槓裡），以及放槍被胡走的那張。
+ * 牌局狀態裡的 discards 仍保留每一張打過的牌（地聽、地胡等規則看的是「打過幾張」），只在輸出給前端時濾掉。
+ */
+function takenFromDiscards(state: MahjongGameState): Set<number> {
+  const ids = new Set<number>();
+  for (const p of state.players) for (const m of p.revealed) for (const t of m.tiles) ids.add(t.id);
+  for (const w of state.winners ?? []) if (w.from != null && w.winTile) ids.add(w.winTile.id);
+  return ids;
+}
+
+export function toPublicPlayerState(player: PlayerState, taken: Set<number> = new Set()): PublicPlayerState {
   return {
     id: player.id,
     name: player.name,
@@ -240,7 +251,7 @@ export function toPublicPlayerState(player: PlayerState): PublicPlayerState {
     tileCount: player.hand.length,
     revealed: player.revealed,
     flowers: player.flowers,
-    discards: player.discards,
+    discards: player.discards.filter((t) => !taken.has(t.id)),
     isDealer: player.isDealer,
   };
 }
@@ -282,10 +293,11 @@ function publicWinner(w: MahjongGameState["winner"]): MahjongGameState["winner"]
 }
 
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
+  const taken = takenFromDiscards(state);
   return {
     roomCode: state.roomCode,
     status: state.status,
-    players: state.players.map(toPublicPlayerState),
+    players: state.players.map((p) => toPublicPlayerState(p, taken)),
     wallCount: state.wall.length,
     currentTurn: state.currentTurn,
     lastDiscard: state.lastDiscard,

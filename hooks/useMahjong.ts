@@ -809,15 +809,18 @@ export function useMahjong(
           hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
           actionNotice: { seat: msg.seat, type: msg.type },
           myHand: updatedHand,
-          players: prev.players.map((p) =>
-            p.seat === msg.seat
+          // 被吃碰槓拿走的那張從打出那家的海底拿掉（和伺服器輸出的 state 一致，不用等輪詢）
+          players: prev.players.map((p) => {
+            const discards = p.discards.filter((t) => !meldTileIds.has(t.id));
+            return p.seat === msg.seat
               ? {
                   ...p,
+                  discards,
                   revealed: [...p.revealed, meld],
                   tileCount: msg.tileCount ?? p.tileCount,
                 }
-              : p
-          ),
+              : { ...p, discards };
+          }),
         };
       });
       // Auto-clear action notice after 1.5s
@@ -1037,8 +1040,13 @@ export function useMahjong(
         roundInfo?: RoundInfo;
         gameOver?: boolean;
       };
+      // 放槍被胡走的那張（不是自摸）從海底拿掉，和伺服器輸出的 state 一致
+      const wonFromDiscard = new Set((msg.winners ?? []).filter((w) => w.from != null && w.winTile).map((w) => w.winTile!.id));
       setState((prev) => ({
         ...prev,
+        players: wonFromDiscard.size
+          ? prev.players.map((p) => ({ ...p, discards: p.discards.filter((t) => !wonFromDiscard.has(t.id)) }))
+          : prev.players,
         status: "finished",
         availableActions: [],
         // 搶槓胡：結算畫面靠 lastDiscard 顯示「某某 放槍」，把加槓的牌放回來

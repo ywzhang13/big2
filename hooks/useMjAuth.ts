@@ -31,9 +31,14 @@ const PAIRING_KEY = "mj-pairing";
 const POLL_MS = 2000;
 type Pairing = { code: string; secret: string; expiresAt: string };
 
-/** 從主畫面打開（獨立模式）：只有這時候 LINE 登入才走交接 */
+/**
+ * iPhone／iPad 從主畫面打開（獨立模式）：只有這時候 LINE 登入才走交接。
+ * navigator.standalone 只有 iOS 的 Safari 有；電腦（Chrome 安裝成 App、Mac 的網頁 App，display-mode 也是 standalone）
+ * 登入不會被丟到另一個瀏覽器，照一般 LINE 登入。iPadOS 的 UA 是 Mac，用觸控點數分辨
+ */
 function isStandalone(): boolean {
-  return (navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return ios && (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
 /** 配對資料（代碼＋領取密鑰）只存在主畫面 App 的 sessionStorage，密鑰不能進網址 */
@@ -150,7 +155,8 @@ export function useMjAuth() {
     // 頁面接著把 ?room= 換成 #room=，會連 ?pairing= 一起蓋掉；交接中的登入事件也不能把畫面切成已登入
     if (pairCodeRef.current === undefined) pairCodeRef.current = guestTab ? null : takePairingCode();
     const pairCode = pairCodeRef.current;
-    const claiming = !!pairCode && !isStandalone();
+    const standalone = isStandalone();
+    const claiming = !!pairCode && !standalone;
     // iOS 沒有把登入丟到 Safari、直接回到主畫面 App：已經登入在 App 裡，不用認領
     if (pairCode && !claiming) dropPairing();
     handoffRef.current = claiming;
@@ -168,11 +174,13 @@ export function useMjAuth() {
         return;
       }
       handoffRef.current = false;
-      if (!data.session && isStandalone() && readPairing()) {
+      const waiting = readPairing();
+      if (waiting && !data.session && standalone && Date.now() < Date.parse(waiting.expiresAt)) {
         // 主畫面 App 重新打開時還在等 Safari 登入：繼續等
         setStatus("pairing");
         return;
       }
+      if (waiting) dropPairing(); // 殘留的配對資料（過期、已經登入、不是 iPhone 主畫面）直接清掉，不會卡在等待
       const u = userOf(data.session, guestTab);
       setUser(u);
       setStatus(u ? "in" : failed ? "error" : "out");
