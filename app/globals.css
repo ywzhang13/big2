@@ -450,13 +450,25 @@
   --gold: #C9A96E; --gold-l: #f0d68a; --felt-1: #0f2a1a;
   --pos: #4ade80; --neg: #f87171; --line-green: #06C755;
   --btn-h: 56px; --line-x: 24px; --rec-row: 60px; --fs-ttl: 48px;
+  /* iPhone 安全區（body 已經用同樣的值留了 padding）；桌機都是 0 */
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
 }
+/* 建立房間的設定分組：桌機不影響排版（照舊一欄），手機橫向才變成左右兩欄 */
+.mjl-cset { display: contents; }
 @media (orientation: landscape) and (max-height: 500px) {
   .mjl { --btn-h: 44px; --line-x: 20px; --rec-row: 52px; --fs-ttl: 30px; }
 }
 .mjl-lobby {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
   width: 100%; min-height: 100dvh; padding: 16px 24px;
+}
+/* 大廳和等待開局：深色底用負 margin 蓋過 body 為安全區留的 padding，iPhone 上下左右不再露出綠色桌布；
+   安全區改由自己的 padding 留（桌機安全區是 0，和原本的 16px 24px／px-6 一樣） */
+.mjl-lobby, .mjl-wait-page {
+  margin: calc(-1 * var(--sat)) calc(-1 * var(--sar)) calc(-1 * var(--sab)) calc(-1 * var(--sal));
+  width: auto; /* body 是直向 flex，auto 會撐滿；寫死 100% 時負 margin 撐不開右邊 */
+  padding-left: calc(24px + var(--sal)); padding-right: calc(24px + var(--sar));
 }
 .mjl-brand { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; }
 .mjl-brand h1 { font-size: var(--fs-ttl); line-height: 1.1; }
@@ -633,7 +645,15 @@
 @keyframes mjl-sh { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 
 @media (orientation: landscape) and (max-height: 500px) {
-  .mjl-lobby { flex-direction: row; gap: 36px; min-height: 0; height: 100dvh; max-height: 100dvh; padding-top: 8px; overflow-y: auto; overflow-x: hidden; }
+  .mjl-lobby { flex-direction: row; gap: 36px; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  /* 上下置中：高度＝整個畫面（含安全區），上下留一樣的 padding（至少 12px、有安全區時取較大的安全區），
+     內容剛好在畫面正中間、也不會壓到 iPhone 底部的橫條；整頁不會多出可以捲的高度 */
+  .mjl-lobby, .mjl-wait-page {
+    height: 100dvh; max-height: none; min-height: 0;
+    padding-top: max(12px, var(--sat), var(--sab));
+    padding-bottom: max(12px, var(--sat), var(--sab));
+  }
+  .mjl-wait-page { overflow-y: auto; overflow-x: hidden; }
   /* 內容比畫面高時（建房表單、鍵盤升起）用 margin 置中，捲動時頂端不會被裁掉 */
   .mjl-lobby { align-items: flex-start; }
   .mjl-lobby > .mjl-brand, .mjl-lobby > .mjl-col { margin: auto 0; }
@@ -657,6 +677,47 @@
   .mjl-seat { padding: 3px 7px; border-radius: 8px; }
   .mjl-seat .n, .mjl-seat .s { font-size: 11px; }
   .mjl-more { height: 40px; font-size: 13px; }
+  /* 歷史紀錄：保留捲動，列高依清單高度算，一屏剛好 4 整列（不露半截） */
+  .mjl-rec-list { container-type: size; padding-top: 4px; padding-bottom: 0; } /* 下方不留白，第 5 列才不會露出半截 */
+  .mjl-row { height: calc((100cqh - 18px) / 4); min-height: 0; overflow: hidden; }
+
+  /* 建立房間（小宜《手機不捲動》3.1）：上一列暱稱、中間兩欄、下一列建立鈕；建房時隱藏左邊品牌區 */
+  .mjl-lobby.is-create > .mjl-brand { display: none; }
+  /* 建房表單撐滿寬度，右上的帳號列會壓到暱稱欄：建房時先收起（回大廳就看得到、也能登出） */
+  .mjl-lobby.is-create > .mjl-authbar { display: none; }
+  .mjl-col.mjl-form { max-width: 560px; }
+  .mjl-create { gap: 6px; }
+  .mjl-create .mjl-field input { height: 40px; padding: 0 16px; font-size: 16px; border-radius: 14px; }
+  .mjl-cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  .mjl-cset { display: flex; flex-direction: column; gap: 6px; }
+  .mjl-card { padding: 8px 10px; border-radius: 14px; }
+  .mjl-card > div:first-child { margin-bottom: 6px; }
+  .mjl-sub { display: none; }
+  .mjl-card .grid { gap: 6px; }
+  .mjl-opt { height: 32px; padding: 0; font-size: 14px; border-radius: 10px; }
+  .mjl-formula { padding: 6px 10px; }
+  .mjl-go { height: 44px; padding: 0; font-size: 16px; }
+  .mjl-back { padding: 2px 0; font-size: 12px; }
+
+  /* 等待開局（小宜《手機不捲動》3.2）：左欄房間碼、底台、返回；右欄座位和開始鈕；拿掉標題 */
+  .mjw {
+    display: grid; width: 100%; max-width: none; justify-content: center; align-items: center;
+    grid-template-columns: 210px minmax(0, 300px); column-gap: 24px; row-gap: 8px;
+    grid-template-areas: ". full" "code seats" "set seats" "back start";
+  }
+  .mjw-ttl { display: none; }
+  .mjw-full { grid-area: full; padding: 8px; }
+  .mjw-code { grid-area: code; padding: 10px 12px; }
+  .mjw-num { font-size: 34px; letter-spacing: .24em; line-height: 1.15; }
+  .mjw-code button { margin-top: 2px; font-size: 12px; }
+  .mjw-set { grid-area: set; padding: 6px 10px; }
+  .mjw-set > div { gap: 16px; font-size: 13px; }
+  .mjw-back { grid-area: back; padding: 2px 0; font-size: 12px; }
+  .mjw-seats { grid-area: seats; gap: 8px; }
+  .mjw-seat { padding: 8px 10px; }
+  .mjw-seat p:first-child { font-size: 11px; margin-bottom: 2px; }
+  .mjw-seat p:last-child { font-size: 15px; }
+  .mjw-start { grid-area: start; height: 50px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
 }
 
 @theme inline {

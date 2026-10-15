@@ -322,7 +322,7 @@ export default function MahjongPage() {
   // --- Home / Create / Join screens ---
   if (screen !== "room") {
     return (
-      <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]">
+      <div className={`mjl mjl-lobby flex-1 bg-[#0f2a1a]${screen === "create" ? " is-create" : ""}`}>
         <PortraitHint label="返回首頁" onClick={goHome} />
         <AuthBar user={auth.user} onSignOut={auth.signOut} />
         {auth.pairedAs !== null && <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} />}
@@ -362,28 +362,29 @@ export default function MahjongPage() {
               </button>
             </div>
           ) : screen === "create" ? (
-            <div className="flex flex-col gap-4 w-full fade-in">
+            <div className="mjl-create flex flex-col gap-4 w-full fade-in">
               <NameField value={name} onChange={editName} fromLine={nameSource === "line" && !auth.user.isGuest} />
 
-              {/* 房間設定 */}
-              <div className="flex flex-col gap-3">
+              {/* 房間設定（手機橫向：左欄圈數＋底、右欄每台＋公式；桌機 mjl-cset 不影響排版，照舊一欄） */}
+              <div className="mjl-cgrid flex flex-col gap-3">
+                <div className="mjl-cset">
 
                 {/* 圈數 Card */}
-                <div className="rounded-2xl p-4"
+                <div className="mjl-card rounded-2xl p-4"
                   style={{
                     background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
                     border: "1px solid rgba(201,169,110,0.15)",
                   }}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[#f0d68a] text-sm font-bold">圈數</span>
-                    <span className="text-white/40 text-xs">每圈4局</span>
+                    <span className="mjl-sub text-white/40 text-xs">每圈4局</span>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
                     {[1, 2, 4, 8].map((n) => (
                       <button
                         key={n}
                         onClick={() => setTotalRounds(n)}
-                        className={`py-2.5 rounded-xl text-base font-bold cursor-pointer transition-all duration-150 active:scale-95
+                        className={`mjl-opt py-2.5 rounded-xl text-base font-bold cursor-pointer transition-all duration-150 active:scale-95
                           ${totalRounds === n
                             ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
                             : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
@@ -396,21 +397,21 @@ export default function MahjongPage() {
                 </div>
 
                 {/* 底 Card */}
-                <div className="rounded-2xl p-4"
+                <div className="mjl-card rounded-2xl p-4"
                   style={{
                     background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
                     border: "1px solid rgba(201,169,110,0.15)",
                   }}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[#f0d68a] text-sm font-bold">底</span>
-                    <span className="text-white/40 text-xs">基本分</span>
+                    <span className="mjl-sub text-white/40 text-xs">基本分</span>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
                     {[30, 50, 100, 200, 300, 500, 600, 1000].map((n) => (
                       <button
                         key={n}
                         onClick={() => setBasePoints(n)}
-                        className={`py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
+                        className={`mjl-opt py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
                           ${basePoints === n
                             ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
                             : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
@@ -422,22 +423,25 @@ export default function MahjongPage() {
                   </div>
                 </div>
 
+                </div>
+
+                <div className="mjl-cset">
                 {/* 每台 Card */}
-                <div className="rounded-2xl p-4"
+                <div className="mjl-card rounded-2xl p-4"
                   style={{
                     background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
                     border: "1px solid rgba(201,169,110,0.15)",
                   }}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[#f0d68a] text-sm font-bold">每台</span>
-                    <span className="text-white/40 text-xs">台數加成</span>
+                    <span className="mjl-sub text-white/40 text-xs">台數加成</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[10, 20, 30, 50, 100, 200].map((n) => (
                       <button
                         key={n}
                         onClick={() => setFanPoints(n)}
-                        className={`py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
+                        className={`mjl-opt py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
                           ${fanPoints === n
                             ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
                             : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
@@ -450,7 +454,7 @@ export default function MahjongPage() {
                 </div>
 
                 {/* 結算公式預覽 */}
-                <div className="rounded-xl px-4 py-3 flex items-center justify-center gap-2"
+                <div className="mjl-formula rounded-xl px-4 py-3 flex items-center justify-center gap-2"
                   style={{
                     background: "rgba(0,0,0,0.25)",
                     border: "1px dashed rgba(201,169,110,0.2)",
@@ -462,12 +466,13 @@ export default function MahjongPage() {
                   <span className="text-white/30 text-xs">×</span>
                   <span className="text-[#C9A96E] font-bold text-sm">{fanPoints}</span>
                 </div>
+                </div>
               </div>
 
               <button
                 onClick={handleCreate}
                 disabled={isSubmitting}
-                className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
+                className="mjl-go w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
                            cursor-pointer active:scale-95 transition-all duration-150
                            hover:brightness-110 disabled:opacity-60 disabled:cursor-wait"
               >
@@ -478,7 +483,7 @@ export default function MahjongPage() {
                   setScreen("home");
                   setError("");
                 }}
-                className="text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
+                className="mjl-back text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
               >
                 返回
               </button>
@@ -767,22 +772,23 @@ function RoomView({
     const roomFull = isFull && !isInRoom;
 
     return (
-      <div className="flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] items-center justify-center px-6">
+      <div className="mjl mjl-wait-page flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] items-center justify-center px-6">
         <PortraitHint label="返回首頁" onClick={onGoHome} />
-        <div className="flex flex-col items-center gap-6 w-full max-w-sm">
-          <h2 className="text-xl font-bold text-[#f0d68a] font-heading">等待玩家加入</h2>
+        {/* 手機橫向：左欄房間碼、底台、返回；右欄四個座位和開始鈕（.mjw 的 grid，桌機照舊一欄） */}
+        <div className="mjw flex flex-col items-center gap-6 w-full max-w-sm">
+          <h2 className="mjw-ttl text-xl font-bold text-[#f0d68a] font-heading">等待玩家加入</h2>
 
           {roomFull && (
-            <div className="w-full rounded-2xl bg-red-500/20 border border-red-500/30 p-4 text-center fade-in">
+            <div className="mjw-full w-full rounded-2xl bg-red-500/20 border border-red-500/30 p-4 text-center fade-in">
               <p className="text-red-400 font-bold text-lg">房間已滿</p>
               <p className="text-red-300/70 text-sm mt-1">此房間已有 4 位玩家</p>
             </div>
           )}
 
           {/* Room code */}
-          <div className="bg-white/10 rounded-2xl px-8 py-4 text-center">
+          <div className="mjw-code bg-white/10 rounded-2xl px-8 py-4 text-center">
             <p className="text-white/50 text-xs mb-1">房間碼</p>
-            <p className="text-4xl font-bold text-[#C9A96E] tracking-[0.3em] font-heading">{code}</p>
+            <p className="mjw-num text-4xl font-bold text-[#C9A96E] tracking-[0.3em] font-heading">{code}</p>
             <button
               onClick={() => {
                 const base = window.location.origin + "/mahjong";
@@ -797,7 +803,7 @@ function RoomView({
 
           {/* Room settings display */}
           {state.roomSettings && (
-            <div className="bg-white/5 rounded-xl px-4 py-2.5 w-full">
+            <div className="mjw-set bg-white/5 rounded-xl px-4 py-2.5 w-full">
               <div className="flex justify-center gap-6 text-sm">
                 <span className="text-white/40">{state.roomSettings.totalRounds}圈</span>
                 <span className="text-white/40">底{state.roomSettings.basePoints}</span>
@@ -807,13 +813,13 @@ function RoomView({
           )}
 
           {/* Player seats */}
-          <div className="grid grid-cols-2 gap-3 w-full">
+          <div className="mjw-seats grid grid-cols-2 gap-3 w-full">
             {[0, 1, 2, 3].map((seat) => {
               const player = state.players.find((p) => p.seat === seat);
               return (
                 <div
                   key={seat}
-                  className={`rounded-xl p-4 text-center transition-all duration-300 ${
+                  className={`mjw-seat rounded-xl p-4 text-center transition-all duration-300 ${
                     player
                       ? "bg-[#C9A96E]/20 border border-[#C9A96E]/30"
                       : "bg-white/5 border border-white/10"
@@ -841,7 +847,7 @@ function RoomView({
             <button
               onClick={startGame}
               disabled={state.players.length !== 4}
-              className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
+              className="mjw-start w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
                          cursor-pointer active:scale-95 transition-all duration-150
                          disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -850,7 +856,7 @@ function RoomView({
                 : `等待玩家 (${state.players.length}/4)`}
             </button>
           ) : (
-            <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
+            <div className="mjw-start w-full py-4 rounded-2xl bg-white/10 text-center">
               <p className="text-white/50 font-medium">
                 {state.players.length === 4
                   ? "等待房主開始遊戲"
@@ -861,7 +867,7 @@ function RoomView({
 
           <button
             onClick={onGoHome}
-            className="text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
+            className="mjw-back text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
           >
             返回首頁
           </button>

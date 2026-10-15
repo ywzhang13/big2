@@ -94,6 +94,11 @@ async function claimPairing(code: string, session: Session): Promise<MjHandoff> 
   }
 }
 
+/** 最多等 ms 毫秒，逾時就用 fallback（不中斷原本的請求） */
+function withTimeout<T>(p: Promise<T>, fallback: T, ms = 3000): Promise<T> {
+  return Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+}
+
 /** 429 的 retryAfter（秒）→ 給人看的分鐘數 */
 function tooManyText(retryAfter: unknown): string {
   const sec = typeof retryAfter === "number" && retryAfter > 0 ? retryAfter : 600;
@@ -347,18 +352,24 @@ export function useMjAuth() {
     return true;
   }, []);
 
+  /**
+   * 登出：畫面先回到登入閘門，本機的登入一定清掉；通知伺服器作廢這次登入放在背景、最多等 3 秒。
+   * 原本要等伺服器回應才換畫面：請求卡住、或拿不到 supabase-js 的登入鎖（例如另一個分頁或主畫面 App 正在用）時，
+   * 按了沒反應；伺服器回錯時 supabase-js 也不會清本機登入，重新整理又是登入狀態。只清這台裝置，其他裝置不受影響
+   */
   const signOut = useCallback(async () => {
-    if (isGuestTab()) {
-      // 遊客登出＝刪掉這個遊客（伺服器）＋清掉這個分頁的 session
-      const headers = await authHeaders();
-      await fetch("/api/auth/guest", { method: "DELETE", headers }).catch(() => {});
-      dropGuest();
-    } else {
-      await getSupabase().auth.signOut({ scope: "local" });
-    }
     setUser(null);
     setPairedAs(null);
     setStatus("out");
+    if (isGuestTab()) {
+      // 遊客登出＝刪掉這個遊客（伺服器）＋清掉這個分頁的 session
+      const headers = await withTimeout(authHeaders(), {});
+      fetch("/api/auth/guest", { method: "DELETE", headers, keepalive: true }).catch(() => {});
+      dropGuest();
+      return;
+    }
+    const ok = await withTimeout(getSupabase().auth.signOut({ scope: "local" }).then((r) => !r.error, () => false), false);
+    if (!ok) dropLocalSession(); // 伺服器沒確認（失敗、逾時、拿不到鎖）：自己清掉這台裝置的登入
   }, [dropGuest]);
 
   /** 任何麻將 API 回 401：token 已失效，清掉本機登入，整頁退回登入閘門 */
