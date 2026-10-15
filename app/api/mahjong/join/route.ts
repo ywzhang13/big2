@@ -51,6 +51,12 @@ export async function POST(request: Request) {
     // 這個玩家 id 已經坐下、但不是這個帳號（別人的座位，或上線前沒綁帳號的舊座位）
     if (existingPlayers.some((p) => p.player_id === playerId)) return notYourSeat();
 
+    // 遊客和 LINE 玩家不同桌：遊客房只收遊客、一般房只收 LINE 玩家（遊客的牌局不會出現在 LINE 帳號的歷史紀錄）
+    const guestRoom = (room.game_state as { guestRoom?: boolean } | null)?.guestRoom === true;
+    if (guestRoom !== user.isGuest) {
+      return Response.json({ error: guestRoom ? "guest_room" : "guest_not_allowed" }, { status: 403 });
+    }
+
     // New player — only allow if still in lobby
     if (room.status !== "waiting") {
       return Response.json({ error: "房間已開始遊戲，無法加入" }, { status: 400 });

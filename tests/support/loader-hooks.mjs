@@ -3,7 +3,7 @@
 //   - 用專案已有的 typescript 把 .ts 轉成 JS（會移除只當型別用的 import）
 //   - 路由裡的 "@/lib/mahjong/db"、"broadcast" 換成 tests/support 的記憶體版本（不連資料庫）；
 //     "gameLogic" 換成 forced-deal（沒指定花牌時和真的完全一樣，用來測開局花牌）；
-//     "records/store"（對局紀錄的資料庫存取）換成記憶體版本；"auth"（驗證登入 token）換成記憶體版本；
+//     "records/store"（對局紀錄的資料庫存取）換成記憶體版本；"auth"（驗證登入 token）、"guest/store"（遊客帳號與猜錯次數）換成記憶體版本；
 //     "next/server" 的 after() 在測試裡不跑
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -18,6 +18,7 @@ const STUBS = {
   "@/lib/records/store": "tests/support/stub-records-store.ts",
   "@/lib/broadcast": "tests/support/stub-broadcast.ts",
   "@/lib/auth": "tests/support/stub-auth.ts",
+  "@/lib/guest/store": "tests/support/stub-guest-store.ts",
   "next/server": "tests/support/stub-next-server.ts",
 };
 

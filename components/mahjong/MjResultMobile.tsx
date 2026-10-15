@@ -1,7 +1,8 @@
 "use client";
 
-// 手機橫向的結算浮層（一般胡牌、流局、八仙過海、七搶一）。左欄：胡法＋台數明細；
-// 右欄：四家攤牌＋輸贏＋下一局。390 高內不捲動就看得到全部，金額一律用後端的 settlement。
+// 結算浮層（一般胡牌、流局、八仙過海、七搶一）。左欄：胡法＋台數明細；
+// 右欄：四家攤牌＋輸贏＋下一局（整場打完時改成總積分榜）。金額一律用後端的 settlement。
+// 桌機和手機橫向同一個樣式（老闆選定手機版），desktop 只是放大字和牌。
 
 import type { Settlement } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjWinner, MjHandReveal } from "@/hooks/useMahjong";
@@ -24,7 +25,10 @@ interface MjResultMobileProps {
   nextGameReady?: string[];
   onNextGame: () => void;
   onLeave: () => void;
+  desktop?: boolean;
 }
+
+const RANK_LABELS = ["冠", "亞", "季", "殿"];
 
 function signed(n: number) {
   return `${n > 0 ? "+" : ""}${n}`;
@@ -49,6 +53,7 @@ export default function MjResultMobile({
   nextGameReady,
   onNextGame,
   onLeave,
+  desktop = false,
 }: MjResultMobileProps) {
   const isDraw = winner.seat < 0;
   const flowerName = winner.score.fans.find((f) => FLOWER_WIN_NAMES.includes(f.name))?.name;
@@ -59,9 +64,13 @@ export default function MjResultMobile({
   const nameOf = (seat: number) => players.find((p) => p.seat === seat)?.name ?? "";
   const title = isDraw ? "流局" : flowerName ?? (isZimo ? "自摸" : "胡");
   const iAmReady = nextGameReady?.includes(myId) ?? false;
+  const readyCount = players.filter((p) => nextGameReady?.includes(p.id)).length;
+  const tile = desktop ? { w: 26, ht: 35, ww: 18, wh: 24 } : { w: 14, ht: 19, ww: 12, wh: 16 };
+  // 整場打完：總積分榜（高分在前）
+  const ranking = gameOver && playerScores ? [...players].sort((a, b) => playerScores[b.seat] - playerScores[a.seat]) : null;
 
   return (
-    <div className="mjm-result">
+    <div className={`mjm-result${desktop ? " desk" : ""}`}>
       {/* 左欄：胡法、誰胡、台數明細 */}
       <div className="lcol">
         <span className={`hu ${isDraw ? "draw" : ""}`}>{title}</span>
@@ -100,14 +109,14 @@ export default function MjResultMobile({
                 <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#f0d68a", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {w && (multi ? `胡 ${w.score.totalFan} 台：${w.score.fans.map((f) => f.name).join("、")}` : "胡")}
                 </span>
-                <WaitsList waits={w?.waits} w={12} ht={16} />
+                <WaitsList waits={w?.waits} w={tile.ww} ht={tile.wh} />
                 {settlement && (
                   <span className="delta" style={{ color: deltaColor(delta) }}>{signed(delta)}</span>
                 )}
                 {playerScores && <span className="tot">總{signed(playerScores[p.seat])}</span>}
                 {h && (
                   <div style={{ flexBasis: "100%", minWidth: 0 }}>
-                    <RevealTiles h={h} winner={w} nameOf={nameOf} w={14} ht={19} />
+                    <RevealTiles h={h} winner={w} nameOf={nameOf} w={tile.w} ht={tile.ht} />
                   </div>
                 )}
               </div>
@@ -117,10 +126,26 @@ export default function MjResultMobile({
         <div className="foot">
           {hasRounds && !gameOver && (
             <div className="ready">
-              {players.map((p) => (
-                <span key={p.seat} className={nextGameReady?.includes(p.id) ? "ok" : ""}>
-                  {nextGameReady?.includes(p.id) ? "✓ " : ""}
-                  {p.name}
+              <span className="cnt">同意 {readyCount}/4</span>
+              {players.map((p) => {
+                const ok = nextGameReady?.includes(p.id) ?? false;
+                return (
+                  <span key={p.seat} className={`chip ${ok ? "ok" : "wait"}`} title={ok ? "已同意" : "還沒按"}>
+                    <i>{ok ? "✓" : "…"}</i>
+                    {p.name}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {ranking && (
+            <div className="rank">
+              <span className="cnt">總積分榜</span>
+              {ranking.map((p, i) => (
+                <span key={p.seat} className={`chip r${i}`}>
+                  <i>{RANK_LABELS[i]}</i>
+                  <span className="nm">{p.name}</span>
+                  <b style={{ color: deltaColor(playerScores![p.seat]) }}>{signed(playerScores![p.seat])}</b>
                 </span>
               ))}
             </div>
@@ -133,7 +158,7 @@ export default function MjResultMobile({
           <button
             type="button"
             className={`mjm-btn ${gameOver || !hasRounds ? "" : "ghost"}`}
-            style={gameOver || !hasRounds ? { marginLeft: "auto" } : undefined}
+            style={!gameOver && !hasRounds ? { marginLeft: "auto" } : undefined}
             onClick={onLeave}
           >
             {gameOver ? "回大廳" : "離開"}

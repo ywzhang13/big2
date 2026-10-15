@@ -23,14 +23,16 @@ function safeHand(tiles: Tile[]): Tile[] {
 import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
-import { authHeaders } from "@/lib/mahjong/clientAuth";
+import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
 
 function getMjId(): string {
   if (typeof window === "undefined") return "";
-  let id = localStorage.getItem("mj_pid");
+  // 遊客分頁各自一個玩家 id（localStorage 是所有分頁共用）
+  const store = mjStorage();
+  let id = store.getItem("mj_pid");
   if (!id) {
     id = Math.random().toString(36).slice(2, 10);
-    localStorage.setItem("mj_pid", id);
+    store.setItem("mj_pid", id);
   }
   return id;
 }

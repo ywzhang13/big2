@@ -29,8 +29,8 @@ import type { MahjongGameState } from "../../lib/mahjong/gameState";
 opts.autoBind = false; // 這個檔要測「沒綁帳號的座位」，不讓 stub 自動綁
 
 const U = ["11111111-0000-4000-8000-000000000000", "22222222-0000-4000-8000-000000000000", "33333333-0000-4000-8000-000000000000", "44444444-0000-4000-8000-000000000000"];
-U.forEach((id, i) => (tokens[`tok${i}`] = { id, displayName: `LINE${i}`, pictureUrl: null }));
-tokens.tok5 = { id: "55555555-0000-4000-8000-000000000000", displayName: "LINE5", pictureUrl: null };
+U.forEach((id, i) => (tokens[`tok${i}`] = { id, displayName: `LINE${i}`, pictureUrl: null, isGuest: false }));
+tokens.tok5 = { id: "55555555-0000-4000-8000-000000000000", displayName: "LINE5", pictureUrl: null, isGuest: false };
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -235,8 +235,8 @@ let roomId = "", code = "";
   };
   for (const d of ["app", "lib", "hooks", "components"]) walk(path.join(ROOT, d));
   const usesAuth = files.filter((f) => /from "@\/lib\/auth"|from "\.\.?\/.*auth"|mahjong\/access"/.test(readFileSync(path.join(ROOT, f), "utf8")));
-  const outside = usesAuth.filter((f) => !f.startsWith("app/api/mahjong/") && !f.startsWith("lib/mahjong/") && f !== "lib/records/close.ts");
-  eq([outside, files.filter((f) => f.startsWith("app/api/game/") && usesAuth.includes(f))], [[], []], "E1 會檢查登入的程式只在麻將路由／麻將函式庫；大老二的路由（app/api/game）、頁面、共用函式庫都沒有接登入");
+  const outside = usesAuth.filter((f) => !f.startsWith("app/api/mahjong/") && !f.startsWith("app/api/auth/") && !f.startsWith("lib/mahjong/") && f !== "lib/records/close.ts");
+  eq([outside, files.filter((f) => f.startsWith("app/api/game/") && usesAuth.includes(f))], [[], []], "E1 會檢查登入的程式只在麻將路由／登入路由（app/api/auth）／麻將函式庫；大老二的路由（app/api/game）、頁面、共用函式庫都沒有接登入");
   const b2 = buildBig2Record({ id: "B", code: "3001", status: "finished", created_at: "2026-10-20T08:00:00.000Z", records_enabled: true, scores: {} },
     [0, 1, 2, 3].map((seat) => ({ player_id: `b${seat}`, name: `大${seat}`, seat, hand: seat === 0 ? [] : ["3C" as never] })), "dissolved");
   eq(b2?.players.map((p) => p.userId ?? null), [null, null, null, null], "E2 大老二的紀錄不帶 user_id（照舊不需要登入）");

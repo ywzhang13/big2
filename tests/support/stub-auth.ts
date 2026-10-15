@@ -7,7 +7,7 @@ export async function getAuthUser(request: Request): Promise<AuthUser | null> {
   const m = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i);
   if (!m) return null;
   const token = m[1].trim();
-  if (token.startsWith("as:")) return { id: `u:${token.slice(3)}`, displayName: null, pictureUrl: null };
+  if (token.startsWith("as:")) return { id: `u:${token.slice(3)}`, displayName: null, pictureUrl: null, isGuest: false };
   return tokens[token] ?? null;
 }
 /** 以 body.playerId 那個座位本人登入的 headers */

@@ -3,13 +3,12 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { useMahjong, getMjId, type MjJoinInfo } from "@/hooks/useMahjong";
 import { useMjAuth } from "@/hooks/useMjAuth";
-import { mjFetch, ROOM_CODE_RE } from "@/lib/mahjong/clientAuth";
-import { AuthBar, LoginGate, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
+import { isGuestTab, mjFetch, mjStorage, ROOM_CODE_RE } from "@/lib/mahjong/clientAuth";
+import { AuthBar, GuestGate, LoginGate, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
 import MjRecords from "@/components/mahjong/MjRecords";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
-import { RevealTiles, WaitsList } from "@/components/mahjong/MjReveal";
 import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
@@ -126,12 +125,12 @@ export default function MahjongPage() {
       setRoomCode(code);
       setScreen("room");
     }
-    const stored = localStorage.getItem("mj_name");
+    const stored = mjStorage().getItem("mj_name");
     if (stored) {
       setName(stored);
       setNameReady(true);
     }
-    const src = localStorage.getItem("mj_name_source");
+    const src = mjStorage().getItem("mj_name_source");
     if (src === "line" || src === "manual") setNameSource(src);
 
     const onHash = () => {
@@ -158,10 +157,10 @@ export default function MahjongPage() {
   // 登入後暱稱帶入 LINE 名稱（自己改過就不覆寫；超過 8 字取前 8 字）
   const lineName = auth.user?.displayName ?? "";
   useEffect(() => {
-    if (!lineName || localStorage.getItem("mj_name_source") === "manual") return;
+    if (!lineName || mjStorage().getItem("mj_name_source") === "manual") return;
     const n = Array.from(lineName).slice(0, 8).join("");
-    localStorage.setItem("mj_name", n);
-    localStorage.setItem("mj_name_source", "line");
+    mjStorage().setItem("mj_name", n);
+    mjStorage().setItem("mj_name_source", "line");
     setName(n);
     setNameSource("line");
   }, [lineName]);
@@ -170,18 +169,24 @@ export default function MahjongPage() {
     setName(v);
     if (nameSource !== "manual") {
       setNameSource("manual");
-      localStorage.setItem("mj_name_source", "manual");
+      mjStorage().setItem("mj_name_source", "manual");
     }
   }
 
-  // 401：登入失效 → 退回登入閘門（在房間裡就是「加入房間 XXXX」）；403：座位不是你的 → 回大廳
+  // 401：登入失效 → 退回登入閘門（在房間裡就是「加入房間 XXXX」）；403：座位不是你的、或遊客／LINE 不同桌 → 回大廳
   const { expire } = auth;
-  const handleAuthError = useCallback((status: 401 | 403) => {
+  const handleAuthError = useCallback((status: 401 | 403, code?: string) => {
     if (status === 401) {
       expire();
       return;
     }
-    setError("無法進入這間房");
+    setError(
+      code === "guest_not_allowed"
+        ? "遊客只能加入遊客建的房間"
+        : code === "guest_room"
+          ? "這是遊客的測試房間，LINE 帳號不能加入"
+          : "無法進入這間房"
+    );
     setJoined(null);
     window.location.hash = "";
   }, [expire]);
@@ -194,7 +199,7 @@ export default function MahjongPage() {
     });
     const data = await res.json();
     if (res.status === 401 || res.status === 403) {
-      handleAuthError(res.status);
+      handleAuthError(res.status, data.error);
       return null;
     }
     // 410：這場已結束，進房後顯示總結算
@@ -214,7 +219,7 @@ export default function MahjongPage() {
     }
     setIsSubmitting(true);
     setError("");
-    localStorage.setItem("mj_name", name.trim());
+    mjStorage().setItem("mj_name", name.trim());
     setNameReady(true);
     try {
       const myId = getMjId();
@@ -257,7 +262,7 @@ export default function MahjongPage() {
     }
     setIsSubmitting(true);
     setError("");
-    localStorage.setItem("mj_name", name.trim());
+    mjStorage().setItem("mj_name", name.trim());
     setNameReady(true);
     try {
       const info = await joinRoom(joinCode);
@@ -278,13 +283,24 @@ export default function MahjongPage() {
     window.location.href = "/";
   }
 
-  // 沒登入：大廳／房號連結都先擋登入閘門（只有 LINE 登入）
+  // 沒登入：大廳／房號連結都先擋登入閘門（只有 LINE 登入；從 ?guest=1 進來的分頁改成遊客的測試密碼）
   const inRoom = screen === "room" && !!roomCode;
   if (auth.status !== "in" || !auth.user) {
     return (
       <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]">
         <PortraitHint label="返回首頁" onClick={goHome} />
         <Brand />
+        {auth.guestMode ? (
+          <GuestGate
+            checking={auth.status === "checking"}
+            roomCode={inRoom ? roomCode : null}
+            onSubmit={auth.signInGuest}
+            onBack={() => {
+              if (inRoom) window.location.hash = "";
+              else goHome();
+            }}
+          />
+        ) : (
         <LoginGate
           status={auth.status === "in" ? "checking" : auth.status}
           roomCode={inRoom ? roomCode : null}
@@ -294,6 +310,7 @@ export default function MahjongPage() {
             else goHome();
           }}
         />
+        )}
       </div>
     );
   }
@@ -341,7 +358,7 @@ export default function MahjongPage() {
             </div>
           ) : screen === "create" ? (
             <div className="flex flex-col gap-4 w-full fade-in">
-              <NameField value={name} onChange={editName} fromLine={nameSource === "line"} />
+              <NameField value={name} onChange={editName} fromLine={nameSource === "line" && !auth.user.isGuest} />
 
               {/* 房間設定 */}
               <div className="flex flex-col gap-3">
@@ -475,7 +492,7 @@ export default function MahjongPage() {
                            tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal
                            placeholder:text-base outline-none focus:ring-2 focus:ring-[#C9A96E]/50 transition-all"
               />
-              <NameField value={name} onChange={editName} fromLine={nameSource === "line"} />
+              <NameField value={name} onChange={editName} fromLine={nameSource === "line" && !auth.user.isGuest} />
               <button
                 onClick={handleJoin}
                 disabled={isSubmitting}
@@ -520,17 +537,17 @@ export default function MahjongPage() {
       code={roomCode}
       playerName={name}
       nameReady={nameReady}
-      nameFromLine={nameSource === "line"}
+      nameFromLine={nameSource === "line" && !auth.user.isGuest}
       initialJoin={joined}
       onSetName={(n) => {
         setName(n);
         setNameReady(true);
-        localStorage.setItem("mj_name", n);
+        mjStorage().setItem("mj_name", n);
       }}
       onNameEdited={() => {
         if (nameSource !== "manual") {
           setNameSource("manual");
-          localStorage.setItem("mj_name_source", "manual");
+          mjStorage().setItem("mj_name_source", "manual");
         }
       }}
       onAuthError={handleAuthError}
@@ -581,7 +598,7 @@ function RoomView({
   initialJoin: MjJoinInfo | null;
   onSetName: (n: string) => void;
   onNameEdited: () => void;
-  onAuthError: (status: 401 | 403) => void;
+  onAuthError: (status: 401 | 403, code?: string) => void;
   onGoHome: () => void;
 }) {
   // 還沒改過字就顯示頁面的暱稱（登入後才帶入的 LINE 名稱也會跟上）
@@ -663,7 +680,7 @@ function RoomView({
           const data = await res.json();
           // 這場已結束、房間已刪：顯示總結算
           if (res.status === 410) markClosed(closedFromResponse(data));
-          else if (res.status === 401 || res.status === 403) onAuthError(res.status);
+          else if (res.status === 401 || res.status === 403) onAuthError(res.status, data.error);
           else if (data.roomId) applyJoin(data as MjJoinInfo);
         })
         .catch((err) => console.error("[mj] auto-join failed:", err));
@@ -748,7 +765,8 @@ function RoomView({
             <button
               onClick={() => {
                 const base = window.location.origin + "/mahjong";
-                navigator.clipboard?.writeText(`${base}#room=${code}`);
+                // 遊客的房間只有遊客能進：連結帶 ?guest=1，別的分頁打開就是遊客登入
+                navigator.clipboard?.writeText(`${base}${isGuestTab() ? "?guest=1" : ""}#room=${code}`);
               }}
               className="mt-2 text-xs text-white/40 cursor-pointer active:text-[#C9A96E] hover:text-white/60 transition-colors"
             >
@@ -851,8 +869,6 @@ function RoomView({
     : undefined;
 
   const nameOfSeat = (seat: number) => state.players.find((p) => p.seat === seat)?.name ?? "";
-  // 這局的所有贏家（三響時三位）；流局是空陣列
-  const resultWinners = state.winners ?? (state.winner && state.winner.seat >= 0 ? [state.winner] : []);
 
   const boardProps = {
     players: state.players,
@@ -1148,9 +1164,10 @@ function RoomView({
         </div>
       )}
 
-      {/* 手機橫向的結算浮層 */}
-      {isMobileLandscape && isFinished && state.winner && (
+      {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大 */}
+      {isFinished && state.winner && (
         <MjResultMobile
+          desktop={!isMobileLandscape}
           winner={state.winner}
           winners={state.winners}
           players={state.players}
@@ -1169,358 +1186,6 @@ function RoomView({
             else setShowLeaveConfirm(true);
           }}
         />
-      )}
-
-      {/* Game over overlay — stays on the board */}
-      {!isMobileLandscape && isFinished && state.winner && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div
-            className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl max-w-5xl w-full shadow-2xl flex flex-col"
-            style={{ maxHeight: "92vh" }}
-          >
-          {/* Scrollable content */}
-          <div className="mj-scroll overflow-y-auto p-5 flex-1">
-            <style jsx>{`
-              .mj-scroll {
-                scrollbar-width: thin;
-                scrollbar-color: rgba(201, 169, 110, 0.35) transparent;
-              }
-              .mj-scroll::-webkit-scrollbar {
-                width: 6px;
-              }
-              .mj-scroll::-webkit-scrollbar-track {
-                background: transparent;
-                margin: 8px 0;
-              }
-              .mj-scroll::-webkit-scrollbar-thumb {
-                background: linear-gradient(
-                  180deg,
-                  rgba(201, 169, 110, 0.55) 0%,
-                  rgba(139, 105, 20, 0.55) 100%
-                );
-                border-radius: 4px;
-                border: 1px solid rgba(201, 169, 110, 0.25);
-              }
-              .mj-scroll::-webkit-scrollbar-thumb:hover {
-                background: linear-gradient(
-                  180deg,
-                  rgba(240, 214, 138, 0.8) 0%,
-                  rgba(201, 169, 110, 0.8) 100%
-                );
-              }
-              @keyframes zimo-pulse {
-                0%, 100% { opacity: 0.6; transform: scale(1); }
-                50% { opacity: 1; transform: scale(1.1); }
-              }
-            `}</style>
-            <div className="flex gap-5 items-start">
-            {/* 左欄：胡法＋台數明細 */}
-            <div className="w-[240px] flex-shrink-0">
-            {state.winner.seat < 0 ? (
-              <div className="text-center">
-                <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-white/5 flex items-center justify-center text-2xl">
-                  &#9940;
-                </div>
-                <h2 className="text-xl font-bold text-white/70">流局</h2>
-                <p className="text-white/40 text-sm mt-1">牌牆摸完，無人胡牌</p>
-              </div>
-            ) : (
-              <div className="text-center relative">
-                {/* 自摸 glowing background animation */}
-                {isZimoWin && (
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 -z-10 pointer-events-none"
-                    style={{
-                      background:
-                        "radial-gradient(ellipse at center, rgba(255,215,0,0.35) 0%, rgba(255,165,0,0.15) 40%, transparent 75%)",
-                      animation: "zimo-pulse 2s ease-in-out infinite",
-                    }}
-                  />
-                )}
-                <div
-                  className="w-14 h-14 mx-auto mb-2 rounded-full flex items-center justify-center text-2xl"
-                  style={{
-                    background: isZimoWin
-                      ? "radial-gradient(circle, #FFD700, #b8860b)"
-                      : "radial-gradient(circle, #C9A96E, #8B6914)",
-                    boxShadow: isZimoWin
-                      ? "0 0 40px rgba(255,215,0,0.8), 0 0 80px rgba(255,165,0,0.4)"
-                      : "0 0 20px rgba(201,169,110,0.4)",
-                  }}
-                >
-                  胡
-                </div>
-                <h2
-                  className="text-xl font-bold"
-                  style={{
-                    color: isZimoWin ? "#fff8dc" : "#f0d68a",
-                    textShadow: isZimoWin
-                      ? "0 0 20px #FFD700, 0 0 40px #FFA500"
-                      : "none",
-                  }}
-                >
-                  {state.winner.name} 胡牌！
-                </h2>
-                {/* 自摸 / 放槍 indicator with emphasis for 自摸 */}
-                <p className={`mt-1 ${isZimoWin || flowerWinName ? "text-xl font-black tracking-[0.4em]" : "text-sm"}`}>
-                  {flowerWinName ? (
-                    <span style={{ color: "#fbbf24", textShadow: "0 0 16px rgba(255,215,0,0.7)" }}>
-                      {flowerWinName}
-                    </span>
-                  ) : isZimoWin ? (
-                    <span
-                      style={{
-                        color: "#fbbf24",
-                        textShadow: "0 0 16px rgba(255,215,0,0.7)",
-                      }}
-                    >
-                      自摸
-                    </span>
-                  ) : (state.winner.from ?? state.lastDiscard?.from) != null ? (
-                    <span className="text-red-400">
-                      {nameOfSeat((state.winner.from ?? state.lastDiscard?.from)!)} 放槍
-                    </span>
-                  ) : (
-                    <span className="text-[#C9A96E]">自摸</span>
-                  )}
-                </p>
-                <p className="text-white/50 text-sm mt-1">
-                  {state.winner.score.totalFan > 0 && (
-                    <span>共 <span className="text-[#C9A96E] font-bold text-lg">{state.winner.score.totalFan}</span> 台</span>
-                  )}
-                </p>
-              </div>
-            )}
-
-            {/* 台數明細（左欄） */}
-            {state.winner && state.winner.seat >= 0 && state.winner.score.fans.length > 0 && (
-              <div className="mt-3 border-t border-white/10 pt-3">
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">台數明細</p>
-                {state.winner.score.fans.map((fan, i) => (
-                  <div key={i} className="flex justify-between text-sm px-2 py-1">
-                    <span className="text-white/70">{fan.name}</span>
-                    <span className="text-[#C9A96E] font-bold">{fan.value} 台</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            </div>
-
-            {/* 右欄：四家攤牌＋輸贏 */}
-            <div className="flex-1 min-w-0">
-            {state.winner?.allHands && state.winner.allHands.length > 0 && (
-              <div>
-                <p className="text-white/40 text-xs font-bold tracking-wider text-center mb-2">各家結算</p>
-                <div className="flex flex-col gap-1.5">
-                  {state.winner.allHands
-                    .sort((a, b) => a.seat - b.seat)
-                    .map((h) => {
-                      const delta = state.settlement?.deltas[h.seat] ?? 0;
-                      const cumulative = state.playerScores?.[h.seat] ?? 0;
-                      const w = resultWinners.find((x) => x.seat === h.seat);
-                      const isWin = !!w;
-                      return (
-                        <div
-                          key={h.seat}
-                          className={`rounded-lg p-2 ${
-                            isWin
-                              ? "bg-[#C9A96E]/15 border border-[#C9A96E]/30"
-                              : "bg-white/5 border border-white/5"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-[11px] text-white/70 font-bold">
-                              {h.name}
-                              {h.seat === state.mySeat && " (你)"}
-                              {isWin && <span className="text-[#f0d68a] ml-1">胡</span>}
-                              {w && resultWinners.length > 1 && (
-                                <span className="text-[#f0d68a]/70 font-normal ml-2">
-                                  {w.score.totalFan}台：{w.score.fans.map((f) => f.name).join("、")}
-                                </span>
-                              )}
-                            </span>
-                            <span className="flex-1" />
-                            <WaitsList waits={w?.waits} w={18} ht={24} />
-                            <div className="flex items-baseline gap-2">
-                              {state.settlement && state.roomSettings && (
-                                <span className={`text-sm font-bold ${
-                                  delta > 0 ? "text-green-400" : delta < 0 ? "text-red-400" : "text-white/40"
-                                }`}>
-                                  {delta > 0 ? "+" : ""}{delta}
-                                </span>
-                              )}
-                              {state.playerScores && state.roomSettings && (
-                                <span className="text-[10px] text-white/40">
-                                  總{cumulative >= 0 ? "+" : ""}{cumulative}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <RevealTiles h={h} winner={w} nameOf={nameOfSeat} w={26} ht={35} />
-                        </div>
-                      );
-                    })}
-                </div>
-                {state.settlement && state.roomSettings && state.settlement.fanTotal > 0 && (
-                  <p className="text-white/30 text-xs text-center mt-2">
-                    底{state.roomSettings.basePoints} + {state.settlement.fanTotal}台 × {state.roomSettings.fanPoints} = {state.settlement.paymentPerPlayer}
-                    {state.settlement.reason === "self_draw" ? " (×3)" : ""}
-                  </p>
-                )}
-              </div>
-            )}
-            </div>
-            </div>
-
-          </div>
-          {/* Sticky bottom: Action buttons + Ready check (always visible) */}
-          <div
-            className="flex flex-col gap-3 p-4 border-t border-[#C9A96E]/20"
-            style={{ background: "linear-gradient(180deg, rgba(26,20,8,0.7) 0%, rgba(26,20,8,1) 100%)" }}
-          >
-              {state.roomSettings && !state.gameOver && (
-                <>
-                  {/* Ready check — 4 player consent */}
-                  <div className="rounded-xl bg-white/5 border border-[#C9A96E]/15 p-3">
-                    <p className="text-[10px] text-white/40 text-center mb-2 font-bold tracking-wider">
-                      四家同意後開始下一局 ({(state.nextGameReady?.length ?? 0)}/4)
-                    </p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {state.players.map((p) => {
-                        const isReady = state.nextGameReady?.includes(p.id) ?? false;
-                        return (
-                          <div
-                            key={p.seat}
-                            className={`text-center py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all ${
-                              isReady
-                                ? "bg-[#C9A96E]/30 text-[#f0d68a] border border-[#C9A96E]/50"
-                                : "bg-white/5 text-white/40 border border-white/10"
-                            }`}
-                          >
-                            <div>{isReady ? "✓" : "·"}</div>
-                            <div className="truncate">{p.name}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* My ready button */}
-                  {state.nextGameReady?.includes(state.myId) ? (
-                    <div className="py-3 rounded-xl bg-white/10 text-center">
-                      <p className="text-white/50 text-sm">已確認，等待其他玩家...</p>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={nextGame}
-                      className="py-3 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold
-                        cursor-pointer active:scale-95 transition-all"
-                    >
-                      同意下一局
-                    </button>
-                  )}
-                </>
-              )}
-
-              <button
-                onClick={() => {
-                  // When all rounds done OR solo lobby, leave directly.
-                  // Mid-session (non-gameOver), require 3-player consent.
-                  if (state.gameOver || !state.roomSettings) {
-                    onGoHome();
-                  } else {
-                    setShowLeaveConfirm(true);
-                  }
-                }}
-                className={`py-3 rounded-xl font-bold
-                  cursor-pointer active:scale-95 transition-all
-                  ${state.gameOver ? "bg-[#C9A96E] text-[#0f2a1a]" : "border border-white/15 text-white/60"}`}
-              >
-                {state.gameOver ? "結束 · 回大廳" : "回大廳（需同意）"}
-              </button>
-            </div>
-
-            {/* Game over final standings — 總積分榜 */}
-            {state.gameOver && state.playerScores && (
-              <div
-                className="mt-4 rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(145deg, rgba(201,169,110,0.15) 0%, rgba(201,169,110,0.03) 100%)",
-                  border: "1.5px solid rgba(201,169,110,0.4)",
-                  boxShadow: "0 4px 20px rgba(201,169,110,0.15)",
-                }}
-              >
-                <div className="text-center mb-3">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full"
-                    style={{ background: "rgba(201,169,110,0.2)" }}>
-                    <span className="text-[#f0d68a] text-xs font-bold tracking-wider">
-                      {state.roomSettings?.totalRounds}圈結束
-                    </span>
-                  </div>
-                  <h2 className="text-xl font-bold mt-2" style={{
-                    color: "#f0d68a",
-                    textShadow: "0 0 20px rgba(240,214,138,0.4)",
-                  }}>
-                    總積分榜
-                  </h2>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  {[...state.players]
-                    .sort((a, b) => (state.playerScores![b.seat]) - (state.playerScores![a.seat]))
-                    .map((p, rank) => {
-                      const score = state.playerScores![p.seat];
-                      const rankColors = [
-                        { bg: "linear-gradient(90deg, rgba(255,215,0,0.25) 0%, rgba(255,215,0,0.08) 100%)", border: "rgba(255,215,0,0.5)", label: "#FFD700", icon: "冠" },
-                        { bg: "linear-gradient(90deg, rgba(192,192,192,0.2) 0%, rgba(192,192,192,0.05) 100%)", border: "rgba(192,192,192,0.45)", label: "#C0C0C0", icon: "亞" },
-                        { bg: "linear-gradient(90deg, rgba(205,127,50,0.22) 0%, rgba(205,127,50,0.05) 100%)", border: "rgba(205,127,50,0.45)", label: "#CD7F32", icon: "季" },
-                        { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)", label: "#6b7280", icon: "殿" },
-                      ];
-                      const c = rankColors[rank] || rankColors[3];
-                      return (
-                        <div
-                          key={p.seat}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                          style={{
-                            background: c.bg,
-                            border: `1px solid ${c.border}`,
-                          }}
-                        >
-                          <div
-                            className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0"
-                            style={{
-                              background: c.label,
-                              color: rank < 3 ? "#1a1408" : "#fff",
-                              boxShadow: rank === 0 ? "0 0 12px rgba(255,215,0,0.5)" : "none",
-                            }}
-                          >
-                            {c.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white truncate">
-                              {p.name}
-                              {p.seat === state.mySeat && <span className="text-white/40 text-xs ml-1">(你)</span>}
-                            </p>
-                            <p className="text-[10px] text-white/40">
-                              第 {rank + 1} 名
-                            </p>
-                          </div>
-                          <span
-                            className={`text-lg font-black ${
-                              score > 0 ? "text-green-400" : score < 0 ? "text-red-400" : "text-white/50"
-                            }`}
-                          >
-                            {score > 0 ? "+" : ""}{score}
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       )}
     </div>
   );

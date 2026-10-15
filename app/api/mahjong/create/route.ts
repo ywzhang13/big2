@@ -21,8 +21,9 @@ export async function POST(request: Request) {
     if (!hostId) {
       return Response.json({ error: "缺少 hostId" }, { status: 400 });
     }
-    // 麻將一定要 LINE 登入才能建房
-    if (!(await getAuthUser(request))) return notLoggedIn();
+    // 麻將一定要登入（LINE 或遊客）才能建房
+    const user = await getAuthUser(request);
+    if (!user) return notLoggedIn();
 
     // Validate settings
     const validRounds = [1, 2, 4, 8];
@@ -43,12 +44,13 @@ export async function POST(request: Request) {
     for (let attempt = 0; attempt < 10; attempt++) {
       code = generateCode();
 
-      // Store settings in game_state so they persist
+      // Store settings in game_state so they persist；遊客建的房標成遊客房（LINE 玩家不能加入，見 join）
+      const lobbyState = { ...(roomSettings ? { roomSettings } : {}), ...(user.isGuest ? { guestRoom: true } : {}) };
       const inserted = await insertRoom({
         code,
         status: "waiting",
         host_id: hostId,
-        game_state: roomSettings ? { roomSettings } : null,
+        game_state: Object.keys(lobbyState).length > 0 ? lobbyState : null,
       }).catch(() => null);
       if (inserted === "duplicate") continue;
       if (!inserted) {
