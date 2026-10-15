@@ -236,14 +236,25 @@ export function useMahjong(
   // 宣告特效：同一個座位同一局只播一次（開新局清空）；第一次拿到牌局狀態時已經眼牌的座位不播（重新整理）
   const playedFxRef = useRef(new Set<number>());
   const fxInitRef = useRef(false);
+  // 特效的移除計時器（每個座位一個）：開新局、同座位再播、卸載時都要取消，舊計時器才不會刪掉新局的特效
+  const fxTimersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const playDeclareFx = useCallback((seat: number, both: boolean) => {
     if (playedFxRef.current.has(seat)) return;
     playedFxRef.current.add(seat);
     setState((prev) => ({ ...prev, declareFx: [...prev.declareFx.filter((f) => f.seat !== seat), { seat, both }] }));
-    // MIGI 牌桌大特效 1.4 秒，眼牌名牌彈一下 0.9 秒
-    setTimeout(() => {
+    // 牌桌中央出現→飛進名牌→名牌標示彈出：MIGI 1.41 秒飛到、1.9 秒結束；一般眼牌 0.83 秒飛到、1.3 秒結束
+    clearTimeout(fxTimersRef.current.get(seat));
+    fxTimersRef.current.set(seat, setTimeout(() => {
+      fxTimersRef.current.delete(seat);
       setState((prev) => ({ ...prev, declareFx: prev.declareFx.filter((f) => f.seat !== seat) }));
-    }, both ? 1400 : 900);
+    }, both ? 1900 : 1300));
+  }, []);
+  useEffect(() => {
+    const timers = fxTimersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
   }, []);
   // 同理：莊家的地聽選項（mj_deal_hand）可能比 mj_game_start 先到
   const dealtThisGameRef = useRef(false);
@@ -630,6 +641,9 @@ export function useMahjong(
     channel.on("broadcast", { event: "mj_game_start" }, ({ payload }) => {
       dismissedOwnActionsRef.current = null;
       playedFxRef.current.clear();
+      // 上一局還在播的宣告特效：取消移除計時器，畫面立即清空（見下方 declareFx: []）
+      fxTimersRef.current.forEach(clearTimeout);
+      fxTimersRef.current.clear();
       const msg = payload as {
         currentTurn: number;
         dealerSeat: number;
@@ -666,6 +680,7 @@ export function useMahjong(
         robFlower: false,
         tingSeats: [],
         eyeSeats: [],
+        declareFx: [],
         opponentHands: null,
         // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
         eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],

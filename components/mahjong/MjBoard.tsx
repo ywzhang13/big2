@@ -6,7 +6,7 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import MjTile from "./MjTile";
 import MjHand from "./MjHand";
-import { MigiFx } from "./MjBoardMobile";
+import { DeclareFx, Die, fxClass } from "./MjBoardMobile";
 import { seatWindChar } from "./seatWind";
 
 export interface MjBoardProps {
@@ -108,11 +108,6 @@ function DeclareTags({ ting, eye, fx }: { ting?: boolean; eye?: boolean; fx?: { 
   return null;
 }
 
-/** 名牌宣告特效：只有一般眼牌在名牌上播紫色彈一下 0.9 秒；MIGI 改播牌桌中央的大特效（MigiFx） */
-function fxClass(fx?: { both: boolean }) {
-  return fx && !fx.both ? "mjm-declare mjm-dc-eye" : "";
-}
-
 /** 眼牌者看到的手牌：摸進的那張排最後一張 */
 function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
   const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
@@ -120,54 +115,6 @@ function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
 }
 
 const DREW_RING = { borderRadius: 3, boxShadow: "0 0 0 2px #fbbf24, 0 0 10px rgba(251,191,36,.45)" };
-
-/** Single die face (1-6) rendered with pips */
-function DieFace({ value, size = 22 }: { value: number; size?: number }) {
-  const dot = (
-    <div
-      style={{
-        width: Math.max(3, size * 0.18),
-        height: Math.max(3, size * 0.18),
-        borderRadius: "50%",
-        background: "radial-gradient(circle at 30% 30%, #7f1d1d 0%, #450a0a 100%)",
-        boxShadow: "inset 0 1px 1px rgba(0,0,0,0.4)",
-      }}
-    />
-  );
-  // Pip positions for values 1-6 using a 3x3 grid
-  const pipMap: Record<number, boolean[]> = {
-    1: [false, false, false, false, true, false, false, false, false],
-    2: [true, false, false, false, false, false, false, false, true],
-    3: [true, false, false, false, true, false, false, false, true],
-    4: [true, false, true, false, false, false, true, false, true],
-    5: [true, false, true, false, true, false, true, false, true],
-    6: [true, false, true, true, false, true, true, false, true],
-  };
-  const pips = pipMap[value] || pipMap[1];
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: Math.max(3, size * 0.18),
-        background: "linear-gradient(145deg, #fefcf5 0%, #f1e9cf 100%)",
-        border: "1px solid rgba(140,110,60,0.5)",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 1px rgba(120,90,40,0.3)",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr",
-        gridTemplateRows: "1fr 1fr 1fr",
-        padding: Math.max(1, size * 0.1),
-        gap: Math.max(1, size * 0.04),
-      }}
-    >
-      {pips.map((show, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {show && dot}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function ActionName(type: string): string {
   const m: Record<string, string> = {
@@ -223,7 +170,7 @@ function PlayerPanel({
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
-      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300 ${fxClass(fx)}
+      <div data-fx-seat={player.seat} className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300 ${fxClass(fx)}
         ${isCurrent
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
@@ -532,6 +479,7 @@ export default function MjBoard({
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
   const migiFx = declareFx.find((f) => f.both);
+  const eyeFx = declareFx.find((f) => !f.both);
 
   const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
 
@@ -593,7 +541,9 @@ export default function MjBoard({
             }}>
 
             {/* MIGI 宣告大特效：四家都看得到，只蓋牌桌（不擋下方動作列） */}
-            {migiFx && <MigiFx name={players.find((p) => p.seat === migiFx.seat)?.name ?? ""} desk />}
+            {migiFx && <DeclareFx seat={migiFx.seat} name={players.find((p) => p.seat === migiFx.seat)?.name ?? ""} migi desk />}
+            {/* 一般眼牌宣告特效：四家都看得到，比 MIGI 輕（牌桌不變暗）；都從牌桌中央飛進宣告者名牌 */}
+            {eyeFx && <DeclareFx seat={eyeFx.seat} name={players.find((p) => p.seat === eyeFx.seat)?.name ?? ""} desk />}
 
             {/* 4-sided discard pool using tiny tiles — no overflow hidden */}
             <div className="absolute inset-0 flex flex-col p-3">
@@ -652,9 +602,9 @@ export default function MjBoard({
                   {dice && !lastDiscard && !pendingAddKong && !pendingFlowerRob && (
                     <div className="flex flex-col items-center gap-1">
                       <div className="flex gap-1">
-                        <DieFace value={dice[0]} size={20} />
-                        <DieFace value={dice[1]} size={20} />
-                        <DieFace value={dice[2]} size={20} />
+                        <Die value={dice[0]} size={20} />
+                        <Die value={dice[1]} size={20} />
+                        <Die value={dice[2]} size={20} />
                       </div>
                       <span className="text-[9px] text-[#C9A96E]/60 font-bold tracking-wider">
                         {dice[0] + dice[1] + dice[2]} 點開門
@@ -877,7 +827,7 @@ export default function MjBoard({
         {/* My info bar */}
         <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5">
           {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變） */}
-          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }}>
+          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }} data-fx-seat={mySeat}>
           {/* Wind avatar */}
           <div className="w-7 h-7 rounded-full bg-[#C9A96E] text-[#0f2a1a] flex items-center justify-center text-xs font-bold">
             {getWindChar(mySeat)}

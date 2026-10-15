@@ -87,6 +87,12 @@
 .mjm-plate-v .l1 { display: flex; align-items: center; gap: 4px; }
 .mjm-plate-v .l2 { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .mjm-plate-v .mjm-nm { max-width: 42px; }
+/* 手機左右家名牌固定 68×54：風位＋名字／標示（同一行、縮小一號）／分數，標示變多也不會撐大或換行 */
+.mjm-plate-v { height: 54px; }
+.mjm-plate-v .l2 { flex-wrap: nowrap; height: 12px; }
+.mjm-plate-v .l2 .mjm-tag { font-size: 8px; padding: 1px 3px; }
+.mjm-plate-v .l2 .mjm-tag.migi { font-size: 8px; padding: 1px 4px; letter-spacing: .02em; box-shadow: 0 0 6px rgba(52, 211, 153, .55); }
+.mjm-plate-v .l3 { display: flex; align-items: center; height: 10px; }
 
 /* 牌背條 */
 .mjm-backbar { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
@@ -285,9 +291,10 @@
 /* 3) 宣告選取中：可以打出的那幾張往上浮，其餘變暗不能點 */
 .mjm-pick { transform: translateY(-4px); }
 
-/* 4) 宣告特效：只在宣告者名牌上播 0.9s，播完留下標示 */
-.mjm-dc-eye  { --dc-ring: rgba(167, 139, 250, .65); --dc-glow: rgba(167, 139, 250, .55); }
-.mjm-declare { animation: mjm-declare-pop .9s cubic-bezier(.2, .9, .25, 1); }
+/* 4) 宣告特效：牌桌中央的字飛到名牌（--fx-arrive＝飛到的時間），飛到時名牌亮一下、標示才彈出來並留著 */
+.mjm-dc-eye  { --dc-ring: rgba(167, 139, 250, .65); --dc-glow: rgba(167, 139, 250, .55); --fx-arrive: .83s; }
+.mjm-dc-migi { --dc-ring: rgba(52, 211, 153, .7); --dc-glow: rgba(16, 185, 129, .6); --fx-arrive: 1.41s; }
+.mjm-declare { animation: mjm-declare-pop .5s cubic-bezier(.2, .9, .25, 1) var(--fx-arrive, 0s) both; }
 @keyframes mjm-declare-pop {
   0% { transform: scale(1); box-shadow: 0 0 0 0 var(--dc-ring), 0 0 0 0 var(--dc-glow); }
   18% { transform: scale(1.1); box-shadow: 0 0 0 4px var(--dc-ring), 0 0 28px 6px var(--dc-glow); }
@@ -295,7 +302,7 @@
   100% { transform: scale(1); box-shadow: 0 0 0 12px rgba(0, 0, 0, 0), 0 0 0 0 rgba(0, 0, 0, 0); }
 }
 /* 桌機的標示是 inline style，同一組彈入動畫用 .mjm-pop */
-.mjm-tag.pop, .mjm-pop { animation: mjm-tag-pop .9s cubic-bezier(.2, .9, .25, 1); }
+.mjm-tag.pop, .mjm-pop { animation: mjm-tag-pop .45s cubic-bezier(.2, .9, .25, 1) var(--fx-arrive, 0s) both; }
 @keyframes mjm-tag-pop {
   0% { transform: scale(.3); opacity: 0; }
   25% { transform: scale(1.3); opacity: 1; }
@@ -321,55 +328,89 @@
   font-family: "Chakra Petch", system-ui, sans-serif;
 }
 
-/* MIGI 宣告大特效（方案 A「翠玉桌布」）：打出那一張的瞬間，四家都看得到，只蓋牌桌，1.4 秒後消失 */
-.mjm-fx {
-  position: absolute; inset: 0; z-index: 48; pointer-events: none; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+/* 宣告特效：.mjm-fx 蓋在牌桌上（MIGI 的暗桌）；.mjm-fly 是飛的字，掛在 body（position: fixed，不被牌桌裁掉），
+   起點＝牌桌中央，終點＝宣告者名牌上的標示（--fx-dx／--fx-dy 由 DeclareFx 量好） */
+.mjm-fx { position: absolute; inset: 0; z-index: 48; pointer-events: none; overflow: hidden; }
+.mjm-fx .bg { position: absolute; inset: 0; }
+.mjm-fly {
+  position: fixed; z-index: 60; pointer-events: none; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
-.mjm-fx .word {
-  position: relative; font-family: "Chakra Petch", "Noto Sans TC", sans-serif;
+.mjm-fly .word {
+  font-family: "Chakra Petch", "Noto Sans TC", sans-serif;
   font-weight: 700; letter-spacing: .22em; text-indent: .22em; line-height: 1; white-space: nowrap;
   background: linear-gradient(180deg, #ffffff 0%, #d1fae5 36%, #34d399 60%, #ecfdf5 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.mjm-fx .who { position: relative; font-size: 13px; font-weight: 700; line-height: 1; color: #d1fae5; text-shadow: 0 0 8px rgba(0,0,0,.85); }
-.mjm-fx .bg { position: absolute; inset: 0; }
-.mjm-fx.a .bg { background: radial-gradient(ellipse at center, rgba(5,150,105,.6) 0%, rgba(0,0,0,.66) 72%); animation: mjm-fx-bg 1.4s ease forwards; }
-.mjm-fx.a .word {
-  font-size: 46px;
-  filter: drop-shadow(0 0 16px rgba(16,185,129,.95)) drop-shadow(0 3px 10px rgba(0,0,0,.7));
-  animation: mjm-fx-a 1.4s cubic-bezier(.2,.9,.25,1) forwards;
-}
-.mjm-fx.a .who { animation: mjm-fx-a 1.4s cubic-bezier(.2,.9,.25,1) forwards; }
-.mjm-fx.a.desk .word { font-size: 92px; }
-.mjm-fx.a.desk .who { font-size: 18px; }
-@keyframes mjm-fx-bg { 0% { opacity: 0; } 10% { opacity: 1; } 76% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes mjm-fx-a {
-  0% { opacity: 0; transform: scale(.7); }
-  12% { opacity: 1; transform: scale(1.07); }
-  22% { transform: scale(1); }
-  76% { opacity: 1; }
-  100% { opacity: 0; transform: scale(1.03); }
+.mjm-fly .who { font-size: 13px; font-weight: 700; line-height: 1; color: #d1fae5; text-shadow: 0 0 8px rgba(0,0,0,.85); white-space: nowrap; }
+
+/* MIGI（方案 A「翠玉桌布」）：牌桌變暗、綠色大字，停到 0.93 秒後縮小飛進名牌，1.41 秒到達 */
+.mjm-fx.a .bg { background: radial-gradient(ellipse at center, rgba(5,150,105,.6) 0%, rgba(0,0,0,.66) 72%); animation: mjm-fx-bg 1.5s ease forwards; }
+.mjm-fly.a { animation: mjm-fly-a 1.5s ease-in-out forwards; }
+.mjm-fly.a .word { font-size: 46px; filter: drop-shadow(0 0 16px rgba(16,185,129,.95)) drop-shadow(0 3px 10px rgba(0,0,0,.7)); }
+.mjm-fly.a.desk .word { font-size: 92px; }
+.mjm-fly.a.desk .who { font-size: 18px; }
+@keyframes mjm-fx-bg { 0% { opacity: 0; } 10% { opacity: 1; } 62% { opacity: 1; } 90% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes mjm-fly-a {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+  8% { opacity: 1; transform: translate(-50%, -50%) scale(1.07); }
+  15% { transform: translate(-50%, -50%) scale(1); }
+  62% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  94% { opacity: 1; transform: translate(calc(-50% + var(--fx-dx)), calc(-50% + var(--fx-dy))) scale(.14); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--fx-dx)), calc(-50% + var(--fx-dy))) scale(.14); }
 }
 
-/* 手機左右家（我眼牌時）：側欄＝外側（名牌＋吃碰槓／花）＋內側手牌一直列，手牌在金框外面、朝向主人。
-   沒眼牌時側欄維持 72px；有翻開的牌時側欄照內容變寬，金框跟著縮窄 */
+/* 一般眼牌：牌桌中央一張紫色小卡片（只墊在字後面，牌桌不變暗），字比 MIGI 小，停到 0.45 秒後飛進名牌，0.83 秒到達 */
+.mjm-fly.eye { animation: mjm-fly-eye .9s ease-in-out forwards; }
+.mjm-fly.eye .card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 7px 16px 8px; border-radius: 12px;
+  background: rgba(30, 16, 58, .86); border: 1px solid rgba(167, 139, 250, .65);
+  box-shadow: 0 0 18px rgba(139, 92, 246, .45), 0 4px 14px rgba(0, 0, 0, .5);
+}
+.mjm-fly.eye .word {
+  font-family: "Noto Sans TC", sans-serif; font-size: 26px; letter-spacing: .3em; text-indent: .3em;
+  background: linear-gradient(180deg, #ffffff 0%, #ede9fe 38%, #a78bfa 68%, #f5f3ff 100%);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 8px rgba(139,92,246,.85));
+}
+.mjm-fly.eye .who { font-size: 12px; color: #ede9fe; }
+.mjm-fly.eye.desk .card { padding: 12px 30px 14px; border-radius: 16px; gap: 8px; }
+.mjm-fly.eye.desk .word { font-size: 48px; }
+.mjm-fly.eye.desk .who { font-size: 16px; }
+@keyframes mjm-fly-eye {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.85); }
+  13% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  92% { opacity: 1; transform: translate(calc(-50% + var(--fx-dx)), calc(-50% + var(--fx-dy))) scale(.3); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--fx-dx)), calc(-50% + var(--fx-dy))) scale(.3); }
+}
+
+/* 手機左右家：側欄＝外側（名牌＋轉向的吃碰槓／花）＋內側手牌欄（金框外、和金框隔 8px）。
+   手牌欄 16 張那一列靠金框，摸進的第 17 張放外側那一列；有沒有眼牌位置都一樣（眼牌只是牌背翻成牌面），金框寬度不變 */
 .mjm-mid { grid-template-columns: max-content minmax(0, 1fr) max-content; }
 .mjm-side { min-width: var(--col-side); }
-.mjm-side.eyeside { flex-direction: row; align-items: stretch; justify-content: flex-start; gap: 3px; }
-.mjm-side.right.eyeside { flex-direction: row-reverse; }
-.mjm-side .eyeouter {
+.mjm-side.handside { flex-direction: row; align-items: stretch; justify-content: flex-start; gap: 3px; }
+.mjm-side.right.handside { flex-direction: row-reverse; }
+.mjm-side .sideouter {
   width: 68px; flex: 0 0 auto; min-height: 0; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
 }
-.mjm-eyestrip {
-  flex: 0 0 auto; min-height: 0; padding: 2px; border-radius: 7px; background: rgba(0,0,0,.22);
-  display: flex; flex-direction: column; flex-wrap: wrap; align-content: center; justify-content: center; column-gap: 1px;
+.mjm-sidehand {
+  flex: 0 0 auto; align-self: center; display: flex; gap: 3px; padding: 2px; border-radius: 7px; background: rgba(0,0,0,.22);
 }
-.mjm-eyestrip .cell { width: 15px; height: 11px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
-.mjm-side.left  .mjm-eyestrip .cell > * { transform: rotate(90deg); }
-.mjm-side.right .mjm-eyestrip .cell > * { transform: rotate(-90deg); }
-.mjm-eyestrip .drew { border-radius: 2px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
+.mjm-side.left .mjm-sidehand { margin-right: 8px; }
+.mjm-side.right .mjm-sidehand { flex-direction: row-reverse; margin-left: 8px; }
+.mjm-sidehand .col { width: 15px; height: 176px; display: flex; flex-direction: column; }
+/* 左家：由上往下排，第 17 張在外側那一列最下面；右家：由下往上排，第 17 張在外側那一列最上面（都是那一家的右手邊） */
+.mjm-side.left .mjm-sidehand .col.extra { justify-content: flex-end; }
+.mjm-side.right .mjm-sidehand .col { flex-direction: column-reverse; }
+.mjm-side.right .mjm-sidehand .col.extra { justify-content: flex-end; }
+.mjm-sidehand .cell { width: 15px; height: 11px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.mjm-side.left  .mjm-sidehand .cell > * { transform: rotate(90deg); }
+.mjm-side.right .mjm-sidehand .cell > * { transform: rotate(-90deg); }
+.mjm-sidehand .drew { border-radius: 2px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
 /* 眼牌模式的吃碰槓／花：一樣轉向，每一副自己一直列、彼此並排，放不下換行 */
 .mjm-side .mjm-melds.rot { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 3px; width: 68px; }
 .mjm-side .mjm-melds.rot .mjm-meld, .mjm-side .mjm-melds.rot .mjm-flowers { flex-direction: column; flex-wrap: nowrap; max-width: none; }

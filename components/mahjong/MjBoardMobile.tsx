@@ -3,7 +3,8 @@
 // 手機橫向牌桌（小宜規格 2026-10-14）。只在 (orientation: landscape) and (max-height: 500px)
 // 由 page.tsx 掛載；桌機仍用 MjBoard。版面與尺寸對應 globals.css 的 .mjm-* 樣式。
 
-import { useEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
@@ -43,12 +44,13 @@ function Score({ score }: { score?: number }) {
   );
 }
 
-function DealerTag({ player, consecutive, withLa }: { player: MjPlayer; consecutive?: number; withLa?: boolean }) {
+/** short＝左右家名牌（寬度固定）：連莊只顯示數字，「莊2」＝連 2 */
+function DealerTag({ player, consecutive, withLa, short }: { player: MjPlayer; consecutive?: number; withLa?: boolean; short?: boolean }) {
   if (!player.isDealer) return null;
   const n = consecutive ?? 0;
   return (
     <span className="mjm-tag dealer">
-      莊{n > 0 ? ` 連${n}${withLa ? `·拉${n}` : ""}` : ""}
+      莊{n > 0 ? (short ? n : ` 連${n}${withLa ? `·拉${n}` : ""}`) : ""}
     </span>
   );
 }
@@ -75,29 +77,31 @@ function Melds({ revealed, flowers, w, h, mine, reveal, rot }: { revealed: Meld[
   );
 }
 
-/** 左右家（我眼牌時）的手牌：金框外面一直列、朝向主人；高度不夠才折第二列（依實際高度算，不寫死張數） */
-function EyeStrip({ h }: { h: MjOpponentHand }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [perCol, setPerCol] = useState(99);
-  useEffect(() => {
-    const el = ref.current?.parentElement;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setPerCol(Math.max(1, Math.floor((el.clientHeight - 4) / 11))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
-  const tiles = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])];
-  const cols = Math.max(1, Math.ceil(tiles.length / perCol));
+// 牌背只用到 faceDown，牌面內容不會顯示
+const BACK_TILE: Tile = { id: -1, suit: "z", rank: 7, display: "" };
+
+/** 左右家的手牌欄：金框外、朝向主人；16 張那一列靠金框，摸進的第 17 張放外側那一列（像自己的手牌一樣分開）。
+ *  沒眼牌＝牌背（張數＝tileCount）；我眼牌＝同一個位置翻成牌面，摸進的那張加金框 */
+function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
+  type Cell = { key: string; tile: Tile; drew: boolean; back: boolean };
+  let cells: Cell[];
+  if (h) {
+    const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
+    cells = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])].map((t) => ({ key: String(t.id), tile: t, drew: t === drew, back: false }));
+  } else {
+    cells = Array.from({ length: count }, (_, i) => ({ key: `b${i}`, tile: BACK_TILE, drew: false, back: true }));
+  }
+  const cell = (c: Cell) => (
+    <span key={c.key} className="cell">
+      <div className={c.drew ? "drew" : undefined}>
+        <MjTile tile={c.tile} width={11} height={15} faceDown={c.back} />
+      </div>
+    </span>
+  );
   return (
-    <div ref={ref} className="mjm-eyestrip" style={{ width: cols * 15 + (cols - 1) + 4 }}>
-      {tiles.map((t) => (
-        <span key={t.id} className="cell">
-          <div className={t === drew ? "drew" : undefined}>
-            <MjTile tile={t} width={11} height={15} />
-          </div>
-        </span>
-      ))}
+    <div className="mjm-sidehand">
+      <div className="col extra">{cells.slice(16).map(cell)}</div>
+      <div className="col main">{cells.slice(0, 16).map(cell)}</div>
     </div>
   );
 }
@@ -117,18 +121,53 @@ function DeclareTags({ ting, eye, fx }: { ting: boolean; eye: boolean; fx?: { bo
   return <TingTag on={ting} pop={!!fx} />;
 }
 
-/** 名牌宣告特效：只有一般眼牌在名牌上播紫色彈一下 0.9 秒；MIGI 改播牌桌中央的大特效（MigiFx） */
-function fxClass(fx?: { both: boolean }) {
-  return fx && !fx.both ? "mjm-declare mjm-dc-eye" : "";
+/** 名牌宣告特效：牌桌中央的字飛到名牌時（--fx-arrive），名牌亮一下、標示才彈出來（桌機共用） */
+export function fxClass(fx?: { both: boolean }) {
+  return fx ? `mjm-declare ${fx.both ? "mjm-dc-migi" : "mjm-dc-eye"}` : "";
 }
 
-/** MIGI 宣告大特效（方案 A「翠玉桌布」）：只蓋牌桌、不擋動作列，1.4 秒後由 hook 移除 */
-export function MigiFx({ name, desk }: { name: string; desk?: boolean }) {
+/**
+ * 宣告特效（桌機、手機共用）：先在牌桌中央出現，停一下再縮小飛進宣告者名牌（data-fx-seat）上的標示。
+ * MIGI＝方案 A 綠色大字＋牌桌變暗，1.41 秒到；一般眼牌＝紫色小卡片、牌桌不變暗，0.83 秒到；之後由 hook 移除。
+ * 飛的字掛到 body，才不會被牌桌裁掉；pointer-events: none，不擋動作列
+ */
+export function DeclareFx({ seat, name, migi, desk }: { seat: number; name: string; migi?: boolean; desk?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const flyRef = useRef<HTMLDivElement>(null);
+  // 畫面出來前量好起點（牌桌中央）和終點（名牌上的標示），直接寫進飛的字的樣式
+  useLayoutEffect(() => {
+    const box = ref.current?.getBoundingClientRect();
+    const el = flyRef.current;
+    if (!box || !el) return;
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const plate = document.querySelector(`[data-fx-seat="${seat}"]`);
+    const t = (plate?.querySelector(".mjm-tag.pop, .mjm-pop") ?? plate)?.getBoundingClientRect();
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.setProperty("--fx-dx", `${t ? t.left + t.width / 2 - x : 0}px`);
+    el.style.setProperty("--fx-dy", `${t ? t.top + t.height / 2 - y : 0}px`);
+  }, [seat]);
+  const kind = `${migi ? "a" : "eye"} ${desk ? "desk" : ""}`;
   return (
-    <div className={`mjm-fx a ${desk ? "desk" : ""}`} aria-hidden>
-      <div className="bg" />
-      <div className="word">MIGI</div>
-      <div className="who">{name}</div>
+    <div ref={ref} className={`mjm-fx ${kind}`} aria-hidden>
+      {migi && <div className="bg" />}
+      {createPortal(
+        <div ref={flyRef} className={`mjm-fly ${kind}`} aria-hidden>
+          {migi ? (
+            <>
+              <div className="word">MIGI</div>
+              <div className="who">{name}</div>
+            </>
+          ) : (
+            <div className="card">
+              <div className="word">眼牌</div>
+              <div className="who">{name}</div>
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -185,35 +224,30 @@ function SidePanel({
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
-    <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`}>
+    <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`} data-fx-seat={player.seat}>
       <div className="l1">
         <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
         <span className="mjm-nm">{player.name}</span>
       </div>
+      {/* 名牌固定大小：標示一行（不換行）、分數獨立一行，標示變多也不會把名牌撐大 */}
       <div className="l2">
-        <DealerTag player={player} consecutive={dealerConsecutive} />
+        <DealerTag player={player} consecutive={dealerConsecutive} short />
         <DeclareTags ting={isTing} eye={isEye} fx={fx} />
+      </div>
+      <div className="l3">
         <Score score={score} />
       </div>
     </div>
   );
-  // 我眼牌時：外側＝名牌＋轉向的吃碰槓／花（9×12），內側＝手牌一直列（11×15，比吃碰牌大）、在金框外面
-  if (opponent) {
-    return (
-      <div className={`mjm-side ${side} eyeside`}>
-        <div className="eyeouter">
-          {plate}
-          <Melds revealed={opponent.revealed} flowers={player.flowers} w={9} h={12} reveal rot />
-        </div>
-        <EyeStrip h={opponent} />
-      </div>
-    );
-  }
+  // 外側＝名牌＋轉向的吃碰槓／花（9×12），內側＝手牌欄（11×15，比吃碰牌大）、在金框外面。
+  // 有沒有眼牌版面都一樣：我眼牌時只是把牌背翻成牌面、暗槓翻開
   return (
-    <div className={`mjm-side ${side}`}>
-      {plate}
-      <BackBar count={player.tileCount} width={44} />
-      <Melds revealed={player.revealed} flowers={player.flowers} w={16} h={22} />
+    <div className={`mjm-side ${side} handside`}>
+      <div className="sideouter">
+        {plate}
+        <Melds revealed={opponent?.revealed ?? player.revealed} flowers={player.flowers} w={9} h={12} reveal={!!opponent} rot />
+      </div>
+      <SideHand count={player.tileCount} h={opponent} />
     </div>
   );
 }
@@ -237,24 +271,34 @@ function VerticalDiscards({ tiles, side }: { tiles: Tile[]; side: "left" | "righ
   );
 }
 
-function Die({ value }: { value: number }) {
-  const pips: Record<number, number[]> = {
-    1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
-  };
-  const on = pips[value] ?? pips[1];
+// 骰子點位（100×100 的座標）：左右兩欄 28／72、上下三排 28／50／72，每一面都對稱
+const DIE_PIPS: Record<number, [number, number][]> = {
+  1: [[50, 50]],
+  2: [[28, 28], [72, 72]],
+  3: [[28, 28], [50, 50], [72, 72]],
+  4: [[28, 28], [72, 28], [28, 72], [72, 72]],
+  5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]],
+  6: [[28, 28], [72, 28], [28, 50], [72, 50], [28, 72], [72, 72]],
+};
+
+/** 骰子（桌機、手機共用）：SVG 畫的白色圓角骰子，點的大小一致；1、4 點紅色，其他黑色 */
+export function Die({ value, size = 18 }: { value: number; size?: number }) {
+  const id = useId();
+  const pips = DIE_PIPS[value] ?? DIE_PIPS[1];
+  const color = value === 1 || value === 4 ? "#c81e1e" : "#1c1917";
   return (
-    <div
-      style={{
-        width: 18, height: 18, borderRadius: 3, padding: 2, gap: 1,
-        display: "grid", gridTemplate: "repeat(3, 1fr) / repeat(3, 1fr)",
-        background: "linear-gradient(145deg, #fefcf5, #f1e9cf)",
-        border: "1px solid rgba(140,110,60,.5)", boxShadow: "0 1px 3px rgba(0,0,0,.35)",
-      }}
-    >
-      {Array.from({ length: 9 }).map((_, i) => (
-        <span key={i} style={{ borderRadius: "50%", background: on.includes(i) ? "#7f1d1d" : "transparent" }} />
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ flex: "0 0 auto", filter: "drop-shadow(0 1.5px 1.5px rgba(0,0,0,.45))" }} aria-label={`${value} 點`}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#e7e2d6" />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="3" width="94" height="94" rx="20" fill={`url(#${id})`} stroke="rgba(120,100,70,.45)" strokeWidth="2" />
+      {pips.map(([cx, cy]) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="9.5" fill={color} />
       ))}
-    </div>
+    </svg>
   );
 }
 
@@ -320,6 +364,7 @@ export default function MjBoardMobile({
   const eyeBlocked = (id: number) => eyeArmed && !eyeOptions.includes(id);
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
   const migiFx = declareFx.find((f) => f.both);
+  const eyeFx = declareFx.find((f) => !f.both);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
 
   // 選取的牌已經不在手上、不能打、或按了眼牌（點牌直接打出）→ 視為沒選
@@ -412,7 +457,7 @@ export default function MjBoardMobile({
       <div className="mjm-top">
         {top && (
           <>
-            <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""} ${fxClass(fxOf(top.seat))}`}>
+            <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""} ${fxClass(fxOf(top.seat))}`} data-fx-seat={top.seat}>
               <span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>
               <span className="mjm-nm">{top.name}</span>
               <DealerTag player={top} consecutive={dealerConsecutive} />
@@ -508,8 +553,9 @@ export default function MjBoardMobile({
               </div>
             </div>
           )}
-          {/* MIGI 宣告大特效：四家都看得到，只蓋牌桌 */}
-          {migiFx && <MigiFx name={nameOf(migiFx.seat)} />}
+          {/* 宣告特效：四家都看得到，從牌桌中央飛進宣告者名牌（MIGI 大、暗桌；一般眼牌小、不暗桌） */}
+          {migiFx && <DeclareFx seat={migiFx.seat} name={nameOf(migiFx.seat)} migi />}
+          {eyeFx && <DeclareFx seat={eyeFx.seat} name={nameOf(eyeFx.seat)} />}
         </div>
 
         <SidePanel
@@ -583,7 +629,7 @@ export default function MjBoardMobile({
       <div className="mjm-me">
         <div className="mjm-me-info">
           {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變，分數留在外面） */}
-          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`}>
+          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} data-fx-seat={mySeat}>
             <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
             <span className="mjm-nm">{playerName}</span>
             {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
