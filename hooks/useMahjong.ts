@@ -126,7 +126,7 @@ export interface MjClientState {
   eyeWithTing: boolean;
   // 我眼牌時才有：其他三家的手牌（暗槓含牌面）；null＝沒有資料，照舊畫牌背
   opponentHands: MjOpponentHand[] | null;
-  // 正在播宣告特效的座位（0.9 秒後自動移除）；both＝第一輪眼牌同時地聽（雙色）
+  // 正在播宣告特效的座位（播完自動移除）；both＝第一輪眼牌同時地聽（MIGI）
   declareFx: { seat: number; both: boolean }[];
   winner?: MjWinner & { allHands?: MjHandReveal[] };
   // 一炮多響: all winners of this round (seat/name/score per winner).
@@ -240,9 +240,10 @@ export function useMahjong(
     if (playedFxRef.current.has(seat)) return;
     playedFxRef.current.add(seat);
     setState((prev) => ({ ...prev, declareFx: [...prev.declareFx.filter((f) => f.seat !== seat), { seat, both }] }));
+    // MIGI 牌桌大特效 1.4 秒，眼牌名牌彈一下 0.9 秒
     setTimeout(() => {
       setState((prev) => ({ ...prev, declareFx: prev.declareFx.filter((f) => f.seat !== seat) }));
-    }, 900);
+    }, both ? 1400 : 900);
   }, []);
   // 同理：莊家的地聽選項（mj_deal_hand）可能比 mj_game_start 先到
   const dealtThisGameRef = useRef(false);

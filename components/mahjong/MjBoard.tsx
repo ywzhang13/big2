@@ -6,6 +6,7 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import MjTile from "./MjTile";
 import MjHand from "./MjHand";
+import { MigiFx } from "./MjBoardMobile";
 import { seatWindChar } from "./seatWind";
 
 export interface MjBoardProps {
@@ -77,9 +78,39 @@ function EyeTag({ pop }: { pop?: boolean }) {
   );
 }
 
-/** 宣告特效：只在宣告者名牌上播 0.9 秒（第一輪眼牌同時地聽＝雙色） */
+/** MIGI（＝地聽）的標示：第一輪宣告眼牌同時成立地聽時，取代「聽」＋「眼」（小宜眼牌 v5：放大加光暈） */
+function MigiTag({ pop }: { pop?: boolean }) {
+  return (
+    <span
+      className={`rounded-full font-black leading-none ${pop ? "mjm-pop" : ""}`}
+      style={{
+        background: "linear-gradient(135deg, #059669, #34d399)",
+        color: "#042f1f",
+        border: "1px solid rgba(209,250,229,0.95)",
+        boxShadow: "0 0 10px rgba(52,211,153,0.55)",
+        fontSize: 11,
+        padding: "3px 7px",
+        letterSpacing: ".06em",
+        fontFamily: '"Chakra Petch", system-ui, sans-serif',
+        whiteSpace: "nowrap",
+      }}
+    >
+      MIGI
+    </span>
+  );
+}
+
+/** 聽／眼標示：地聽＋眼牌＝只顯示 MIGI；只有眼牌＝眼；只有地聽（舊牌局）＝聽 */
+function DeclareTags({ ting, eye, fx }: { ting?: boolean; eye?: boolean; fx?: { both: boolean } }) {
+  if (ting && eye) return <MigiTag pop={!!fx} />;
+  if (eye) return <EyeTag pop={!!fx} />;
+  if (ting) return <TingTag pop={!!fx} />;
+  return null;
+}
+
+/** 名牌宣告特效：只有一般眼牌在名牌上播紫色彈一下 0.9 秒；MIGI 改播牌桌中央的大特效（MigiFx） */
 function fxClass(fx?: { both: boolean }) {
-  return fx ? `mjm-declare ${fx.both ? "mjm-dc-both" : "mjm-dc-eye"}` : "";
+  return fx && !fx.both ? "mjm-declare mjm-dc-eye" : "";
 }
 
 /** 眼牌者看到的手牌：摸進的那張排最後一張 */
@@ -184,6 +215,9 @@ function PlayerPanel({
   // For left/right: layout is horizontal row with hand on outside, melds towards center
   // Each tile rotated 90° to face center
   const rotStyle = position === "left" ? "rotate(90deg)" : position === "right" ? "rotate(-90deg)" : undefined;
+  // 吃碰槓／花的牌：平常 26×35；我眼牌時縮成 20×27，讓翻開的手牌（26×35）是這一區最大的牌
+  const mw = opponent ? 20 : 26;
+  const mh = opponent ? 27 : 35;
 
   return (
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
@@ -217,8 +251,7 @@ function PlayerPanel({
                     連{dealerConsecutive}
                   </span>
                 )}
-                {isTing && <TingTag pop={fx?.both} />}
-                {isEye && <EyeTag pop={!!fx} />}
+                <DeclareTags ting={isTing} eye={isEye} fx={fx} />
               </>
             );
             const name = (
@@ -250,18 +283,18 @@ function PlayerPanel({
         </div>
       </div>
 
-      {/* 眼牌者：這家的手牌翻開（對家 20×27；左右家 16×22 旋轉，摸進的那張最後＋金框） */}
+      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（26×35；左右家旋轉，摸進的那張最後＋金框） */}
       {opponent ? (
         <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
           {eyeHandTiles(opponent).map(({ tile, drew }) =>
             isHorizontal ? (
               <div key={tile.id} style={drew ? { marginLeft: 6, ...DREW_RING } : undefined}>
-                <MjTile tile={tile} width={20} height={27} />
+                <MjTile tile={tile} width={26} height={35} />
               </div>
             ) : (
-              <div key={tile.id} style={{ width: 24, height: 17, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
+              <div key={tile.id} style={{ width: 37, height: 27, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
                 <div style={{ transform: rotStyle, ...(drew ? DREW_RING : {}) }}>
-                  <MjTile tile={tile} width={16} height={22} />
+                  <MjTile tile={tile} width={26} height={35} />
                 </div>
               </div>
             )
@@ -322,8 +355,8 @@ function PlayerPanel({
                     style={
                       rotStyle
                         ? {
-                            width: 35,
-                            height: 26,
+                            width: mh,
+                            height: mw,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -332,7 +365,7 @@ function PlayerPanel({
                     }
                   >
                     <div style={rotStyle ? { transform: rotStyle } : undefined}>
-                      <MjTile tile={t} tiny faceDown={isConcealedFaceDown} />
+                      <MjTile tile={t} width={mw} height={mh} faceDown={isConcealedFaceDown} />
                     </div>
                   </div>
                 );
@@ -350,8 +383,8 @@ function PlayerPanel({
                   style={
                     rotStyle
                       ? {
-                          width: 35,
-                          height: 26,
+                          width: mh,
+                          height: mw,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -360,7 +393,7 @@ function PlayerPanel({
                   }
                 >
                   <div style={rotStyle ? { transform: rotStyle } : undefined}>
-                    <MjTile tile={f} tiny />
+                    <MjTile tile={f} width={mw} height={mh} />
                   </div>
                 </div>
               ))}
@@ -498,6 +531,7 @@ export default function MjBoard({
   const eyeArmed = canEye && eyeArmedKey === eyeKey;
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
+  const migiFx = declareFx.find((f) => f.both);
 
   const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
 
@@ -558,6 +592,9 @@ export default function MjBoard({
               boxShadow: "0 0 0 1px #5a4510, 0 0 0 5px #3a2a08, 0 8px 32px rgba(0,0,0,0.5), inset 0 2px 20px rgba(0,0,0,0.3)",
             }}>
 
+            {/* MIGI 宣告大特效：四家都看得到，只蓋牌桌（不擋下方動作列） */}
+            {migiFx && <MigiFx name={players.find((p) => p.seat === migiFx.seat)?.name ?? ""} desk />}
+
             {/* 4-sided discard pool using tiny tiles — no overflow hidden */}
             <div className="absolute inset-0 flex flex-col p-3">
               {/* Top discards — top player faces down, so their right is
@@ -579,8 +616,10 @@ export default function MjBoard({
                   {(() => {
                     const tiles = (left?.discards || []);
                     const cols: typeof tiles[] = [];
-                    for (let i = 0; i < tiles.length; i += 5) {
-                      cols.push(tiles.slice(i, i + 5));
+                    // 每欄 5 張；超過 20 張時改成最多 4 欄、每欄加長，寬度才不會超出 160px 跑出金框
+                    const perCol = Math.max(5, Math.ceil(tiles.length / 4));
+                    for (let i = 0; i < tiles.length; i += perCol) {
+                      cols.push(tiles.slice(i, i + perCol));
                     }
                     return cols.map((col, ci) => (
                       <div key={ci} className="flex flex-col-reverse gap-[1px]" style={{ width: 35 }}>
@@ -670,8 +709,10 @@ export default function MjBoard({
                   {(() => {
                     const tiles = (right?.discards || []);
                     const cols: typeof tiles[] = [];
-                    for (let i = 0; i < tiles.length; i += 5) {
-                      cols.push(tiles.slice(i, i + 5));
+                    // 每欄 5 張；超過 20 張時改成最多 4 欄、每欄加長，寬度才不會超出 160px 跑出金框
+                    const perCol = Math.max(5, Math.ceil(tiles.length / 4));
+                    for (let i = 0; i < tiles.length; i += perCol) {
+                      cols.push(tiles.slice(i, i + perCol));
                     }
                     return cols.map((col, ci) => (
                       <div key={ci} className="flex flex-col gap-[1px]" style={{ width: 35 }}>
@@ -860,8 +901,7 @@ export default function MjBoard({
               連{dealerConsecutive}·拉{dealerConsecutive}
             </span>
           )}
-          {isTing && <TingTag pop={fxOf(mySeat)?.both} />}
-          {isEye && <EyeTag pop={!!fxOf(mySeat)} />}
+          <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
           </span>
           {playerScores && mySeat >= 0 && (
             <span className={`text-[11px] font-bold ${

@@ -253,6 +253,15 @@ const chan = (seat: number) => privateChannelName("T", "p" + seat);
   eq([fanNames(3), w[0]?.score.totalFan, st().settlement?.deltas], [["門清"], 1, [0, 0, -120, 120]],
     "E30 結算：座位 3 門清 1 台，只有放槍的座位 2 付 100＋1×20＝120，座位 1 沒有收錢");
 }
+// ---- 第一輪以後的一般眼牌：自摸照樣算門清自摸 3 台 ----
+{
+  setup();
+  await playFrom(1, WAIT25, "z6", true);
+  turn(1, "m5");
+  const r = await call(draw, { playerId: "p1" });
+  eq([r.body.autoWin, st().winners?.[0].score.fans.map((f) => f.name + f.value), st().settlement?.deltas], [true, ["門清自摸3", "莊家(斷)1"], [-180, 500, -160, -160]],
+    "E31 一般眼牌自動自摸：門清自摸 3＋莊家(斷) 1，沒有地聽；閒家付 100+3×20=160、莊家付 180，共收 500");
+}
 // ---- 新的一局清空 ----
 {
   setup();

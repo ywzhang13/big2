@@ -88,8 +88,8 @@ function backToDealer(key: string) {
   const r = await call(draw, { playerId: "p0" });
   const fans = st().winners?.[0].score.fans.map((f) => f.name + f.value);
   eq([r.status, r.body.autoDiscarded, r.body.autoWin, st().status, evs().includes("mj_game_over"), fans, st().settlement?.deltas],
-    [200, null, true, "finished", true, ["地聽8", "莊家1", "門清自摸3"], [1020, -340, -340, -340]],
-    "T6/T8 摸到能胡的牌：自動自摸；地聽8+莊家1+門清自摸3=12 台，三家各付 100+12×20=340（眼牌不加台）");
+    [200, null, true, "finished", true, ["地聽8", "莊家1", "自摸1"], [900, -300, -300, -300]],
+    "T6/T8 摸到能胡的牌：自動自摸；MIGI 地聽8+莊家1+自摸1=10 台（不算門清自摸 3），三家各付 100+10×20=300（眼牌不加台）");
 }
 
 console.log(results.join("\n"));

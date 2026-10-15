@@ -116,7 +116,7 @@ function throws(fn: () => unknown, msg: string) {
   eq([autoDiscardForTing(drawn), ownTurnActions(drawn, 1).map((a) => a.type)], [null, ["win"]], "B4 地聽後摸到能胡的牌：不自動打，只有自摸胡");
   const r = declareWin(drawn, 1, true);
   eq([r.winners![0].score.fans.map((f) => f.name + f.value), calculateSettlement(r).deltas],
-    [["地聽8", "門清自摸3", "莊家(斷)1"], [-340, 980, -320, -320]], "B5 地聽自摸：地聽8+門清自摸3+莊家(斷)1=12 台；閒家各付 100+11×20=320、莊家付 340", fanStr(r));
+    [["地聽8", "自摸1", "莊家(斷)1"], [-300, 860, -280, -280]], "B5 MIGI（地聽）自摸：地聽8+自摸1+莊家(斷)1=10 台（MIGI 一定門清，不算門清自摸 3）；閒家各付 100+9×20=280、莊家付 300", fanStr(r));
 }
 {
   const base = seat1FirstTurn();
@@ -144,8 +144,8 @@ function throws(fn: () => unknown, msg: string) {
   s.pendingActions = undefined;
   s.lastDiscard = { tile: t("s7"), from: 3 };
   const r = declareWin(s, 1, false);
-  eq([r.winners![0].score.fans.map((f) => f.name + f.value), calculateSettlement(r).deltas], [["地聽8", "門清1"], [0, 280, 0, -280]],
-    "C1 地聽胡閒家放的槍：地聽8+門清1=9 台，放槍者付 100+9×20=280", fanStr(r));
+  eq([r.winners![0].score.fans.map((f) => f.name + f.value), calculateSettlement(r).deltas], [["地聽8"], [0, 260, 0, -260]],
+    "C1 MIGI（地聽）胡閒家放的槍：只有地聽 8 台（不算門清），放槍者付 100+8×20=260", fanStr(r));
 }
 {
   const hand = tiles(H16); const win = t("s7");
@@ -155,6 +155,17 @@ function throws(fn: () => unknown, msg: string) {
   eq(both.fans.filter((f) => ["地聽", "地胡", "天胡"].includes(f.name)).map((f) => f.name + f.value), ["地聽8"], "C2 同時符合地聽和地胡：只算地聽 8，不疊加");
   const di = calculateScore({ ...ctx, isFirstDraw: true });
   eq(di.fans.filter((f) => ["地聽", "地胡", "天胡"].includes(f.name)).map((f) => f.name + f.value), ["地胡8"], "C3 地胡：8 台（16 台取消）");
+  // MIGI 只拿掉門清自摸（含門清、不求人）、改算自摸 1；獨聽、花等其他台數和沒地聽時一樣
+  const single = tiles("m1 m2 m3 m4 m5 m6 p7 p8 p9 s2 s3 s4 s6 s7 s8"); const z5 = t("z5"), z5w = t("z5");
+  const sctx = { ...ctx, concealed: [...single, z5, z5w], winTile: z5w, isFirstDraw: false, flowers: tiles("f2 f6") };
+  const plain = calculateScore(sctx).fans.map((f) => f.name + f.value);
+  const migi = calculateScore({ ...sctx, isTing: true }).fans.map((f) => f.name + f.value);
+  eq([plain.includes("門清自摸3"), migi.filter((f) => /門清|不求人/.test(f)), migi.includes("地聽8"), migi.includes("自摸1"), migi.includes("獨聽1"),
+    migi.filter((f) => f !== "地聽8" && f !== "自摸1"), plain.filter((f) => f !== "門清自摸3")].map((x) => JSON.stringify(x)),
+    ["true", "[]", "true", "true", "true", JSON.stringify(plain.filter((f) => f !== "門清自摸3")), JSON.stringify(plain.filter((f) => f !== "門清自摸3"))],
+    "C6 MIGI 自摸單吊：有地聽 8、自摸 1、獨聽 1，沒有門清自摸／門清／不求人；其他台數（花等）和一般門清自摸完全一樣", `一般=${plain.join("+")}　MIGI=${migi.join("+")}`);
+  const ron = calculateScore({ ...sctx, isSelfDraw: false }).fans.map((f) => f.name + f.value);
+  eq([plain.includes("門清自摸3"), ron.includes("門清1")], [true, true], "C7 沒有地聽：門清自摸照樣 3 台、胡別人照樣門清 1 台");
   const tian = calculateScore({ ...ctx, isDealer: true, isFirstDraw: true });
   eq(tian.fans.filter((f) => ["地聽", "地胡", "天胡"].includes(f.name)).map((f) => f.name + f.value), ["天胡24"], "C4 天胡：24 台，只有莊家");
 }

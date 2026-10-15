@@ -204,7 +204,11 @@ function scoreDecomposition(
   }
 
   // --- 門清自摸 / 門清 / 自摸 ---
-  if (isConcealed && ctx.isSelfDraw) {
+  // MIGI（地聽）一定是門清：不另算門清、門清自摸（含不求人），自摸只算 1 台
+  const isMigi = fans.some((f) => f.name === "地聽");
+  if (isMigi) {
+    if (ctx.isSelfDraw) fans.push({ name: "自摸", value: 1 });
+  } else if (isConcealed && ctx.isSelfDraw) {
     fans.push({ name: "門清自摸", value: 3 });
   } else {
     if (isConcealed) {

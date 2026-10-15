@@ -3,7 +3,7 @@
 // 手機橫向牌桌（小宜規格 2026-10-14）。只在 (orientation: landscape) and (max-height: 500px)
 // 由 page.tsx 掛載；桌機仍用 MjBoard。版面與尺寸對應 globals.css 的 .mjm-* 樣式。
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
@@ -53,25 +53,51 @@ function DealerTag({ player, consecutive, withLa }: { player: MjPlayer; consecut
   );
 }
 
-/** 吃碰槓＋花。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開） */
-function Melds({ revealed, flowers, w, h, mine, reveal }: { revealed: Meld[]; flowers: Tile[]; w: number; h: number; mine?: boolean; reveal?: boolean }) {
+/** 吃碰槓＋花。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
+ *  rot＝左右家眼牌模式：每張包一格、由 CSS 轉 ±90° 朝向主人，每一副自己一直列 */
+function Melds({ revealed, flowers, w, h, mine, reveal, rot }: { revealed: Meld[]; flowers: Tile[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean }) {
   if (revealed.length === 0 && flowers.length === 0) return null;
+  const tile = (t: Tile, faceDown: boolean) =>
+    rot ? (
+      <span key={t.id} className="rcell"><MjTile tile={t} width={w} height={h} faceDown={faceDown} /></span>
+    ) : (
+      <MjTile key={t.id} tile={t} width={w} height={h} faceDown={faceDown} />
+    );
   return (
-    <div className="mjm-melds">
+    <div className={`mjm-melds ${rot ? "rot" : ""}`}>
       {revealed.map((meld, mi) => (
         <div key={mi} className="mjm-meld">
-          {meld.tiles.map((t) => (
-            <MjTile key={t.id} tile={t} width={w} height={h} faceDown={!mine && !reveal && meld.type === "concealed_kong"} />
-          ))}
+          {meld.tiles.map((t) => tile(t, !mine && !reveal && meld.type === "concealed_kong"))}
         </div>
       ))}
-      {flowers.length > 0 && (
-        <div className="mjm-flowers">
-          {flowers.map((f) => (
-            <MjTile key={f.id} tile={f} width={w} height={h} />
-          ))}
-        </div>
-      )}
+      {flowers.length > 0 && <div className="mjm-flowers">{flowers.map((f) => tile(f, false))}</div>}
+    </div>
+  );
+}
+
+/** 左右家（我眼牌時）的手牌：金框外面一直列、朝向主人；高度不夠才折第二列（依實際高度算，不寫死張數） */
+function EyeStrip({ h }: { h: MjOpponentHand }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [perCol, setPerCol] = useState(99);
+  useEffect(() => {
+    const el = ref.current?.parentElement;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPerCol(Math.max(1, Math.floor((el.clientHeight - 4) / 11))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
+  const tiles = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])];
+  const cols = Math.max(1, Math.ceil(tiles.length / perCol));
+  return (
+    <div ref={ref} className="mjm-eyestrip" style={{ width: cols * 15 + (cols - 1) + 4 }}>
+      {tiles.map((t) => (
+        <span key={t.id} className="cell">
+          <div className={t === drew ? "drew" : undefined}>
+            <MjTile tile={t} width={11} height={15} />
+          </div>
+        </span>
+      ))}
     </div>
   );
 }
@@ -84,12 +110,30 @@ function EyeTag({ on, pop }: { on: boolean; pop?: boolean }) {
   return on ? <span className={`mjm-tag eye ${pop ? "pop" : ""}`}>眼</span> : null;
 }
 
-/** 宣告特效：只在宣告者名牌上播 0.9 秒（第一輪眼牌同時地聽＝雙色） */
-function fxClass(fx?: { both: boolean }) {
-  return fx ? `mjm-declare ${fx.both ? "mjm-dc-both" : "mjm-dc-eye"}` : "";
+/** 聽／眼標示：地聽＋眼牌＝只顯示 MIGI（小宜眼牌 v5）；只有眼牌＝眼；只有地聽（舊牌局）＝聽 */
+function DeclareTags({ ting, eye, fx }: { ting: boolean; eye: boolean; fx?: { both: boolean } }) {
+  if (ting && eye) return <span className={`mjm-tag migi ${fx ? "pop" : ""}`}>MIGI</span>;
+  if (eye) return <EyeTag on pop={!!fx} />;
+  return <TingTag on={ting} pop={!!fx} />;
 }
 
-/** 我眼牌時：取代牌背條，翻開這家的手牌；摸進的那張排最後＋金框 */
+/** 名牌宣告特效：只有一般眼牌在名牌上播紫色彈一下 0.9 秒；MIGI 改播牌桌中央的大特效（MigiFx） */
+function fxClass(fx?: { both: boolean }) {
+  return fx && !fx.both ? "mjm-declare mjm-dc-eye" : "";
+}
+
+/** MIGI 宣告大特效（方案 A「翠玉桌布」）：只蓋牌桌、不擋動作列，1.4 秒後由 hook 移除 */
+export function MigiFx({ name, desk }: { name: string; desk?: boolean }) {
+  return (
+    <div className={`mjm-fx a ${desk ? "desk" : ""}`} aria-hidden>
+      <div className="bg" />
+      <div className="word">MIGI</div>
+      <div className="who">{name}</div>
+    </div>
+  );
+}
+
+/** 我眼牌時：對家取代牌背條，翻開手牌（一列）；摸進的那張排最後＋金框 */
 function EyeHand({ h, w, ht }: { h: MjOpponentHand; w: number; ht: number }) {
   const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
   const tiles = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])];
@@ -125,7 +169,9 @@ function SidePanel({
   fx,
   opponent,
   windChar,
+  side,
 }: {
+  side: "left" | "right";
   player: MjPlayer | undefined;
   isCurrent: boolean;
   isDoor: boolean;
@@ -137,33 +183,37 @@ function SidePanel({
   fx?: { both: boolean };
   opponent?: MjOpponentHand;
 }) {
-  if (!player) return <div className="mjm-side" />;
-  return (
-    <div className="mjm-side">
-      <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`}>
-        <div className="l1">
-          <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
-          <span className="mjm-nm">{player.name}</span>
-        </div>
-        <div className="l2">
-          <DealerTag player={player} consecutive={dealerConsecutive} />
-          <TingTag on={isTing} pop={fx?.both} />
-          <EyeTag on={isEye} pop={!!fx} />
-          <Score score={score} />
-        </div>
+  if (!player) return <div className={`mjm-side ${side}`} />;
+  const plate = (
+    <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`}>
+      <div className="l1">
+        <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
+        <span className="mjm-nm">{player.name}</span>
       </div>
-      {opponent ? (
-        <>
-          {/* 眼牌模式：手牌、吃碰槓、花一起縮成 12×16，最壞情況才不會被側欄切掉 */}
-          <EyeHand h={opponent} w={12} ht={16} />
-          <Melds revealed={opponent.revealed} flowers={player.flowers} w={12} h={16} reveal />
-        </>
-      ) : (
-        <>
-          <BackBar count={player.tileCount} width={44} />
-          <Melds revealed={player.revealed} flowers={player.flowers} w={16} h={22} />
-        </>
-      )}
+      <div className="l2">
+        <DealerTag player={player} consecutive={dealerConsecutive} />
+        <DeclareTags ting={isTing} eye={isEye} fx={fx} />
+        <Score score={score} />
+      </div>
+    </div>
+  );
+  // 我眼牌時：外側＝名牌＋轉向的吃碰槓／花（9×12），內側＝手牌一直列（11×15，比吃碰牌大）、在金框外面
+  if (opponent) {
+    return (
+      <div className={`mjm-side ${side} eyeside`}>
+        <div className="eyeouter">
+          {plate}
+          <Melds revealed={opponent.revealed} flowers={player.flowers} w={9} h={12} reveal rot />
+        </div>
+        <EyeStrip h={opponent} />
+      </div>
+    );
+  }
+  return (
+    <div className={`mjm-side ${side}`}>
+      {plate}
+      <BackBar count={player.tileCount} width={44} />
+      <Melds revealed={player.revealed} flowers={player.flowers} w={16} h={22} />
     </div>
   );
 }
@@ -269,6 +319,7 @@ export default function MjBoardMobile({
   const eyePick = (id: number) => eyeArmed && eyeOptions.includes(id);
   const eyeBlocked = (id: number) => eyeArmed && !eyeOptions.includes(id);
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
+  const migiFx = declareFx.find((f) => f.both);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
 
   // 選取的牌已經不在手上、不能打、或按了眼牌（點牌直接打出）→ 視為沒選
@@ -365,14 +416,14 @@ export default function MjBoardMobile({
               <span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>
               <span className="mjm-nm">{top.name}</span>
               <DealerTag player={top} consecutive={dealerConsecutive} />
-              <TingTag on={tingSeats.includes(top.seat)} pop={fxOf(top.seat)?.both} />
-              <EyeTag on={eyeSeats.includes(top.seat)} pop={!!fxOf(top.seat)} />
+              <DeclareTags ting={tingSeats.includes(top.seat)} eye={eyeSeats.includes(top.seat)} fx={fxOf(top.seat)} />
               <Score score={scoreOf(top)} />
             </div>
             {oppOf(top.seat) ? (
               <>
-                <EyeHand h={oppOf(top.seat)!} w={14} ht={19} />
-                <Melds revealed={oppOf(top.seat)!.revealed} flowers={top.flowers} w={16} h={22} reveal />
+                {/* 眼牌模式：手牌 16×22 比吃碰槓 12×16 大 */}
+                <EyeHand h={oppOf(top.seat)!} w={16} ht={22} />
+                <Melds revealed={oppOf(top.seat)!.revealed} flowers={top.flowers} w={12} h={16} reveal />
               </>
             ) : (
               <>
@@ -387,6 +438,7 @@ export default function MjBoardMobile({
       {/* 左家 | 牌桌 | 右家 */}
       <div className="mjm-mid">
         <SidePanel
+          side="left"
           player={left}
           isCurrent={left?.seat === currentTurn}
           isDoor={left != null && doorSeat === left.seat}
@@ -456,9 +508,12 @@ export default function MjBoardMobile({
               </div>
             </div>
           )}
+          {/* MIGI 宣告大特效：四家都看得到，只蓋牌桌 */}
+          {migiFx && <MigiFx name={nameOf(migiFx.seat)} />}
         </div>
 
         <SidePanel
+          side="right"
           player={right}
           isCurrent={right?.seat === currentTurn}
           isDoor={right != null && doorSeat === right.seat}
@@ -532,8 +587,7 @@ export default function MjBoardMobile({
             <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
             <span className="mjm-nm">{playerName}</span>
             {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
-            <TingTag on={isTing} pop={fxOf(mySeat)?.both} />
-            <EyeTag on={isEye} pop={!!fxOf(mySeat)} />
+            <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
           </span>
           <Score score={scoreOf(me)} />
           {me && <Melds revealed={me.revealed} flowers={me.flowers} w={20} h={27} mine />}

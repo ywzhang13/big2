@@ -84,9 +84,14 @@ export default function MjResultMobile({
               <span key={w.seat}>
                 {i > 0 && "、"}
                 {w.name}
-                {/* 名字後面接藥丸：有地聽接「聽」、有眼牌接「眼」 */}
-                {tingSeats.includes(w.seat) && <span className="mjm-tag ting" style={{ marginLeft: 4, verticalAlign: "middle" }}>聽</span>}
-                {eyeSeats.includes(w.seat) && <span className="mjm-tag eye" style={{ marginLeft: 4, verticalAlign: "middle" }}>眼</span>}
+                {/* 名字後面接藥丸：地聽＋眼牌＝MIGI；只有眼牌＝眼；只有地聽（舊牌局）＝聽 */}
+                {tingSeats.includes(w.seat) && eyeSeats.includes(w.seat) ? (
+                  <span className="mjm-tag migi" style={{ marginLeft: 4, verticalAlign: "middle" }}>MIGI</span>
+                ) : eyeSeats.includes(w.seat) ? (
+                  <span className="mjm-tag eye" style={{ marginLeft: 4, verticalAlign: "middle" }}>眼</span>
+                ) : tingSeats.includes(w.seat) ? (
+                  <span className="mjm-tag ting" style={{ marginLeft: 4, verticalAlign: "middle" }}>聽</span>
+                ) : null}
               </span>
             ))}{" "}
             胡牌
