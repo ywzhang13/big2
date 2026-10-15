@@ -26,6 +26,8 @@ interface MjResultMobileProps {
   onNextGame: () => void;
   onLeave: () => void;
   desktop?: boolean;
+  tingSeats?: number[];
+  eyeSeats?: number[];
 }
 
 const RANK_LABELS = ["冠", "亞", "季", "殿"];
@@ -54,6 +56,8 @@ export default function MjResultMobile({
   onNextGame,
   onLeave,
   desktop = false,
+  tingSeats = [],
+  eyeSeats = [],
 }: MjResultMobileProps) {
   const isDraw = winner.seat < 0;
   const flowerName = winner.score.fans.find((f) => FLOWER_WIN_NAMES.includes(f.name))?.name;
@@ -75,7 +79,18 @@ export default function MjResultMobile({
       <div className="lcol">
         <span className={`hu ${isDraw ? "draw" : ""}`}>{title}</span>
         {!isDraw && (
-          <span className="who">{allWinners.map((w) => w.name).join("、")} 胡牌</span>
+          <span className="who">
+            {allWinners.map((w, i) => (
+              <span key={w.seat}>
+                {i > 0 && "、"}
+                {w.name}
+                {/* 名字後面接藥丸：有地聽接「聽」、有眼牌接「眼」 */}
+                {tingSeats.includes(w.seat) && <span className="mjm-tag ting" style={{ marginLeft: 4, verticalAlign: "middle" }}>聽</span>}
+                {eyeSeats.includes(w.seat) && <span className="mjm-tag eye" style={{ marginLeft: 4, verticalAlign: "middle" }}>眼</span>}
+              </span>
+            ))}{" "}
+            胡牌
+          </span>
         )}
         {!isDraw && !flowerName && !isZimo && fromName && <span className="from">{fromName} 放槍</span>}
         {!isDraw && !multi && (

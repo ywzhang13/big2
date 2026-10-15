@@ -348,7 +348,7 @@ export function passFlowerRob(state: MahjongGameState): MahjongGameState {
 export function ownTurnActions(
   state: MahjongGameState,
   seat: number
-): { type: "win" | "kong" | "add_kong" | "declare_ting"; tiles?: Tile[] }[] {
+): { type: "win" | "kong" | "add_kong" | "declare_eye"; tiles?: Tile[]; ting?: boolean }[] {
   if (
     state.status !== "playing" ||
     state.currentTurn !== seat ||
@@ -361,15 +361,15 @@ export function ownTurnActions(
     return [];
   }
   const p = state.players[seat];
-  const actions: { type: "win" | "kong" | "add_kong" | "declare_ting"; tiles?: Tile[] }[] = [];
+  const actions: { type: "win" | "kong" | "add_kong" | "declare_eye"; tiles?: Tile[]; ting?: boolean }[] = [];
   if (!isGuoShui(state, seat) && isWinningHand(p.hand, p.revealed.length)) actions.push({ type: "win" });
-  // 地聽後不能改聽：不給暗槓／加槓
-  if (canKongNow(state) && !state.tingSeats?.includes(seat)) {
+  // 地聽、眼牌後不能改聽：不給暗槓／加槓
+  if (canKongNow(state) && !isLocked(state, seat)) {
     for (const group of canConcealedKong(p.hand)) actions.push({ type: "kong", tiles: group });
     for (const t of canAddKong(p)) actions.push({ type: "add_kong", tiles: [t] });
   }
-  const ting = tingDiscardOptions(state, seat);
-  if (ting.length > 0) actions.push({ type: "declare_ting", tiles: ting });
+  const eye = eyeDiscardOptions(state, seat);
+  if (eye.length > 0) actions.push({ type: "declare_eye", tiles: eye, ting: canDeclareTingNow(state, seat) });
   return actions;
 }
 
@@ -378,7 +378,7 @@ export function ownTurnActions(
 // ---------------------------------------------------------------------------
 
 /**
- * 現在能不能宣告地聽（打出這張的同時宣告）：
+ * 現在是不是地聽的時機（這時宣告眼牌就同時算地聽）：
  *   - 輪到自己、已摸牌（莊家開局 17 張也算）、沒有等待中的窗口、還沒宣告過
  *   - 桌上打出的牌還在 5 張以內（這張是第 1～5 張）
  *   - 自己第一輪打牌；莊家多一次機會：第 1 張或第 5 張（自己的第 2 張）
@@ -403,36 +403,67 @@ export function canDeclareTingNow(state: MahjongGameState, seat: number): boolea
   return p.discards.length === 0 || (p.isDealer && p.discards.length === 1);
 }
 
-/** 打出後仍聽牌（至少聽一種）的手牌 id；不能宣告地聽時回空陣列 */
-export function tingDiscardOptions(state: MahjongGameState, seat: number): Tile[] {
-  if (!canDeclareTingNow(state, seat)) return [];
-  const p = state.players[seat];
-  return p.hand.filter((t) => {
-    const rest = p.hand.filter((x) => x.id !== t.id);
-    return findWaitingTiles(rest, p.revealed.length).length > 0;
-  });
-}
+// ---------------------------------------------------------------------------
+// 眼牌（地聽不用單獨宣告：在可以地聽的時機宣告眼牌，就同時算地聽）
+// ---------------------------------------------------------------------------
 
-/** 宣告地聽並打出 tileId：記到 tingSeats 後照一般打牌處理 */
-export function declareTingAndDiscard(state: MahjongGameState, tileId: number): MahjongGameState {
-  const seat = state.currentTurn;
-  if (!tingDiscardOptions(state, seat).some((t) => t.id === tileId)) {
-    throw new Error("現在不能宣告地聽，或打出這張後沒有聽牌");
-  }
-  const s = cloneState(state);
-  s.tingSeats = [...(s.tingSeats ?? []), seat];
-  return discardTile(s, tileId);
+/** 已地聽或已眼牌：不能改聽（不能吃碰槓、只能打摸到的牌） */
+export function isLocked(state: MahjongGameState, seat: number): boolean {
+  return !!state.tingSeats?.includes(seat) || !!state.eyeSeats?.includes(seat);
 }
 
 /**
- * 地聽的人摸牌後不能胡：自動打出剛摸到的牌（回傳打牌後的狀態）；
+ * 現在能不能宣告眼牌（打出這張的同時宣告）：輪到自己打牌（摸牌後或吃碰後）、
+ * 沒有等待中的窗口、還沒宣告過。第一輪以後也可以。
+ */
+function canDeclareEyeNow(state: MahjongGameState, seat: number): boolean {
+  return (
+    state.status === "playing" &&
+    state.currentTurn === seat &&
+    state.hasDrawn &&
+    !state.lastDiscard &&
+    !state.pendingActions &&
+    !state.pendingAddKong &&
+    !state.pendingFlowerRob &&
+    !isLocked(state, seat)
+  );
+}
+
+/** 打出後仍聽牌（至少聽一種）的手牌；不能宣告眼牌時回空陣列 */
+export function eyeDiscardOptions(state: MahjongGameState, seat: number): Tile[] {
+  if (!canDeclareEyeNow(state, seat)) return [];
+  const p = state.players[seat];
+  return p.hand.filter((t) => {
+    const rest = p.hand.filter((x) => x.id !== t.id && !isFlower(x));
+    return !isFlower(t) && findWaitingTiles(rest, p.revealed.length).length > 0;
+  });
+}
+
+/**
+ * 宣告眼牌並打出 tileId：照一般打牌處理後記到 eyeSeats；
+ * 在可以地聽的時機（第一輪）宣告的，同時記到 tingSeats（結算地聽 8 台）
+ */
+export function declareEyeAndDiscard(state: MahjongGameState, tileId: number): MahjongGameState {
+  const seat = state.currentTurn;
+  if (!eyeDiscardOptions(state, seat).some((t) => t.id === tileId)) {
+    throw new Error("現在不能宣告眼牌，或打出這張後沒有聽牌");
+  }
+  const withTing = canDeclareTingNow(state, seat);
+  const s = discardTile(state, tileId);
+  s.eyeSeats = [...(s.eyeSeats ?? []), seat];
+  if (withTing) s.tingSeats = [...(s.tingSeats ?? []), seat];
+  return s;
+}
+
+/**
+ * 地聽／眼牌的人摸牌後不能胡（或過水中）：自動打出剛摸到的牌（回傳打牌後的狀態）；
  * 不需要自動打時回 null（沒宣告、能胡、等待窗口中…）。
  */
 export function autoDiscardForTing(state: MahjongGameState): MahjongGameState | null {
   const seat = state.currentTurn;
   if (
     state.status !== "playing" ||
-    !state.tingSeats?.includes(seat) ||
+    !isLocked(state, seat) ||
     !state.hasDrawn ||
     state.drawnTileId === undefined ||
     state.lastDiscard ||
@@ -500,7 +531,7 @@ export function discardTile(
     throw new Error("Must draw before discarding");
   }
 
-  if (s.tingSeats?.includes(s.currentTurn) && s.drawnTileId !== undefined && tileId !== s.drawnTileId) {
+  if (isLocked(s, s.currentTurn) && s.drawnTileId !== undefined && tileId !== s.drawnTileId) {
     throw new Error("地聽後只能打出摸到的牌");
   }
 
@@ -633,12 +664,9 @@ export function getAvailableActions(
   if (state.pendingAddKong) {
     return actions.filter((a) => a.type === "win");
   }
-  // 地聽的人不能改聽：別人打的牌只能拿來胡，不能吃碰槓
-  if (state.tingSeats?.length) {
-    const ting = state.tingSeats;
-    for (let i = actions.length - 1; i >= 0; i--) {
-      if (ting.includes(actions[i].playerSeat) && actions[i].type !== "win") actions.splice(i, 1);
-    }
+  // 地聽、眼牌的人不能改聽：別人打的牌只能拿來胡，不能吃碰槓
+  for (let i = actions.length - 1; i >= 0; i--) {
+    if (isLocked(state, actions[i].playerSeat) && actions[i].type !== "win") actions.splice(i, 1);
   }
 
   // Sort by priority: win > kong > pong > chi
@@ -1310,6 +1338,7 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
   s.pendingAddKong = undefined;
   s.pendingFlowerRob = undefined;
   s.tingSeats = undefined;
+  s.eyeSeats = undefined;
   s.guoShuiSeats = undefined;
   s.gameOver = false;
 

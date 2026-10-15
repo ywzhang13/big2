@@ -17,8 +17,9 @@ function base(): MahjongGameState {
 }
 const out: string[] = [];
 const eq = (a: unknown, e: unknown, m: string) => out.push(`${JSON.stringify(a) === JSON.stringify(e) ? "✅" : "❌"} ${m}\n   預期=${JSON.stringify(e)} 實際=${JSON.stringify(a)}`);
+// 眼牌的出牌選項（declare_eye）不是按鈕，這裡只看按鈕
 const types = (v: { myAvailableActions?: { type: string; tiles?: Tile[] }[] }) =>
-  (v.myAvailableActions ?? []).map((a) => a.type + (a.tiles ? ":" + a.tiles.map((x) => x.display).join(",") : ""));
+  (v.myAvailableActions ?? []).filter((a) => a.type !== "declare_eye").map((a) => a.type + (a.tiles ? ":" + a.tiles.map((x) => x.display).join(",") : ""));
 
 // 摸到 7 筒：可自摸、手上 5 筒可加槓
 let s = base();
@@ -45,7 +46,8 @@ p.currentTurn = 0;
 p.players[2].hand = tiles("p5 p5 m1 m2 m3 s1 s2 s3 z2 z2 z2 z6 z6 p6 p7 m9");
 p.lastDiscard = { tile: t("p5"), from: 0 };
 p = executeAction(p, { type: "pong", playerSeat: 2, tiles: p.players[2].hand.filter((x) => x.display === "p5") });
-eq(toPlayerGameState(p, "p2").myAvailableActions ?? null, null, "⑥e 碰完輪到自己打牌：不會出現自摸／槓按鈕");
+eq([types(toPlayerGameState(p, "p2")), toPlayerGameState(p, "p2").myAvailableActions?.map((a) => a.type)], [[], ["declare_eye"]],
+  "⑥e 碰完輪到自己打牌：不會出現自摸／槓按鈕（只有眼牌的出牌選項）");
 
 // 七搶一等待中：有 7 張花的人重新整理拿到 win
 let f = base();

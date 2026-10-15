@@ -100,6 +100,9 @@ export interface MahjongGameState {
   pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
   // 已宣告地聽的座位（公開）。宣告後不能改聽：只能胡，或打出剛摸到的牌（不能胡時由伺服器自動打出）
   tingSeats?: number[];
+  // 已宣告眼牌的座位（公開）。宣告後能胡就自動胡、不能胡就自動打出摸到的牌，不能吃碰槓；
+  // 看得到其他三家的手牌（只送給本人）。第一輪宣告眼牌同時算地聽（也記在 tingSeats）
+  eyeSeats?: number[];
   // 過水中的座位（不公開，只在伺服器）：打出自己聽的牌、或能胡別人的牌卻沒胡（pass）就進入；
   // 過水中不能胡任何牌（自摸、放槍、搶槓）。打出一張不是自己聽的牌就解除。每局重來
   guoShuiSeats?: number[];

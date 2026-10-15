@@ -3,13 +3,18 @@
 import {
   allHands,
   advanceTurn,
+  applyWinnerOrderRule,
   autoDiscardForTing,
   calculateSettlement,
+  declareWin,
   getAvailableActions,
   isAllRoundsComplete,
+  isLocked,
   ownTurnActions,
+  robFlower,
 } from "./gameLogic";
 import type { MahjongGameState } from "./gameState";
+import { sortTiles, type Tile } from "./tiles";
 
 export type MjEvent = { event: string; payload: Record<string, unknown> };
 
@@ -58,7 +63,7 @@ export function drawEvents(s: MahjongGameState, seat: number): MjEvent[] {
   const actions = ownTurnActions(s, seat);
   const kongOptions = actions.filter((a) => a.type === "kong").map((a) => a.tiles!.map((t) => t.id));
   const addKongOptions = actions.filter((a) => a.type === "add_kong").map((a) => a.tiles![0].id);
-  const tingOptions = actions.find((a) => a.type === "declare_ting")?.tiles?.map((t) => t.id) ?? [];
+  const eye = actions.find((a) => a.type === "declare_eye");
   const events: MjEvent[] = [
     {
       event: "mj_draw",
@@ -75,7 +80,8 @@ export function drawEvents(s: MahjongGameState, seat: number): MjEvent[] {
         canKong: kongOptions.length > 0,
         kongOptions,
         addKongOptions,
-        tingOptions,
+        eyeOptions: eye?.tiles?.map((t) => t.id) ?? [],
+        eyeWithTing: !!eye?.ting,
       },
     },
   ];
@@ -133,17 +139,6 @@ export function discardEvents(s: MahjongGameState, seat: number, auto = false): 
   return events;
 }
 
-/**
- * 摸牌（或七搶一不搶）之後：輪到的人已地聽、又不能胡 → 伺服器自動打出摸到的牌。
- * 回傳 [自動打牌後的狀態, 打牌事件]；不需要自動打時回 null。要在存檔前呼叫。
- */
-export function tingAutoDiscard(s: MahjongGameState): [MahjongGameState, MjEvent[]] | null {
-  const seat = s.currentTurn;
-  const next = autoDiscardForTing(s);
-  if (!next) return null;
-  return [next, discardEvents(next, seat, true)];
-}
-
 /** 七搶一等待中：公開 mj_flower_rob_pending，並只給有 7 張花的人 win 選項 */
 export function flowerRobEvents(s: MahjongGameState): MjEvent[] {
   const fr = s.pendingFlowerRob;
@@ -159,4 +154,99 @@ export function flowerRobEvents(s: MahjongGameState): MjEvent[] {
       },
     },
   ];
+}
+
+// ---------------------------------------------------------------------------
+// 眼牌
+// ---------------------------------------------------------------------------
+
+/** 這局有人胡了、沒有其他人要決定：定案贏家順序、結束、結算。會直接改 s */
+function finishWithWinners(s: MahjongGameState): MahjongGameState {
+  const done = applyWinnerOrderRule(s);
+  done.status = "finished";
+  done.pendingActions = undefined;
+  done.pendingAddKong = undefined;
+  applySettlement(done);
+  return done;
+}
+
+export type EyeAutoplay = {
+  s: MahjongGameState;
+  events: MjEvent[];
+  finished: boolean;
+  autoDiscarded?: Tile;
+};
+
+/**
+ * 替眼牌的人做決定（每次存檔前呼叫）：
+ *   - 能胡別人打的牌（含搶槓）→ 自動胡；還有不是眼牌的人能胡同一張（一砲多響）就等他們決定
+ *   - 自己摸到能胡 → 自動自摸；不能胡（或過水中）→ 自動打出摸到的牌，再看別的眼牌者能不能胡這張
+ *   - 七搶一輪到眼牌的人決定 → 自動搶
+ * 地聽的人（舊版宣告、沒有眼牌）照舊：只自動打牌，胡要自己按。
+ */
+export function eyeAutoplay(input: MahjongGameState): EyeAutoplay {
+  let s = input;
+  const events: MjEvent[] = [];
+  let autoDiscarded: Tile | undefined;
+  const isEye = (seat: number) => !!s.eyeSeats?.includes(seat);
+  for (let guard = 0; guard < 8 && s.status === "playing"; guard++) {
+    if (s.pendingFlowerRob) {
+      if (!isEye(s.pendingFlowerRob.robberSeat)) break;
+      s = robFlower(s);
+      applySettlement(s);
+      return { s, events: [...events, gameOverEvent(s)], finished: true, autoDiscarded };
+    }
+    const pa = s.pendingActions;
+    if (s.lastDiscard && pa) {
+      const undecided = (seat: number) => pa.potentialActors.includes(seat) && !pa.passedActors.includes(seat);
+      const winSeats = [...new Set(getAvailableActions(s).filter((a) => a.type === "win").map((a) => a.playerSeat))].filter(undecided);
+      const eyeWinners = winSeats.filter(isEye);
+      if (eyeWinners.length === 0) break;
+      for (const seat of eyeWinners) s = declareWin(s, seat, false);
+      s.pendingActions = { ...pa, passedActors: [...pa.passedActors, ...eyeWinners] };
+      if (winSeats.some((x) => !isEye(x))) {
+        // 一砲多響：還有人能胡同一張，等他們胡或 pass（和手動胡的部分結果同一個事件）
+        for (const seat of eyeWinners) {
+          const w = s.winners!.find((x) => x.seat === seat)!;
+          events.push({ event: "mj_partial_win", payload: { seat, winnerName: s.players[seat].name, score: w.score } });
+        }
+        break;
+      }
+      s = finishWithWinners(s);
+      return { s, events: [...events, gameOverEvent(s)], finished: true, autoDiscarded };
+    }
+    const seat = s.currentTurn;
+    if (!isLocked(s, seat) || !s.hasDrawn || s.drawnTileId === undefined || s.lastDiscard || pa || s.pendingAddKong) break;
+    if (isEye(seat) && ownTurnActions(s, seat).some((a) => a.type === "win")) {
+      s = finishWithWinners(declareWin(s, seat, true));
+      return { s, events: [...events, gameOverEvent(s)], finished: true, autoDiscarded };
+    }
+    const next = autoDiscardForTing(s);
+    if (!next) break;
+    s = next;
+    autoDiscarded = s.lastDiscard!.tile;
+    events.push(...discardEvents(s, seat, true));
+  }
+  return { s, events, finished: false, autoDiscarded };
+}
+
+/** 眼牌的人看到的其他三家手牌（排序好、不含花）；摸進還沒打的那張用 drawnTileId 指出 */
+export function opponentHands(s: MahjongGameState, eyeSeat: number) {
+  return s.players
+    .filter((p) => p.seat !== eyeSeat)
+    .map((p) => ({
+      seat: p.seat,
+      hand: sortTiles(p.hand.filter((t) => t.suit !== "f")),
+      revealed: p.revealed, // 吃碰槓，暗槓含牌面
+      drawnTileId: s.currentTurn === p.seat && s.hasDrawn ? (s.drawnTileId ?? null) : null,
+    }));
+}
+
+/** 每次狀態改變後送給每位眼牌者（只送到本人座位頻道）的三家手牌 */
+export function eyeViewEvents(s: MahjongGameState): MjEvent[] {
+  if (s.status !== "playing") return [];
+  return (s.eyeSeats ?? []).map((seat) => ({
+    event: "mj_opponent_hands",
+    payload: { playerId: s.players[seat].id, opponentHands: opponentHands(s, seat) },
+  }));
 }

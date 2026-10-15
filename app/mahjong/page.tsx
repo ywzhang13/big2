@@ -883,7 +883,11 @@ function RoomView({
     pendingFlowerRob: state.pendingFlowerRob,
     robFlower: state.robFlower,
     tingSeats: state.tingSeats,
-    tingOptions: state.tingOptions,
+    eyeSeats: state.eyeSeats,
+    eyeOptions: state.eyeOptions,
+    eyeWithTing: state.eyeWithTing,
+    opponentHands: state.opponentHands,
+    declareFx: state.declareFx,
     wallRemaining: state.wallRemaining,
     hasDrawn: state.hasDrawn,
     needsDraw,
@@ -1168,6 +1172,8 @@ function RoomView({
       {isFinished && state.winner && (
         <MjResultMobile
           desktop={!isMobileLandscape}
+          tingSeats={state.tingSeats}
+          eyeSeats={state.eyeSeats}
           winner={state.winner}
           winners={state.winners}
           players={state.players}

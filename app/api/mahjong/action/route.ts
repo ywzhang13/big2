@@ -22,6 +22,9 @@ import {
   getAvailableActions,
   AvailableAction,
   isGuoShui,
+  isLocked,
+  eyeDiscardOptions,
+  canDeclareTingNow,
   markGuoShuiOnPass,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
@@ -30,9 +33,10 @@ import { Tile } from "@/lib/mahjong/tiles";
 import {
   applySettlement,
   drawEvents,
+  eyeAutoplay,
+  eyeViewEvents,
   flowerRobEvents,
   gameOverEvent,
-  tingAutoDiscard,
   type MjEvent,
 } from "@/lib/mahjong/events";
 
@@ -127,14 +131,13 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
       // 輪到的人繼續（打牌中＝摸到花的人；開局＝莊家），重送他的摸牌事件和可做的動作
       ...drawEvents(newState, newState.currentTurn),
     ];
-    // 摸到花的人已地聽又不能胡：自動打出摸到的牌
-    const auto = tingAutoDiscard(newState);
-    if (auto) {
-      newState = auto[0];
-      events.push(...auto[1]);
-    }
-    await save(newState);
+    // 摸到花的人已地聽／眼牌：能胡就自動胡（眼牌），不能胡就自動打出摸到的牌
+    const auto = eyeAutoplay(newState);
+    newState = auto.s;
+    events.push(...auto.events, ...eyeViewEvents(newState));
+    await save(newState, auto.finished ? "finished" : undefined);
     await mjBroadcastBatch(room.code, events);
+    if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
     return Response.json({ success: true });
   }
 
@@ -164,6 +167,11 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
     }
   }
 
+  // 地聽、眼牌後不能吃、碰、槓（明槓、暗槓、加槓）
+  if ((actionType === "chi" || actionType === "pong" || actionType === "kong" || actionType === "add_kong") && isLocked(state, seat)) {
+    return Response.json({ error: "地聽、眼牌後不能吃碰槓" }, { status: 400 });
+  }
+
   if ((actionType === "kong" || actionType === "add_kong") && !canKongNow(state)) {
     return Response.json({ error: "牌牆剩 16 張，不能再槓" }, { status: 400 });
   }
@@ -181,20 +189,33 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
     if (!newState.pendingAddKong) {
       // 沒人能搶：已完成加槓並補牌（沒牌可補則流局）
       const events = addKongDoneEvents(newState, seat, tile);
+      // 補到第 8 張花、七搶一輪到眼牌的人：自動搶
+      const auto = eyeAutoplay(newState);
+      newState = auto.s;
+      events.push(...auto.events, ...eyeViewEvents(newState));
       await save(newState, newState.status === "finished" ? "finished" : undefined);
       await mjBroadcastBatch(room.code, events);
       await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
       return Response.json({ success: true, robWindow: false });
     }
-    await save(newState);
-
-    // 有人能搶：通知所有人「加槓中」，並只給能胡的人 win 選項
+    // 有人能搶：通知所有人「加槓中」，並只給能胡的人 win 選項；眼牌的人能搶就自動搶槓胡
     const p = newState.players[seat];
     const events: MjEvent[] = [
       { event: "mj_add_kong_pending", payload: { seat, tile, tileCount: p.hand.length } },
       { event: "mj_hand_update", payload: { playerId, hand: p.hand.filter((t) => t.suit !== "f") } },
     ];
-    for (const robber of newState.pendingActions!.potentialActors) {
+    const auto = eyeAutoplay(newState);
+    newState = auto.s;
+    if (auto.finished) {
+      await save(newState, "finished");
+      await mjBroadcastBatch(room.code, [...events, ...auto.events]);
+      await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
+      return Response.json({ success: true, robWindow: true });
+    }
+    await save(newState);
+    events.push(...auto.events);
+    const decided = newState.pendingActions!.passedActors;
+    for (const robber of newState.pendingActions!.potentialActors.filter((r) => !decided.includes(r))) {
       events.push({
         event: "mj_available_actions",
         payload: {
@@ -204,7 +225,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
         },
       });
     }
-    await mjBroadcastBatch(room.code, events);
+    await mjBroadcastBatch(room.code, [...events, ...eyeViewEvents(newState)]);
     return Response.json({ success: true, robWindow: true });
   }
 
@@ -323,6 +344,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
           const { seat: kongSeat, tile: kongTile } = state.pendingAddKong;
           newState = completeAddKong(passState);
           const events = addKongDoneEvents(newState, kongSeat, kongTile);
+          const auto = eyeAutoplay(newState); // 補到花、七搶一輪到眼牌的人：自動搶
+          newState = auto.s;
           await save(newState, newState.status === "finished" ? "finished" : undefined);
           await mjBroadcastBatch(room.code, [
             {
@@ -330,6 +353,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
               payload: { seat, allPassed: true, currentTurn: kongSeat, hasDrawn: newState.hasDrawn },
             },
             ...events,
+            ...auto.events,
+            ...eyeViewEvents(newState),
           ]);
           await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
           return Response.json({ success: true });
@@ -397,7 +422,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
       }
     }
 
-    await mjBroadcastBatch(room.code, events);
+    await mjBroadcastBatch(room.code, [...events, ...eyeViewEvents(newState)]);
     return Response.json({ success: true });
   }
 
@@ -479,7 +504,10 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
     return Response.json({ success: true });
   }
 
-  await save(newState);
+  // 槓後補到第 8 張花、七搶一輪到眼牌的人：自動搶
+  const auto = eyeAutoplay(newState);
+  newState = auto.s;
+  await save(newState, auto.finished ? "finished" : undefined);
 
   // Broadcast the action (revealed meld) with tileCount
   // Use lastMeld.type so "concealed_kong" (暗槓) is correctly conveyed
@@ -504,11 +532,21 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
     },
     {
       event: "mj_hand_update",
-      payload: { playerId, hand: handNoFlowers, drawnTileId },
+      // 吃、碰後要打牌：可以一起宣告眼牌的出牌選項
+      payload: {
+        playerId,
+        hand: handNoFlowers,
+        drawnTileId,
+        eyeOptions: eyeDiscardOptions(newState, seat).map((t) => t.id),
+        eyeWithTing: canDeclareTingNow(newState, seat),
+      },
     },
     // 槓：補牌後能不能自摸（槓上開花）／再槓，以及補到第 8 張花時的七搶一
     ...(actionType === "kong" ? drawEvents(newState, seat) : []),
+    ...auto.events,
+    ...eyeViewEvents(newState),
   ]);
+  if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
   return Response.json({ success: true });
 }

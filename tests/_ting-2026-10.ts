@@ -1,7 +1,7 @@
-// 2026-10 老闆規則：天胡 24（只有莊家）、地胡 8、地聽 8（自己宣告、不能改聽、和地胡不疊加）。
+// 2026-10 老闆規則：天胡 24（只有莊家）、地胡 8、地聽 8（第一輪宣告眼牌時同時算地聽、不能改聽、和地胡不疊加）。
 // 共同設定：底 100、每台 20、dealer=seat 0、doorSeat=0、圈風東、連莊 0。
 import {
-  canDeclareTingNow, tingDiscardOptions, declareTingAndDiscard, autoDiscardForTing,
+  canDeclareTingNow, eyeDiscardOptions, declareEyeAndDiscard, autoDiscardForTing,
   ownTurnActions, getAvailableActions, discardTile, drawTile, declareWin, calculateSettlement, startNextGame,
   executeConcealedKong,
 } from "../lib/mahjong/gameLogic";
@@ -63,16 +63,16 @@ function throws(fn: () => unknown, msg: string) {
 // --- 宣告時機 ---
 {
   const s = opening();
-  const opts = ids(tingDiscardOptions(s, 0));
+  const opts = ids(eyeDiscardOptions(s, 0));
   eq([canDeclareTingNow(s, 0), opts.includes("z5"), opts.includes("m1")], [true, true, false],
     "A1 莊家打第 1 張：可以宣告；打出中（z5）後聽 1/4/7 條 → 是選項；打出 1 萬後沒聽 → 不是選項");
-  throws(() => declareTingAndDiscard(s, s.players[0].hand[0].id), "A2 用打出後不會聽牌的 1 萬宣告：擋下");
-  const d = declareTingAndDiscard(s, s.players[0].hand[16].id);
+  throws(() => declareEyeAndDiscard(s, s.players[0].hand[0].id), "A2 用打出後不會聽牌的 1 萬宣告：擋下");
+  const d = declareEyeAndDiscard(s, s.players[0].hand[16].id);
   eq([d.tingSeats, d.lastDiscard?.tile.display, d.turnCount], [[0], "z5", 1], "A3 莊家打出中並宣告：tingSeats=[0]，照常打出（第 1 張）");
 }
 {
   const s = seat1FirstTurn();
-  eq([canDeclareTingNow(s, 1), ids(tingDiscardOptions(s, 1)).includes("z5")], [true, true], "A4 閒家 seat1 自己第一次打牌（桌上第 2 張）：可以宣告");
+  eq([canDeclareTingNow(s, 1), ids(eyeDiscardOptions(s, 1)).includes("z5")], [true, true], "A4 閒家 seat1 自己第一次打牌（桌上第 2 張）：可以宣告");
   const second = { ...seat1FirstTurn(), turnCount: 5 } as MahjongGameState;
   second.players[1].discards = tiles("z6");
   eq(canDeclareTingNow(second, 1), false, "A5 閒家自己的第 2 張：不能宣告");
@@ -89,14 +89,14 @@ function throws(fn: () => unknown, msg: string) {
   s.turnCount = 5;
   eq(canDeclareTingNow(s, 0), false, "A9 莊家第 3 次打牌：不能宣告");
   const o = opening();
-  const d = declareTingAndDiscard(o, o.players[0].hand[16].id);
+  const d = declareEyeAndDiscard(o, o.players[0].hand[16].id);
   eq(canDeclareTingNow({ ...d, currentTurn: 0, hasDrawn: true, lastDiscard: null, pendingActions: undefined } as MahjongGameState, 0), false, "A10 已經宣告過：不能再宣告");
 }
 
 // --- 宣告後不能改聽 ---
 {
   const base = seat1FirstTurn();
-  const s = declareTingAndDiscard(base, base.players[1].hand[16].id);
+  const s = declareEyeAndDiscard(base, base.players[1].hand[16].id);
   eq([s.tingSeats, s.players[1].hand.length], [[1], 16], "B0 seat1 打出中並宣告地聽");
   // 輪回 seat1：摸到不能胡的 9 萬 → 自動打出
   s.pendingActions = undefined; s.currentTurn = 1; s.hasDrawn = false; s.lastDiscard = null;
@@ -109,7 +109,7 @@ function throws(fn: () => unknown, msg: string) {
 }
 {
   const base = seat1FirstTurn();
-  const s = declareTingAndDiscard(base, base.players[1].hand[16].id);
+  const s = declareEyeAndDiscard(base, base.players[1].hand[16].id);
   s.pendingActions = undefined; s.currentTurn = 1; s.hasDrawn = false; s.lastDiscard = null;
   s.wall[0] = t("s7");
   const drawn = drawTile(s);
@@ -120,7 +120,7 @@ function throws(fn: () => unknown, msg: string) {
 }
 {
   const base = seat1FirstTurn();
-  const s = declareTingAndDiscard(base, base.players[1].hand[16].id);
+  const s = declareEyeAndDiscard(base, base.players[1].hand[16].id);
   s.players[1].hand = tiles("p5 p5 p5 p5 m1 m2 m3 m4 m5 m6 p7 p8 p9 s2 s3 s4"); // 手上 4 張 5 筒
   s.pendingActions = undefined; s.currentTurn = 1; s.hasDrawn = true; s.lastDiscard = null;
   s.drawnTileId = s.players[1].hand[0].id;
@@ -128,7 +128,7 @@ function throws(fn: () => unknown, msg: string) {
 }
 {
   const base = seat1FirstTurn();
-  const s = declareTingAndDiscard(base, base.players[1].hand[16].id);
+  const s = declareEyeAndDiscard(base, base.players[1].hand[16].id);
   s.players[1].hand = tiles("s7 s7 m1 m2 m3 m4 m5 m6 p7 p8 p9 s1 s2 s3 z4 z4"); // 對 7 條＋對北：胡 7 條或北，也能碰 7 條
   s.pendingActions = undefined;
   s.lastDiscard = { tile: t("s7"), from: 2 };
@@ -140,7 +140,7 @@ function throws(fn: () => unknown, msg: string) {
 // --- 台數 ---
 {
   const base = seat1FirstTurn();
-  const s = declareTingAndDiscard(base, base.players[1].hand[16].id);
+  const s = declareEyeAndDiscard(base, base.players[1].hand[16].id);
   s.pendingActions = undefined;
   s.lastDiscard = { tile: t("s7"), from: 3 };
   const r = declareWin(s, 1, false);
@@ -161,7 +161,7 @@ function throws(fn: () => unknown, msg: string) {
 // --- 下一局清掉地聽 ---
 {
   const base = seat1FirstTurn();
-  const s = declareTingAndDiscard(base, base.players[1].hand[16].id);
+  const s = declareEyeAndDiscard(base, base.players[1].hand[16].id);
   s.status = "finished";
   s.winners = [{ seat: 1, score: { fans: [], totalFan: 1 } }];
   eq(startNextGame(s).tingSeats ?? [], [], "D1 下一局：地聽清掉");

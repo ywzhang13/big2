@@ -7,8 +7,9 @@ import {
 } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import { discardTile, declareTingAndDiscard, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
-import { discardEvents } from "@/lib/mahjong/events";
+import { discardTile, declareEyeAndDiscard, eyeDiscardOptions, isLocked } from "@/lib/mahjong/gameLogic";
+import { discardEvents, eyeAutoplay, eyeViewEvents, type MjEvent } from "@/lib/mahjong/events";
+import { closeMahjongIfOver } from "@/lib/records/close";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
@@ -22,11 +23,12 @@ export async function POST(request: Request) {
 }
 
 async function handleDiscard(request: Request, body: unknown, fresh: boolean): Promise<Response> {
-  const { roomId, playerId, tileId, declareTing } = body as {
+  const { roomId, playerId, tileId, declareTing, declareEye } = body as {
     roomId?: string;
     playerId?: string;
     tileId?: number;
-    declareTing?: boolean; // 打出這張的同時宣告地聽
+    declareTing?: boolean; // 已拿掉：地聽改成在第一輪宣告眼牌時自動算
+    declareEye?: boolean; // 打出這張的同時宣告眼牌（第一輪宣告同時算地聽）
   };
 
   if (!roomId || !playerId || tileId === undefined) {
@@ -62,24 +64,37 @@ async function handleDiscard(request: Request, body: unknown, fresh: boolean): P
     return Response.json({ error: "等待其他玩家決定是否七搶一" }, { status: 409 });
   }
 
-  if (declareTing && !tingDiscardOptions(state, seat).some((t) => t.id === tileId)) {
-    return Response.json({ error: "現在不能宣告地聽，或打出這張後沒有聽牌" }, { status: 400 });
+  if (declareTing) {
+    return Response.json({ error: "地聽不用單獨宣告，請宣告眼牌（第一輪宣告眼牌同時算地聽）" }, { status: 400 });
   }
-  if (state.tingSeats?.includes(seat) && state.drawnTileId !== undefined && tileId !== state.drawnTileId) {
+  if (declareEye && !eyeDiscardOptions(state, seat).some((t) => t.id === tileId)) {
+    return Response.json({ error: "現在不能宣告眼牌，或打出這張後沒有聽牌" }, { status: 400 });
+  }
+  if (isLocked(state, seat) && state.drawnTileId !== undefined && tileId !== state.drawnTileId) {
     return Response.json({ error: "地聽後只能打出摸到的牌" }, { status: 400 });
   }
 
-  // Execute discard（declareTing=true：打出這張的同時宣告地聽）
-  const newState = declareTing ? declareTingAndDiscard(state, tileId) : discardTile(state, tileId);
-  const events = discardEvents(newState, seat);
-  if (declareTing) {
-    events.unshift({ event: "mj_ting_declared", payload: { seat, tile: newState.lastDiscard!.tile } });
+  // Execute discard（declareEye=true：打出這張的同時宣告眼牌）
+  let newState = declareEye ? declareEyeAndDiscard(state, tileId) : discardTile(state, tileId);
+  const ting = !!declareEye && !!newState.tingSeats?.includes(seat) && !state.tingSeats?.includes(seat);
+  const events: MjEvent[] = [];
+  if (declareEye) {
+    const tile = newState.lastDiscard!.tile;
+    events.push({ event: "mj_eye_declared", payload: { seat, tile, ting } });
+    if (ting) events.push({ event: "mj_ting_declared", payload: { seat, tile } });
   }
+  const discarded = discardEvents(newState, seat);
+  events.push(...discarded);
+  // 眼牌的人能胡這張：自動胡
+  const auto = eyeAutoplay(newState);
+  newState = auto.s;
+  events.push(...auto.events, ...eyeViewEvents(newState));
 
   // Save state
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState);
+  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, auto.finished ? "finished" : undefined);
   await mjBroadcastBatch(room.code, events);
+  if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
-  const actions = (events[declareTing ? 1 : 0].payload.availableActions ?? []) as { type: string; playerSeat: number }[];
-  return Response.json({ success: true, availableActions: actions, ting: !!declareTing });
+  const actions = (discarded[0].payload.availableActions ?? []) as { type: string; playerSeat: number }[];
+  return Response.json({ success: true, availableActions: actions, ting, eye: !!declareEye });
 }

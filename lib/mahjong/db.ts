@@ -2,7 +2,8 @@ import { getSupabaseAdmin } from "../supabase-admin";
 import { MahjongGameState, PlayerState } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
-import { allHands, getAvailableActions, ownTurnActions } from "./gameLogic";
+import { allHands, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
+import { opponentHands } from "./events";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows
@@ -271,6 +272,7 @@ export interface PublicGameState {
   pendingAddKong?: MahjongGameState["pendingAddKong"];
   pendingFlowerRob?: MahjongGameState["pendingFlowerRob"];
   tingSeats?: MahjongGameState["tingSeats"];
+  eyeSeats?: MahjongGameState["eyeSeats"];
   // 只有一局結束後（含流局）才有：四家手牌、吃碰槓（暗槓含牌面）、花牌，格式同 mj_game_over 的 allHands
   allHands?: ReturnType<typeof allHands>;
 }
@@ -307,6 +309,7 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     pendingAddKong: state.pendingAddKong,
     pendingFlowerRob: state.pendingFlowerRob,
     tingSeats: state.tingSeats ?? [],
+    eyeSeats: state.eyeSeats ?? [],
     // 牌局進行中絕不帶別家手牌；結束後才攤牌
     ...(state.status === "finished" ? { allHands: allHands(state) } : {}),
   };
@@ -322,8 +325,9 @@ export function toPlayerGameState(
   playerId: string
 ): PublicGameState & {
   hand?: Tile[];
-  myAvailableActions?: { type: string; tiles?: Tile[] }[];
+  myAvailableActions?: { type: string; tiles?: Tile[]; ting?: boolean }[];
   myDrawnTileId?: number;
+  opponentHands?: ReturnType<typeof opponentHands>;
 } {
   const pub = toPublicGameState(state);
   const player = state.players.find((p) => p.id === playerId);
@@ -332,7 +336,7 @@ export function toPlayerGameState(
 
   // Compute my available actions if this player is a potential actor on the
   // current pending discard and hasn't passed yet.
-  let myAvailableActions: { type: string; tiles?: Tile[] }[] | undefined;
+  let myAvailableActions: { type: string; tiles?: Tile[]; ting?: boolean }[] | undefined;
   if (player && state.pendingActions && state.lastDiscard) {
     const mySeat = player.seat;
     const isPending =
@@ -362,6 +366,10 @@ export function toPlayerGameState(
     const own = ownTurnActions(state, player.seat);
     if (own.length > 0) myAvailableActions = own;
     myDrawnTileId = state.drawnTileId;
+  } else if (player && state.currentTurn === player.seat) {
+    // 吃、碰後要打牌：也可以宣告眼牌
+    const eye = eyeDiscardOptions(state, player.seat);
+    if (eye.length > 0) myAvailableActions = [{ type: "declare_eye", tiles: eye, ting: canDeclareTingNow(state, player.seat) }];
   }
   // 七搶一：等我決定要不要搶
   if (player && state.pendingFlowerRob?.robberSeat === player.seat) {
@@ -373,6 +381,10 @@ export function toPlayerGameState(
     hand,
     myAvailableActions,
     myDrawnTileId,
+    // 眼牌的人才看得到三家手牌（只在本人的 state 裡）
+    ...(player && state.status === "playing" && state.eyeSeats?.includes(player.seat)
+      ? { opponentHands: opponentHands(state, player.seat) }
+      : {}),
   };
 }
 

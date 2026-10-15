@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
-import type { MjPlayer } from "@/hooks/useMahjong";
+import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import MjTile from "./MjTile";
 import MjHand from "./MjHand";
 import { seatWindChar } from "./seatWind";
@@ -21,7 +21,11 @@ export interface MjBoardProps {
   pendingFlowerRob: { robberSeat: number; fromSeat: number; tile: Tile } | null;
   robFlower: boolean;
   tingSeats: number[];
-  tingOptions: number[];
+  eyeSeats: number[];
+  eyeOptions: number[]; // 這次打牌可以一起宣告眼牌的牌
+  eyeWithTing: boolean;
+  opponentHands: MjOpponentHand[] | null; // 我眼牌時才有
+  declareFx: { seat: number; both: boolean }[]; // 正在播宣告特效的座位
   wallRemaining: number;
   hasDrawn: boolean;
   needsDraw: boolean;
@@ -31,7 +35,7 @@ export interface MjBoardProps {
   drawnTileId: number | null;
   actionNotice: { seat: number; type: string } | null;
   onDraw: () => void;
-  onDiscard: (tileId: number, declareTing?: boolean) => void;
+  onDiscard: (tileId: number, declareEye?: boolean) => void;
   onAction: (type: string, tiles?: Tile[]) => void;
   dice?: [number, number, number];
   doorSeat?: number;
@@ -39,11 +43,11 @@ export interface MjBoardProps {
   dealerConsecutive?: number;
 }
 
-/** 已宣告地聽的標示（小宜規格的聽牌標） */
-function TingTag() {
+/** 已宣告地聽的標示（小宜規格的聽牌標）；pop＝宣告特效期間彈入 */
+function TingTag({ pop }: { pop?: boolean }) {
   return (
     <span
-      className="px-1.5 py-[1px] rounded-full text-[9px] font-black leading-none"
+      className={`px-1.5 py-[1px] rounded-full text-[9px] font-black leading-none ${pop ? "mjm-pop" : ""}`}
       style={{
         background: "linear-gradient(135deg, #059669, #34d399)",
         color: "#042f1f",
@@ -55,6 +59,36 @@ function TingTag() {
     </span>
   );
 }
+
+/** 已宣告眼牌的標示（小宜眼牌 v3） */
+function EyeTag({ pop }: { pop?: boolean }) {
+  return (
+    <span
+      className={`px-1.5 py-[1px] rounded-full text-[9px] font-black leading-none ${pop ? "mjm-pop" : ""}`}
+      style={{
+        background: "linear-gradient(135deg, #7c3aed, #c4b5fd)",
+        color: "#2b0f55",
+        border: "1px solid rgba(233,213,255,0.8)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      眼
+    </span>
+  );
+}
+
+/** 宣告特效：只在宣告者名牌上播 0.9 秒（第一輪眼牌同時地聽＝雙色） */
+function fxClass(fx?: { both: boolean }) {
+  return fx ? `mjm-declare ${fx.both ? "mjm-dc-both" : "mjm-dc-eye"}` : "";
+}
+
+/** 眼牌者看到的手牌：摸進的那張排最後一張 */
+function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
+  const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
+  return [...h.hand.filter((t) => t !== drew).map((tile) => ({ tile, drew: false })), ...(drew ? [{ tile: drew, drew: true }] : [])];
+}
+
+const DREW_RING = { borderRadius: 3, boxShadow: "0 0 0 2px #fbbf24, 0 0 10px rgba(251,191,36,.45)" };
 
 /** Single die face (1-6) rendered with pips */
 function DieFace({ value, size = 22 }: { value: number; size?: number }) {
@@ -126,6 +160,9 @@ function PlayerPanel({
   score,
   dealerConsecutive,
   isTing,
+  isEye,
+  fx,
+  opponent,
 }: {
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
@@ -134,6 +171,9 @@ function PlayerPanel({
   score?: number;
   dealerConsecutive?: number;
   isTing?: boolean;
+  isEye?: boolean;
+  fx?: { both: boolean }; // 正在播宣告特效
+  opponent?: MjOpponentHand; // 我眼牌時：這家的牌面（暗槓翻開）
 }) {
   if (!player) return null;
 
@@ -149,7 +189,7 @@ function PlayerPanel({
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
       {/* Avatar + Name badge */}
-      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300
+      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300 ${fxClass(fx)}
         ${isCurrent
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
@@ -158,28 +198,45 @@ function PlayerPanel({
           ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
           {windChar}
         </div>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1">
-            <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
-              {player.name}
-            </span>
-            {isTing && <TingTag />}
-            {/* 連N pill — inline next to the name, no absolute positioning so
-                it never clips against viewport edges. */}
-            {player.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
-              <span
-                className="px-1 py-[1px] rounded-full text-[8px] font-black tracking-wider"
-                style={{
-                  background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
-                  color: "#fff8dc",
-                  border: "1px solid rgba(240,214,138,0.6)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                連{dealerConsecutive}
+        <div className={`flex flex-col ${isHorizontal ? "" : "max-w-[64px]"}`}>
+          {(() => {
+            // 標示順序：連N → 聽 → 眼。對家放在名字同一行；左右家換到名字下一行（名牌寬度固定，不被畫面邊緣切掉）
+            const tags = (
+              <>
+                {/* 連N pill — inline, no absolute positioning so it never clips against viewport edges. */}
+                {player.isDealer && !!dealerConsecutive && dealerConsecutive > 0 && (
+                  <span
+                    className="px-1 py-[1px] rounded-full text-[8px] font-black tracking-wider"
+                    style={{
+                      background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
+                      color: "#fff8dc",
+                      border: "1px solid rgba(240,214,138,0.6)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    連{dealerConsecutive}
+                  </span>
+                )}
+                {isTing && <TingTag pop={fx?.both} />}
+                {isEye && <EyeTag pop={!!fx} />}
+              </>
+            );
+            const name = (
+              <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
+                {player.name}
               </span>
-            )}
-          </div>
+            );
+            return isHorizontal ? (
+              <div className="flex items-center gap-1">{name}{tags}</div>
+            ) : (
+              <>
+                {name}
+                {(isTing || isEye || (player.isDealer && !!dealerConsecutive)) && (
+                  <div className="flex items-center gap-1 flex-wrap">{tags}</div>
+                )}
+              </>
+            );
+          })()}
           <span className="text-[8px] text-white/30">
             {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
           </span>
@@ -193,7 +250,25 @@ function PlayerPanel({
         </div>
       </div>
 
-      {/* Face-down tiles (outside edge) */}
+      {/* 眼牌者：這家的手牌翻開（對家 20×27；左右家 16×22 旋轉，摸進的那張最後＋金框） */}
+      {opponent ? (
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
+          {eyeHandTiles(opponent).map(({ tile, drew }) =>
+            isHorizontal ? (
+              <div key={tile.id} style={drew ? { marginLeft: 6, ...DREW_RING } : undefined}>
+                <MjTile tile={tile} width={20} height={27} />
+              </div>
+            ) : (
+              <div key={tile.id} style={{ width: 24, height: 17, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
+                <div style={{ transform: rotStyle, ...(drew ? DREW_RING : {}) }}>
+                  <MjTile tile={tile} width={16} height={22} />
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      ) : (
+      /* Face-down tiles (outside edge) */
       <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
         {Array.from({ length: player.tileCount }).map((_, i) => (
           <div
@@ -210,18 +285,19 @@ function PlayerPanel({
           />
         ))}
       </div>
+      )}
 
       {/* Flowers + Revealed melds — same visual spec for all three opponents:
           1px gap inside each meld, 10px gap between melds, thin bordered
           group background. Left/right rotate each tile to face center; to
           stop rotation from fighting flex layout we wrap each rotated tile
           in a swapped-dim container (35×26) so the column packs cleanly. */}
-      {(player.flowers.length > 0 || player.revealed.length > 0) && (
+      {(player.flowers.length > 0 || (opponent?.revealed ?? player.revealed).length > 0) && (
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
           style={{ gap: 10 }}
         >
-          {player.revealed.map((meld, mi) => (
+          {(opponent?.revealed ?? player.revealed).map((meld, mi) => (
             <div
               key={mi}
               className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`}
@@ -238,7 +314,8 @@ function PlayerPanel({
                 // 暗槓：對家無法看牌面，全部 4 張面朝下。自己的暗槓顯示
                 // 邏輯在 "Bottom: my area" 區段單獨處理（那邊看得到牌面）。
                 void ti;
-                const isConcealedFaceDown = meld.type === "concealed_kong";
+                // 眼牌者看得到暗槓（opponent.revealed 有牌面）
+                const isConcealedFaceDown = meld.type === "concealed_kong" && !opponent;
                 return (
                   <div
                     key={t.id}
@@ -379,7 +456,10 @@ export default function MjBoard({
   pendingFlowerRob,
   robFlower,
   tingSeats,
-  tingOptions,
+  eyeSeats,
+  eyeOptions,
+  opponentHands,
+  declareFx,
   wallRemaining,
   hasDrawn,
   needsDraw,
@@ -408,11 +488,16 @@ export default function MjBoard({
 
   const hasActions = availableActions.length > 0;
   const isTing = tingSeats.includes(mySeat);
-  // 地聽：這次打牌可以一起宣告時才有「地聽」鈕；記住是對哪一組選項按下的，換回合自動失效
-  const canTing = needsDiscard && tingOptions.length > 0;
-  const tingKey = tingOptions.join(",");
-  const [tingArmedKey, setTingArmedKey] = useState<string | null>(null);
-  const tingArmed = canTing && tingArmedKey === tingKey;
+  const isEye = eyeSeats.includes(mySeat);
+  // 地聽／眼牌後由伺服器處理出牌，不能自己選牌
+  const locked = isTing || isEye;
+  // 眼牌：這次打牌可以一起宣告時才有「眼牌」鈕；記住是對哪一組選項按下的，換回合自動失效
+  const canEye = needsDiscard && !locked && eyeOptions.length > 0;
+  const eyeKey = eyeOptions.join(",");
+  const [eyeArmedKey, setEyeArmedKey] = useState<string | null>(null);
+  const eyeArmed = canEye && eyeArmedKey === eyeKey;
+  const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
+  const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
 
   const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
 
@@ -433,6 +518,9 @@ export default function MjBoard({
           windChar={getWindChar(top?.seat ?? 2)}
           score={top && playerScores ? playerScores[top.seat] : undefined}
             isTing={top != null && tingSeats.includes(top.seat)}
+          isEye={top != null && eyeSeats.includes(top.seat)}
+          fx={fxOf(top?.seat)}
+          opponent={oppOf(top?.seat)}
           dealerConsecutive={dealerConsecutive}
         />
       </div>
@@ -440,7 +528,7 @@ export default function MjBoard({
       {/* Middle row: left | table | right */}
       <div className="flex-1 flex items-stretch px-2 min-h-0">
         {/* Left */}
-        <div className="w-[80px] flex-shrink-0 flex items-center justify-center">
+        <div className="flex-shrink-0 flex items-center justify-center">
           <PlayerPanel
             player={left}
             position="left"
@@ -448,6 +536,9 @@ export default function MjBoard({
             windChar={getWindChar(left?.seat ?? 3)}
             score={left && playerScores ? playerScores[left.seat] : undefined}
             isTing={left != null && tingSeats.includes(left.seat)}
+            isEye={left != null && eyeSeats.includes(left.seat)}
+            fx={fxOf(left?.seat)}
+            opponent={oppOf(left?.seat)}
             dealerConsecutive={dealerConsecutive}
           />
         </div>
@@ -664,8 +755,8 @@ export default function MjBoard({
             })()}
           </div>
 
-          {/* Action buttons (碰/槓/胡/過/地聽) */}
-          {(hasActions || canTing) && (
+          {/* Action buttons (碰/槓/胡/過/眼牌) */}
+          {(hasActions || canEye) && (
             <div className="flex gap-2 justify-center flex-wrap">
               {availableActions.map((action, i) => (
                 <button
@@ -705,18 +796,15 @@ export default function MjBoard({
                   {robKong || robFlower ? "不搶" : "過"}
                 </button>
               )}
-              {canTing && (
+              {canEye && (
                 <button
-                  onClick={() => setTingArmedKey(tingArmed ? null : tingKey)}
-                  aria-pressed={tingArmed}
+                  onClick={() => setEyeArmedKey(eyeArmed ? null : eyeKey)}
+                  aria-pressed={eyeArmed}
                   className={`px-4 py-2 rounded-xl font-bold text-sm cursor-pointer active:scale-95 transition-all duration-150
-                    ${tingArmed
-                      ? "text-[#042f1f] shadow-lg"
-                      : "bg-white/10 text-[#6ee7b7] border border-[#34d399]/40"
-                    }`}
-                  style={tingArmed ? { background: "linear-gradient(135deg, #059669, #34d399)" } : undefined}
+                    ${eyeArmed ? "text-[#2b0f55] shadow-lg" : "bg-white/10 text-[#c4b5fd] border border-[#a78bfa]/45"}`}
+                  style={eyeArmed ? { background: "linear-gradient(135deg, #7c3aed, #c4b5fd)", boxShadow: "0 2px 10px rgba(167,139,250,.4)" } : undefined}
                 >
-                  地聽
+                  眼牌
                 </button>
               )}
             </div>
@@ -724,7 +812,7 @@ export default function MjBoard({
         </div>
 
         {/* Right */}
-        <div className="w-[80px] flex-shrink-0 flex items-center justify-center">
+        <div className="flex-shrink-0 flex items-center justify-center">
           <PlayerPanel
             player={right}
             position="right"
@@ -732,6 +820,9 @@ export default function MjBoard({
             windChar={getWindChar(right?.seat ?? 1)}
             score={right && playerScores ? playerScores[right.seat] : undefined}
             isTing={right != null && tingSeats.includes(right.seat)}
+            isEye={right != null && eyeSeats.includes(right.seat)}
+            fx={fxOf(right?.seat)}
+            opponent={oppOf(right?.seat)}
             dealerConsecutive={dealerConsecutive}
           />
         </div>
@@ -744,18 +835,19 @@ export default function MjBoard({
       }}>
         {/* My info bar */}
         <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5">
+          {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變） */}
+          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }}>
           {/* Wind avatar */}
           <div className="w-7 h-7 rounded-full bg-[#C9A96E] text-[#0f2a1a] flex items-center justify-center text-xs font-bold">
             {getWindChar(mySeat)}
           </div>
           <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
-          {isTing && <TingTag />}
           {me?.isDealer && (
             <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">
               莊
             </span>
           )}
-          {me?.isDealer && dealerConsecutive && dealerConsecutive > 0 && (
+          {me?.isDealer && !!dealerConsecutive && dealerConsecutive > 0 && (
             <span
               className="px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
               style={{
@@ -768,6 +860,9 @@ export default function MjBoard({
               連{dealerConsecutive}·拉{dealerConsecutive}
             </span>
           )}
+          {isTing && <TingTag pop={fxOf(mySeat)?.both} />}
+          {isEye && <EyeTag pop={!!fxOf(mySeat)} />}
+          </span>
           {playerScores && mySeat >= 0 && (
             <span className={`text-[11px] font-bold ${
               playerScores[mySeat] > 0 ? "text-green-400" :
@@ -807,11 +902,11 @@ export default function MjBoard({
           <div className="flex-1 min-w-0">
             <MjHand
               tiles={myHand}
-              canDiscard={needsDiscard && !isTing}
+              canDiscard={needsDiscard && !locked}
               onDiscard={onDiscard}
               drawnTileId={drawnTileId ?? undefined}
-              tingArmed={tingArmed}
-              tingOptionIds={tingOptions}
+              eyeArmed={eyeArmed}
+              eyeOptionIds={eyeOptions}
             />
           </div>
         </div>

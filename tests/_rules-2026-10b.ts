@@ -137,7 +137,7 @@ function ronSeat1(hand: string, winKey: string) {
   s.players[1].hand = tiles("m1 m2 m3 s1 s2 s3 s4 s5 s6 z2 z2 p5 p5 p5 p5 z6 z6");
   eq(canKongNow(s), false, "⑤a 牌牆 16 張：canKongNow=false");
   throws(() => executeConcealedKong(s, s.players[1].hand.filter((x) => x.display === "p5")), "⑤b 剩 16 張暗槓：擋下");
-  eq(ownTurnActions(s, 1).map((a) => a.type), [], "⑤c 剩 16 張：摸牌後不提供暗槓");
+  eq(ownTurnActions(s, 1).map((a) => a.type).filter((x) => x !== "declare_eye"), [], "⑤c 剩 16 張：摸牌後不提供暗槓");
 
   const a = baseState(16);
   a.currentTurn = 1; a.hasDrawn = true;
@@ -154,7 +154,7 @@ function ronSeat1(hand: string, winKey: string) {
   const ok = baseState(17);
   ok.currentTurn = 1; ok.hasDrawn = true; ok.drawnTileId = 1;
   ok.players[1].hand = s.players[1].hand;
-  eq(ownTurnActions(ok, 1).map((x) => x.type), ["kong"], "⑤g 牌牆 17 張：還可以暗槓");
+  eq(ownTurnActions(ok, 1).map((x) => x.type).filter((x) => x !== "declare_eye"), ["kong"], "⑤g 牌牆 17 張：還可以暗槓");
 }
 
 // ⑥ 摸牌後可做的動作（重新整理恢復按鈕）
@@ -164,7 +164,7 @@ function ronSeat1(hand: string, winKey: string) {
   s.players[1].hand = tiles("m1 m2 m3 s1 s2 s3 z2 z2 z2 p5 p6 z6 z6");
   s.wall[0] = t("p7");
   const n = drawTile(s); // 摸到 p7：可自摸（m1-3、s1-3、z2 刻、p5-7、z6 對＋碰 p5）、手上 p5 可加槓
-  eq([ownTurnActions(n, 1).map((a) => a.type), n.drawnTileId !== undefined], [["win", "add_kong"], true], "⑥a 摸牌後：自摸胡＋加槓", fanStr(n));
+  eq([ownTurnActions(n, 1).map((a) => a.type).filter((x) => x !== "declare_eye"), n.drawnTileId !== undefined], [["win", "add_kong"], true], "⑥a 摸牌後：自摸胡＋加槓", fanStr(n));
   eq(ownTurnActions(n, 2), [], "⑥b 不是自己的回合：沒有動作");
   const afterPong = { ...n, drawnTileId: undefined } as MahjongGameState;
   eq(ownTurnActions(afterPong, 1), [], "⑥c 吃碰後（這回合沒摸牌）：不給自摸／槓");

@@ -7,7 +7,7 @@ import {
 } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import { initGame, dealTiles, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
+import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow } from "@/lib/mahjong/gameLogic";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { closeMahjongIfOver } from "@/lib/records/close";
 
@@ -126,8 +126,9 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
       playerId: player.id,
       hand: player.hand.filter((t) => t.suit !== "f"),
       flowers: player.flowers,
-      // 開局莊家打第一張時可以宣告地聽：能宣告的出牌選項（其他人是空陣列）
-      tingOptions: tingDiscardOptions(state, player.seat).map((t) => t.id),
+      // 開局莊家打第一張時可以宣告眼牌（同時算地聽）：能宣告的出牌選項（其他人是空陣列）
+      eyeOptions: eyeDiscardOptions(state, player.seat).map((t) => t.id),
+      eyeWithTing: canDeclareTingNow(state, player.seat),
     });
   }
 

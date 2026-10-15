@@ -6,7 +6,7 @@
 import { useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
-import type { MjPlayer } from "@/hooks/useMahjong";
+import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import MjTile from "./MjTile";
 import { seatWindChar } from "./seatWind";
@@ -53,15 +53,15 @@ function DealerTag({ player, consecutive, withLa }: { player: MjPlayer; consecut
   );
 }
 
-/** 吃碰槓＋花。暗槓：自己看得到牌面，別家全部蓋牌 */
-function Melds({ revealed, flowers, w, h, mine }: { revealed: Meld[]; flowers: Tile[]; w: number; h: number; mine?: boolean }) {
+/** 吃碰槓＋花。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開） */
+function Melds({ revealed, flowers, w, h, mine, reveal }: { revealed: Meld[]; flowers: Tile[]; w: number; h: number; mine?: boolean; reveal?: boolean }) {
   if (revealed.length === 0 && flowers.length === 0) return null;
   return (
     <div className="mjm-melds">
       {revealed.map((meld, mi) => (
         <div key={mi} className="mjm-meld">
           {meld.tiles.map((t) => (
-            <MjTile key={t.id} tile={t} width={w} height={h} faceDown={!mine && meld.type === "concealed_kong"} />
+            <MjTile key={t.id} tile={t} width={w} height={h} faceDown={!mine && !reveal && meld.type === "concealed_kong"} />
           ))}
         </div>
       ))}
@@ -76,8 +76,32 @@ function Melds({ revealed, flowers, w, h, mine }: { revealed: Meld[]; flowers: T
   );
 }
 
-function TingTag({ on }: { on: boolean }) {
-  return on ? <span className="mjm-tag ting">聽</span> : null;
+function TingTag({ on, pop }: { on: boolean; pop?: boolean }) {
+  return on ? <span className={`mjm-tag ting ${pop ? "pop" : ""}`}>聽</span> : null;
+}
+
+function EyeTag({ on, pop }: { on: boolean; pop?: boolean }) {
+  return on ? <span className={`mjm-tag eye ${pop ? "pop" : ""}`}>眼</span> : null;
+}
+
+/** 宣告特效：只在宣告者名牌上播 0.9 秒（第一輪眼牌同時地聽＝雙色） */
+function fxClass(fx?: { both: boolean }) {
+  return fx ? `mjm-declare ${fx.both ? "mjm-dc-both" : "mjm-dc-eye"}` : "";
+}
+
+/** 我眼牌時：取代牌背條，翻開這家的手牌；摸進的那張排最後＋金框 */
+function EyeHand({ h, w, ht }: { h: MjOpponentHand; w: number; ht: number }) {
+  const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
+  const tiles = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])];
+  return (
+    <div className="mjm-eyehand">
+      {tiles.map((t) => (
+        <div key={t.id} className={t === drew ? "drew" : undefined}>
+          <MjTile tile={t} width={w} height={ht} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function BackBar({ count, width }: { count: number; width: number }) {
@@ -97,6 +121,9 @@ function SidePanel({
   score,
   dealerConsecutive,
   isTing,
+  isEye,
+  fx,
+  opponent,
   windChar,
 }: {
   player: MjPlayer | undefined;
@@ -106,23 +133,37 @@ function SidePanel({
   score?: number;
   dealerConsecutive?: number;
   isTing: boolean;
+  isEye: boolean;
+  fx?: { both: boolean };
+  opponent?: MjOpponentHand;
 }) {
   if (!player) return <div className="mjm-side" />;
   return (
     <div className="mjm-side">
-      <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""}`}>
+      <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`}>
         <div className="l1">
           <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
           <span className="mjm-nm">{player.name}</span>
         </div>
         <div className="l2">
           <DealerTag player={player} consecutive={dealerConsecutive} />
-          <TingTag on={isTing} />
+          <TingTag on={isTing} pop={fx?.both} />
+          <EyeTag on={isEye} pop={!!fx} />
           <Score score={score} />
         </div>
       </div>
-      <BackBar count={player.tileCount} width={44} />
-      <Melds revealed={player.revealed} flowers={player.flowers} w={16} h={22} />
+      {opponent ? (
+        <>
+          {/* 眼牌模式：手牌、吃碰槓、花一起縮成 12×16，最壞情況才不會被側欄切掉 */}
+          <EyeHand h={opponent} w={12} ht={16} />
+          <Melds revealed={opponent.revealed} flowers={player.flowers} w={12} h={16} reveal />
+        </>
+      ) : (
+        <>
+          <BackBar count={player.tileCount} width={44} />
+          <Melds revealed={player.revealed} flowers={player.flowers} w={16} h={22} />
+        </>
+      )}
     </div>
   );
 }
@@ -180,7 +221,10 @@ export default function MjBoardMobile({
   pendingFlowerRob,
   robFlower,
   tingSeats,
-  tingOptions,
+  eyeSeats,
+  eyeOptions,
+  opponentHands,
+  declareFx,
   wallRemaining,
   needsDraw,
   needsDiscard,
@@ -202,8 +246,8 @@ export default function MjBoardMobile({
 }: MjBoardMobileProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // 地聽：記住是對哪一組選項按下的，換回合自動失效
-  const [tingArmedKey, setTingArmedKey] = useState<string | null>(null);
+  // 眼牌：記住是對哪一組選項按下的，換回合自動失效
+  const [eyeArmedKey, setEyeArmedKey] = useState<string | null>(null);
 
   const seatPlayer = (offset: number) => players.find((p) => p.seat === (mySeat + offset) % 4);
   const top = seatPlayer(2);
@@ -215,16 +259,21 @@ export default function MjBoardMobile({
   const scoreOf = (p?: MjPlayer) => (p && playerScores ? playerScores[p.seat] : undefined);
 
   const isTing = tingSeats.includes(mySeat);
-  const canTing = needsDiscard && tingOptions.length > 0;
-  const tingKey = tingOptions.join(",");
-  const tingArmed = canTing && tingArmedKey === tingKey;
-  const tingBlocked = (id: number) => tingArmed && !tingOptions.includes(id);
-  // 地聽後由伺服器處理出牌，不能自己選牌
-  const canPick = needsDiscard && !isTing;
+  const isEye = eyeSeats.includes(mySeat);
+  // 地聽／眼牌後由伺服器處理出牌，不能自己選牌
+  const canPick = needsDiscard && !isTing && !isEye;
+  const canEye = canPick && eyeOptions.length > 0;
+  const eyeKey = eyeOptions.join(",");
+  const eyeArmed = canEye && eyeArmedKey === eyeKey;
+  // 按下眼牌：可以打的牌往上浮、點一下就打出並宣告；其他的變暗不能點
+  const eyePick = (id: number) => eyeArmed && eyeOptions.includes(id);
+  const eyeBlocked = (id: number) => eyeArmed && !eyeOptions.includes(id);
+  const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
+  const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
 
-  // 選取的牌已經不在手上、不能打、或按了地聽後不能選 → 視為沒選
-  const picked = canPick ? myHand.find((t) => t.id === selectedId) ?? null : null;
-  const selected = picked && !tingBlocked(picked.id) ? picked : null;
+  // 選取的牌已經不在手上、不能打、或按了眼牌（點牌直接打出）→ 視為沒選
+  const picked = canPick && !eyeArmed ? myHand.find((t) => t.id === selectedId) ?? null : null;
+  const selected = picked;
 
   // 摸進的那張分開顯示（找不到就把最後一張當摸進的）
   let drawnTile: Tile | null = null;
@@ -240,28 +289,32 @@ export default function MjBoardMobile({
   }
 
   const handTile = (t: Tile) => (
-    <div key={t.id} style={canPick && tingBlocked(t.id) ? { opacity: 0.35 } : undefined}>
+    <div key={t.id} className={eyePick(t.id) ? "mjm-pick" : undefined} style={eyeBlocked(t.id) ? { opacity: 0.35 } : undefined}>
       <MjTile
         tile={t}
         width="var(--tile-hand-w)"
         height="var(--tile-hand-h)"
         selected={selected?.id === t.id}
         onClick={() => {
-          if (!canPick || tingBlocked(t.id)) return;
+          if (!canPick || eyeBlocked(t.id)) return;
+          if (eyeArmed) {
+            onDiscard(t.id, true);
+            return;
+          }
           setSelectedId((prev) => (prev === t.id ? null : t.id));
         }}
       />
     </div>
   );
 
-  const tingToggle = canTing && (
+  const eyeToggle = canEye && (
     <button
       type="button"
-      className={`mjm-btn ting ${tingArmed ? "on" : ""}`}
-      aria-pressed={tingArmed}
-      onClick={() => setTingArmedKey(tingArmed ? null : tingKey)}
+      className={`mjm-btn eye ${eyeArmed ? "on" : ""}`}
+      aria-pressed={eyeArmed}
+      onClick={() => setEyeArmedKey(eyeArmed ? null : eyeKey)}
     >
-      地聽
+      眼牌
     </button>
   );
 
@@ -308,15 +361,25 @@ export default function MjBoardMobile({
       <div className="mjm-top">
         {top && (
           <>
-            <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""}`}>
+            <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""} ${fxClass(fxOf(top.seat))}`}>
               <span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>
               <span className="mjm-nm">{top.name}</span>
               <DealerTag player={top} consecutive={dealerConsecutive} />
-              <TingTag on={tingSeats.includes(top.seat)} />
+              <TingTag on={tingSeats.includes(top.seat)} pop={fxOf(top.seat)?.both} />
+              <EyeTag on={eyeSeats.includes(top.seat)} pop={!!fxOf(top.seat)} />
               <Score score={scoreOf(top)} />
             </div>
-            <BackBar count={top.tileCount} width={92} />
-            <Melds revealed={top.revealed} flowers={top.flowers} w={16} h={22} />
+            {oppOf(top.seat) ? (
+              <>
+                <EyeHand h={oppOf(top.seat)!} w={14} ht={19} />
+                <Melds revealed={oppOf(top.seat)!.revealed} flowers={top.flowers} w={16} h={22} reveal />
+              </>
+            ) : (
+              <>
+                <BackBar count={top.tileCount} width={92} />
+                <Melds revealed={top.revealed} flowers={top.flowers} w={16} h={22} />
+              </>
+            )}
           </>
         )}
       </div>
@@ -330,6 +393,9 @@ export default function MjBoardMobile({
           score={scoreOf(left)}
           dealerConsecutive={dealerConsecutive}
           isTing={left != null && tingSeats.includes(left.seat)}
+          isEye={left != null && eyeSeats.includes(left.seat)}
+          fx={fxOf(left?.seat)}
+          opponent={oppOf(left?.seat)}
           windChar={left ? windOf(left.seat) : ""}
         />
 
@@ -399,6 +465,9 @@ export default function MjBoardMobile({
           score={scoreOf(right)}
           dealerConsecutive={dealerConsecutive}
           isTing={right != null && tingSeats.includes(right.seat)}
+          isEye={right != null && eyeSeats.includes(right.seat)}
+          fx={fxOf(right?.seat)}
+          opponent={oppOf(right?.seat)}
           windChar={right ? windOf(right.seat) : ""}
         />
       </div>
@@ -427,28 +496,28 @@ export default function MjBoardMobile({
             <button type="button" className="mjm-btn ghost" onClick={() => onAction("pass")}>
               {robKong || robFlower ? "不搶" : "過"}
             </button>
-            {tingToggle}
+            {eyeToggle}
           </>
         ) : selected ? (
           <>
             <span className="mjm-status me">輪到你打牌</span>
-            {tingToggle}
+            {eyeToggle}
             <button
               type="button"
               className="mjm-btn wide"
               onClick={() => {
-                onDiscard(selected.id, tingArmed);
+                onDiscard(selected.id);
                 setSelectedId(null);
               }}
             >
-              {tingArmed ? "打出＋地聽" : "打出"}
+              打出
               <MjTile tile={selected} width={20} height={27} />
             </button>
           </>
-        ) : canTing ? (
+        ) : canEye ? (
           <>
             <span className="mjm-status me">輪到你打牌</span>
-            {tingToggle}
+            {eyeToggle}
           </>
         ) : (
           <span className={`mjm-status ${status.me ? "me" : "wait"}`}>{status.text}</span>
@@ -458,10 +527,14 @@ export default function MjBoardMobile({
       {/* 我的資訊列＋手牌 */}
       <div className="mjm-me">
         <div className="mjm-me-info">
-          <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
-          <span className="mjm-nm">{playerName}</span>
-          {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
-          <TingTag on={isTing} />
+          {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變，分數留在外面） */}
+          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`}>
+            <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
+            <span className="mjm-nm">{playerName}</span>
+            {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
+            <TingTag on={isTing} pop={fxOf(mySeat)?.both} />
+            <EyeTag on={isEye} pop={!!fxOf(mySeat)} />
+          </span>
           <Score score={scoreOf(me)} />
           {me && <Melds revealed={me.revealed} flowers={me.flowers} w={20} h={27} mine />}
           <span className="cnt">{myHand.length} 張</span>

@@ -7,7 +7,7 @@ import {
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { drawTile, ownTurnActions } from "@/lib/mahjong/gameLogic";
-import { applySettlement, drawEvents, gameOverEvent, tingAutoDiscard } from "@/lib/mahjong/events";
+import { applySettlement, drawEvents, eyeAutoplay, eyeViewEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
 
@@ -79,10 +79,11 @@ async function handleDraw(request: Request, body: unknown, fresh: boolean): Prom
   }
 
   const events = drawEvents(newState, seat);
-  // 地聽的人摸到不能胡的牌：伺服器直接幫他打出這張
-  const auto = tingAutoDiscard(newState);
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, auto ? auto[0] : newState);
-  await mjBroadcastBatch(room.code, auto ? [...events, ...auto[1]] : events);
+  // 地聽／眼牌的人摸到不能胡的牌：伺服器直接幫他打出這張；眼牌的人能胡就自動胡（也包括別的眼牌者胡這張、七搶一）
+  const auto = eyeAutoplay(newState);
+  await saveGameStateIfUnchanged(roomId, state.stateVersion, auto.s, auto.finished ? "finished" : undefined);
+  await mjBroadcastBatch(room.code, [...events, ...auto.events, ...eyeViewEvents(auto.s)]);
+  if (auto.finished) await closeMahjongIfOver(roomId, room.code, auto.s); // 整場打完：寫紀錄後關房
 
   const player = newState.players[seat];
   const actions = ownTurnActions(newState, seat);
@@ -93,6 +94,7 @@ async function handleDraw(request: Request, body: unknown, fresh: boolean): Prom
     canKong: actions.some((a) => a.type === "kong"),
     addKongOptions: actions.filter((a) => a.type === "add_kong").map((a) => a.tiles![0].id),
     flowerRob: !!newState.pendingFlowerRob,
-    autoDiscarded: auto ? auto[0].lastDiscard!.tile : null,
+    autoDiscarded: auto.autoDiscarded ?? null,
+    autoWin: auto.finished && !!auto.s.winners?.some((w) => w.seat === seat),
   });
 }

@@ -1,4 +1,5 @@
-// 地聽 API：打牌時宣告（discard + declareTing）、mj_ting_declared、摸到不能胡自動打出、只能打摸到的牌、state 讀得到誰宣告
+// 地聽 API（地聽不用單獨宣告）：第一輪打牌時宣告眼牌（discard + declareEye）＝同時地聽、mj_eye_declared／mj_ting_declared、
+// 摸到不能胡自動打出、摸到能胡自動胡（地聽 8 台）、只能打摸到的牌、state 讀得到誰宣告
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
@@ -50,18 +51,22 @@ function backToDealer(key: string) {
 {
   setup();
   const view = toPlayerGameState(st(), "p0");
-  const opt = view.myAvailableActions?.find((a) => a.type === "declare_ting");
-  eq(opt?.tiles?.map((x) => x.display), ["z5"], "T1 開局莊家重新整理：myAvailableActions 有 declare_ting，可宣告的出牌只有中");
-  const bad = await call(discard, { playerId: "p0", tileId: st().players[0].hand[0].id, declareTing: true });
-  eq([bad.status, bad.body.error, st().tingSeats ?? []], [400, "現在不能宣告地聽，或打出這張後沒有聽牌", []], "T2 打出後不會聽牌的 1 萬還宣告：400，狀態不變");
-  const ok = await call(discard, { playerId: "p0", tileId: st().players[0].hand[16].id, declareTing: true });
-  eq([ok.status, ok.body.ting, st().tingSeats, evs()[0], sent[0].payload, evs()[1]],
-    [200, true, [0], "mj_ting_declared", { seat: 0, tile: st().lastDiscard!.tile }, "mj_discard"],
-    "T3 打出中並宣告：200，先送 mj_ting_declared { seat:0, tile }，再送 mj_discard");
-  eq([toPlayerGameState(st(), "p2").tingSeats], [[0]], "T4 其他玩家重新整理：公開狀態 tingSeats=[0]");
+  const opt = view.myAvailableActions?.find((a) => a.type === "declare_eye");
+  eq([opt?.tiles?.map((x) => x.display), opt?.ting, view.myAvailableActions?.some((a) => a.type === "declare_ting")], [["z5"], true, false],
+    "T1 開局莊家重新整理：myAvailableActions 有 declare_eye（ting=true＝這次宣告同時算地聽），可宣告的出牌只有中；沒有 declare_ting");
+  const old = await call(discard, { playerId: "p0", tileId: st().players[0].hand[16].id, declareTing: true });
+  const bad = await call(discard, { playerId: "p0", tileId: st().players[0].hand[0].id, declareEye: true });
+  eq([old.status, bad.status, bad.body.error, st().tingSeats ?? [], st().eyeSeats ?? [], st().turnCount], [400, 400, "現在不能宣告眼牌，或打出這張後沒有聽牌", [], [], 0],
+    "T2 舊的 declareTing 單獨宣告：400；用打出後不會聽牌的 1 萬宣告眼牌：400；狀態都不變");
+  const ok = await call(discard, { playerId: "p0", tileId: st().players[0].hand[16].id, declareEye: true });
+  eq([ok.status, ok.body.ting, ok.body.eye, st().tingSeats, st().eyeSeats, evs().slice(0, 3), sent[0].payload, sent[1].payload],
+    [200, true, true, [0], [0], ["mj_eye_declared", "mj_ting_declared", "mj_discard"], { seat: 0, tile: st().lastDiscard!.tile, ting: true }, { seat: 0, tile: st().lastDiscard!.tile }],
+    "T3 第一輪打出中並宣告眼牌：200（ting、eye 都是 true），同時記地聽；先送 mj_eye_declared(ting:true)、mj_ting_declared，再送 mj_discard");
+  const pub = toPlayerGameState(st(), "p2");
+  eq([pub.tingSeats, pub.eyeSeats], [[0], [0]], "T4 其他玩家重新整理：公開狀態 tingSeats=[0]、eyeSeats=[0]");
 }
 {
-  // 莊家已地聽，摸到不能胡的 9 萬 → 伺服器自動打出
+  // 莊家已地聽（眼牌），摸到不能胡的 9 萬 → 伺服器自動打出
   backToDealer("m9");
   const r = await call(draw, { playerId: "p0" });
   const disc = sent.find((e) => e.event === "mj_discard")!.payload;
@@ -70,15 +75,21 @@ function backToDealer(key: string) {
     "T5 地聽後摸到不能胡的牌：draw 回 autoDiscarded，廣播 摸牌→mj_discard(auto:true)，手牌回到 16 張、輪到下一家");
 }
 {
-  backToDealer("s7"); // 摸到能胡的 7 條
-  const r = await call(draw, { playerId: "p0" });
-  eq([r.status, r.body.autoDiscarded, r.body.canWin, evs().includes("mj_discard")], [200, null, true, false], "T6 摸到能胡的牌：不自動打，canWin=true");
+  // 摸到還沒打的狀態（例如重新整理時）：只能打摸到的那張
+  const s = st();
+  s.currentTurn = 0; s.hasDrawn = true; s.lastDiscard = null; s.pendingActions = undefined;
+  const drawn = t("m9"); s.players[0].hand.push(drawn); s.drawnTileId = drawn.id;
   const other = await call(discard, { playerId: "p0", tileId: st().players[0].hand[0].id });
   eq([other.status, other.body.error], [400, "地聽後只能打出摸到的牌"], "T7 地聽後想打別張：400");
-  const w = await call(action, { playerId: "p0", actionType: "win" });
+  s.players[0].hand.pop(); s.drawnTileId = undefined;
+}
+{
+  backToDealer("s7"); // 摸到能胡的 7 條 → 眼牌自動胡
+  const r = await call(draw, { playerId: "p0" });
   const fans = st().winners?.[0].score.fans.map((f) => f.name + f.value);
-  eq([w.status, fans, st().settlement?.deltas], [200, ["地聽8", "莊家1", "門清自摸3"], [1020, -340, -340, -340]],
-    "T8 莊家地聽自摸：地聽8+莊家1+門清自摸3=12 台，三家各付 100+12×20=340");
+  eq([r.status, r.body.autoDiscarded, r.body.autoWin, st().status, evs().includes("mj_game_over"), fans, st().settlement?.deltas],
+    [200, null, true, "finished", true, ["地聽8", "莊家1", "門清自摸3"], [1020, -340, -340, -340]],
+    "T6/T8 摸到能胡的牌：自動自摸；地聽8+莊家1+門清自摸3=12 台，三家各付 100+12×20=340（眼牌不加台）");
 }
 
 console.log(results.join("\n"));

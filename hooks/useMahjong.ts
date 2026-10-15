@@ -89,6 +89,14 @@ export interface MjWinner {
   waits?: WaitTile[];
 }
 
+/** 眼牌的人看到的一家手牌（mj_opponent_hands／state 的 opponentHands） */
+export interface MjOpponentHand {
+  seat: number;
+  hand: Tile[];
+  revealed: Meld[];
+  drawnTileId: number | null;
+}
+
 export interface MjClientState {
   roomCode: string;
   status: "waiting" | "playing" | "finished";
@@ -108,10 +116,18 @@ export interface MjClientState {
   pendingFlowerRob: { robberSeat: number; fromSeat: number; tile: Tile } | null;
   // 我目前的動作按鈕是七搶一（顯示「七搶一／不搶」）
   robFlower: boolean;
-  // 已宣告地聽的座位（公開）
+  // 已宣告地聽的座位（公開）：第一輪宣告眼牌的人由伺服器同時算地聽
   tingSeats: number[];
-  // 這次打牌可以一起宣告地聽的牌 id（打出後仍聽牌）；空陣列＝現在不能宣告
-  tingOptions: number[];
+  // 已宣告眼牌的座位（公開）
+  eyeSeats: number[];
+  // 這次打牌可以一起宣告眼牌的牌 id（打出後仍聽牌）；空陣列＝現在不能宣告
+  eyeOptions: number[];
+  // 這次宣告眼牌會同時算地聽（第一輪）
+  eyeWithTing: boolean;
+  // 我眼牌時才有：其他三家的手牌（暗槓含牌面）；null＝沒有資料，照舊畫牌背
+  opponentHands: MjOpponentHand[] | null;
+  // 正在播宣告特效的座位（0.9 秒後自動移除）；both＝第一輪眼牌同時地聽（雙色）
+  declareFx: { seat: number; both: boolean }[];
   winner?: MjWinner & { allHands?: MjHandReveal[] };
   // 一炮多響: all winners of this round (seat/name/score per winner).
   // Populated alongside `winner` when multiple players hu on the same discard.
@@ -184,7 +200,11 @@ export function useMahjong(
     pendingFlowerRob: null,
     robFlower: false,
     tingSeats: [],
-    tingOptions: [],
+    eyeSeats: [],
+    eyeOptions: [],
+    eyeWithTing: false,
+    opponentHands: null,
+    declareFx: [],
     wallRemaining: 0,
     hostId: "",
     hasDrawn: false,
@@ -213,6 +233,17 @@ export function useMahjong(
   // 公開頻道和座位頻道之間不保證到達順序：座位頻道的動作按鈕（吃碰槓胡、槓後補牌）可能比
   // 公開的 mj_discard／mj_action 先到。記下「上一個公開事件之後才收到的按鈕」，公開事件就不要把它清掉
   const freshPrivateActionsRef = useRef(false);
+  // 宣告特效：同一個座位同一局只播一次（開新局清空）；第一次拿到牌局狀態時已經眼牌的座位不播（重新整理）
+  const playedFxRef = useRef(new Set<number>());
+  const fxInitRef = useRef(false);
+  const playDeclareFx = useCallback((seat: number, both: boolean) => {
+    if (playedFxRef.current.has(seat)) return;
+    playedFxRef.current.add(seat);
+    setState((prev) => ({ ...prev, declareFx: [...prev.declareFx.filter((f) => f.seat !== seat), { seat, both }] }));
+    setTimeout(() => {
+      setState((prev) => ({ ...prev, declareFx: prev.declareFx.filter((f) => f.seat !== seat) }));
+    }, 900);
+  }, []);
   // 同理：莊家的地聽選項（mj_deal_hand）可能比 mj_game_start 先到
   const dealtThisGameRef = useRef(false);
   // 整場打完（gameOver）後不再採用輪詢結果：比結束事件晚回來的舊輪詢會把畫面蓋回「打牌中」，
@@ -257,6 +288,8 @@ export function useMahjong(
           pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
           myDrawnTileId?: number;
           tingSeats?: number[];
+          eyeSeats?: number[];
+          opponentHands?: MjOpponentHand[]; // 我眼牌、牌局進行中才有
           myChannel?: string; // 登入房才有
         } | null;
       }>("GET", `/api/mahjong/state?roomId=${rid}&playerId=${myId}`);
@@ -301,9 +334,19 @@ export function useMahjong(
       if (gs.status !== "playing" || gs.currentTurn !== mySeat || turnKey !== dismissedOwnActionsRef.current) {
         dismissedOwnActionsRef.current = null;
       }
-      // 自己回合的動作裡「declare_ting」不是按鈕，拆出來當地聽選項
-      const polledActions = gs.myAvailableActions?.filter((a) => a.type !== "declare_ting");
-      const polledTing = gs.myAvailableActions?.find((a) => a.type === "declare_ting")?.tiles?.map((t) => t.id);
+      // 自己回合的動作裡「declare_eye」不是按鈕，拆出來當眼牌選項
+      const polledActions = gs.myAvailableActions?.filter((a) => a.type !== "declare_eye");
+      const polledEye = gs.myAvailableActions?.find((a) => a.type === "declare_eye") as { tiles?: Tile[]; ting?: boolean } | undefined;
+      const polledEyeIds = polledEye?.tiles?.map((t) => t.id);
+      // 漏接 mj_eye_declared 的保險：輪詢發現新的眼牌座位就補播特效（第一次拿到狀態時不播，例如重新整理）
+      const polledEyeSeats = gs.eyeSeats ?? [];
+      if (polledEyeSeats.length === 0) playedFxRef.current.clear();
+      if (!fxInitRef.current) {
+        fxInitRef.current = true;
+        polledEyeSeats.forEach((seat) => playedFxRef.current.add(seat));
+      } else {
+        polledEyeSeats.forEach((seat) => playDeclareFx(seat, (gs.tingSeats ?? []).includes(seat)));
+      }
       const stillMyDiscard = gs.status === "playing" && gs.currentTurn === mySeat && gs.hasDrawn && !gs.lastDiscard;
       const pendingAddKong = gs.pendingAddKong ?? null;
       const pendingFlowerRob = gs.pendingFlowerRob ?? null;
@@ -344,8 +387,11 @@ export function useMahjong(
             ? []
             : (polledActions ?? []),
         tingSeats: gs.tingSeats ?? prev.tingSeats,
+        eyeSeats: gs.eyeSeats ?? prev.eyeSeats,
+        opponentHands: gs.status === "playing" ? gs.opponentHands ?? null : null,
         // 輪詢有帶（摸牌後）就用輪詢的；沒帶時（例如莊家開局沒摸牌）還是我的打牌回合就保留
-        tingOptions: polledTing ?? (gs.myAvailableActions ? [] : stillMyDiscard ? prev.tingOptions : []),
+        eyeOptions: polledEyeIds ?? (gs.myAvailableActions ? [] : stillMyDiscard ? prev.eyeOptions : []),
+        eyeWithTing: polledEye ? polledEye.ting === true : gs.myAvailableActions ? false : stillMyDiscard ? prev.eyeWithTing : false,
         // 一局結束後 state 會帶四家手牌（allHands）；舊版沒有就保留廣播收到的
         winner: gs.winner
           ? {
@@ -386,25 +432,27 @@ export function useMahjong(
       }
       console.error("[mj] fetchState failed:", err);
     }
-  }, [markClosed]);
+  }, [markClosed, playDeclareFx]);
 
   // 只給本人的事件（手牌、摸到的牌、可以吃碰槓胡）。舊房送在房間頻道、登入房送在座位頻道，
   // 兩邊都掛上；payload 一樣帶 playerId，不是我的就略過
   const bindPrivateEvents = useCallback((ch: RealtimeChannel, myId: string) => {
       // --- mj_deal_hand (private) ---
       ch.on("broadcast", { event: "mj_deal_hand" }, ({ payload }) => {
-        const { playerId, hand, flowers, tingOptions } = payload as {
+        const { playerId, hand, flowers, eyeOptions, eyeWithTing } = payload as {
           playerId: string;
           hand: Tile[];
           flowers: Tile[];
-          tingOptions?: number[]; // 莊家打第一張時可以一起宣告地聽的牌
+          eyeOptions?: number[]; // 莊家打第一張時可以一起宣告眼牌的牌
+          eyeWithTing?: boolean;
         };
         if (playerId !== myId) return;
         dealtThisGameRef.current = true;
         setState((prev) => ({
           ...prev,
           myHand: safeHand(hand),
-          tingOptions: tingOptions ?? [],
+          eyeOptions: eyeOptions ?? [],
+          eyeWithTing: eyeWithTing === true,
           // Update my flower count in players list
           players: prev.players.map((p) =>
             p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
@@ -414,7 +462,7 @@ export function useMahjong(
 
       // --- mj_draw_tile (private) ---
       ch.on("broadcast", { event: "mj_draw_tile" }, ({ payload }) => {
-        const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions, tingOptions } = payload as {
+        const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions, eyeOptions, eyeWithTing } = payload as {
           playerId: string;
           tile: Tile;
           hand: Tile[];
@@ -423,7 +471,8 @@ export function useMahjong(
           canKong: boolean;
           kongOptions: number[][];
           addKongOptions?: number[];
-          tingOptions?: number[];
+          eyeOptions?: number[];
+          eyeWithTing?: boolean;
         };
         if (playerId !== myId) return;
         dismissedOwnActionsRef.current = null; // 新摸的牌（含槓後補牌）重新判斷
@@ -448,7 +497,8 @@ export function useMahjong(
           ...prev,
           myHand: safeHand(hand),
           availableActions: actions,
-          tingOptions: tingOptions ?? [],
+          eyeOptions: eyeOptions ?? [],
+          eyeWithTing: eyeWithTing === true,
           robKong: false,
           hasDrawn: true,
           drawnTileId: drawnTile?.id ?? null,
@@ -484,10 +534,12 @@ export function useMahjong(
 
       // --- mj_hand_update (private, after action) ---
       ch.on("broadcast", { event: "mj_hand_update" }, ({ payload }) => {
-        const { playerId, hand, drawnTileId } = payload as {
+        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing } = payload as {
           playerId: string;
           hand: Tile[];
           drawnTileId?: number;
+          eyeOptions?: number[]; // 吃、碰後要打牌：可以一起宣告眼牌的牌
+          eyeWithTing?: boolean;
         };
         if (playerId !== myId) return;
         setState((prev) => ({
@@ -495,7 +547,15 @@ export function useMahjong(
           myHand: safeHand(hand),
           // Authoritative: kong → replacement tile id; chi/pong → null
           drawnTileId: drawnTileId ?? null,
+          ...(eyeOptions ? { eyeOptions, eyeWithTing: eyeWithTing === true } : {}),
         }));
+      });
+
+      // --- mj_opponent_hands (private)：我眼牌時，三家手牌的完整快照（直接整份取代） ---
+      ch.on("broadcast", { event: "mj_opponent_hands" }, ({ payload }) => {
+        const { playerId, opponentHands } = payload as { playerId: string; opponentHands: MjOpponentHand[] };
+        if (playerId !== myId) return;
+        setState((prev) => (prev.status === "playing" ? { ...prev, opponentHands } : prev));
       });
   }, []);
 
@@ -568,6 +628,7 @@ export function useMahjong(
     // --- mj_game_start ---
     channel.on("broadcast", { event: "mj_game_start" }, ({ payload }) => {
       dismissedOwnActionsRef.current = null;
+      playedFxRef.current.clear();
       const msg = payload as {
         currentTurn: number;
         dealerSeat: number;
@@ -603,8 +664,11 @@ export function useMahjong(
         pendingFlowerRob: null,
         robFlower: false,
         tingSeats: [],
-        // 座位頻道的發牌（含莊家的地聽選項）可能先到，先到就保留
-        tingOptions: dealtThisGameRef.current ? prev.tingOptions : [],
+        eyeSeats: [],
+        opponentHands: null,
+        // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
+        eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],
+        eyeWithTing: dealtThisGameRef.current ? prev.eyeWithTing : false,
         hasDrawn: msg.currentTurn === msg.dealerSeat, // dealer starts with 17
         players: msg.players.map((p) => ({
           id: p.id,
@@ -672,7 +736,8 @@ export function useMahjong(
           keepEarlyActions && (payload as { availableActions?: { playerSeat: number }[] }).availableActions?.some((a) => a.playerSeat === prev.mySeat)
             ? prev.availableActions
             : [],
-        tingOptions: [],
+        eyeOptions: [],
+        eyeWithTing: false,
         drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
         players: prev.players.map((p) =>
           p.seat === seat
@@ -763,7 +828,18 @@ export function useMahjong(
       }));
     });
 
-    // --- mj_ting_declared (public): 有人打牌時一起宣告地聽 ---
+    // --- mj_eye_declared (public)：有人打牌時一起宣告眼牌；ting＝第一輪同時算地聽（雙色特效） ---
+    channel.on("broadcast", { event: "mj_eye_declared" }, ({ payload }) => {
+      const { seat, ting } = payload as { seat: number; tile: Tile; ting?: boolean };
+      setState((prev) => ({
+        ...prev,
+        eyeSeats: prev.eyeSeats.includes(seat) ? prev.eyeSeats : [...prev.eyeSeats, seat],
+        tingSeats: ting && !prev.tingSeats.includes(seat) ? [...prev.tingSeats, seat] : prev.tingSeats,
+      }));
+      playDeclareFx(seat, ting === true);
+    });
+
+    // --- mj_ting_declared (public): 第一輪宣告眼牌時伺服器同時算地聽 ---
     channel.on("broadcast", { event: "mj_ting_declared" }, ({ payload }) => {
       const { seat } = payload as { seat: number; tile: Tile };
       setState((prev) => ({
@@ -932,6 +1008,8 @@ export function useMahjong(
       freshPrivateActionsRef.current = false;
       dealtThisGameRef.current = false;
       if ((payload as { gameOver?: boolean }).gameOver) matchOverRef.current = true;
+      // 牌局結束：三家手牌改看結算攤牌（allHands），不再顯示眼牌視角
+      setState((prev) => ({ ...prev, opponentHands: null }));
       const msg = payload as {
         winnerSeat: number;
         winnerName: string | null;
@@ -1002,7 +1080,7 @@ export function useMahjong(
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents]);
+  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents, playDeclareFx]);
 
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
@@ -1066,7 +1144,7 @@ export function useMahjong(
   }, [myId, call]);
 
   const discardTile = useCallback(
-    async (tileId: number, declareTing?: boolean) => {
+    async (tileId: number, declareEye?: boolean) => {
       const rid = roomIdRef.current;
       if (!rid) return;
       // Bug #16: prevent double-discard race condition
@@ -1081,7 +1159,8 @@ export function useMahjong(
           ...prev,
           myHand: prev.myHand.filter((t) => t.id !== tileId),
           availableActions: [],
-          tingOptions: [],
+          eyeOptions: [],
+          eyeWithTing: false,
           drawnTileId: null,
           hasDrawn: false,
           lastDiscard: tile ? { tile, from: prev.mySeat } : prev.lastDiscard,
@@ -1092,7 +1171,7 @@ export function useMahjong(
           roomId: rid,
           playerId: myId,
           tileId,
-          ...(declareTing ? { declareTing: true } : {}),
+          ...(declareEye ? { declareEye: true } : {}),
         });
       } catch (err) {
         console.error("[mj] discard failed:", err);
@@ -1122,8 +1201,8 @@ export function useMahjong(
         !cur.pendingAddKong &&
         !cur.pendingFlowerRob
       ) {
-        // 地聽後不能換牌：不胡就打出剛摸到的那張
-        if (cur.tingSeats.includes(cur.mySeat) && cur.drawnTileId != null) {
+        // 地聽／眼牌後不能換牌：不胡就打出剛摸到的那張
+        if ((cur.tingSeats.includes(cur.mySeat) || cur.eyeSeats.includes(cur.mySeat)) && cur.drawnTileId != null) {
           await discardTile(cur.drawnTileId);
           return;
         }

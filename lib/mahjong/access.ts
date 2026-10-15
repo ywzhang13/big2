@@ -31,7 +31,7 @@ export async function seatOwnerError(
 // ---------------------------------------------------------------------------
 
 /** 只給 payload.playerId 那個人看的事件 */
-export const PRIVATE_EVENTS = new Set(["mj_deal_hand", "mj_draw_tile", "mj_hand_update", "mj_available_actions"]);
+export const PRIVATE_EVENTS = new Set(["mj_deal_hand", "mj_draw_tile", "mj_hand_update", "mj_available_actions", "mj_opponent_hands"]);
 
 /**
  * 座位專屬頻道名稱：用伺服器金鑰做 HMAC，只有伺服器算得出來，
