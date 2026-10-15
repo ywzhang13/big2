@@ -53,8 +53,9 @@ const bearer = (t: string) => ({ authorization: `Bearer ${t}` });
   const fifth = await login("guess-5", "2.2.2.2");
   const rightButLocked = await login(PASSWORD, "2.2.2.2");
   const otherIp = await login(PASSWORD, "3.3.3.3");
-  eq([fifth.status, fifth.body.error, fifth.retry, rightButLocked.status, otherIp.status, gs.guests.size],
-    [429, "too_many_attempts", String(15 * 60), 429, 200, 1],
+  // Retry-After 無條件進位，鎖定時間和現在差 1 毫秒就會是 901，兩個都對
+  eq([fifth.status, fifth.body.error, ["900", "901"].includes(fifth.retry ?? ""), rightButLocked.status, otherIp.status, gs.guests.size],
+    [429, "too_many_attempts", true, 429, 200, 1],
     "G3 同一個 IP 錯 5 次就鎖 15 分鐘（429＋Retry-After）；鎖住時連對的密碼也不收；別的 IP 不受影響");
 }
 {

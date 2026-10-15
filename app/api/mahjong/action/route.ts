@@ -21,6 +21,8 @@ import {
   drawTile,
   getAvailableActions,
   AvailableAction,
+  isGuoShui,
+  markGuoShuiOnPass,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
@@ -215,6 +217,10 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
       return Response.json({ error: "你已經胡過了" }, { status: 400 });
     }
 
+    // 過水中不能胡（自摸也一樣）。放槍／搶槓在上面已因不在窗口名單被擋下
+    if (isGuoShui(state, seat)) {
+      return Response.json({ error: "現在不能胡" }, { status: 400 });
+    }
     newState = declareWin(state, seat, isSelfDraw);
 
     // For self-draw or no pending actions, finalize immediately.
@@ -284,6 +290,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
   if (actionType === "pass") {
     // Multi-player action window: track who has passed
     if (state.pendingActions) {
+      // 本來能胡這張（放槍或搶槓）卻 pass：進入過水，之後的狀態都從這裡接著算
+      const passState = markGuoShuiOnPass(state, seat);
       const pending = { ...state.pendingActions };
       // Add this player to passedActors if they are a potential actor
       if (
@@ -301,7 +309,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
         // Everyone passed. If there are collected winners (一炮多響),
         // finalize the game instead of advancing the turn.
         if (state.winners && state.winners.length > 0) {
-          newState = { ...state, pendingActions: undefined, pendingAddKong: undefined } as MahjongGameState;
+          newState = { ...passState, pendingActions: undefined, pendingAddKong: undefined } as MahjongGameState;
           newState = applyWinnerOrderRule(newState);
           newState.status = "finished";
           applySettlement(newState);
@@ -313,7 +321,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
         if (state.pendingAddKong) {
           // 沒人搶槓：完成加槓並補牌，輪到加槓的人繼續
           const { seat: kongSeat, tile: kongTile } = state.pendingAddKong;
-          newState = completeAddKong(state);
+          newState = completeAddKong(passState);
           const events = addKongDoneEvents(newState, kongSeat, kongTile);
           await save(newState, newState.status === "finished" ? "finished" : undefined);
           await mjBroadcastBatch(room.code, [
@@ -327,11 +335,11 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
           return Response.json({ success: true });
         }
         // Everyone passed — advance turn, clear pending
-        newState = advanceTurn(state);
+        newState = advanceTurn(passState);
         newState.pendingActions = undefined;
       } else {
         // Still waiting for others — just update passedActors
-        newState = { ...state, pendingActions: pending } as MahjongGameState;
+        newState = { ...passState, pendingActions: pending } as MahjongGameState;
       }
     } else {
       // 沒有等待中的窗口就沒有「過」可以按：自己回合送過會跳過打牌，

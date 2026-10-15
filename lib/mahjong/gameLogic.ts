@@ -362,7 +362,7 @@ export function ownTurnActions(
   }
   const p = state.players[seat];
   const actions: { type: "win" | "kong" | "add_kong" | "declare_ting"; tiles?: Tile[] }[] = [];
-  if (isWinningHand(p.hand, p.revealed.length)) actions.push({ type: "win" });
+  if (!isGuoShui(state, seat) && isWinningHand(p.hand, p.revealed.length)) actions.push({ type: "win" });
   // 地聽後不能改聽：不給暗槓／加槓
   if (canKongNow(state) && !state.tingSeats?.includes(seat)) {
     for (const group of canConcealedKong(p.hand)) actions.push({ type: "kong", tiles: group });
@@ -443,7 +443,7 @@ export function autoDiscardForTing(state: MahjongGameState): MahjongGameState | 
     return null;
   }
   const p = state.players[seat];
-  if (isWinningHand(p.hand, p.revealed.length)) return null;
+  if (!isGuoShui(state, seat) && isWinningHand(p.hand, p.revealed.length)) return null;
   return discardTile(state, state.drawnTileId);
 }
 
@@ -517,7 +517,37 @@ export function discardTile(
   s.isAfterKong = false;
   s.isFirstRound = false;
   s.turnCount++;
+  // 過水：打出的是自己（打完後）聽的牌就進入；打出不是聽的牌就解除
+  const waits = findWaitingTiles(player.hand.filter((t) => !isFlower(t)), player.revealed.length);
+  setGuoShui(s, s.currentTurn, waits.includes(tileKey(discarded)));
 
+  return s;
+}
+
+// ---------------------------------------------------------------------------
+// 過水
+// ---------------------------------------------------------------------------
+
+/** 這個座位現在是否過水中（過水中不能胡任何牌）。只在伺服器判斷，不公開 */
+export function isGuoShui(state: MahjongGameState, seat: number): boolean {
+  return !!state.guoShuiSeats?.includes(seat);
+}
+
+/** 直接改 s（呼叫端要先 clone） */
+function setGuoShui(s: MahjongGameState, seat: number, on: boolean): void {
+  const rest = (s.guoShuiSeats ?? []).filter((x) => x !== seat);
+  s.guoShuiSeats = on ? [...rest, seat] : rest;
+}
+
+/**
+ * 有人 pass 時呼叫：他本來能胡這張牌（放槍或搶槓）卻沒胡，就進入過水。
+ * 回傳新的狀態（不能胡就原樣回傳）。
+ */
+export function markGuoShuiOnPass(state: MahjongGameState, seat: number): MahjongGameState {
+  const couldWin = getAvailableActions(state).some((a) => a.playerSeat === seat && a.type === "win");
+  if (!couldWin) return state;
+  const s = cloneState(state);
+  setGuoShui(s, seat, true);
   return s;
 }
 
@@ -553,7 +583,7 @@ export function getAvailableActions(
 
     // --- Win check ---
     const testHand = [...player.hand, disc];
-    if (isWinningHand(testHand, player.revealed.length)) {
+    if (!isGuoShui(state, seat) && isWinningHand(testHand, player.revealed.length)) {
       actions.push({ type: "win", playerSeat: seat });
     }
 
@@ -948,6 +978,9 @@ export function declareWin(
   seat: number,
   isSelfDraw: boolean
 ): MahjongGameState {
+  if (isGuoShui(state, seat)) {
+    throw new Error("現在不能胡");
+  }
   const s = cloneState(state);
   const player = s.players[seat];
 
@@ -1277,6 +1310,7 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
   s.pendingAddKong = undefined;
   s.pendingFlowerRob = undefined;
   s.tingSeats = undefined;
+  s.guoShuiSeats = undefined;
   s.gameOver = false;
 
   // Reset players

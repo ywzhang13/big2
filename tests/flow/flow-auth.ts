@@ -88,7 +88,8 @@ let roomId = "", code = "";
   eq([deal.length, deal.every((e) => e.channel === privateChannelName(code, e.payload.playerId as string)), new Set(deal.map((e) => e.channel)).size],
     [4, true, 4], "A10 開局發牌：四家手牌各自只送到本人的座位頻道（四個不同頻道）");
   eq([sent.filter((e) => e.channel === pub && PRIVATE_EVENTS.has(e.event)).length, sent.filter((e) => e.channel === pub).some((e) => JSON.stringify(e.payload).includes('"hand"')),
-    deal.some((e) => (e.channel ?? "").includes(e.payload.playerId as string))],
+    // 頻道名稱是 mj-房號-p-<32 字雜湊>；只看雜湊不是玩家 id（隨機雜湊偶爾剛好含有「p0」這種短字串，不能用 includes）
+    deal.some((e) => (e.channel ?? "").split("-p-")[1] === e.payload.playerId || !/^[A-Za-z0-9_-]{32}$/.test((e.channel ?? "").split("-p-")[1] ?? ""))],
     [0, false, false], "A11 房間公開頻道沒有任何私人事件、沒有手牌；座位頻道名稱看不出玩家 id（只有伺服器算得出來）");
 }
 // 開局後：每個動作都要是座位本人

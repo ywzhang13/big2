@@ -100,6 +100,9 @@ export interface MahjongGameState {
   pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
   // 已宣告地聽的座位（公開）。宣告後不能改聽：只能胡，或打出剛摸到的牌（不能胡時由伺服器自動打出）
   tingSeats?: number[];
+  // 過水中的座位（不公開，只在伺服器）：打出自己聽的牌、或能胡別人的牌卻沒胡（pass）就進入；
+  // 過水中不能胡任何牌（自摸、放槍、搶槓）。打出一張不是自己聽的牌就解除。每局重來
+  guoShuiSeats?: number[];
   // 對局紀錄用：新版開局時寫入。上線前開局的房間沒有這兩個欄位 → 不補記紀錄
   startedAt?: string;       // 開局時間（ISO）
   handsCompleted?: number;  // 這場已打完（已結算）幾局，含流局
