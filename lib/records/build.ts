@@ -31,6 +31,7 @@ export function buildMahjongRecord(
       seat: p.seat,
       playerName: p.name,
       playerId: p.id,
+      userId: p.userId ?? null,
       totalScore: scores[p.seat] ?? 0,
     })),
   };

@@ -83,6 +83,25 @@ export async function closeBig2Room(
 }
 
 /**
+ * 關掉一間從資料庫選出來的麻將房（閒置清理、上線時關舊房共用）：
+ * 整場已打完（之前關房失敗）記 completed，其餘打過至少一局的記 dissolved，一局都沒打完的直接刪。
+ * 刪除當下再確認 row_version 和選中時一樣（中間有人動過就不刪也不記）。
+ */
+export async function closeMahjongRow(r: {
+  id: string;
+  code: string;
+  row_version: number;
+  game_state: MahjongGameState | null;
+}): Promise<boolean> {
+  const s = r.game_state;
+  const expect = { rowVersion: r.row_version };
+  const reason: EndReason = s?.status === "finished" && s.gameOver ? "completed" : "dissolved";
+  return s?.players
+    ? closeMahjongRoom(r.id, r.code, s, reason, expect)
+    : closeAtomically("mahjong", r.id, null, expect); // 還在大廳、沒有牌局
+}
+
+/**
  * 建房時順便清：等待中閒置超過 2 小時、進行中閒置超過 12 小時的房間。
  * 打過至少一局的先記成 dissolved 再刪；一局都沒打完的直接刪。
  * 刪除當下會再確認 row_version 和選中時一樣（中間有人動過就不刪也不記）。每次最多處理 limit 間。
@@ -93,14 +112,7 @@ export async function sweepIdleRooms(nowMs = Date.now(), limit = 10): Promise<{ 
   const done = { mahjong: 0, big2: 0 };
   try {
     for (const r of await store.listIdleMahjongRooms(waitingBefore, activeBefore, limit)) {
-      const s = r.game_state;
-      const expect = { rowVersion: r.row_version };
-      // 整場已打完（之前關房失敗）記 completed，其餘閒置的記 dissolved
-      const reason: EndReason = s?.status === "finished" && s.gameOver ? "completed" : "dissolved";
-      const ok = s?.players
-        ? await closeMahjongRoom(r.id, r.code, s, reason, expect)
-        : await closeAtomically("mahjong", r.id, null, expect); // 還在大廳、沒有牌局
-      if (ok) done.mahjong++;
+      if (await closeMahjongRow(r)) done.mahjong++;
     }
   } catch (err) {
     console.error("[records] 清理麻將閒置房失敗：", err instanceof Error ? err.message : err);

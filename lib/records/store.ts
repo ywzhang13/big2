@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { invalidateGameState } from "@/lib/mahjong/cache";
 import type { MahjongGameState } from "@/lib/mahjong/gameState";
 import type { Big2PlayerRow, Big2RoomRow } from "./build";
-import type { GameKind, MatchRecordInput, MatchRecordSummary } from "./types";
+import type { GameKind, MatchRecordInput, MatchRecordSummary, MyMatch } from "./types";
 
 
 export type CloseResult = "closed" | "already_closed" | "changed" | "not_found";
@@ -44,6 +44,7 @@ export async function closeRoom(
             seat: p.seat,
             player_name: p.playerName,
             player_id: p.playerId,
+            user_id: p.userId ?? null,
             total_score: p.totalScore,
           })),
         }
@@ -104,6 +105,71 @@ export async function findRecentRecordByCode(
   return data && data.length > 0 ? toSummary(data[0] as unknown as RecordRow) : null;
 }
 
+type MyMatchRow = {
+  id: string;
+  room_code: string;
+  ended_at: string;
+  end_reason: MyMatch["endReason"];
+  total_rounds: number | null;
+  base_points: number | null;
+  fan_points: number | null;
+  hands_played: number | null;
+  players: { seat: number; player_name: string; total_score: number; user_id: string | null }[];
+};
+
+/**
+ * 歷史紀錄：這個使用者打過的麻將場次，ended_at、id 由新到舊（keyset 分頁）。
+ * cursor＝上一頁最後一筆的 ended_at（資料庫原字串，保留微秒）與 id。
+ */
+export async function listMyMahjongMatches(
+  userId: string,
+  limit: number,
+  cursor: { endedAt: string; id: string } | null
+): Promise<MyMatch[]> {
+  let q = getSupabaseAdmin()
+    .from("match_records")
+    .select(
+      "id, room_code, ended_at, end_reason, total_rounds, base_points, fan_points, hands_played, " +
+        "me:match_record_players!inner(user_id), players:match_record_players(seat, player_name, total_score, user_id)"
+    )
+    .eq("game", "mahjong")
+    .eq("me.user_id", userId);
+  if (cursor) {
+    q = q.or(`ended_at.lt.${cursor.endedAt},and(ended_at.eq.${cursor.endedAt},id.lt.${cursor.id})`);
+  }
+  const { data, error } = await q.order("ended_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+  if (error) throw new Error(`查詢歷史紀錄失敗：${error.message}`);
+  return ((data ?? []) as unknown as MyMatchRow[]).map((r) => {
+    const players = [...r.players]
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => ({ seat: p.seat, playerName: p.player_name, totalScore: p.total_score, isMe: p.user_id === userId }));
+    return {
+      id: r.id,
+      roomCode: r.room_code,
+      endedAt: r.ended_at,
+      endReason: r.end_reason,
+      totalRounds: r.total_rounds,
+      basePoints: r.base_points,
+      fanPoints: r.fan_points,
+      handsPlayed: r.hands_played,
+      myScore: players.find((p) => p.isMe)?.totalScore ?? 0,
+      players,
+    };
+  });
+}
+
+/** 歷史紀錄摘要：這個使用者打過幾場麻將、累計總輸贏 */
+export async function summarizeMyMahjong(userId: string): Promise<{ matches: number; totalScore: number }> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("match_record_players")
+    .select("total_score, match_records!inner(game)")
+    .eq("user_id", userId)
+    .eq("match_records.game", "mahjong");
+  if (error) throw new Error(`查詢歷史紀錄摘要失敗：${error.message}`);
+  const rows = (data ?? []) as { total_score: number }[];
+  return { matches: rows.length, totalScore: rows.reduce((sum, r) => sum + r.total_score, 0) };
+}
+
 /** 閒置太久的房間：等待中超過 waitingBefore、其他狀態超過 activeBefore 沒有更新 */
 function idleFilter(waitingBefore: string, activeBefore: string): string {
   return `and(status.eq.waiting,updated_at.lt.${waitingBefore}),and(status.neq.waiting,updated_at.lt.${activeBefore})`;
@@ -122,6 +188,27 @@ export async function listIdleMahjongRooms(
     .limit(limit);
   if (error) throw new Error(`查詢閒置麻將房失敗：${error.message}`);
   return data ?? [];
+}
+
+/** 上線時關舊房用：beforeIso 之前建的麻將房（含座位綁定的帳號），建房時間舊到新 */
+export interface MahjongRoomRow {
+  id: string;
+  code: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  row_version: number;
+  game_state: MahjongGameState | null;
+  mj_players: { seat: number; name: string; user_id: string | null }[];
+}
+export async function listMahjongRoomsCreatedBefore(beforeIso: string): Promise<MahjongRoomRow[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("mj_rooms")
+    .select("id, code, status, created_at, updated_at, row_version, game_state, mj_players(seat, name, user_id)")
+    .lt("created_at", beforeIso)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`查詢舊麻將房失敗：${error.message}`);
+  return (data ?? []) as MahjongRoomRow[];
 }
 
 export async function listIdleBig2Rooms(

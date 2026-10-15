@@ -1,4 +1,6 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { insertRoom } from "@/lib/mahjong/db";
+import { getAuthUser } from "@/lib/auth";
+import { notLoggedIn } from "@/lib/mahjong/access";
 import { after } from "next/server";
 import { sweepIdleRooms } from "@/lib/records/close";
 
@@ -19,6 +21,8 @@ export async function POST(request: Request) {
     if (!hostId) {
       return Response.json({ error: "缺少 hostId" }, { status: 400 });
     }
+    // 麻將一定要 LINE 登入才能建房
+    if (!(await getAuthUser(request))) return notLoggedIn();
 
     // Validate settings
     const validRounds = [1, 2, 4, 8];
@@ -33,36 +37,25 @@ export async function POST(request: Request) {
       fanPoints: fan ?? 10,
     } : undefined;
 
-    const supabase = getSupabaseServer();
-
     let code = "";
     let roomId = "";
 
     for (let attempt = 0; attempt < 10; attempt++) {
       code = generateCode();
 
-      const insertData: Record<string, unknown> = {
+      // Store settings in game_state so they persist
+      const inserted = await insertRoom({
         code,
         status: "waiting",
         host_id: hostId,
-      };
-      // Store settings in game_state so they persist
-      if (roomSettings) {
-        insertData.game_state = { roomSettings };
-      }
-
-      const { data, error } = await supabase
-        .from("mj_rooms")
-        .insert(insertData)
-        .select("id")
-        .single();
-
-      if (error) {
-        if (error.code === "23505") continue;
+        game_state: roomSettings ? { roomSettings } : null,
+      }).catch(() => null);
+      if (inserted === "duplicate") continue;
+      if (!inserted) {
         return Response.json({ error: "建立房間失敗" }, { status: 500 });
       }
 
-      roomId = data.id;
+      roomId = inserted.id;
       break;
     }
 

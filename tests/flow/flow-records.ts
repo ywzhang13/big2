@@ -13,6 +13,7 @@ import { big2RoundScores, calculateScore } from "../../lib/scoring";
 import type { Card } from "../../lib/constants";
 import type { MahjongGameState, Meld } from "../../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../../lib/mahjong/tiles";
+import { asSeat } from "../support/stub-auth";
 
 let nextId = 70000;
 const t = (k: string): Tile => ({ id: nextId++, suit: k[0] as TileSuit, rank: parseInt(k.slice(1), 10), display: k });
@@ -40,11 +41,11 @@ function mjRoom(id: string, code: string, o: { handsCompleted?: number; lastHand
   return s;
 }
 async function call(fn: (r: Request) => Promise<Response>, roomId: string, body: object) {
-  const r = await fn(new Request("http://x", { method: "POST", body: JSON.stringify({ roomId, ...body }) }));
+  const r = await fn(new Request("http://x", { method: "POST", headers: asSeat({ roomId, ...body }), body: JSON.stringify({ roomId, ...body }) }));
   return { status: r.status, body: await r.json() };
 }
 async function getState(roomId: string) {
-  const r = await stateGet(new Request(`http://x/api/mahjong/state?roomId=${roomId}&playerId=p0`));
+  const r = await stateGet(new Request(`http://x/api/mahjong/state?roomId=${roomId}&playerId=p0`, { headers: asSeat({ playerId: "p0" }) }));
   return { status: r.status, body: await r.json() };
 }
 /** seat3 打出 7 條、seat1 胡 */

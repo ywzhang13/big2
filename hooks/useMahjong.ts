@@ -23,6 +23,7 @@ function safeHand(tiles: Tile[]): Tile[] {
 import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
+import { authHeaders } from "@/lib/mahjong/clientAuth";
 
 function getMjId(): string {
   if (typeof window === "undefined") return "";
@@ -43,7 +44,8 @@ function ownTurnKey(roundInfo: RoundInfo | undefined, wallCount: number, drawnTi
 }
 
 async function api<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>): Promise<T> {
-  const opts: RequestInit = { method, headers: { "Content-Type": "application/json" } };
+  // 登入房每個動作都要帶登入 token（上線前的舊房不檢查，帶了也沒關係）
+  const opts: RequestInit = { method, headers: { "Content-Type": "application/json", ...(await authHeaders()) } };
   if (body && method === "POST") opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   if (!res.ok) {
@@ -142,8 +144,27 @@ export interface MjClientState {
 
 export { getMjId };
 
-export function useMahjong(roomCode: string, playerName: string) {
-  const myId = useRef(getMjId()).current;
+/** join 回應（登入房才有 playerId、privateChannel） */
+export interface MjJoinInfo {
+  roomId: string;
+  playerId?: string;
+  privateChannel?: string;
+}
+
+export function useMahjong(
+  roomCode: string,
+  playerName: string,
+  // 登入房：401＝登入失效、403＝這個座位不是你的
+  onAuthError?: (status: 401 | 403) => void
+) {
+  // 登入房：同一個 LINE 帳號換裝置再加入時，伺服器會回原本那台的玩家 id，之後一律用它
+  const [myId, setMyId] = useState(getMjId);
+  // 登入房：手牌等私人事件改走本人的座位頻道（名稱只從 join 回應或 state 的 myChannel 拿）
+  const [privateChannel, setPrivateChannel] = useState<string | null>(null);
+  const myIdRef = useRef(myId);
+  myIdRef.current = myId;
+  const onAuthErrorRef = useRef(onAuthError);
+  onAuthErrorRef.current = onAuthError;
 
   const [state, setState] = useState<MjClientState>({
     roomCode,
@@ -187,10 +208,19 @@ export function useMahjong(roomCode: string, playerName: string) {
   // 自己回合按「過」收起自摸胡／暗槓／加槓按鈕：記下是哪一張摸牌時收起的，輪詢就不再補回。
   // 只對「這一回合」有效：換局、別人出牌／吃碰槓、我重新摸牌都會清掉（牌 id 每局會重複使用）
   const dismissedOwnActionsRef = useRef<string | null>(null);
+  // 公開頻道和座位頻道之間不保證到達順序：座位頻道的動作按鈕（吃碰槓胡、槓後補牌）可能比
+  // 公開的 mj_discard／mj_action 先到。記下「上一個公開事件之後才收到的按鈕」，公開事件就不要把它清掉
+  const freshPrivateActionsRef = useRef(false);
+  // 同理：莊家的地聽選項（mj_deal_hand）可能比 mj_game_start 先到
+  const dealtThisGameRef = useRef(false);
+  // 整場打完（gameOver）後不再採用輪詢結果：比結束事件晚回來的舊輪詢會把畫面蓋回「打牌中」，
+  // 房間一關就變成「這場已結束」而看不到最終結算
+  const matchOverRef = useRef(false);
 
   // Fetch full state from API (for reconnection / polling)
   const fetchState = useCallback(async (rid: string) => {
     if (closedRef.current) return;
+    const myId = myIdRef.current; // applyJoin 換了玩家 id 後，還沒重新 render 也要用新的
     try {
       const data = await api<{
         roomId: string;
@@ -225,8 +255,10 @@ export function useMahjong(roomCode: string, playerName: string) {
           pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
           myDrawnTileId?: number;
           tingSeats?: number[];
+          myChannel?: string; // 登入房才有
         } | null;
       }>("GET", `/api/mahjong/state?roomId=${rid}&playerId=${myId}`);
+      if (matchOverRef.current) return;
 
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
@@ -255,6 +287,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       }
 
       const gs = data.gameState;
+      if (gs.myChannel) setPrivateChannel(gs.myChannel);
       const hand = gs.hand ? safeHand(gs.hand) : [];
       const mySeat = gs.players.find((p) => p.id === myId)?.seat ?? -1;
       // 漏接廣播時的保險：伺服器上已經不是收起時的那個回合，就清掉記號
@@ -345,9 +378,139 @@ export function useMahjong(roomCode: string, playerName: string) {
         markClosed(status === 410 ? closedFromResponse(body) : { players: [] });
         return;
       }
+      if (status === 401 || status === 403) {
+        onAuthErrorRef.current?.(status);
+        return;
+      }
       console.error("[mj] fetchState failed:", err);
     }
-  }, [myId, markClosed]);
+  }, [markClosed]);
+
+  // 只給本人的事件（手牌、摸到的牌、可以吃碰槓胡）。舊房送在房間頻道、登入房送在座位頻道，
+  // 兩邊都掛上；payload 一樣帶 playerId，不是我的就略過
+  const bindPrivateEvents = useCallback((ch: RealtimeChannel, myId: string) => {
+      // --- mj_deal_hand (private) ---
+      ch.on("broadcast", { event: "mj_deal_hand" }, ({ payload }) => {
+        const { playerId, hand, flowers, tingOptions } = payload as {
+          playerId: string;
+          hand: Tile[];
+          flowers: Tile[];
+          tingOptions?: number[]; // 莊家打第一張時可以一起宣告地聽的牌
+        };
+        if (playerId !== myId) return;
+        dealtThisGameRef.current = true;
+        setState((prev) => ({
+          ...prev,
+          myHand: safeHand(hand),
+          tingOptions: tingOptions ?? [],
+          // Update my flower count in players list
+          players: prev.players.map((p) =>
+            p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
+          ),
+        }));
+      });
+
+      // --- mj_draw_tile (private) ---
+      ch.on("broadcast", { event: "mj_draw_tile" }, ({ payload }) => {
+        const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions, tingOptions } = payload as {
+          playerId: string;
+          tile: Tile;
+          hand: Tile[];
+          flowers?: Tile[];
+          canWin: boolean;
+          canKong: boolean;
+          kongOptions: number[][];
+          addKongOptions?: number[];
+          tingOptions?: number[];
+        };
+        if (playerId !== myId) return;
+        dismissedOwnActionsRef.current = null; // 新摸的牌（含槓後補牌）重新判斷
+        freshPrivateActionsRef.current = true;
+        const actions: { type: string; tiles?: Tile[] }[] = [];
+        if (canWin) {
+          actions.push({ type: "win" });
+        }
+        if (canKong && kongOptions) {
+          for (const group of kongOptions) {
+            const tiles = hand.filter((t) => group.includes(t.id));
+            actions.push({ type: "kong", tiles });
+          }
+        }
+        for (const id of addKongOptions ?? []) {
+          const tile = hand.find((t) => t.id === id);
+          if (tile) actions.push({ type: "add_kong", tiles: [tile] });
+        }
+        const drawnTile = payload.tile as Tile;
+        console.log("[mj] mj_draw_tile", { drawnTileId: drawnTile?.id, drawnDisplay: drawnTile?.display, handLen: hand.length });
+        setState((prev) => ({
+          ...prev,
+          myHand: safeHand(hand),
+          availableActions: actions,
+          tingOptions: tingOptions ?? [],
+          robKong: false,
+          hasDrawn: true,
+          drawnTileId: drawnTile?.id ?? null,
+          // Update flowers if provided (補花)
+          players: flowers
+            ? prev.players.map((p) =>
+                p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
+              )
+            : prev.players,
+        }));
+      });
+
+      // --- mj_available_actions (private) ---
+      ch.on("broadcast", { event: "mj_available_actions" }, ({ payload }) => {
+        const { playerId, actions, robKong, robFlower } = payload as {
+          playerId: string;
+          actions: { type: string; playerSeat: number; tiles?: Tile[] }[];
+          robKong?: boolean;
+          robFlower?: boolean;
+        };
+        if (playerId !== myId) return;
+        freshPrivateActionsRef.current = true;
+        setState((prev) => ({
+          ...prev,
+          robKong: robKong === true,
+          robFlower: robFlower === true,
+          availableActions: actions.map((a) => ({
+            type: a.type,
+            tiles: a.tiles,
+          })),
+        }));
+      });
+
+      // --- mj_hand_update (private, after action) ---
+      ch.on("broadcast", { event: "mj_hand_update" }, ({ payload }) => {
+        const { playerId, hand, drawnTileId } = payload as {
+          playerId: string;
+          hand: Tile[];
+          drawnTileId?: number;
+        };
+        if (playerId !== myId) return;
+        setState((prev) => ({
+          ...prev,
+          myHand: safeHand(hand),
+          // Authoritative: kong → replacement tile id; chi/pong → null
+          drawnTileId: drawnTileId ?? null,
+        }));
+      });
+  }, []);
+
+  // 登入房：另外訂閱本人的座位頻道（房間頻道照舊訂閱）
+  useEffect(() => {
+    if (!privateChannel || !playerName) return;
+    const supabase = getSupabase();
+    const ch = supabase.channel(privateChannel);
+    bindPrivateEvents(ch, myId);
+    ch.subscribe((status) => {
+      // 訂閱好之前送的私人事件收不到，用 state 補
+      if (status === "SUBSCRIBED" && roomIdRef.current) fetchState(roomIdRef.current);
+    });
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [privateChannel, playerName, myId, bindPrivateEvents, fetchState]);
 
   // Subscribe to Supabase Realtime
   useEffect(() => {
@@ -438,7 +601,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         pendingFlowerRob: null,
         robFlower: false,
         tingSeats: [],
-        tingOptions: [],
+        // 座位頻道的發牌（含莊家的地聽選項）可能先到，先到就保留
+        tingOptions: dealtThisGameRef.current ? prev.tingOptions : [],
         hasDrawn: msg.currentTurn === msg.dealerSeat, // dealer starts with 17
         players: msg.players.map((p) => ({
           id: p.id,
@@ -463,25 +627,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       }));
     });
 
-    // --- mj_deal_hand (private) ---
-    channel.on("broadcast", { event: "mj_deal_hand" }, ({ payload }) => {
-      const { playerId, hand, flowers, tingOptions } = payload as {
-        playerId: string;
-        hand: Tile[];
-        flowers: Tile[];
-        tingOptions?: number[]; // 莊家打第一張時可以一起宣告地聽的牌
-      };
-      if (playerId !== myId) return;
-      setState((prev) => ({
-        ...prev,
-        myHand: safeHand(hand),
-        tingOptions: tingOptions ?? [],
-        // Update my flower count in players list
-        players: prev.players.map((p) =>
-          p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
-        ),
-      }));
-    });
+    bindPrivateEvents(channel, myId);
 
     // --- mj_draw (public) ---
     channel.on("broadcast", { event: "mj_draw" }, ({ payload }) => {
@@ -504,54 +650,6 @@ export function useMahjong(roomCode: string, playerName: string) {
       }));
     });
 
-    // --- mj_draw_tile (private) ---
-    channel.on("broadcast", { event: "mj_draw_tile" }, ({ payload }) => {
-      const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions, tingOptions } = payload as {
-        playerId: string;
-        tile: Tile;
-        hand: Tile[];
-        flowers?: Tile[];
-        canWin: boolean;
-        canKong: boolean;
-        kongOptions: number[][];
-        addKongOptions?: number[];
-        tingOptions?: number[];
-      };
-      if (playerId !== myId) return;
-      dismissedOwnActionsRef.current = null; // 新摸的牌（含槓後補牌）重新判斷
-      const actions: { type: string; tiles?: Tile[] }[] = [];
-      if (canWin) {
-        actions.push({ type: "win" });
-      }
-      if (canKong && kongOptions) {
-        for (const group of kongOptions) {
-          const tiles = hand.filter((t) => group.includes(t.id));
-          actions.push({ type: "kong", tiles });
-        }
-      }
-      for (const id of addKongOptions ?? []) {
-        const tile = hand.find((t) => t.id === id);
-        if (tile) actions.push({ type: "add_kong", tiles: [tile] });
-      }
-      const drawnTile = payload.tile as Tile;
-      console.log("[mj] mj_draw_tile", { drawnTileId: drawnTile?.id, drawnDisplay: drawnTile?.display, handLen: hand.length });
-      setState((prev) => ({
-        ...prev,
-        myHand: safeHand(hand),
-        availableActions: actions,
-        tingOptions: tingOptions ?? [],
-        robKong: false,
-        hasDrawn: true,
-        drawnTileId: drawnTile?.id ?? null,
-        // Update flowers if provided (補花)
-        players: flowers
-          ? prev.players.map((p) =>
-              p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
-            )
-          : prev.players,
-      }));
-    });
-
     // --- mj_discard ---
     channel.on("broadcast", { event: "mj_discard" }, ({ payload }) => {
       dismissedOwnActionsRef.current = null;
@@ -560,12 +658,18 @@ export function useMahjong(roomCode: string, playerName: string) {
         tile: Tile;
         availableActions: { type: string; playerSeat: number }[];
       };
+      const keepEarlyActions = freshPrivateActionsRef.current;
+      freshPrivateActionsRef.current = false;
       setState((prev) => ({
         ...prev,
         lastDiscard: { tile, from: seat },
         // Clear actions — new mj_available_actions will re-populate after this
         // arrives (server sends mj_discard first, action broadcasts second).
-        availableActions: [],
+        // 登入房的按鈕走座位頻道，可能比這個事件先到：這張牌有給我按鈕就保留
+        availableActions:
+          keepEarlyActions && (payload as { availableActions?: { playerSeat: number }[] }).availableActions?.some((a) => a.playerSeat === prev.mySeat)
+            ? prev.availableActions
+            : [],
         tingOptions: [],
         drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
         players: prev.players.map((p) =>
@@ -588,26 +692,6 @@ export function useMahjong(roomCode: string, playerName: string) {
       }));
     });
 
-    // --- mj_available_actions (private) ---
-    channel.on("broadcast", { event: "mj_available_actions" }, ({ payload }) => {
-      const { playerId, actions, robKong, robFlower } = payload as {
-        playerId: string;
-        actions: { type: string; playerSeat: number; tiles?: Tile[] }[];
-        robKong?: boolean;
-        robFlower?: boolean;
-      };
-      if (playerId !== myId) return;
-      setState((prev) => ({
-        ...prev,
-        robKong: robKong === true,
-        robFlower: robFlower === true,
-        availableActions: actions.map((a) => ({
-          type: a.type,
-          tiles: a.tiles,
-        })),
-      }));
-    });
-
     // --- mj_action (chi/pong/kong) ---
     channel.on("broadcast", { event: "mj_action" }, ({ payload }) => {
       dismissedOwnActionsRef.current = null;
@@ -617,6 +701,8 @@ export function useMahjong(roomCode: string, playerName: string) {
         tiles: Tile[];
         tileCount?: number;
       };
+      const keepEarlyActions = freshPrivateActionsRef.current;
+      freshPrivateActionsRef.current = false;
       setState((prev) => {
         const meld: Meld = {
           type: msg.type as Meld["type"],
@@ -635,7 +721,8 @@ export function useMahjong(roomCode: string, playerName: string) {
           ...prev,
           currentTurn: msg.seat,
           lastDiscard: null,
-          availableActions: [],
+          // 我槓完補牌的按鈕（槓上開花、再槓）走座位頻道，可能比這個事件先到
+          availableActions: keepEarlyActions && msg.seat === prev.mySeat ? prev.availableActions : [],
           hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
           actionNotice: { seat: msg.seat, type: msg.type },
           myHand: updatedHand,
@@ -733,22 +820,6 @@ export function useMahjong(roomCode: string, playerName: string) {
       setTimeout(() => {
         setState((prev) => ({ ...prev, actionNotice: null }));
       }, 1500);
-    });
-
-    // --- mj_hand_update (private, after action) ---
-    channel.on("broadcast", { event: "mj_hand_update" }, ({ payload }) => {
-      const { playerId, hand, drawnTileId } = payload as {
-        playerId: string;
-        hand: Tile[];
-        drawnTileId?: number;
-      };
-      if (playerId !== myId) return;
-      setState((prev) => ({
-        ...prev,
-        myHand: safeHand(hand),
-        // Authoritative: kong → replacement tile id; chi/pong → null
-        drawnTileId: drawnTileId ?? null,
-      }));
     });
 
     // --- mj_turn_advance (from discard when no actions, to avoid flash) ---
@@ -856,6 +927,9 @@ export function useMahjong(roomCode: string, playerName: string) {
     // --- mj_game_over ---
     channel.on("broadcast", { event: "mj_game_over" }, ({ payload }) => {
       dismissedOwnActionsRef.current = null;
+      freshPrivateActionsRef.current = false;
+      dealtThisGameRef.current = false;
+      if ((payload as { gameOver?: boolean }).gameOver) matchOverRef.current = true;
       const msg = payload as {
         winnerSeat: number;
         winnerName: string | null;
@@ -926,11 +1000,22 @@ export function useMahjong(roomCode: string, playerName: string) {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId, fetchState, markClosed]);
+  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents]);
 
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
   // --- API calls ---
+
+  /** 動作 API：登入房回 401／403 時通知頁面（退回登入閘門／回大廳），錯誤照樣往外丟 */
+  const call = useCallback(async (path: string, body: Record<string, unknown>) => {
+    try {
+      return await api("POST", path, body);
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 401 || status === 403) onAuthErrorRef.current?.(status);
+      throw err;
+    }
+  }, []);
 
   const createRoom = useCallback(async () => {
     const data = await api<{ code: string; roomId: string }>("POST", "/api/mahjong/create", {
@@ -954,17 +1039,17 @@ export function useMahjong(roomCode: string, playerName: string) {
   const startGame = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
-    await api("POST", "/api/mahjong/start", {
+    await call("/api/mahjong/start", {
       roomId: rid,
       playerId: myId,
     });
-  }, [myId]);
+  }, [myId, call]);
 
   const drawTileAction = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
     try {
-      await api("POST", "/api/mahjong/draw", {
+      await call("/api/mahjong/draw", {
         roomId: rid,
         playerId: myId,
       });
@@ -976,7 +1061,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       if (msg.includes("已經摸過牌了") || msg.includes("等待其他玩家動作中")) return;
       console.error("[mj] draw failed:", err);
     }
-  }, [myId]);
+  }, [myId, call]);
 
   const discardTile = useCallback(
     async (tileId: number, declareTing?: boolean) => {
@@ -985,6 +1070,7 @@ export function useMahjong(roomCode: string, playerName: string) {
       // Bug #16: prevent double-discard race condition
       if (discardingRef.current) return;
       discardingRef.current = true;
+      freshPrivateActionsRef.current = false;
       // Optimistically remove tile from hand + mark hasDrawn=false so UI
       // doesn't keep showing "輪到你打牌" during the pending-action window
       setState((prev) => {
@@ -1000,7 +1086,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         };
       });
       try {
-        await api("POST", "/api/mahjong/discard", {
+        await call("/api/mahjong/discard", {
           roomId: rid,
           playerId: myId,
           tileId,
@@ -1015,7 +1101,7 @@ export function useMahjong(roomCode: string, playerName: string) {
         discardingRef.current = false;
       }
     },
-    [myId, fetchState]
+    [myId, fetchState, call]
   );
 
   const doAction = useCallback(
@@ -1044,9 +1130,10 @@ export function useMahjong(roomCode: string, playerName: string) {
         return;
       }
       // Optimistically clear action buttons immediately
+      freshPrivateActionsRef.current = false;
       setState((prev) => ({ ...prev, availableActions: [] }));
       try {
-        const res = await api("POST", "/api/mahjong/action", {
+        const res = await call("/api/mahjong/action", {
           roomId: rid,
           playerId: myId,
           actionType,
@@ -1059,28 +1146,28 @@ export function useMahjong(roomCode: string, playerName: string) {
         fetchState(rid);
       }
     },
-    [myId, fetchState, discardTile]
+    [myId, fetchState, discardTile, call]
   );
 
   const requestLeave = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
     try {
-      await api("POST", "/api/mahjong/leave-request", {
+      await call("/api/mahjong/leave-request", {
         roomId: rid,
         playerId: myId,
       });
     } catch (err) {
       console.error("[mj] leave-request failed:", err);
     }
-  }, [myId]);
+  }, [myId, call]);
 
   const voteLeave = useCallback(
     async (approve: boolean) => {
       const rid = roomIdRef.current;
       if (!rid) return;
       try {
-        await api("POST", "/api/mahjong/leave-vote", {
+        await call("/api/mahjong/leave-vote", {
           roomId: rid,
           playerId: myId,
           approve,
@@ -1089,21 +1176,21 @@ export function useMahjong(roomCode: string, playerName: string) {
         console.error("[mj] leave-vote failed:", err);
       }
     },
-    [myId]
+    [myId, call]
   );
 
   const nextGame = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
     try {
-      await api("POST", "/api/mahjong/next-game", {
+      await call("/api/mahjong/next-game", {
         roomId: rid,
         playerId: myId,
       });
     } catch (err) {
       console.error("[mj] next-game failed:", err);
     }
-  }, [myId]);
+  }, [myId, call]);
 
   const setRoomIdExternal = useCallback((id: string) => {
     setRoomId(id);
@@ -1113,6 +1200,17 @@ export function useMahjong(roomCode: string, playerName: string) {
       fetchState(id);
     }
   }, [fetchState]);
+
+  /** join 成功：登入房改用伺服器回的玩家 id、訂閱座位頻道，再開始抓狀態 */
+  const applyJoin = useCallback((info: MjJoinInfo) => {
+    if (info.playerId && info.playerId !== myIdRef.current) {
+      myIdRef.current = info.playerId;
+      setMyId(info.playerId);
+      setState((prev) => ({ ...prev, myId: info.playerId! }));
+    }
+    if (info.privateChannel) setPrivateChannel(info.privateChannel);
+    setRoomIdExternal(info.roomId);
+  }, [setRoomIdExternal]);
 
   const isMyTurn = state.currentTurn === state.mySeat;
   const needsDraw = isMyTurn && !state.hasDrawn && state.status === "playing";
@@ -1157,6 +1255,7 @@ export function useMahjong(roomCode: string, playerName: string) {
     discardTile,
     doAction,
     setRoomId: setRoomIdExternal,
+    applyJoin,
     closed,
     markClosed,
     createRoom,

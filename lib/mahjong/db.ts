@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "../supabase-server";
+import { getSupabaseAdmin } from "../supabase-admin";
 import { MahjongGameState, PlayerState } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
@@ -22,6 +22,7 @@ export interface MjPlayer {
   player_id: string;
   name: string;
   seat: number;
+  user_id: string | null; // 這個座位的 LINE 登入使用者；上線前的座位是 null
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ export async function loadRoom(
   // fresh=true skips the cache (used when retrying after a write conflict,
   // since the cache may be behind Postgres).
   const cached = opts?.fresh ? null : await getCachedGameState(roomId);
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin();
   if (cached) {
     const { data, error } = await supabase
       .from("mj_rooms")
@@ -66,7 +67,7 @@ export async function loadRoom(
 }
 
 export async function loadRoomByCode(code: string): Promise<MjRoom | null> {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("mj_rooms")
     .select("id, code, status, host_id, game_state")
@@ -82,7 +83,7 @@ export async function saveGameState(
   state: MahjongGameState,
   status?: string
 ): Promise<void> {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin();
   state.stateVersion = (state.stateVersion ?? 0) + 1;
   const update: Record<string, unknown> = { game_state: state };
   if (status) update.status = status;
@@ -118,7 +119,7 @@ export async function saveGameStateIfUnchanged(
   state: MahjongGameState,
   status?: string
 ): Promise<void> {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin();
   state.stateVersion = (baseVersion ?? 0) + 1;
   const update: Record<string, unknown> = { game_state: state };
   if (status) update.status = status;
@@ -162,15 +163,57 @@ export async function retryOnConflict(
 }
 
 export async function loadPlayers(roomId: string): Promise<MjPlayer[]> {
-  const supabase = getSupabaseServer();
+  const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("mj_players")
-    .select("id, room_id, player_id, name, seat")
+    .select("id, room_id, player_id, name, seat, user_id")
     .eq("room_id", roomId)
     .order("seat", { ascending: true });
 
   if (error) return [];
   return (data ?? []) as MjPlayer[];
+}
+
+/** 建房：房號重複回 "duplicate"（呼叫端換一個再試），其他錯誤丟出 */
+export async function insertRoom(row: {
+  code: string;
+  status: string;
+  host_id: string;
+  game_state: Record<string, unknown> | null;
+}): Promise<{ id: string } | "duplicate"> {
+  const { data, error } = await getSupabaseAdmin().from("mj_rooms").insert(row).select("id").single();
+  if (error) {
+    if (error.code === "23505") return "duplicate";
+    throw new Error(`建立房間失敗：${error.message}`);
+  }
+  return { id: data.id };
+}
+
+/** 加入房間用：房間裡已經有的座位（查詢失敗丟出，不當成空房） */
+export async function loadSeats(roomId: string): Promise<Pick<MjPlayer, "seat" | "player_id" | "user_id">[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("mj_players")
+    .select("seat, player_id, user_id")
+    .eq("room_id", roomId)
+    .order("seat", { ascending: true });
+  if (error) throw new Error(`查詢玩家失敗：${error.message}`);
+  return data ?? [];
+}
+
+/** 坐下：座位或玩家 id 重複回 "duplicate"，其他錯誤丟出 */
+export async function insertPlayer(row: {
+  room_id: string;
+  player_id: string;
+  name: string;
+  seat: number;
+  user_id: string | null;
+}): Promise<"ok" | "duplicate"> {
+  const { error } = await getSupabaseAdmin().from("mj_players").insert(row);
+  if (error) {
+    if (error.code === "23505") return "duplicate";
+    throw new Error(`加入房間失敗：${error.message}`);
+  }
+  return "ok";
 }
 
 // ---------------------------------------------------------------------------

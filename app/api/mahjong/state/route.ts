@@ -1,6 +1,7 @@
 import { loadRoom, loadPlayers, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
 import { endedResponse } from "@/lib/records/close";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
+import { privateChannelName, seatOwnerError } from "@/lib/mahjong/access";
 
 export async function GET(request: Request) {
   try {
@@ -43,7 +44,12 @@ export async function GET(request: Request) {
     const state = room.game_state as MahjongGameState;
 
     if (playerId) {
+      // 只有座位本人看得到這個座位的手牌
+      const denied = await seatOwnerError(request, state, playerId);
+      if (denied) return denied;
       const playerView = toPlayerGameState(state, playerId);
+      // 本人的座位頻道（重新整理後重新訂閱）
+      Object.assign(playerView, { myChannel: privateChannelName(room.code, playerId) });
       return Response.json({
         roomId: room.id,
         code: room.code,

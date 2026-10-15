@@ -5,6 +5,7 @@ import {
   toPublicGameState,
   retryOnConflict,
 } from "@/lib/mahjong/db";
+import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import {
   executeAction,
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleAction(body, fresh));
+  return retryOnConflict((fresh) => handleAction(request, body, fresh));
 }
 
 /**
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
  * 若同時有人先寫了會丟 StateConflictError，由 retryOnConflict 重新讀取後整個重做，
  * 所以兩個人同時送出的決定不會互相蓋掉。
  */
-async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
+async function handleAction(request: Request, body: unknown, fresh: boolean): Promise<Response> {
   const { roomId, playerId, actionType, tiles } = body as {
     roomId?: string;
     playerId?: string;
@@ -82,6 +83,9 @@ async function handleAction(body: unknown, fresh: boolean): Promise<Response> {
   if (!room || !room.game_state) {
     return Response.json({ error: "找不到遊戲" }, { status: 404 });
   }
+  // 確認是這個座位的本人（一律要登入）
+  const denied = await seatOwnerError(request, room.game_state, playerId);
+  if (denied) return denied;
 
   const state = room.game_state as MahjongGameState;
   const baseVersion = state.stateVersion;

@@ -17,6 +17,7 @@ export interface PlayerState {
   flowers: Tile[]; // flower tiles
   discards: Tile[]; // tiles this player discarded
   isDealer: boolean;
+  userId?: string | null; // 這個座位的 LINE 登入使用者（Supabase auth user id）；只在伺服器用，不公開
 }
 
 export interface ScoreResult {

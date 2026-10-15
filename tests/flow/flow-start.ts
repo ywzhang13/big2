@@ -5,9 +5,10 @@ import { force } from "../support/forced-deal";
 import { rooms, opts, stats } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
+import { asSeat } from "../support/stub-auth";
 
 async function call(body: object) {
-  const r = await start(new Request("http://x", { method: "POST", body: JSON.stringify({ roomId: "R", ...body }) }));
+  const r = await start(new Request("http://x", { method: "POST", headers: asSeat({ roomId: "R", ...body }), body: JSON.stringify({ roomId: "R", ...body }) }));
   return { status: r.status, body: await r.json() };
 }
 function lobby() {

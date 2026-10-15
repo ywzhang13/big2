@@ -3,7 +3,8 @@
 //   - 用專案已有的 typescript 把 .ts 轉成 JS（會移除只當型別用的 import）
 //   - 路由裡的 "@/lib/mahjong/db"、"broadcast" 換成 tests/support 的記憶體版本（不連資料庫）；
 //     "gameLogic" 換成 forced-deal（沒指定花牌時和真的完全一樣，用來測開局花牌）；
-//     "records/store"（對局紀錄的資料庫存取）換成記憶體版本
+//     "records/store"（對局紀錄的資料庫存取）換成記憶體版本；"auth"（驗證登入 token）換成記憶體版本；
+//     "next/server" 的 after() 在測試裡不跑
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -16,10 +17,18 @@ const STUBS = {
   "@/lib/mahjong/gameLogic": "tests/support/forced-deal.ts",
   "@/lib/records/store": "tests/support/stub-records-store.ts",
   "@/lib/broadcast": "tests/support/stub-broadcast.ts",
+  "@/lib/auth": "tests/support/stub-auth.ts",
+  "next/server": "tests/support/stub-next-server.ts",
 };
 
+// scripts/ts-register.mjs 用 { stubs: false } 註冊：只轉 TypeScript、解析路徑，連真的資料庫
+let useStubs = true;
+export async function initialize(data) {
+  if (data?.stubs === false) useStubs = false;
+}
+
 export async function resolve(spec, ctx, next) {
-  if (STUBS[spec]) return next(pathToFileURL(path.join(ROOT, STUBS[spec])).href, ctx);
+  if (useStubs && STUBS[spec]) return next(pathToFileURL(path.join(ROOT, STUBS[spec])).href, ctx);
   if (spec.startsWith("@/")) spec = pathToFileURL(path.join(ROOT, spec.slice(2))).href;
   const isRel = spec.startsWith("./") || spec.startsWith("../");
   if ((isRel || spec.startsWith("file:")) && !path.extname(spec)) {

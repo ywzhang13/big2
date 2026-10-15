@@ -7,6 +7,7 @@ export interface MatchRecordPlayer {
   seat: number;
   playerName: string;
   playerId: string; // 原本的匿名玩家 id
+  userId?: string | null; // LINE 登入的使用者（Supabase auth user id）；上線前的座位／大老二＝null
   totalScore: number;
 }
 
@@ -31,6 +32,20 @@ export interface MatchRecordSummary {
   endReason: EndReason;
   endedAt: string;
   players: { seat: number; playerName: string; totalScore: number }[];
+}
+
+/** 歷史紀錄列表的一場（只回「我」打過的；不含玩家 id／user id，用 isMe 標出自己） */
+export interface MyMatch {
+  id: string;
+  roomCode: string;
+  endedAt: string;
+  endReason: EndReason;
+  totalRounds: number | null;
+  basePoints: number | null;
+  fanPoints: number | null;
+  handsPlayed: number | null;
+  myScore: number;
+  players: { seat: number; playerName: string; totalScore: number; isMe: boolean }[];
 }
 
 /** 等待中閒置多久清掉、進行中閒置多久清掉 */

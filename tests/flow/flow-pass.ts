@@ -5,6 +5,7 @@ import { rooms } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
 import type { MahjongGameState, Meld } from "../../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../../lib/mahjong/tiles";
+import { asSeat } from "../support/stub-auth";
 
 let nextId = 30000;
 const t = (k: string): Tile => ({ id: nextId++, suit: k[0] as TileSuit, rank: parseInt(k.slice(1), 10), display: k });
@@ -24,7 +25,7 @@ function setup(mut?: (s: MahjongGameState) => void) {
   sent.length = 0;
 }
 async function call(fn: (r: Request) => Promise<Response>, body: object) {
-  const r = await fn(new Request("http://x", { method: "POST", body: JSON.stringify({ roomId: "R", ...body }) }));
+  const r = await fn(new Request("http://x", { method: "POST", headers: asSeat({ roomId: "R", ...body }), body: JSON.stringify({ roomId: "R", ...body }) }));
   return { status: r.status, body: await r.json() };
 }
 const st = () => rooms.R.game_state;

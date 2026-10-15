@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 .playwright-cli/
 qa-*.png
+
+# supabase CLI 的本機連結檔（不 commit）
+supabase/.temp/

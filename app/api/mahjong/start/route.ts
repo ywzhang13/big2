@@ -5,6 +5,7 @@ import {
   toPublicGameState,
   retryOnConflict,
 } from "@/lib/mahjong/db";
+import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { initGame, dealTiles, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleStart(body, fresh));
+  return retryOnConflict((fresh) => handleStart(request, body, fresh));
 }
 
 /**
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
  * status 改成 playing／finished），所以同時送兩次開局時，晚到的那次會衝突、
  * 重新讀到 status 已不是 waiting 而被擋下，不會蓋掉已開的局、也不會重複廣播。
  */
-async function handleStart(body: unknown, fresh: boolean): Promise<Response> {
+async function handleStart(request: Request, body: unknown, fresh: boolean): Promise<Response> {
   const { roomId, playerId } = body as {
     roomId?: string;
     playerId?: string;
@@ -52,6 +53,9 @@ async function handleStart(body: unknown, fresh: boolean): Promise<Response> {
 
   // Load players
   const players = await loadPlayers(roomId);
+  // 確認是房主本人（還沒開局，座位主人從 mj_players 查）
+  const denied = await seatOwnerError(request, room.game_state, playerId, players.find((p) => p.player_id === playerId)?.user_id ?? null);
+  if (denied) return denied;
   if (players.length !== 4) {
     return Response.json({ error: "需要 4 位玩家才能開始" }, { status: 400 });
   }
@@ -68,6 +72,8 @@ async function handleStart(body: unknown, fresh: boolean): Promise<Response> {
 
   let state = initGame(playerInfos, savedSettings);
   state.roomCode = room.code;
+  // 記下每個座位綁定的使用者，之後每個動作都用它確認本人、整場結束寫進對局紀錄
+  state.players.forEach((p, i) => (p.userId = players[i].user_id ?? null));
 
   // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
   // 起莊者 = 開門者（第一局同一顆骰子）

@@ -5,6 +5,7 @@ import {
   retryOnConflict,
   toPublicGameState,
 } from "@/lib/mahjong/db";
+import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { discardTile, declareTingAndDiscard, tingDiscardOptions } from "@/lib/mahjong/gameLogic";
 import { discardEvents } from "@/lib/mahjong/events";
@@ -17,10 +18,10 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleDiscard(body, fresh));
+  return retryOnConflict((fresh) => handleDiscard(request, body, fresh));
 }
 
-async function handleDiscard(body: unknown, fresh: boolean): Promise<Response> {
+async function handleDiscard(request: Request, body: unknown, fresh: boolean): Promise<Response> {
   const { roomId, playerId, tileId, declareTing } = body as {
     roomId?: string;
     playerId?: string;
@@ -37,6 +38,9 @@ async function handleDiscard(body: unknown, fresh: boolean): Promise<Response> {
   if (!room || !room.game_state) {
     return Response.json({ error: "找不到遊戲" }, { status: 404 });
   }
+  // 確認是這個座位的本人（一律要登入）
+  const denied = await seatOwnerError(request, room.game_state, playerId);
+  if (denied) return denied;
 
   const state = room.game_state as MahjongGameState;
   if (state.status !== "playing") {

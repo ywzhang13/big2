@@ -1,4 +1,5 @@
 import { loadRoom, saveGameStateIfUnchanged, retryOnConflict } from "@/lib/mahjong/db";
+import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongRoom } from "@/lib/records/close";
@@ -10,10 +11,10 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleLeaveVote(body, fresh));
+  return retryOnConflict((fresh) => handleLeaveVote(request, body, fresh));
 }
 
-async function handleLeaveVote(body: unknown, fresh: boolean): Promise<Response> {
+async function handleLeaveVote(request: Request, body: unknown, fresh: boolean): Promise<Response> {
   const { roomId, playerId, approve } = body as {
     roomId?: string;
     playerId?: string;
@@ -27,6 +28,9 @@ async function handleLeaveVote(body: unknown, fresh: boolean): Promise<Response>
   if (!room || !room.game_state) {
     return Response.json({ error: "找不到遊戲" }, { status: 404 });
   }
+  // 確認是這個座位的本人（一律要登入）
+  const notOwner = await seatOwnerError(request, room.game_state, playerId);
+  if (notOwner) return notOwner;
 
   const state = room.game_state as MahjongGameState;
   if (!state.leaveRequest) {
