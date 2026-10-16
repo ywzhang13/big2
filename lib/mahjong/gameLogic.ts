@@ -775,6 +775,11 @@ export function executeAction(
         s = handleFlowers(s, action.playerSeat);
       }
       markDrawn(s, action.playerSeat);
+      // 明槓別人的牌、補到胡牌（補花後最後拿到的那張）：進入過水，當下不能自摸。
+      // 這時手牌已經胡了，打出哪一張都是自己聽的牌，所以當輪打牌不會解除（照一般過水規則）；
+      // 下一輪摸牌也不能胡，要打出不是聽的牌才解除
+      const kp = s.players[action.playerSeat];
+      if (isWinningHand(kp.hand, kp.revealed.length)) setGuoShui(s, action.playerSeat, true);
       return checkFlowerWin(state, s, action.playerSeat);
     } else {
       s.status = "finished"; // wall exhausted

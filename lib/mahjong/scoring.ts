@@ -253,15 +253,31 @@ function scoreDecomposition(
     return true;
   });
 
-  // --- 平胡: all chi + pair, no 字牌 ---
+  // --- 平胡 ---
+  // 沒字沒花、五副都是順子、胡別人的牌（搶槓也算）、不是獨聽，
+  // 而且這種拆法裡胡的那張落在手上的順子、是兩面聽（不是眼、邊張、中洞）。
   const allTileKeys = [
     ...allMelds.flatMap((m) => m.tileKeys),
     hand.pair,
     hand.pair,
   ];
   const hasHonor = allTileKeys.some((k) => k[0] === "z");
+  const winRank = ctx.winTile.rank;
+  const isTwoSidedWin = chiMelds.some((m) => {
+    if (!m.isConcealed || meldSuit(m) !== ctx.winTile.suit) return false;
+    const low = meldRank(m);
+    return (winRank === low && low <= 6) || (winRank === low + 2 && low >= 2);
+  });
 
-  if (chiMelds.length === 5 && pongMelds.length === 0 && !hasHonor) {
+  if (
+    chiMelds.length === 5 &&
+    pongMelds.length === 0 &&
+    !hasHonor &&
+    ctx.flowers.length === 0 &&
+    !ctx.isSelfDraw &&
+    waits.length >= 2 &&
+    isTwoSidedWin
+  ) {
     fans.push({ name: "平胡", value: 2 });
   }
 
