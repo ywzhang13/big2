@@ -160,16 +160,17 @@ function PlayerPanel({
   if (!player) return null;
 
   const isHorizontal = position === "top";
-  const tileSize = position === "top" ? 20 : 16;
-  const tileH = position === "top" ? 26 : 22;
+  // 左右家版面（小宜 2026-10-17）：海底縮小換來的寬度給左右家，手牌 16×22 → 22×30
+  const tileSize = position === "top" ? 20 : 22;
+  const tileH = position === "top" ? 26 : 30;
 
   // For left/right: layout is horizontal row with hand on outside, melds towards center
   // Each tile rotated 90° to face center
   const rotStyle = position === "left" ? "rotate(90deg)" : position === "right" ? "rotate(-90deg)" : undefined;
   // 吃碰槓的牌：對家平常 26×35；我眼牌時縮成 20×27，讓翻開的手牌（26×35）是這一區最大的牌。
-  // 左右家 18×25（吃碰區 v2，原 26×35 縮 30%），眼牌時 14×19：4 副吃碰槓直排在 1280×800 才放得下
-  const mw = isHorizontal ? (opponent ? 20 : 26) : opponent ? 14 : 18;
-  const mh = isHorizontal ? (opponent ? 27 : 35) : opponent ? 19 : 25;
+  // 左右家 24×33（左右家版面 2026-10-17），眼牌時 18×25（比翻開的手牌 22×30 小）
+  const mw = isHorizontal ? (opponent ? 20 : 26) : opponent ? 18 : 24;
+  const mh = isHorizontal ? (opponent ? 27 : 35) : opponent ? 25 : 33;
 
   return (
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
@@ -239,7 +240,7 @@ function PlayerPanel({
       <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
       </div>
 
-      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（26×35；左右家旋轉，摸進的那張最後＋金框） */}
+      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，摸進的那張最後＋金框） */}
       {opponent ? (
         <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
           {eyeHandTiles(opponent).map(({ tile, drew }) =>
@@ -248,9 +249,9 @@ function PlayerPanel({
                 <MjTile tile={tile} width={26} height={35} />
               </div>
             ) : (
-              <div key={tile.id} style={{ width: 37, height: 27, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
+              <div key={tile.id} style={{ width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
                 <div style={{ transform: rotStyle, ...(drew ? DREW_RING : {}) }}>
-                  <MjTile tile={tile} width={26} height={35} />
+                  <MjTile tile={tile} width={tileSize} height={tileH} />
                 </div>
               </div>
             )
@@ -555,26 +556,26 @@ export default function MjBoard({
                   {(() => {
                     const tiles = (left?.discards || []);
                     const cols: typeof tiles[] = [];
-                    // 每欄 5 張；超過 20 張時改成最多 4 欄、每欄加長，寬度才不會超出 160px 跑出金框
-                    const perCol = Math.max(5, Math.ceil(tiles.length / 4));
+                    // 每欄 7 張、牌 21×29（左右家版面 2026-10-17，原 5 張 26×35）；超過 28 張時改成最多 4 欄、每欄加長
+                    const perCol = Math.max(7, Math.ceil(tiles.length / 4));
                     for (let i = 0; i < tiles.length; i += perCol) {
                       cols.push(tiles.slice(i, i + perCol));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col gap-[1px]" style={{ width: 35 }}>
+                      <div key={ci} className="flex flex-col gap-[1px]" style={{ width: 29 }}>
                         {col.map((t, ti) => (
                           <div
                             key={`left-${t.id}-${ti}`}
                             style={{
-                              width: 35,
-                              height: 26,
+                              width: 29,
+                              height: 21,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                             }}
                           >
                             <div style={{ transform: "rotate(90deg)" }}>
-                              <MjTile tile={t} tiny />
+                              <MjTile tile={t} width={21} height={29} />
                             </div>
                           </div>
                         ))}
@@ -649,26 +650,26 @@ export default function MjBoard({
                   {(() => {
                     const tiles = (right?.discards || []);
                     const cols: typeof tiles[] = [];
-                    // 每欄 5 張；超過 20 張時改成最多 4 欄、每欄加長，寬度才不會超出 160px 跑出金框
-                    const perCol = Math.max(5, Math.ceil(tiles.length / 4));
+                    // 每欄 7 張、牌 21×29（左右家版面 2026-10-17，原 5 張 26×35）；超過 28 張時改成最多 4 欄、每欄加長
+                    const perCol = Math.max(7, Math.ceil(tiles.length / 4));
                     for (let i = 0; i < tiles.length; i += perCol) {
                       cols.push(tiles.slice(i, i + perCol));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col-reverse gap-[1px]" style={{ width: 35 }}>
+                      <div key={ci} className="flex flex-col-reverse gap-[1px]" style={{ width: 29 }}>
                         {col.map((t, ti) => (
                           <div
                             key={`right-${t.id}-${ti}`}
                             style={{
-                              width: 35,
-                              height: 26,
+                              width: 29,
+                              height: 21,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                             }}
                           >
                             <div style={{ transform: "rotate(-90deg)" }}>
-                              <MjTile tile={t} tiny />
+                              <MjTile tile={t} width={21} height={29} />
                             </div>
                           </div>
                         ))}

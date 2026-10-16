@@ -63,7 +63,7 @@ function Melds({ revealed, w, h, mine, reveal, rot }: { revealed: Meld[]; w: num
   if (revealed.length === 0) return rot ? <div className="mjm-meldcol" /> : null;
   const tile = (t: Tile, faceDown: boolean) =>
     rot ? (
-      <span key={t.id} className="rcell"><MjTile tile={t} width={w} height={h} faceDown={faceDown} /></span>
+      <span key={t.id} className="rcell" style={{ width: h, height: w }}><MjTile tile={t} width={w} height={h} faceDown={faceDown} /></span>
     ) : (
       <MjTile key={t.id} tile={t} width={w} height={h} faceDown={faceDown} />
     );
@@ -95,7 +95,7 @@ function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
   const cell = (c: Cell) => (
     <span key={c.key} className="cell">
       <div className={c.drew ? "drew" : undefined}>
-        <MjTile tile={c.tile} width={11} height={15} faceDown={c.back} />
+        <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
       </div>
     </span>
   );
@@ -241,8 +241,8 @@ function SidePanel({
       </div>
     </div>
   );
-  // 吃碰區 v2：由外往內＝名牌（下面接花膠囊）→ 手牌欄（11×15）→ 吃碰槓（12×16、轉向、靠海底；老闆要求放大，比手牌略大）。
-  // 有沒有眼牌版面都一樣：我眼牌時只是把牌背翻成牌面、暗槓翻開
+  // 吃碰區 v2：由外往內＝名牌（下面接花膠囊）→ 手牌欄（12×16）→ 吃碰槓（17×23、轉向、靠海底）。
+  // 我眼牌時牌背翻成牌面、暗槓翻開，吃碰槓縮成 10×14（翻開的手牌要比吃碰牌大）；吃碰欄有最小寬度，縮小時版面不跳（左右家版面 2026-10-17）
   return (
     <div className={`mjm-side ${side} handside`}>
       <div className="sideplate">
@@ -250,22 +250,42 @@ function SidePanel({
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
       <SideHand count={player.tileCount} h={opponent} />
-      <Melds revealed={opponent?.revealed ?? player.revealed} w={12} h={16} reveal={!!opponent} rot />
+      <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot />
     </div>
   );
 }
 
 /** 左右家棄牌：每欄 4 張，牌旋轉朝向該家 */
+/** 左右家海底：每欄 15×20 的牌直排，一欄最多 6 張（左右家版面 2026-10-17）。
+ *  一欄放幾張看牌桌中間那一列實際多高：667、726 這類矮螢幕放不下 6 張就改 5 張（最少 4 張），
+ *  還差一點時把牌與牌的間距從 1px 壓小，不會被上下的海底切掉 */
+const DIS_V_TILE = 15;
 function VerticalDiscards({ tiles, side }: { tiles: Tile[]; side: "left" | "right" }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ per: 6, gap: 1 });
+  useLayoutEffect(() => {
+    const row = ref.current?.parentElement;
+    if (!row) return;
+    const measure = () => {
+      const h = row.clientHeight;
+      const per = Math.max(4, Math.min(6, Math.floor(h / DIS_V_TILE)));
+      const gap = per > 1 ? Math.max(0, Math.min(1, (h - per * DIS_V_TILE) / (per - 1))) : 1;
+      setFit((f) => (f.per === per && f.gap === gap ? f : { per, gap }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, []);
   const cols: Tile[][] = [];
-  for (let i = 0; i < tiles.length; i += 4) cols.push(tiles.slice(i, i + 4));
+  for (let i = 0; i < tiles.length; i += fit.per) cols.push(tiles.slice(i, i + fit.per));
   return (
-    <div className={`mjm-dis-v ${side}`}>
+    <div ref={ref} className={`mjm-dis-v ${side}`}>
       {cols.map((col, ci) => (
-        <div key={ci} className="col">
+        <div key={ci} className="col" style={{ gap: fit.gap }}>
           {col.map((t) => (
             <div key={t.id} className="cell">
-              <MjTile tile={t} width={18} height={24} />
+              <MjTile tile={t} width={15} height={20} />
             </div>
           ))}
         </div>

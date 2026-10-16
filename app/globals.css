@@ -24,9 +24,9 @@
   --gold-l: #f0d68a;
   --tile-hand-w: clamp(30px, calc((100dvw - env(safe-area-inset-left) - env(safe-area-inset-right) - 64px) / 18), 38px);
   --tile-hand-h: calc(var(--tile-hand-w) * 1.36);
-  --row-top: 44px;
+  --row-top: 38px; /* 左右家版面 2026-10-17：44→38、動作列 46→40，側欄才放得下 17 張 12px 的手牌 */
   --col-side: 72px;
-  --row-action: 46px;
+  --row-action: 40px;
   --row-myinfo: 24px;
   position: fixed;
   inset: 0;
@@ -132,7 +132,7 @@
 .mjm-mid-row { display: flex; align-items: center; min-height: 0; overflow: hidden; }
 .mjm-dis-v { display: flex; gap: 2px; flex: 0 0 auto; }
 .mjm-dis-v .col { display: flex; flex-direction: column; gap: 1px; }
-.mjm-dis-v .cell { width: 24px; height: 18px; display: flex; align-items: center; justify-content: center; }
+.mjm-dis-v .cell { width: 20px; height: 15px; display: flex; align-items: center; justify-content: center; }
 /* 上家：每欄由上往下、第一欄靠中央；下家：每欄由下往上、第一欄靠中央 */
 .mjm-dis-v.left { flex-direction: row-reverse; align-items: flex-start; }
 .mjm-dis-v.right { align-items: flex-end; }
@@ -167,6 +167,8 @@
   background: linear-gradient(135deg, #C9A96E, #e8c97a); color: #0f2a1a; box-shadow: 0 2px 10px rgba(201,169,110,.25);
   transition: transform .15s;
 }
+/* 動作列（40px，左右家版面 2026-10-17 從 46 壓矮）裡的按鈕跟著列高、上下各留 2px，不會被列的 overflow 切掉；結算畫面的按鈕不受影響 */
+.mjm-action .mjm-btn { height: calc(var(--row-action) - 4px); }
 .mjm-btn:active { transform: scale(.95); }
 .mjm-btn:disabled { opacity: .4; box-shadow: none; pointer-events: none; }
 .mjm-btn.win { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; box-shadow: 0 2px 12px rgba(220,38,38,.4); }
@@ -481,10 +483,10 @@
 }
 /* 只排一列、預留 17 格：摸進的第 17 張接在同一列最後面（那一家的右手邊），不會臨時多出第二列。
    側欄不夠高（726×369）時整列等比壓扁一點點，不會被切。 */
-.mjm-sidehand .col { width: 15px; height: 187px; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mjm-sidehand .col { width: 16px; height: 204px; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 /* 左家：由上往下排，第 17 張在最下面；右家：由下往上排，第 17 張在最上面 */
 .mjm-side.right .mjm-sidehand .col { flex-direction: column-reverse; }
-.mjm-sidehand .cell { width: 15px; height: 11px; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.mjm-sidehand .cell { width: 16px; height: 12px; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .mjm-side.left  .mjm-sidehand .cell > * { transform: rotate(90deg); }
 .mjm-side.right .mjm-sidehand .cell > * { transform: rotate(-90deg); }
 .mjm-sidehand .drew { border-radius: 2px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
@@ -496,10 +498,12 @@
   gap: 3px;
   max-height: calc(100% - 28px);
 }
+/* 有吃碰槓時鎖最小寬度：我眼牌時吃碰牌縮成 10×14，欄寬不跟著縮，牌桌不會跳 */
+.mjm-side .mjm-meldcol:not(:empty) { min-width: 57px; }
 .mjm-side.left  .mjm-meldcol { margin-right: 8px; }
 .mjm-side.right .mjm-meldcol { margin-left: 8px; flex-wrap: wrap-reverse; }
 .mjm-side .mjm-meldcol .mjm-meld { flex-direction: column; flex-wrap: nowrap; max-width: none; flex: 0 0 auto; }
-.mjm-side .mjm-meldcol .rcell { width: 16px; height: 12px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.mjm-side .mjm-meldcol .rcell { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .mjm-side.left  .mjm-meldcol .rcell > * { transform: rotate(90deg); }
 .mjm-side.right .mjm-meldcol .rcell > * { transform: rotate(-90deg); }
 
