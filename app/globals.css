@@ -106,7 +106,6 @@
 /* 吃碰槓、花 */
 .mjm-melds { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; min-width: 0; }
 .mjm-meld { display: flex; gap: 1px; padding: 1px; border-radius: 3px; background: rgba(0,0,0,.35); border: 1px solid rgba(0,0,0,.5); flex: 0 0 auto; }
-.mjm-flowers { display: flex; gap: 1px; padding: 1px; border-radius: 3px; background: rgba(201,169,110,.12); border: 1px solid rgba(201,169,110,.25); flex: 0 0 auto; }
 
 /* 上：對家 */
 .mjm-top { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 48px; min-width: 0; overflow: hidden; }
@@ -115,7 +114,7 @@
 .mjm-mid { display: grid; grid-template-columns: var(--col-side) minmax(0, 1fr) var(--col-side); min-height: 0; padding: 0 4px; }
 .mjm-side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 0; overflow: hidden; }
 .mjm-side .mjm-melds { flex-direction: column; gap: 4px; width: 68px; }
-.mjm-side .mjm-meld, .mjm-side .mjm-flowers { flex-wrap: wrap; justify-content: center; max-width: 68px; }
+.mjm-side .mjm-meld { flex-wrap: wrap; justify-content: center; max-width: 68px; }
 
 .mjm-table {
   position: relative; margin: 2px 0; border-radius: 10px; min-height: 0; min-width: 0;
@@ -125,16 +124,19 @@
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; padding: 4px 6px; gap: 2px; overflow: hidden;
 }
 .mjm-dis-h {
-  display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; align-content: flex-start;
+  display: flex; flex-wrap: wrap; gap: 1px; justify-content: flex-start; align-content: flex-start;
   margin: 0 auto; max-width: 92%; max-height: 49px; overflow: hidden;
 }
-.mjm-dis-h.rev { flex-direction: row-reverse; }
+/* 海底一律從該家自己看「由左到右、由上到下」：對家第一張在右、往左長，滿了往畫面上方換列 */
+.mjm-dis-h.rev { flex-direction: row-reverse; flex-wrap: wrap-reverse; }
 .mjm-mid-row { display: flex; align-items: center; min-height: 0; overflow: hidden; }
 .mjm-dis-v { display: flex; gap: 2px; flex: 0 0 auto; }
 .mjm-dis-v .col { display: flex; flex-direction: column; gap: 1px; }
 .mjm-dis-v .cell { width: 24px; height: 18px; display: flex; align-items: center; justify-content: center; }
-.mjm-dis-v.left { flex-direction: row-reverse; align-items: flex-end; }
-.mjm-dis-v.left .col { flex-direction: column-reverse; }
+/* 上家：每欄由上往下、第一欄靠中央；下家：每欄由下往上、第一欄靠中央 */
+.mjm-dis-v.left { flex-direction: row-reverse; align-items: flex-start; }
+.mjm-dis-v.right { align-items: flex-end; }
+.mjm-dis-v.right .col { flex-direction: column-reverse; }
 .mjm-dis-v.left .cell > * { transform: rotate(90deg); }
 .mjm-dis-v.right .cell > * { transform: rotate(-90deg); }
 
@@ -387,36 +389,129 @@
   100% { opacity: 0; transform: translate(calc(-50% + var(--fx-dx)), calc(-50% + var(--fx-dy))) scale(.3); }
 }
 
+/* ===== 補花特效（小宜 2026-10-16）：最輕的一層，只在補花那一家的名牌旁 =====
+   掛在 body（position: fixed，不被牌桌裁掉）；z-index 55 在宣告特效（60）底下；pointer-events: none 不擋按鈕 */
+.mjm-flowerfx {
+  position: fixed; z-index: 55; pointer-events: none;
+  left: var(--ffx-x); top: var(--ffx-y); transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 6px; border-radius: 999px; white-space: nowrap;
+  background: rgba(32, 23, 8, .92);
+  border: 1px solid rgba(201, 169, 110, .75);
+  box-shadow: 0 0 14px rgba(201, 169, 110, .35), 0 3px 10px rgba(0, 0, 0, .5);
+  animation: mjm-ffx 1s cubic-bezier(.2, .9, .25, 1) var(--ffx-delay, 0s) both;
+}
+.mjm-flowerfx .tiles { display: flex; gap: 2px; align-items: center; }
+.mjm-flowerfx .lb {
+  font-size: 12px; font-weight: 800; line-height: 1; letter-spacing: .06em;
+  color: #f0d68a; text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+}
+.mjm-flowerfx .more { font-size: 11px; font-weight: 800; color: #C9A96E; }
+.mjm-flowerfx.desk { gap: 8px; padding: 6px 14px 6px 8px; }
+.mjm-flowerfx.desk .lb { font-size: 15px; }
+.mjm-flowerfx.desk .more { font-size: 13px; }
+@keyframes mjm-ffx {
+  0%   { opacity: 0; transform: translate(-50%, calc(-50% + 7px)) scale(.6); }
+  12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  20%  { transform: translate(-50%, -50%) scale(1); }
+  70%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, calc(-50% - 14px)) scale(1); }
+}
+
+/* ===== 眼牌「慢慢摸牌」（小宜 2026-10-16）：只有眼牌的人自己看得到 =====
+   牌背那面留在版面裡撐出牌的大小，翻開那面疊在上面（規格是兩面都 absolute、外層給固定尺寸，這樣寫桌機手機不用另外給尺寸） */
+.mjm-slowdraw { perspective: 480px; flex: 0 0 auto; display: inline-block; }
+.mjm-slowdraw .inner {
+  position: relative; transform-style: preserve-3d;
+  animation: mjm-slowdraw .8s linear both;   /* 節奏寫在 keyframes 裡，不要再用 easing 扭曲 */
+}
+.mjm-slowdraw .face { backface-visibility: hidden; border-radius: 4px; }
+.mjm-slowdraw .face.back { position: relative; animation: mjm-slowdraw-glow .8s ease both; }
+.mjm-slowdraw .face.front { position: absolute; inset: 0; transform: rotateY(180deg); }
+.mjm-slowdraw.win .face.front { animation: mjm-slowdraw-win .8s ease both; }
+@keyframes mjm-slowdraw {
+  0%   { transform: translateY(-5px) rotateY(0deg) scale(1.05); }
+  44%  { transform: translateY(-5px) rotateY(0deg) scale(1.05); }
+  88%  { transform: translateY(0) rotateY(180deg) scale(1.03); }
+  100% { transform: translateY(0) rotateY(180deg) scale(1); }
+}
+@keyframes mjm-slowdraw-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(201, 169, 110, 0); }
+  22%  { box-shadow: 0 0 16px 3px rgba(201, 169, 110, .85); }
+  44%  { box-shadow: 0 0 4px 1px rgba(201, 169, 110, .3); }
+  60%, 100% { box-shadow: 0 0 0 0 rgba(201, 169, 110, 0); }
+}
+@keyframes mjm-slowdraw-win {
+  0%, 84% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  93%     { box-shadow: 0 0 0 3px #fbbf24, 0 0 18px rgba(251, 191, 36, .85); }
+  100%    { box-shadow: 0 0 0 2px #fbbf24, 0 0 10px rgba(251, 191, 36, .55); }
+}
+
 /* 手機左右家：側欄＝外側（名牌＋轉向的吃碰槓／花）＋內側手牌欄（金框外、和金框隔 8px）。
    手牌欄 16 張那一列靠金框，摸進的第 17 張放外側那一列；有沒有眼牌位置都一樣（眼牌只是牌背翻成牌面），金框寬度不變 */
 .mjm-mid { grid-template-columns: max-content minmax(0, 1fr) max-content; }
 .mjm-side { min-width: var(--col-side); }
 .mjm-side.handside { flex-direction: row; align-items: stretch; justify-content: flex-start; gap: 3px; }
 .mjm-side.right.handside { flex-direction: row-reverse; }
-.mjm-side .sideouter {
-  width: 68px; flex: 0 0 auto; min-height: 0; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+/* 吃碰區 v2（小宜 2026-10-16）：左右家由外往內＝名牌（下面接花膠囊）→ 手牌 → 吃碰槓（靠海底） */
+.mjm-side .sideplate {
+  width: 60px; flex: 0 0 auto; min-height: 0; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
+.mjm-side .mjm-plate-v { width: 60px; }
+.mjm-side .mjm-plate-v .mjm-nm { max-width: 36px; }
 .mjm-sidehand {
-  flex: 0 0 auto; align-self: center; display: flex; gap: 3px; padding: 2px; border-radius: 7px; background: rgba(0,0,0,.22);
+  flex: 0 0 auto; align-self: center; display: flex; flex-direction: column; max-height: 100%; min-height: 0;
+  padding: 2px; border-radius: 7px; background: rgba(0,0,0,.22);
 }
-.mjm-side.left .mjm-sidehand { margin-right: 8px; }
-.mjm-side.right .mjm-sidehand { flex-direction: row-reverse; margin-left: 8px; }
-.mjm-sidehand .col { width: 15px; height: 176px; display: flex; flex-direction: column; }
-/* 左家：由上往下排，第 17 張在外側那一列最下面；右家：由下往上排，第 17 張在外側那一列最上面（都是那一家的右手邊） */
-.mjm-side.left .mjm-sidehand .col.extra { justify-content: flex-end; }
+/* 只排一列、預留 17 格：摸進的第 17 張接在同一列最後面（那一家的右手邊），不會臨時多出第二列。
+   側欄不夠高（726×369）時整列等比壓扁一點點，不會被切。 */
+.mjm-sidehand .col { width: 15px; height: 187px; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* 左家：由上往下排，第 17 張在最下面；右家：由下往上排，第 17 張在最上面 */
 .mjm-side.right .mjm-sidehand .col { flex-direction: column-reverse; }
-.mjm-side.right .mjm-sidehand .col.extra { justify-content: flex-end; }
-.mjm-sidehand .cell { width: 15px; height: 11px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.mjm-sidehand .cell { width: 15px; height: 11px; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .mjm-side.left  .mjm-sidehand .cell > * { transform: rotate(90deg); }
 .mjm-side.right .mjm-sidehand .cell > * { transform: rotate(-90deg); }
 .mjm-sidehand .drew { border-radius: 2px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
-/* 眼牌模式的吃碰槓／花：一樣轉向，每一副自己一直列、彼此並排，放不下換行 */
-.mjm-side .mjm-melds.rot { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 3px; width: 68px; }
-.mjm-side .mjm-melds.rot .mjm-meld, .mjm-side .mjm-melds.rot .mjm-flowers { flex-direction: column; flex-wrap: nowrap; max-width: none; }
-.mjm-melds.rot .rcell { width: 12px; height: 9px; display: flex; align-items: center; justify-content: center; }
-.mjm-side.left  .mjm-melds.rot .rcell > * { transform: rotate(90deg); }
-.mjm-side.right .mjm-melds.rot .rcell > * { transform: rotate(-90deg); }
+/* 吃碰槓欄：每一副自己一直列、由上往下排；放不下就往海底方向長出第二列，不會溢出。
+   和金框的 8px 間距由這一欄留（沒有吃碰槓時是空的一欄） */
+.mjm-side .mjm-meldcol {
+  width: auto; flex: 0 0 auto; align-self: stretch; min-width: 0;
+  display: flex; flex-flow: column wrap; align-content: center; justify-content: center;
+  gap: 3px;
+  max-height: calc(100% - 28px);
+}
+.mjm-side.left  .mjm-meldcol { margin-right: 8px; }
+.mjm-side.right .mjm-meldcol { margin-left: 8px; flex-wrap: wrap-reverse; }
+.mjm-side .mjm-meldcol .mjm-meld { flex-direction: column; flex-wrap: nowrap; max-width: none; flex: 0 0 auto; }
+.mjm-side .mjm-meldcol .rcell { width: 16px; height: 12px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.mjm-side.left  .mjm-meldcol .rcell > * { transform: rotate(90deg); }
+.mjm-side.right .mjm-meldcol .rcell > * { transform: rotate(-90deg); }
+
+/* 花牌收合：一顆「花牌縮圖＋×N」膠囊，點一下展開（面板掛 body、position: fixed） */
+.mjm-flowertag {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px; flex: 0 0 auto;
+  min-width: 26px;
+  padding: 1px 6px 1px 2px; border-radius: 999px;
+  background: rgba(201,169,110,.14); border: 1px solid rgba(201,169,110,.45);
+  cursor: pointer; transition: background .12s, border-color .12s, transform .08s;
+}
+.mjm-flowertag b { font-size: 11px; font-weight: 800; color: #f0d68a; line-height: 1; font-variant-numeric: tabular-nums; }
+.mjm-flowertag:hover  { background: rgba(201,169,110,.26); border-color: rgba(201,169,110,.8); }
+.mjm-flowertag:active { transform: scale(.94); }
+.mjm-flowertag.open   { background: rgba(201,169,110,.34); border-color: #f0d68a; box-shadow: 0 0 0 1px rgba(240,214,138,.35); }
+.mjm-flowerpop {
+  position: fixed; z-index: 120;
+  display: flex; flex-direction: column; gap: 4px; align-items: center;
+  padding: 6px 8px; border-radius: 10px;
+  background: rgba(10,26,16,.97); border: 1px solid rgba(201,169,110,.6);
+  box-shadow: 0 6px 24px rgba(0,0,0,.6);
+  animation: mjm-fp-in .14s cubic-bezier(.2,.9,.25,1) both;
+}
+@keyframes mjm-fp-in { 0% { opacity: 0; transform: scale(.88); } 100% { opacity: 1; transform: scale(1); } }
+.mjm-flowerpop .hd    { font-size: 10px; font-weight: 700; color: #f0d68a; line-height: 1; white-space: nowrap; }
+.mjm-flowerpop .tiles { display: flex; gap: 2px; }
 
 /* 直向轉橫向提示 */
 .mjm-portrait {

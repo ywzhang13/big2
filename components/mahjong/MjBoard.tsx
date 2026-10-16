@@ -6,6 +6,7 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import MjTile from "./MjTile";
 import MjHand from "./MjHand";
+import MjFlowerTag from "./MjFlowerTag";
 import { DeclareFx, Die, fxClass } from "./MjBoardMobile";
 import { seatWindChar } from "./seatWind";
 
@@ -34,6 +35,7 @@ export interface MjBoardProps {
   isMyTurn: boolean;
   playerName: string;
   drawnTileId: number | null;
+  slowDraw: { tileId: number; win: boolean } | null; // 眼牌後慢慢摸牌（只有自己看得到）
   actionNotice: { seat: number; type: string } | null;
   onDraw: () => void;
   onDiscard: (tileId: number, declareEye?: boolean) => void;
@@ -141,6 +143,7 @@ function PlayerPanel({
   isEye,
   fx,
   opponent,
+  busy,
 }: {
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
@@ -152,6 +155,7 @@ function PlayerPanel({
   isEye?: boolean;
   fx?: { both: boolean }; // 正在播宣告特效
   opponent?: MjOpponentHand; // 我眼牌時：這家的牌面（暗槓翻開）
+  busy?: boolean; // 輪到我打牌／有吃碰槓胡按鈕：花的展開面板要收起來
 }) {
   if (!player) return null;
 
@@ -162,13 +166,16 @@ function PlayerPanel({
   // For left/right: layout is horizontal row with hand on outside, melds towards center
   // Each tile rotated 90° to face center
   const rotStyle = position === "left" ? "rotate(90deg)" : position === "right" ? "rotate(-90deg)" : undefined;
-  // 吃碰槓／花的牌：平常 26×35；我眼牌時縮成 20×27，讓翻開的手牌（26×35）是這一區最大的牌
-  const mw = opponent ? 20 : 26;
-  const mh = opponent ? 27 : 35;
+  // 吃碰槓的牌：對家平常 26×35；我眼牌時縮成 20×27，讓翻開的手牌（26×35）是這一區最大的牌。
+  // 左右家 18×25（吃碰區 v2，原 26×35 縮 30%），眼牌時 14×19：4 副吃碰槓直排在 1280×800 才放得下
+  const mw = isHorizontal ? (opponent ? 20 : 26) : opponent ? 14 : 18;
+  const mh = isHorizontal ? (opponent ? 27 : 35) : opponent ? 19 : 25;
 
   return (
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
       ${isCurrent ? "scale-105" : "opacity-60"}`}>
+      {/* 名牌＋花膠囊：對家花在名牌右邊，左右家在名牌下面 */}
+      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center gap-1`}>
       {/* Avatar + Name badge */}
       <div data-fx-seat={player.seat} className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300 ${fxClass(fx)}
         ${isCurrent
@@ -229,6 +236,8 @@ function PlayerPanel({
           )}
         </div>
       </div>
+      <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
+      </div>
 
       {/* 眼牌者：這家的手牌翻開，比吃碰槓大（26×35；左右家旋轉，摸進的那張最後＋金框） */}
       {opponent ? (
@@ -272,7 +281,7 @@ function PlayerPanel({
           group background. Left/right rotate each tile to face center; to
           stop rotation from fighting flex layout we wrap each rotated tile
           in a swapped-dim container (35×26) so the column packs cleanly. */}
-      {(player.flowers.length > 0 || (opponent?.revealed ?? player.revealed).length > 0) && (
+      {(opponent?.revealed ?? player.revealed).length > 0 && (
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
           style={{ gap: 10 }}
@@ -304,6 +313,7 @@ function PlayerPanel({
                         ? {
                             width: mh,
                             height: mw,
+                            minHeight: 0, // 直排時轉 90° 的牌只佔 mw 高；不設的話 flex 會撐回轉之前的 mh
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -319,33 +329,6 @@ function PlayerPanel({
               })}
             </div>
           ))}
-          {player.flowers.length > 0 && (
-            <div
-              className={`flex ${isHorizontal ? "flex-row" : "flex-col"}`}
-              style={{ gap: 1 }}
-            >
-              {player.flowers.map((f) => (
-                <div
-                  key={f.id}
-                  style={
-                    rotStyle
-                      ? {
-                          width: mh,
-                          height: mw,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }
-                      : undefined
-                  }
-                >
-                  <div style={rotStyle ? { transform: rotStyle } : undefined}>
-                    <MjTile tile={f} width={mw} height={mh} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -447,6 +430,7 @@ export default function MjBoard({
   isMyTurn,
   playerName,
   drawnTileId,
+  slowDraw,
   actionNotice,
   onDraw,
   onDiscard,
@@ -467,6 +451,8 @@ export default function MjBoard({
   const me = players.find((p) => p.seat === mySeat);
 
   const hasActions = availableActions.length > 0;
+  // 輪到我打牌或有吃碰槓胡按鈕時，花的展開面板收起來，不擋操作
+  const flowerBusy = needsDiscard || hasActions;
   const isTing = tingSeats.includes(mySeat);
   const isEye = eyeSeats.includes(mySeat);
   // 地聽／眼牌後由伺服器處理出牌，不能自己選牌
@@ -503,6 +489,7 @@ export default function MjBoard({
           isEye={top != null && eyeSeats.includes(top.seat)}
           fx={fxOf(top?.seat)}
           opponent={oppOf(top?.seat)}
+          busy={flowerBusy}
           dealerConsecutive={dealerConsecutive}
         />
       </div>
@@ -521,6 +508,7 @@ export default function MjBoard({
             isEye={left != null && eyeSeats.includes(left.seat)}
             fx={fxOf(left?.seat)}
             opponent={oppOf(left?.seat)}
+            busy={flowerBusy}
             dealerConsecutive={dealerConsecutive}
           />
         </div>
@@ -547,10 +535,10 @@ export default function MjBoard({
 
             {/* 4-sided discard pool using tiny tiles — no overflow hidden */}
             <div className="absolute inset-0 flex flex-col p-3">
-              {/* Top discards — top player faces down, so their right is
-                  screen LEFT. Row-reverse + justify-start puts first tile at
-                  screen RIGHT and grows leftward (toward their right). */}
-              <div className="flex flex-wrap flex-row-reverse justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
+              {/* Top discards — 從對家自己看：由左到右、由上到下。
+                  對家的左手邊是畫面右邊、「上」是靠牌桌中央（畫面下方），
+                  所以第一張在右邊往左長，滿了往畫面上方換列（wrap-reverse）。 */}
+              <div className="flex flex-wrap-reverse flex-row-reverse justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
                 {(top?.discards || []).map((t, i) => (
                   <MjTile key={`top-${t.id}-${i}`} tile={t} tiny />
                 ))}
@@ -558,11 +546,12 @@ export default function MjBoard({
 
               {/* Middle: left | center | right */}
               <div className="flex-1 flex items-center min-h-0">
-                {/* Left discards — left player faces right, so their right is
-                    screen UP. Each column fills bottom→top (flex-col-reverse).
+                {/* Left discards — 從上家自己看：由左到右、由上到下。
+                    上家面向畫面右邊，左手邊是畫面上方，所以每欄由上往下排；
+                    「上」是靠牌桌中央，第一欄在最右邊、往左換欄。
                     Wrapper dims (35×26) match the rotated tile's visual
                     bounding box so sibling columns don't overlap. */}
-                <div className="flex-shrink-0 flex flex-row-reverse gap-[2px] items-end" style={{ maxWidth: 160 }}>
+                <div className="flex-shrink-0 flex flex-row-reverse gap-[2px] items-start" style={{ maxWidth: 160 }}>
                   {(() => {
                     const tiles = (left?.discards || []);
                     const cols: typeof tiles[] = [];
@@ -572,7 +561,7 @@ export default function MjBoard({
                       cols.push(tiles.slice(i, i + perCol));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col-reverse gap-[1px]" style={{ width: 35 }}>
+                      <div key={ci} className="flex flex-col gap-[1px]" style={{ width: 35 }}>
                         {col.map((t, ti) => (
                           <div
                             key={`left-${t.id}-${ti}`}
@@ -652,10 +641,11 @@ export default function MjBoard({
                   )}
                 </div>
 
-                {/* Right discards — right player faces left, so their right is
-                    screen DOWN. Each column fills top→down (default flex-col).
+                {/* Right discards — 從下家自己看：由左到右、由上到下。
+                    下家面向畫面左邊，左手邊是畫面下方，所以每欄由下往上排；
+                    「上」是靠牌桌中央，第一欄在最左邊、往右換欄。
                     Wrapper dims match rotated bounding box (35×26). */}
-                <div className="flex-shrink-0 flex flex-row gap-[2px] items-start" style={{ maxWidth: 160 }}>
+                <div className="flex-shrink-0 flex flex-row gap-[2px] items-end" style={{ maxWidth: 160 }}>
                   {(() => {
                     const tiles = (right?.discards || []);
                     const cols: typeof tiles[] = [];
@@ -665,7 +655,7 @@ export default function MjBoard({
                       cols.push(tiles.slice(i, i + perCol));
                     }
                     return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col gap-[1px]" style={{ width: 35 }}>
+                      <div key={ci} className="flex flex-col-reverse gap-[1px]" style={{ width: 35 }}>
                         {col.map((t, ti) => (
                           <div
                             key={`right-${t.id}-${ti}`}
@@ -814,6 +804,7 @@ export default function MjBoard({
             isEye={right != null && eyeSeats.includes(right.seat)}
             fx={fxOf(right?.seat)}
             opponent={oppOf(right?.seat)}
+            busy={flowerBusy}
             dealerConsecutive={dealerConsecutive}
           />
         </div>
@@ -863,12 +854,10 @@ export default function MjBoard({
           )}
           <span className="text-[10px] text-white/30 ml-auto">{myHand.length} 張</span>
 
-          {/* Flowers */}
-          {me && me.flowers.length > 0 && (
-            <div className="flex gap-[2px] items-center ml-2">
-              {me.flowers.map((f) => (
-                <MjTile key={f.id} tile={f} small />
-              ))}
+          {/* Flowers：收成一顆「花×N」，點一下展開 */}
+          {me && (
+            <div className="flex items-center ml-2">
+              <MjFlowerTag flowers={me.flowers} name={me.name} w={20} h={28} popW={26} popH={35} busy={flowerBusy} />
             </div>
           )}
 
@@ -879,7 +868,7 @@ export default function MjBoard({
                 <div key={mi} className="flex gap-[1px]">
                   {/* 自己的暗槓顯示全部牌面（其他家 PlayerPanel 則全部面朝下） */}
                   {meld.tiles.map((t) => (
-                    <MjTile key={t.id} tile={t} small />
+                    <MjTile key={t.id} tile={t} width={20} height={28} />
                   ))}
                 </div>
               ))}
@@ -895,6 +884,7 @@ export default function MjBoard({
               canDiscard={needsDiscard && !locked}
               onDiscard={onDiscard}
               drawnTileId={drawnTileId ?? undefined}
+              slowDraw={slowDraw}
               eyeArmed={eyeArmed}
               eyeOptionIds={eyeOptions}
             />

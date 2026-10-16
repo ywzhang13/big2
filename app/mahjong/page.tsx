@@ -9,6 +9,7 @@ import MjRecords from "@/components/mahjong/MjRecords";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
+import MjFlowerFx from "@/components/mahjong/MjFlowerFx";
 import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
@@ -929,6 +930,7 @@ function RoomView({
     isMyTurn,
     playerName,
     drawnTileId: state.drawnTileId,
+    slowDraw: state.slowDraw,
     actionNotice: state.actionNotice,
     onDraw: drawTile,
     onDiscard: discardTile,
@@ -981,6 +983,9 @@ function RoomView({
       <MjBoard {...boardProps} />
       </>
       )}
+
+      {/* 補花特效：掛在 body，貼著補花那一家的名牌（桌機、手機共用） */}
+      <MjFlowerFx fx={state.flowerFx} mySeat={state.mySeat} desk={!isMobileLandscape} />
 
       {/* Leave confirmation modal (requester side) */}
       {showLeaveConfirm && !state.leaveRequest && (

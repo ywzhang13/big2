@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { sortTiles, isFlower, tileKey } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
+import { FlowerTracker } from "@/lib/mahjong/flowerTracker";
 
 /** Filter out any flower tiles that shouldn't be in hand (defensive) */
 function safeHand(tiles: Tile[]): Tile[] {
@@ -58,6 +59,20 @@ async function api<T>(method: "GET" | "POST", path: string, body?: Record<string
   }
   return res.json();
 }
+
+/** 補花特效的一顆膠囊：key 每次播放都換（同一家 1 秒內又補到時接續、重新播）；delay 秒 */
+export interface MjFlowerFx {
+  key: number;
+  seat: number;
+  tiles: Tile[];
+  delay: number;
+}
+
+/** 慢慢摸牌時也照常即時處理的事件：摸到的牌本身、剩餘張數和補花、眼牌者看到的三家手牌 */
+const SLOW_DRAW_PASS = new Set(["mj_draw_tile", "mj_draw", "mj_opponent_hands"]);
+const SLOW_DRAW_MS = 800;
+/** 眼牌者摸牌：翻到正面後一律再停 1 秒，才自動打出或進結算 */
+const SLOW_DRAW_PAUSE_MS = 1000;
 
 export interface MjPlayer {
   id: string;
@@ -128,6 +143,10 @@ export interface MjClientState {
   opponentHands: MjOpponentHand[] | null;
   // 正在播宣告特效的座位（播完自動移除）；both＝第一輪眼牌同時地聽（MIGI）
   declareFx: { seat: number; both: boolean }[];
+  // 正在播補花特效的膠囊（播完自動移除）
+  flowerFx: MjFlowerFx[];
+  // 眼牌後慢慢摸牌：只有眼牌的人自己看得到；tileId＝正在翻的那張，win＝翻開是胡牌（閃金框）
+  slowDraw: { tileId: number; win: boolean } | null;
   winner?: MjWinner & { allHands?: MjHandReveal[] };
   // 一炮多響: all winners of this round (seat/name/score per winner).
   // Populated alongside `winner` when multiple players hu on the same discard.
@@ -205,6 +224,8 @@ export function useMahjong(
     eyeWithTing: false,
     opponentHands: null,
     declareFx: [],
+    flowerFx: [],
+    slowDraw: null,
     wallRemaining: 0,
     hostId: "",
     hasDrawn: false,
@@ -238,9 +259,12 @@ export function useMahjong(
   const fxInitRef = useRef(false);
   // 特效的移除計時器（每個座位一個）：開新局、同座位再播、卸載時都要取消，舊計時器才不會刪掉新局的特效
   const fxTimersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  // 宣告特效什麼時候播完（每個座位）：同一家正在播宣告特效時，補花膠囊延後到播完再出現
+  const declareEndRef = useRef(new Map<number, number>());
   const playDeclareFx = useCallback((seat: number, both: boolean) => {
     if (playedFxRef.current.has(seat)) return;
     playedFxRef.current.add(seat);
+    declareEndRef.current.set(seat, Date.now() + (both ? 1900 : 1300));
     setState((prev) => ({ ...prev, declareFx: [...prev.declareFx.filter((f) => f.seat !== seat), { seat, both }] }));
     // 牌桌中央出現→飛進名牌→名牌標示彈出：MIGI 1.41 秒飛到、1.9 秒結束；一般眼牌 0.83 秒飛到、1.3 秒結束
     clearTimeout(fxTimersRef.current.get(seat));
@@ -256,6 +280,87 @@ export function useMahjong(
       timers.clear();
     };
   }, []);
+
+  // 補花特效（小宜 2026-10-16）：只在收到廣播時播，輪詢只記下來不播（重新整理不重播）。
+  // 每個座位已經知道的花牌 id（跟著局走，見 FlowerTracker）；事件帶來的花牌和它比對，多出來的就是這次補的
+  const flowerTrackerRef = useRef(new FlowerTracker());
+  const flowerFxRef = useRef(new Map<number, MjFlowerFx>()); // 正在播的膠囊（同一家 1 秒內又補到時接續）
+  const flowerTimersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const flowerKeyRef = useRef(0);
+  const clearFlowerFx = useCallback(() => {
+    flowerTimersRef.current.forEach(clearTimeout);
+    flowerTimersRef.current.clear();
+    flowerFxRef.current.clear();
+  }, []);
+  const playFlowerFx = useCallback((seat: number, tiles: Tile[], delay: number) => {
+    const prevFx = flowerFxRef.current.get(seat);
+    const left = (declareEndRef.current.get(seat) ?? 0) - Date.now();
+    const fx: MjFlowerFx = {
+      key: ++flowerKeyRef.current,
+      seat,
+      tiles: prevFx ? [...prevFx.tiles, ...tiles] : tiles,
+      delay: Math.max(delay, left > 0 ? left / 1000 : 0),
+    };
+    flowerFxRef.current.set(seat, fx);
+    setState((prev) => ({ ...prev, flowerFx: [...prev.flowerFx.filter((f) => f.seat !== seat), fx] }));
+    clearTimeout(flowerTimersRef.current.get(seat));
+    flowerTimersRef.current.set(seat, setTimeout(() => {
+      flowerTimersRef.current.delete(seat);
+      flowerFxRef.current.delete(seat);
+      setState((prev) => ({ ...prev, flowerFx: prev.flowerFx.filter((f) => f.seat !== seat) }));
+    }, (fx.delay + 1) * 1000));
+  }, []);
+  /** 廣播事件帶來某家的花牌：有新補的花就播。這家還沒記過（剛重新整理）就只記不播 */
+  const noteFlowers = useCallback((seat: number, flowers: Tile[]) => {
+    const added = flowerTrackerRef.current.onEvent(seat, flowers);
+    if (added.length > 0) playFlowerFx(seat, added, 0);
+  }, [playFlowerFx]);
+  useEffect(() => clearFlowerFx, [clearFlowerFx]);
+
+  // 眼牌後慢慢摸牌（小宜 2026-10-16）：伺服器在同一個請求裡做完「摸牌→自動胡或自動打出」並一次廣播，
+  // 所以眼牌的人送出摸牌時，先把收到的事件排隊（摸到的牌、剩餘張數／補花、三家手牌照常即時），
+  // 摸到的牌翻開（0.8 秒）後再照原順序套用。只影響眼牌的人自己的畫面，其他三家完全不變。
+  // 保險：沒等到摸牌事件最多排 1.5 秒；切到背景、摸牌失敗、卸載都立刻套用；排隊期間不採用輪詢
+  // gen：每次開始排隊就加 1。輪詢送出後如果開始過排隊，回應就是過時的，不能套用（見 fetchState）
+  const holdRef = useRef<{ on: boolean; gen: number; queue: (() => void)[]; timer?: ReturnType<typeof setTimeout>; refetch?: () => void }>({ on: false, gen: 0, queue: [] });
+  const releaseHold = useCallback(() => {
+    const h = holdRef.current;
+    clearTimeout(h.timer);
+    if (!h.on) return;
+    h.on = false;
+    const queue = h.queue;
+    const refetch = h.refetch;
+    h.queue = [];
+    h.refetch = undefined;
+    setState((prev) => (prev.slowDraw ? { ...prev, slowDraw: null } : prev));
+    queue.forEach((fn) => fn());
+    refetch?.(); // 排隊期間丟掉的輪詢，停完再抓一次，收斂到伺服器狀態
+  }, []);
+  const holdFor = useCallback((ms: number) => {
+    const h = holdRef.current;
+    if (!h.on) h.gen++;
+    h.on = true;
+    clearTimeout(h.timer);
+    h.timer = setTimeout(releaseHold, ms);
+  }, [releaseHold]);
+  /** 訂閱廣播事件；慢慢摸牌期間，除了摸牌本身的事件以外都先排隊 */
+  const onHeld = useCallback((ch: RealtimeChannel, event: string, fn: (msg: { payload: Record<string, unknown> }) => void) => {
+    ch.on("broadcast", { event }, (msg) => {
+      const m = { payload: (msg.payload ?? {}) as Record<string, unknown> };
+      const h = holdRef.current;
+      if (h.on && !SLOW_DRAW_PASS.has(event)) h.queue.push(() => fn(m));
+      else fn(m);
+    });
+  }, []);
+  useEffect(() => {
+    const hold = holdRef.current;
+    const onVis = () => { if (document.hidden) releaseHold(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      clearTimeout(hold.timer);
+    };
+  }, [releaseHold]);
   // 同理：莊家的地聽選項（mj_deal_hand）可能比 mj_game_start 先到
   const dealtThisGameRef = useRef(false);
   // 整場打完（gameOver）後不再採用輪詢結果：比結束事件晚回來的舊輪詢會把畫面蓋回「打牌中」，
@@ -265,6 +370,8 @@ export function useMahjong(
   // Fetch full state from API (for reconnection / polling)
   const fetchState = useCallback(async (rid: string) => {
     if (closedRef.current) return;
+    if (holdRef.current.on) { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; } // 慢慢摸牌中：伺服器已經是打出後的狀態，翻完再說
+    const holdGen = holdRef.current.gen;
     const myId = myIdRef.current; // applyJoin 換了玩家 id 後，還沒重新 render 也要用新的
     try {
       const data = await api<{
@@ -306,6 +413,12 @@ export function useMahjong(
         } | null;
       }>("GET", `/api/mahjong/state?roomId=${rid}&playerId=${myId}`);
       if (matchOverRef.current) return;
+      // 請求在路上時開始了慢慢摸牌：這份回應不能在翻牌＋停頓期間套用。還在排隊就等停完再抓，已經停完就馬上重抓
+      if (holdRef.current.gen !== holdGen) {
+        if (holdRef.current.on) holdRef.current.refetch = () => fetchStateRef.current?.(rid);
+        else fetchStateRef.current?.(rid);
+        return;
+      }
 
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
@@ -363,6 +476,7 @@ export function useMahjong(
       const pendingAddKong = gs.pendingAddKong ?? null;
       const pendingFlowerRob = gs.pendingFlowerRob ?? null;
 
+      flowerTrackerRef.current.onPoll(gs.players, (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined);
       setState((prev) => ({
         ...prev,
         status: gs.status as MjClientState["status"],
@@ -445,12 +559,14 @@ export function useMahjong(
       console.error("[mj] fetchState failed:", err);
     }
   }, [markClosed, playDeclareFx]);
+  const fetchStateRef = useRef<((rid: string) => Promise<void>) | null>(null);
+  useEffect(() => { fetchStateRef.current = fetchState; }, [fetchState]);
 
   // 只給本人的事件（手牌、摸到的牌、可以吃碰槓胡）。舊房送在房間頻道、登入房送在座位頻道，
   // 兩邊都掛上；payload 一樣帶 playerId，不是我的就略過
   const bindPrivateEvents = useCallback((ch: RealtimeChannel, myId: string) => {
       // --- mj_deal_hand (private) ---
-      ch.on("broadcast", { event: "mj_deal_hand" }, ({ payload }) => {
+      onHeld(ch, "mj_deal_hand", ({ payload }) => {
         const { playerId, hand, flowers, eyeOptions, eyeWithTing } = payload as {
           playerId: string;
           hand: Tile[];
@@ -473,7 +589,7 @@ export function useMahjong(
       });
 
       // --- mj_draw_tile (private) ---
-      ch.on("broadcast", { event: "mj_draw_tile" }, ({ payload }) => {
+      onHeld(ch, "mj_draw_tile", ({ payload }) => {
         const { playerId, hand, flowers, canWin, canKong, kongOptions, addKongOptions, eyeOptions, eyeWithTing } = payload as {
           playerId: string;
           tile: Tile;
@@ -504,11 +620,16 @@ export function useMahjong(
           if (tile) actions.push({ type: "add_kong", tiles: [tile] });
         }
         const drawnTile = payload.tile as Tile;
+        if (flowers) noteFlowers(stateRef.current.mySeat, flowers);
+        // 眼牌的人自己送出的摸牌：開始翻牌，翻開（0.8 秒）後再停 1 秒，才套用排隊中的自動打出／自動胡
+        const slow = holdRef.current.on && drawnTile ? { tileId: drawnTile.id, win: canWin } : null;
+        if (slow) holdFor(SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS);
         console.log("[mj] mj_draw_tile", { drawnTileId: drawnTile?.id, drawnDisplay: drawnTile?.display, handLen: hand.length });
         setState((prev) => ({
           ...prev,
           myHand: safeHand(hand),
-          availableActions: actions,
+          availableActions: slow ? [] : actions, // 眼牌的人不用按：伺服器已經自動胡或打出
+          slowDraw: slow,
           eyeOptions: eyeOptions ?? [],
           eyeWithTing: eyeWithTing === true,
           robKong: false,
@@ -524,7 +645,7 @@ export function useMahjong(
       });
 
       // --- mj_available_actions (private) ---
-      ch.on("broadcast", { event: "mj_available_actions" }, ({ payload }) => {
+      onHeld(ch, "mj_available_actions", ({ payload }) => {
         const { playerId, actions, robKong, robFlower } = payload as {
           playerId: string;
           actions: { type: string; playerSeat: number; tiles?: Tile[] }[];
@@ -545,7 +666,7 @@ export function useMahjong(
       });
 
       // --- mj_hand_update (private, after action) ---
-      ch.on("broadcast", { event: "mj_hand_update" }, ({ payload }) => {
+      onHeld(ch, "mj_hand_update", ({ payload }) => {
         const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing } = payload as {
           playerId: string;
           hand: Tile[];
@@ -564,12 +685,12 @@ export function useMahjong(
       });
 
       // --- mj_opponent_hands (private)：我眼牌時，三家手牌的完整快照（直接整份取代） ---
-      ch.on("broadcast", { event: "mj_opponent_hands" }, ({ payload }) => {
+      onHeld(ch, "mj_opponent_hands", ({ payload }) => {
         const { playerId, opponentHands } = payload as { playerId: string; opponentHands: MjOpponentHand[] };
         if (playerId !== myId) return;
         setState((prev) => (prev.status === "playing" ? { ...prev, opponentHands } : prev));
       });
-  }, []);
+  }, [noteFlowers, holdFor, onHeld]);
 
   // 登入房：另外訂閱本人的座位頻道（房間頻道照舊訂閱）
   useEffect(() => {
@@ -596,7 +717,7 @@ export function useMahjong(
     });
 
     // --- mj_player_joined ---
-    channel.on("broadcast", { event: "mj_player_joined" }, ({ payload }) => {
+    onHeld(channel, "mj_player_joined", ({ payload }) => {
       const { playerId, name, seat } = payload as {
         playerId: string;
         name: string;
@@ -638,12 +759,14 @@ export function useMahjong(
     });
 
     // --- mj_game_start ---
-    channel.on("broadcast", { event: "mj_game_start" }, ({ payload }) => {
+    onHeld(channel, "mj_game_start", ({ payload }) => {
       dismissedOwnActionsRef.current = null;
       playedFxRef.current.clear();
       // 上一局還在播的宣告特效：取消移除計時器，畫面立即清空（見下方 declareFx: []）
       fxTimersRef.current.forEach(clearTimeout);
       fxTimersRef.current.clear();
+      declareEndRef.current.clear();
+      clearFlowerFx(); // 上一局的補花膠囊同理（見下方 flowerFx: []）
       const msg = payload as {
         currentTurn: number;
         dealerSeat: number;
@@ -681,6 +804,7 @@ export function useMahjong(
         tingSeats: [],
         eyeSeats: [],
         declareFx: [],
+        flowerFx: [],
         opponentHands: null,
         // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
         eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],
@@ -707,18 +831,22 @@ export function useMahjong(
         nextGameReady: [],
         nextGameAllReady: false,
       }));
+      // 開局補花：每家開局的花都是剛補的；依座位順序（自己→下家→對家→上家）每隔 0.12 秒出現
+      const opening = flowerTrackerRef.current.onGameStart(msg.players.map((p) => ({ seat: p.seat, flowers: p.flowers || [] })), msg.roundInfo);
+      for (const p of opening) playFlowerFx(p.seat, p.flowers, mySeat < 0 ? 0 : ((p.seat - mySeat + 4) % 4) * 0.12);
     });
 
     bindPrivateEvents(channel, myId);
 
     // --- mj_draw (public) ---
-    channel.on("broadcast", { event: "mj_draw" }, ({ payload }) => {
+    onHeld(channel, "mj_draw", ({ payload }) => {
       const { seat, tileCount, wallCount, flowers } = payload as {
         seat: number;
         tileCount: number;
         wallCount: number;
         flowers?: Tile[];
       };
+      if (flowers) noteFlowers(seat, flowers);
       setState((prev) => ({
         ...prev,
         wallRemaining: wallCount,
@@ -733,7 +861,7 @@ export function useMahjong(
     });
 
     // --- mj_discard ---
-    channel.on("broadcast", { event: "mj_discard" }, ({ payload }) => {
+    onHeld(channel, "mj_discard", ({ payload }) => {
       dismissedOwnActionsRef.current = null;
       const { seat, tile } = payload as {
         seat: number;
@@ -776,7 +904,7 @@ export function useMahjong(
     });
 
     // --- mj_action (chi/pong/kong) ---
-    channel.on("broadcast", { event: "mj_action" }, ({ payload }) => {
+    onHeld(channel, "mj_action", ({ payload }) => {
       dismissedOwnActionsRef.current = null;
       const msg = payload as {
         type: string;
@@ -830,7 +958,7 @@ export function useMahjong(
     });
 
     // --- mj_add_kong_pending (public): 加槓中，等其他家決定要不要搶槓 ---
-    channel.on("broadcast", { event: "mj_add_kong_pending" }, ({ payload }) => {
+    onHeld(channel, "mj_add_kong_pending", ({ payload }) => {
       const { seat, tile, tileCount } = payload as {
         seat: number;
         tile: Tile;
@@ -848,7 +976,7 @@ export function useMahjong(
     });
 
     // --- mj_eye_declared (public)：有人打牌時一起宣告眼牌；ting＝第一輪同時算地聽（雙色特效） ---
-    channel.on("broadcast", { event: "mj_eye_declared" }, ({ payload }) => {
+    onHeld(channel, "mj_eye_declared", ({ payload }) => {
       const { seat, ting } = payload as { seat: number; tile: Tile; ting?: boolean };
       setState((prev) => ({
         ...prev,
@@ -859,7 +987,7 @@ export function useMahjong(
     });
 
     // --- mj_ting_declared (public): 第一輪宣告眼牌時伺服器同時算地聽 ---
-    channel.on("broadcast", { event: "mj_ting_declared" }, ({ payload }) => {
+    onHeld(channel, "mj_ting_declared", ({ payload }) => {
       const { seat } = payload as { seat: number; tile: Tile };
       setState((prev) => ({
         ...prev,
@@ -868,7 +996,7 @@ export function useMahjong(
     });
 
     // --- mj_flower_rob_pending (public): 有人摸到第 8 張花，等 7 張花的人決定要不要七搶一 ---
-    channel.on("broadcast", { event: "mj_flower_rob_pending" }, ({ payload }) => {
+    onHeld(channel, "mj_flower_rob_pending", ({ payload }) => {
       const { robberSeat, fromSeat, tile } = payload as {
         robberSeat: number;
         fromSeat: number;
@@ -883,7 +1011,7 @@ export function useMahjong(
     });
 
     // --- mj_add_kong (public): 加槓完成，把那組碰升成槓（不新增一組） ---
-    channel.on("broadcast", { event: "mj_add_kong" }, ({ payload }) => {
+    onHeld(channel, "mj_add_kong", ({ payload }) => {
       const { seat, tile, tileCount } = payload as {
         seat: number;
         tile: Tile;
@@ -920,7 +1048,7 @@ export function useMahjong(
     });
 
     // --- mj_turn_advance (from discard when no actions, to avoid flash) ---
-    channel.on("broadcast", { event: "mj_turn_advance" }, ({ payload }) => {
+    onHeld(channel, "mj_turn_advance", ({ payload }) => {
       const { currentTurn, hasDrawn } = payload as {
         currentTurn: number;
         hasDrawn: boolean;
@@ -933,7 +1061,7 @@ export function useMahjong(
     });
 
     // --- mj_pass ---
-    channel.on("broadcast", { event: "mj_pass" }, ({ payload }) => {
+    onHeld(channel, "mj_pass", ({ payload }) => {
       const { seat: _seat, allPassed, currentTurn: newTurn, hasDrawn: newHasDrawn } = payload as {
         seat: number;
         allPassed?: boolean;
@@ -961,7 +1089,7 @@ export function useMahjong(
     });
 
     // --- mj_leave_request ---
-    channel.on("broadcast", { event: "mj_leave_request" }, ({ payload }) => {
+    onHeld(channel, "mj_leave_request", ({ payload }) => {
       const { requesterId, requesterName, requesterSeat } = payload as {
         requesterId: string;
         requesterName: string;
@@ -976,11 +1104,11 @@ export function useMahjong(
 
     // --- mj_leave_vote ---
     // --- mj_room_closed：這場已寫紀錄並刪房（最終結算照常顯示） ---
-    channel.on("broadcast", { event: "mj_room_closed" }, ({ payload }) => {
+    onHeld(channel, "mj_room_closed", ({ payload }) => {
       markClosed(closedFromEvent(payload));
     });
 
-    channel.on("broadcast", { event: "mj_leave_vote" }, ({ payload }) => {
+    onHeld(channel, "mj_leave_vote", ({ payload }) => {
       const { approvedCount, deniedCount, result, requesterSeat, requesterName } = payload as {
         voterId: string;
         voterSeat: number;
@@ -1012,7 +1140,7 @@ export function useMahjong(
     });
 
     // --- mj_next_game_ready (partial readiness or all ready) ---
-    channel.on("broadcast", { event: "mj_next_game_ready" }, ({ payload }) => {
+    onHeld(channel, "mj_next_game_ready", ({ payload }) => {
       const { readyIds, allReady } = payload as { readyIds: string[]; allReady?: boolean };
       setState((prev) => ({
         ...prev,
@@ -1022,7 +1150,7 @@ export function useMahjong(
     });
 
     // --- mj_game_over ---
-    channel.on("broadcast", { event: "mj_game_over" }, ({ payload }) => {
+    onHeld(channel, "mj_game_over", ({ payload }) => {
       dismissedOwnActionsRef.current = null;
       freshPrivateActionsRef.current = false;
       dealtThisGameRef.current = false;
@@ -1104,7 +1232,7 @@ export function useMahjong(
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents, playDeclareFx]);
+  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents, playDeclareFx, playFlowerFx, noteFlowers, clearFlowerFx, onHeld]);
 
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
@@ -1152,12 +1280,15 @@ export function useMahjong(
   const drawTileAction = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
+    const cur = stateRef.current;
+    if (cur.eyeSeats.includes(cur.mySeat) && !document.hidden) holdFor(1500); // 眼牌：先排隊，收到摸到的牌再翻（在背景就不翻，直接套用）
     try {
       await call("/api/mahjong/draw", {
         roomId: rid,
         playerId: myId,
       });
     } catch (err) {
+      releaseHold();
       // Race: auto-draw effect can fire before the mj_action broadcast
       // flips hasDrawn to true after chi/pong/kong. Server will reject with
       // "已經摸過牌了" — safe to ignore; the next discard path will proceed.
@@ -1165,7 +1296,7 @@ export function useMahjong(
       if (msg.includes("已經摸過牌了") || msg.includes("等待其他玩家動作中")) return;
       console.error("[mj] draw failed:", err);
     }
-  }, [myId, call]);
+  }, [myId, call, holdFor, releaseHold]);
 
   const discardTile = useCallback(
     async (tileId: number, declareEye?: boolean) => {
@@ -1325,7 +1456,8 @@ export function useMahjong(
     state.hasDrawn &&
     state.status === "playing" &&
     !state.pendingAddKong &&
-    !state.pendingFlowerRob;
+    !state.pendingFlowerRob &&
+    !state.slowDraw; // 慢慢摸牌中：伺服器已經處理完，不能再點牌
 
   // Auto-draw: when it's my turn and I need to draw, do it automatically
   // BUT NOT if there are pending actions OR I just discarded (pending

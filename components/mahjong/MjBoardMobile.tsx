@@ -10,6 +10,8 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import MjTile from "./MjTile";
+import { SlowDrawTile } from "./MjHand";
+import MjFlowerTag from "./MjFlowerTag";
 import { seatWindChar } from "./seatWind";
 
 const ACTION_NAMES: Record<string, string> = {
@@ -55,10 +57,10 @@ function DealerTag({ player, consecutive, withLa, short }: { player: MjPlayer; c
   );
 }
 
-/** 吃碰槓＋花。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
- *  rot＝左右家眼牌模式：每張包一格、由 CSS 轉 ±90° 朝向主人，每一副自己一直列 */
-function Melds({ revealed, flowers, w, h, mine, reveal, rot }: { revealed: Meld[]; flowers: Tile[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean }) {
-  if (revealed.length === 0 && flowers.length === 0) return null;
+/** 吃碰槓（花改成 MjFlowerTag 收合）。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
+ *  rot＝左右家：每張包一格、由 CSS 轉 ±90° 朝向主人，每一副自己一直列，放在靠海底那一欄（沒有吃碰槓也留著，當作和金框的間距） */
+function Melds({ revealed, w, h, mine, reveal, rot }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean }) {
+  if (revealed.length === 0) return rot ? <div className="mjm-meldcol" /> : null;
   const tile = (t: Tile, faceDown: boolean) =>
     rot ? (
       <span key={t.id} className="rcell"><MjTile tile={t} width={w} height={h} faceDown={faceDown} /></span>
@@ -66,13 +68,12 @@ function Melds({ revealed, flowers, w, h, mine, reveal, rot }: { revealed: Meld[
       <MjTile key={t.id} tile={t} width={w} height={h} faceDown={faceDown} />
     );
   return (
-    <div className={`mjm-melds ${rot ? "rot" : ""}`}>
+    <div className={rot ? "mjm-meldcol" : "mjm-melds"}>
       {revealed.map((meld, mi) => (
         <div key={mi} className="mjm-meld">
           {meld.tiles.map((t) => tile(t, !mine && !reveal && meld.type === "concealed_kong"))}
         </div>
       ))}
-      {flowers.length > 0 && <div className="mjm-flowers">{flowers.map((f) => tile(f, false))}</div>}
     </div>
   );
 }
@@ -100,8 +101,7 @@ function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
   );
   return (
     <div className="mjm-sidehand">
-      <div className="col extra">{cells.slice(16).map(cell)}</div>
-      <div className="col main">{cells.slice(0, 16).map(cell)}</div>
+      <div className="col main">{cells.map(cell)}</div>
     </div>
   );
 }
@@ -209,6 +209,7 @@ function SidePanel({
   opponent,
   windChar,
   side,
+  busy,
 }: {
   side: "left" | "right";
   player: MjPlayer | undefined;
@@ -221,6 +222,7 @@ function SidePanel({
   isEye: boolean;
   fx?: { both: boolean };
   opponent?: MjOpponentHand;
+  busy?: boolean;
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
@@ -239,15 +241,16 @@ function SidePanel({
       </div>
     </div>
   );
-  // 外側＝名牌＋轉向的吃碰槓／花（9×12），內側＝手牌欄（11×15，比吃碰牌大）、在金框外面。
+  // 吃碰區 v2：由外往內＝名牌（下面接花膠囊）→ 手牌欄（11×15）→ 吃碰槓（12×16、轉向、靠海底；老闆要求放大，比手牌略大）。
   // 有沒有眼牌版面都一樣：我眼牌時只是把牌背翻成牌面、暗槓翻開
   return (
     <div className={`mjm-side ${side} handside`}>
-      <div className="sideouter">
+      <div className="sideplate">
         {plate}
-        <Melds revealed={opponent?.revealed ?? player.revealed} flowers={player.flowers} w={9} h={12} reveal={!!opponent} rot />
+        <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
       <SideHand count={player.tileCount} h={opponent} />
+      <Melds revealed={opponent?.revealed ?? player.revealed} w={12} h={16} reveal={!!opponent} rot />
     </div>
   );
 }
@@ -325,6 +328,7 @@ export default function MjBoardMobile({
   isMyTurn,
   playerName,
   drawnTileId,
+  slowDraw,
   actionNotice,
   onDiscard,
   onAction,
@@ -366,6 +370,8 @@ export default function MjBoardMobile({
   const migiFx = declareFx.find((f) => f.both);
   const eyeFx = declareFx.find((f) => !f.both);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
+  // 輪到我打牌或有吃碰槓胡按鈕時，花的展開面板收起來，不擋操作
+  const flowerBusy = needsDiscard || availableActions.length > 0;
 
   // 選取的牌已經不在手上、不能打、或按了眼牌（點牌直接打出）→ 視為沒選
   const picked = canPick && !eyeArmed ? myHand.find((t) => t.id === selectedId) ?? null : null;
@@ -464,16 +470,17 @@ export default function MjBoardMobile({
               <DeclareTags ting={tingSeats.includes(top.seat)} eye={eyeSeats.includes(top.seat)} fx={fxOf(top.seat)} />
               <Score score={scoreOf(top)} />
             </div>
+            <MjFlowerTag flowers={top.flowers} name={top.name} w={12} h={16} popW={20} popH={27} busy={flowerBusy} />
             {oppOf(top.seat) ? (
               <>
                 {/* 眼牌模式：手牌 16×22 比吃碰槓 12×16 大 */}
                 <EyeHand h={oppOf(top.seat)!} w={16} ht={22} />
-                <Melds revealed={oppOf(top.seat)!.revealed} flowers={top.flowers} w={12} h={16} reveal />
+                <Melds revealed={oppOf(top.seat)!.revealed} w={12} h={16} reveal />
               </>
             ) : (
               <>
                 <BackBar count={top.tileCount} width={92} />
-                <Melds revealed={top.revealed} flowers={top.flowers} w={16} h={22} />
+                <Melds revealed={top.revealed} w={12} h={16} />
               </>
             )}
           </>
@@ -493,6 +500,7 @@ export default function MjBoardMobile({
           isEye={left != null && eyeSeats.includes(left.seat)}
           fx={fxOf(left?.seat)}
           opponent={oppOf(left?.seat)}
+          busy={flowerBusy}
           windChar={left ? windOf(left.seat) : ""}
         />
 
@@ -569,6 +577,7 @@ export default function MjBoardMobile({
           isEye={right != null && eyeSeats.includes(right.seat)}
           fx={fxOf(right?.seat)}
           opponent={oppOf(right?.seat)}
+          busy={flowerBusy}
           windChar={right ? windOf(right.seat) : ""}
         />
       </div>
@@ -636,12 +645,21 @@ export default function MjBoardMobile({
             <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
           </span>
           <Score score={scoreOf(me)} />
-          {me && <Melds revealed={me.revealed} flowers={me.flowers} w={20} h={27} mine />}
+          {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
+          {me && <Melds revealed={me.revealed} w={14} h={19} mine />}
           <span className="cnt">{myHand.length} 張</span>
         </div>
         <div className="mjm-hand">
           <div className="main">{mainTiles.map(handTile)}</div>
-          {drawnTile && <div className="drawn">{handTile(drawnTile)}</div>}
+          {drawnTile && (
+            <div className="drawn">
+              {slowDraw?.tileId === drawnTile.id ? (
+                <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} width="var(--tile-hand-w)" height="var(--tile-hand-h)" />
+              ) : (
+                handTile(drawnTile)
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -12,9 +12,23 @@ interface MjHandProps {
   // 眼牌：按下「眼牌」後，打出後仍聽牌的牌往上浮，點一張就直接打出並宣告；其餘變暗不能點
   eyeArmed?: boolean;
   eyeOptionIds?: number[];
+  // 眼牌後慢慢摸牌：摸進的那張先蓋著再翻開（只有眼牌的人自己看得到）
+  slowDraw?: { tileId: number; win: boolean } | null;
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds }: MjHandProps) {
+/** 慢慢摸牌的翻牌（小宜 2026-10-16）：牌背浮起＋金光 → 翻面 → 落定；能胡時翻開那面閃金框。桌機、手機共用 */
+export function SlowDrawTile({ tile, win, width, height }: { tile: Tile; win: boolean; width?: number | string; height?: number | string }) {
+  return (
+    <div className={`mjm-slowdraw ${win ? "win" : ""}`} data-slow-draw={win ? "win" : "draw"}>
+      <div className="inner">
+        <div className="face back"><MjTile tile={tile} faceDown width={width} height={height} /></div>
+        <div className="face front"><MjTile tile={tile} width={width} height={height} /></div>
+      </div>
+    </div>
+  );
+}
+
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw }: MjHandProps) {
   const [rawSelectedId, setSelectedId] = useState<number | null>(null);
   const eyePick = (id: number) => !!eyeArmed && (eyeOptionIds ?? []).includes(id);
   const eyeBlocked = (id: number) => !!eyeArmed && !eyePick(id);
@@ -75,11 +89,15 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
         {/* Drawn tile separated */}
         {drawnTile && (
           <div className="ml-3 pl-3 border-l border-white/10" style={dim(drawnTile.id)}>
-            <MjTile
-              tile={drawnTile}
-              selected={selectedId === drawnTile.id}
-              onClick={() => handleTileClick(drawnTile)}
-            />
+            {slowDraw?.tileId === drawnTile.id ? (
+              <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} />
+            ) : (
+              <MjTile
+                tile={drawnTile}
+                selected={selectedId === drawnTile.id}
+                onClick={() => handleTileClick(drawnTile)}
+              />
+            )}
           </div>
         )}
       </div>
