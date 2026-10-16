@@ -5,7 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import { sortTiles, isFlower, tileKey } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
-import { StateRequestGate, readyAfterNextGame } from "@/lib/mahjong/stateSync";
+import { EyeDrawGate, StateRequestGate, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 
 /** Filter out any flower tiles that shouldn't be in hand (defensive) */
 function safeHand(tiles: Tile[]): Tile[] {
@@ -74,6 +74,8 @@ const SLOW_DRAW_PASS = new Set(["mj_draw_tile", "mj_draw", "mj_opponent_hands"])
 const SLOW_DRAW_MS = 800;
 /** 眼牌者摸牌：翻到正面後一律再停 1 秒，才自動打出或進結算 */
 const SLOW_DRAW_PAUSE_MS = 1000;
+/** 眼牌者送出摸牌後，等摸到的牌（事件或 API 回應）最多等多久；正常幾百毫秒就到 */
+const SLOW_DRAW_WAIT_MS = 6000;
 
 export interface MjPlayer {
   id: string;
@@ -321,14 +323,19 @@ export function useMahjong(
   // 眼牌後慢慢摸牌（小宜 2026-10-16）：伺服器在同一個請求裡做完「摸牌→自動胡或自動打出」並一次廣播，
   // 所以眼牌的人送出摸牌時，先把收到的事件排隊（摸到的牌、剩餘張數／補花、三家手牌照常即時），
   // 摸到的牌翻開（0.8 秒）後再照原順序套用。只影響眼牌的人自己的畫面，其他三家完全不變。
-  // 保險：沒等到摸牌事件最多排 1.5 秒；切到背景、摸牌失敗、卸載都立刻套用；排隊期間不採用輪詢
+  // 翻牌從「摸到的牌」到手時開始算（私人事件 mj_draw_tile，或摸牌 API 的回應，哪個先到用哪個），伺服器再慢也一定播完才打出。
+  // 保險：兩者都沒到最多排 SLOW_DRAW_WAIT_MS；切到背景、摸牌失敗、卸載都立刻套用；排隊期間不採用輪詢
   // gen：每次開始排隊就加 1。輪詢送出後如果開始過排隊，回應就是過時的，不能套用（見 fetchState）
-  const holdRef = useRef<{ on: boolean; gen: number; queue: (() => void)[]; timer?: ReturnType<typeof setTimeout>; refetch?: () => void }>({ on: false, gen: 0, queue: [] });
+  // slowTile：已經開始翻的那張（事件和 API 回應都會到，第二個到的不能重新計時）
+  const holdRef = useRef<{ on: boolean; gen: number; queue: (() => void)[]; timer?: ReturnType<typeof setTimeout>; refetch?: () => void; slowTile?: number }>({ on: false, gen: 0, queue: [] });
+  // 眼牌者的同一次摸牌：API 回應和 mj_draw_tile 只處理先到的那個（後到的在動畫播完、打出套用後才來也不能把牌加回去）
+  const eyeDrawRef = useRef(new EyeDrawGate());
   const releaseHold = useCallback(() => {
     const h = holdRef.current;
     clearTimeout(h.timer);
     if (!h.on) return;
     h.on = false;
+    h.slowTile = undefined;
     const queue = h.queue;
     const refetch = h.refetch;
     h.queue = [];
@@ -624,10 +631,16 @@ export function useMahjong(
           if (tile) actions.push({ type: "add_kong", tiles: [tile] });
         }
         const drawnTile = payload.tile as Tile;
+        // 這一次眼牌摸牌已經由 API 回應處理過（可能動畫已播完、打出已套用）：整個略過
+        if (drawnTile && !eyeDrawRef.current.claimEvent(drawnTile.id)) return;
         if (flowers) noteFlowers(stateRef.current.mySeat, flowers);
         // 眼牌的人自己送出的摸牌：開始翻牌，翻開（0.8 秒）後再停 1 秒，才套用排隊中的自動打出／自動胡
         const slow = holdRef.current.on && drawnTile ? { tileId: drawnTile.id, win: canWin } : null;
-        if (slow) holdFor(SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS);
+        // API 回應已經先開始翻同一張：不重新計時
+        if (slow && holdRef.current.slowTile !== drawnTile.id) {
+          holdFor(SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS);
+          holdRef.current.slowTile = drawnTile.id;
+        }
         console.log("[mj] mj_draw_tile", { drawnTileId: drawnTile?.id, drawnDisplay: drawnTile?.display, handLen: hand.length });
         setState((prev) => ({
           ...prev,
@@ -764,6 +777,7 @@ export function useMahjong(
 
     // --- mj_game_start ---
     onHeld(channel, "mj_game_start", ({ payload }) => {
+      eyeDrawRef.current.reset(); // 上一局沒處理完的摸牌作廢（牌 id 每局重複使用）
       dismissedOwnActionsRef.current = null;
       playedFxRef.current.clear();
       // 上一局還在播的宣告特效：取消移除計時器，畫面立即清空（見下方 declareFx: []）
@@ -948,7 +962,10 @@ export function useMahjong(
               ? {
                   ...p,
                   discards,
-                  revealed: [...p.revealed, meld],
+                  // 輪詢可能比這個事件先拿到吃碰完的狀態：同一組已經在了就不再加（不然會暫時出現兩組）
+                  revealed: p.revealed.some((m) => m.tiles.length === msg.tiles.length && msg.tiles.every((t) => m.tiles.some((x) => x.id === t.id)))
+                    ? p.revealed
+                    : [...p.revealed, meld],
                   tileCount: msg.tileCount ?? p.tileCount,
                 }
               : { ...p, discards };
@@ -1296,12 +1313,33 @@ export function useMahjong(
     const rid = roomIdRef.current;
     if (!rid) return;
     const cur = stateRef.current;
-    if (cur.eyeSeats.includes(cur.mySeat) && !document.hidden) holdFor(1500); // 眼牌：先排隊，收到摸到的牌再翻（在背景就不翻，直接套用）
+    const eye = cur.eyeSeats.includes(cur.mySeat) && !document.hidden;
+    const drawToken = eyeDrawRef.current.start(eye);
+    if (eye) holdFor(SLOW_DRAW_WAIT_MS); // 眼牌：先排隊，收到摸到的牌再翻（在背景就不翻，直接套用）
     try {
-      await call("/api/mahjong/draw", {
+      const res = (await call("/api/mahjong/draw", {
         roomId: rid,
         playerId: myId,
-      });
+      })) as { drawnTile?: Tile | null; canWin?: boolean; autoWin?: boolean } | null;
+      const h = holdRef.current;
+      const tile = res?.drawnTile;
+      // 私人事件還沒到（不同頻道、順序不保證）：用 API 回應的那張先開始翻，打出等翻完＋停 1 秒。
+      // 事件已經先處理過這一次摸牌就什麼都不做（不重新計時、不蓋掉新狀態）
+      if (eye && tile && eyeDrawRef.current.claimResponse(drawToken, tile.id)) {
+        if (!h.on) return; // 排隊已經結束（等太久保險放行）：打出已套用，不能再把牌加回去
+        holdFor(SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS);
+        h.slowTile = tile.id;
+        setState((prev) => ({
+          ...prev,
+          myHand: prev.myHand.some((t) => t.id === tile.id) ? prev.myHand : safeHand([...prev.myHand, tile]),
+          slowDraw: { tileId: tile.id, win: res?.canWin === true || res?.autoWin === true },
+          availableActions: [],
+          hasDrawn: true,
+          drawnTileId: tile.id,
+        }));
+      } else if (eye && !tile && h.on && h.slowTile === undefined) {
+        releaseHold(); // 沒摸到牌（例如進入七搶一）：直接套用
+      }
     } catch (err) {
       releaseHold();
       // Race: auto-draw effect can fire before the mj_action broadcast

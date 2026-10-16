@@ -64,3 +64,39 @@ export function readyAfterNextGame(
   if (prev.nextGameReady?.includes(myId)) return null;
   return [...(prev.nextGameReady ?? []), myId];
 }
+
+/**
+ * 眼牌者的一次摸牌：摸到的牌會從兩個地方來——摸牌 API 的回應、座位頻道的 mj_draw_tile（不同頻道，先後不保證）。
+ * 同一次摸牌只能處理一次：先到的那個開始翻牌，後到的整個略過（不加回手牌、不改 hasDrawn／drawnTileId、不重播、不重新計時）。
+ * 綁定的是「這一次摸牌」（start() 拿到的 token），不是永久記牌 id：下一次摸牌（含下一局用到同一個牌 id）一律重新開始。
+ */
+export class EyeDrawGate {
+  private current: { tileId?: number } | null = null;
+
+  /** 送出摸牌：眼牌者開新的一次（回傳 token 給 API 回應用）；不是眼牌者就清掉，私人事件照常處理 */
+  start(eye: boolean): object | null {
+    this.current = eye ? {} : null;
+    return this.current;
+  }
+
+  /** 換局：上一局沒處理完的摸牌一律作廢 */
+  reset(): void {
+    this.current = null;
+  }
+
+  /** 摸牌 API 回應：token 還是目前這一次、而且事件還沒處理過，才由 API 處理 */
+  claimResponse(token: object | null, tileId: number): boolean {
+    const c = this.current;
+    if (!token || c !== token || c.tileId !== undefined) return false;
+    c.tileId = tileId;
+    return true;
+  }
+
+  /** 座位頻道的 mj_draw_tile：同一次摸牌、同一張已經由 API 處理過就略過；其他（沒有進行中的眼牌摸牌、槓後補牌等別張）照常處理 */
+  claimEvent(tileId: number): boolean {
+    const c = this.current;
+    if (!c) return true;
+    if (c.tileId === undefined) { c.tileId = tileId; return true; }
+    return c.tileId !== tileId;
+  }
+}
