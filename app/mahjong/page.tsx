@@ -531,7 +531,7 @@ export default function MahjongPage() {
         {screen === "home" && (
           <p className="mjl-credit">
             牌面 <a href="/tiles/cj6/LICENSE.txt" target="_blank" rel="noopener noreferrer">Cangjie6</a>・
-            <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>（已修改）
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>
           </p>
         )}
         {showRecords && (
