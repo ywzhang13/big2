@@ -230,6 +230,9 @@
 .mjm-result .seat .tot { flex: 0 0 auto; font-size: 10px; color: rgba(255,255,255,.4); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 .mjm-result .foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 /* 同意下一局：已同意＝金底＋✓，還沒按＝虛線框＋… ；整場打完時同一列改成總積分榜 */
+.mjm-result .nextline { margin-top: 4px; font-size: 11px; font-weight: 700; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mjm-result .nextline.err { color: #fca5a5; }
+.mjm-result.desk .nextline { font-size: 14px; margin-top: 8px; }
 .mjm-result .ready, .mjm-result .rank { display: flex; align-items: center; gap: 4px; margin-right: auto; min-width: 0; overflow: hidden; }
 /* 手機：總積分榜排 2×2（一列四格名字會被擠成一個字），標題在左邊跨兩列 */
 .mjm-result .rank { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); flex: 1 1 auto; }
@@ -598,6 +601,15 @@
 .mjl-btn.primary:hover { filter: brightness(1.1); }
 .mjl-btn.second { background: transparent; color: var(--gold-l); border: 2px solid rgba(201,169,110,.6); }
 .mjl-btn.second:hover { border-color: var(--gold); background: rgba(201,169,110,.05); }
+/* 找回沒打完的牌局：大廳最上面、金框發光，比「建立房間」更醒目 */
+.mjl-btn.resume {
+  gap: 4px; font-size: 15px; color: #fff6d8; border: 2px solid #f0d68a;
+  background: linear-gradient(135deg, rgba(201,169,110,.32), rgba(201,169,110,.12));
+  box-shadow: 0 0 0 3px rgba(240,214,138,.12), 0 0 18px rgba(240,214,138,.35);
+  animation: mjl-resume 1.8s ease-in-out infinite;
+}
+.mjl-btn.resume b { color: #f0d68a; font-weight: 800; }
+@keyframes mjl-resume { 50% { box-shadow: 0 0 0 3px rgba(240,214,138,.2), 0 0 26px rgba(240,214,138,.55); } }
 .mjl-btn.ghost { background: rgba(255,255,255,.04); color: rgba(240,214,138,.85); border: 1px solid rgba(201,169,110,.3); font-size: 15px; height: 44px; }
 .mjl-foot { text-align: center; font-size: 13px; color: rgba(255,255,255,.4); padding: 14px 0; cursor: pointer; }
 .mjl-foot:hover { color: rgba(255,255,255,.6); }

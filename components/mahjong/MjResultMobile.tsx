@@ -4,6 +4,7 @@
 // 右欄：四家攤牌＋輸贏＋下一局（整場打完時改成總積分榜）。金額一律用後端的 settlement。
 // 桌機和手機橫向同一個樣式（老闆選定手機版），desktop 只是放大字和牌。
 
+import { useState } from "react";
 import type { Settlement } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjWinner, MjHandReveal } from "@/hooks/useMahjong";
 import { RevealTiles, WaitsList } from "./MjReveal";
@@ -23,7 +24,8 @@ interface MjResultMobileProps {
   hasRounds: boolean;
   gameOver?: boolean;
   nextGameReady?: string[];
-  onNextGame: () => void;
+  /** 回傳被拒絕時要顯示的訊息（成功或已由登入流程處理時是 null） */
+  onNextGame: () => Promise<string | null>;
   onLeave: () => void;
   desktop?: boolean;
   tingSeats?: number[];
@@ -68,7 +70,20 @@ export default function MjResultMobile({
   const nameOf = (seat: number) => players.find((p) => p.seat === seat)?.name ?? "";
   const title = isDraw ? "流局" : flowerName ?? (isZimo ? "自摸" : "胡");
   const iAmReady = nextGameReady?.includes(myId) ?? false;
+  // 按下一局：送出中先鎖住按鈕；被拒絕時在按鈕旁顯示原因（之前錯誤被吞掉，看起來像按了沒反應）
+  const [sending, setSending] = useState(false);
+  const [nextErr, setNextErr] = useState<string | null>(null);
+  const pressNext = async () => {
+    setSending(true);
+    setNextErr(null);
+    try {
+      setNextErr(await onNextGame());
+    } finally {
+      setSending(false);
+    }
+  };
   const readyCount = players.filter((p) => nextGameReady?.includes(p.id)).length;
+  const waiting = players.filter((p) => !nextGameReady?.includes(p.id)).map((p) => (p.id === myId ? "你" : p.name));
   const tile = desktop ? { w: 26, ht: 35, ww: 18, wh: 24 } : { w: 14, ht: 19, ww: 12, wh: 16 };
   // 整場打完：總積分榜（高分在前）
   const ranking = gameOver && playerScores ? [...players].sort((a, b) => playerScores[b.seat] - playerScores[a.seat]) : null;
@@ -143,6 +158,12 @@ export default function MjResultMobile({
             );
           })}
 
+        {/* 下一局的狀態列：被拒絕時顯示原因；有人按了、還沒到齊時列出還在等誰（四家都看得到） */}
+        {hasRounds && !gameOver && (nextErr || (readyCount > 0 && waiting.length > 0)) && (
+          <div className={`nextline${nextErr ? " err" : ""}`} role={nextErr ? "alert" : "status"}>
+            {nextErr ?? `還在等 ${waiting.join("、")} 按下一局`}
+          </div>
+        )}
         <div className="foot">
           {hasRounds && !gameOver && (
             <div className="ready">
@@ -171,8 +192,8 @@ export default function MjResultMobile({
             </div>
           )}
           {hasRounds && !gameOver && (
-            <button type="button" className="mjm-btn" disabled={iAmReady} onClick={onNextGame}>
-              {iAmReady ? "已同意" : "下一局"}
+            <button type="button" className="mjm-btn" disabled={iAmReady || sending} onClick={pressNext}>
+              {iAmReady ? "已同意" : sending ? "送出中…" : "下一局"}
             </button>
           )}
           <button

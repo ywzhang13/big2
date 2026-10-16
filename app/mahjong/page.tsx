@@ -199,10 +199,10 @@ export default function MahjongPage() {
   }, [expire]);
 
   /** 加入房間（建房後房主也要加入）；回傳 null 表示失敗，錯誤已顯示 */
-  async function joinRoom(code: string): Promise<(MjJoinInfo & { ended?: boolean }) | null> {
+  async function joinRoom(code: string, nm = name.trim()): Promise<(MjJoinInfo & { ended?: boolean }) | null> {
     const res = await mjFetch("/api/mahjong/join", {
       method: "POST",
-      body: JSON.stringify({ code, playerId: getMjId(), name: name.trim() }),
+      body: JSON.stringify({ code, playerId: getMjId(), name: nm }),
     });
     const data = await res.json();
     if (res.status === 401 || res.status === 403) {
@@ -216,6 +216,56 @@ export default function MahjongPage() {
       return null;
     }
     return data as MjJoinInfo;
+  }
+
+  // 找回沒打完的牌局（老柯 GET /api/mahjong/my-room）：LINE 登入、在大廳時問一次，從背景回來（主畫面 App）再問一次。
+  // 遊客不提供；有房就在大廳最上面顯示「回到房間」，按下去用 join 拿回原本的座位（伺服器用 LINE 帳號認人）
+  const [myRoom, setMyRoom] = useState<{ code: string; status: string } | null>(null);
+  const lobbyHome = auth.status === "in" && !!auth.user && !auth.user.isGuest && screen === "home" && !roomCode;
+  useEffect(() => {
+    if (!lobbyHome) return;
+    let alive = true;
+    const ask = () => {
+      if (document.hidden) return;
+      mjFetch("/api/mahjong/my-room")
+        .then(async (res) => {
+          const data = res.ok ? ((await res.json()) as { room?: { code: string; status: string } | null }) : null;
+          if (alive) setMyRoom(data?.room && ROOM_CODE_RE.test(data.room.code) ? data.room : null);
+        })
+        .catch(() => {});
+    };
+    ask();
+    document.addEventListener("visibilitychange", ask);
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", ask);
+    };
+  }, [lobbyHome]);
+
+  async function handleResume(code: string) {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setError("");
+    const nm = name.trim() || Array.from(lineName).slice(0, 8).join("") || "玩家";
+    mjStorage().setItem("mj_name", nm);
+    setName(nm);
+    setNameReady(true);
+    try {
+      const info = await joinRoom(code, nm);
+      if (!info) {
+        setMyRoom(null);
+        return;
+      }
+      setMyRoom(null);
+      setRoomCode(code);
+      setJoined(info.ended ? null : info);
+      setScreen("room");
+      window.location.hash = `room=${code}`;
+    } catch {
+      setError("網路錯誤，請重試");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleCreate() {
@@ -337,6 +387,12 @@ export default function MahjongPage() {
         <div className={`mjl-col${screen === "create" ? " mjl-form" : ""}`}>
           {screen === "home" ? (
             <div className="mjl-col fade-in">
+              {myRoom && (
+                <button onClick={() => handleResume(myRoom.code)} disabled={isSubmitting} className="mjl-btn resume">
+                  {myRoom.status === "waiting" ? "你在房間等開局，" : "你有一局還沒打完，"}
+                  <b>回到房間 {myRoom.code}</b>
+                </button>
+              )}
               <button
                 onClick={() => {
                   setScreen("create");

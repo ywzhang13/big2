@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { sortTiles, isFlower, tileKey } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
-import { FlowerTracker } from "@/lib/mahjong/flowerTracker";
+import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
+import { StateRequestGate, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 
 /** Filter out any flower tiles that shouldn't be in hand (defensive) */
 function safeHand(tiles: Tile[]): Tile[] {
@@ -366,12 +367,15 @@ export function useMahjong(
   // 整場打完（gameOver）後不再採用輪詢結果：比結束事件晚回來的舊輪詢會把畫面蓋回「打牌中」，
   // 房間一關就變成「這場已結束」而看不到最終結算
   const matchOverRef = useRef(false);
+  // state 請求的編號：後送先回時，比較舊的回應不能蓋掉比較新的；回前景事件連發只多送一次（見 stateSync）
+  const stateGateRef = useRef(new StateRequestGate());
 
   // Fetch full state from API (for reconnection / polling)
   const fetchState = useCallback(async (rid: string) => {
     if (closedRef.current) return;
     if (holdRef.current.on) { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; } // 慢慢摸牌中：伺服器已經是打出後的狀態，翻完再說
     const holdGen = holdRef.current.gen;
+    const reqId = stateGateRef.current.begin();
     const myId = myIdRef.current; // applyJoin 換了玩家 id 後，還沒重新 render 也要用新的
     try {
       const data = await api<{
@@ -413,12 +417,12 @@ export function useMahjong(
         } | null;
       }>("GET", `/api/mahjong/state?roomId=${rid}&playerId=${myId}`);
       if (matchOverRef.current) return;
-      // 請求在路上時開始了慢慢摸牌：這份回應不能在翻牌＋停頓期間套用。還在排隊就等停完再抓，已經停完就馬上重抓
-      if (holdRef.current.gen !== holdGen) {
-        if (holdRef.current.on) holdRef.current.refetch = () => fetchStateRef.current?.(rid);
-        else fetchStateRef.current?.(rid);
-        return;
-      }
+      // 請求在路上時開始了慢慢摸牌：這份回應不能在翻牌＋停頓期間套用。還在排隊就等停完再抓，已經停完就由最新的請求重抓一次；
+      // 比已經套用的回應舊（後送先回）：丟掉
+      const verdict = stateGateRef.current.settle(reqId, holdGen, holdRef.current);
+      if (verdict === "refetchAfterHold") { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; }
+      if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
+      if (verdict === "drop") return;
 
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
@@ -1226,8 +1230,19 @@ export function useMahjong(
       if (!rid || closedRef.current) return;
       fetchState(rid);
     }, 5000);
+    // iPhone 主畫面 App／Safari 從背景回來：計時器和即時連線可能停過，馬上重抓一次，不等下一輪輪詢（最多 5 秒）
+    const onResume = () => {
+      const rid = roomIdRef.current;
+      if (document.hidden || !rid || closedRef.current) return;
+      if (!stateGateRef.current.allowResume(Date.now())) return; // visibilitychange＋pageshow 連發：只抓一次
+      fetchState(rid);
+    };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
 
     return () => {
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
       channelRef.current = null;
@@ -1415,16 +1430,36 @@ export function useMahjong(
     [myId, call]
   );
 
-  const nextGame = useCallback(async () => {
+  /**
+   * 按「下一局」：成功就先把自己標成已同意（不用等 mj_next_game_ready 廣播；第 4 個按、已經開新局時不標，見 readyAfterNextGame）；
+   * 被拒絕（這局其實還沒結束／整場已結束／房間不在／網路錯誤）回傳要顯示的訊息，並馬上重抓狀態，讓畫面跟上伺服器。
+   * 登入失效、座位不是自己的（401／403）由 onAuthError 處理，不另外顯示。
+   */
+  const nextGame = useCallback(async (): Promise<string | null> => {
     const rid = roomIdRef.current;
-    if (!rid) return;
+    if (!rid) return null;
+    const pressedGame = gameKeyOf(stateRef.current.roundInfo); // 按的是哪一局的結算
     try {
-      await call("/api/mahjong/next-game", {
+      const res = (await call("/api/mahjong/next-game", {
         roomId: rid,
         playerId: myId,
+      })) as { started?: boolean } | null;
+      // 第 4 個按（started）或回應到之前已經換局：不動；第 1～3 個：先把自己標成已同意
+      setState((prev) => {
+        const ready = readyAfterNextGame(prev, myId, res, pressedGame);
+        return ready ? { ...prev, nextGameReady: ready } : prev;
       });
+      return null;
     } catch (err) {
       console.error("[mj] next-game failed:", err);
+      const status = (err as { status?: number }).status;
+      if (status === 401 || status === 403) return null;
+      fetchStateRef.current?.(rid);
+      let msg = "";
+      try { msg = (JSON.parse((err as Error).message) as { error?: string }).error ?? ""; } catch {}
+      if (status === 400 && msg) return `${msg}，已重新整理牌局`;
+      if (status === 404) return "房間已經不在了";
+      return "沒有送出，請再按一次";
     }
   }, [myId, call]);
 
