@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { Settlement } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjWinner, MjHandReveal } from "@/hooks/useMahjong";
 import { RevealTiles, WaitsList } from "./MjReveal";
+import { Die } from "./MjBoardMobile";
 
 const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
@@ -30,9 +31,15 @@ interface MjResultMobileProps {
   desktop?: boolean;
   tingSeats?: number[];
   eyeSeats?: number[];
+  /** 這局開局的三顆骰子；doorSeat＝開門那家（門風東），dealerSeat＝莊家 */
+  dice?: [number, number, number];
+  doorSeat?: number;
+  dealerSeat?: number;
 }
 
 const RANK_LABELS = ["冠", "亞", "季", "殿"];
+
+const WINDS = ["東", "南", "西", "北"];
 
 function signed(n: number) {
   return `${n > 0 ? "+" : ""}${n}`;
@@ -60,6 +67,9 @@ export default function MjResultMobile({
   desktop = false,
   tingSeats = [],
   eyeSeats = [],
+  dice,
+  doorSeat,
+  dealerSeat,
 }: MjResultMobileProps) {
   const isDraw = winner.seat < 0;
   const flowerName = winner.score.fans.find((f) => FLOWER_WIN_NAMES.includes(f.name))?.name;
@@ -84,6 +94,8 @@ export default function MjResultMobile({
   };
   const readyCount = players.filter((p) => nextGameReady?.includes(p.id)).length;
   const waiting = players.filter((p) => !nextGameReady?.includes(p.id)).map((p) => (p.id === myId ? "你" : p.name));
+  // 門風：開門那家（doorSeat）是東，seat+1 依序南西北（和計分的自風、正花同一套，見 gameLogic 的 seatWind）
+  const windOf = (seat: number) => (doorSeat == null ? null : WINDS[(seat - doorSeat + 4) % 4]);
   const tile = desktop ? { w: 26, ht: 35, ww: 18, wh: 24 } : { w: 14, ht: 19, ww: 12, wh: 16 };
   // 整場打完：總積分榜（高分在前）
   const ranking = gameOver && playerScores ? [...players].sort((a, b) => playerScores[b.seat] - playerScores[a.seat]) : null;
@@ -113,6 +125,14 @@ export default function MjResultMobile({
           </span>
         )}
         {!isDraw && !flowerName && !isZimo && fromName && <span className="from">{fromName} 放槍</span>}
+        {dice && (
+          <span className="dice">
+            <Die value={dice[0]} size={desktop ? 20 : 14} />
+            <Die value={dice[1]} size={desktop ? 20 : 14} />
+            <Die value={dice[2]} size={desktop ? 20 : 14} />
+            <span>骰 <b>{dice[0] + dice[1] + dice[2]}</b></span>
+          </span>
+        )}
         {!isDraw && !multi && (
           <div className="fans">
             {winner.score.fans.map((f, i) => (
@@ -138,6 +158,7 @@ export default function MjResultMobile({
             return (
               <div key={p.seat} className={`seat ${w ? "win" : ""}`} style={{ flexWrap: "wrap", rowGap: 2 }}>
                 <span className="who2">
+                  {windOf(p.seat) && <i className={`wind${p.seat === dealerSeat ? " dealer" : ""}`} title={p.seat === dealerSeat ? "莊家" : undefined}>{windOf(p.seat)}</i>}
                   {p.name}
                   {p.seat === mySeat && "（你）"}
                 </span>

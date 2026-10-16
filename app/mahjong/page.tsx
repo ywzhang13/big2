@@ -1275,6 +1275,9 @@ function RoomView({
           desktop={!isMobileLandscape}
           tingSeats={state.tingSeats}
           eyeSeats={state.eyeSeats}
+          dice={state.dice}
+          doorSeat={state.doorSeat}
+          dealerSeat={state.dealerSeat}
           winner={state.winner}
           winners={state.winners}
           players={state.players}
