@@ -10,6 +10,8 @@ import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import MjFlowerFx from "@/components/mahjong/MjFlowerFx";
+import MjTile from "@/components/mahjong/MjTile";
+import type { Tile } from "@/lib/mahjong/tiles";
 import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
@@ -81,22 +83,26 @@ function NameField({
   );
 }
 
+// 大廳 Logo（小宜 C 書法橫式）：遊戲裡的 Cangjie6 平面牌＋細金線＋明體金漸層標題，橫排一行最省高度
+const BRAND_TILES: Tile[] = [
+  { id: 0, suit: "z", rank: 5, display: "中" },
+  { id: 1, suit: "z", rank: 6, display: "發" },
+  { id: 2, suit: "z", rank: 7, display: "白" },
+];
+
 function Brand() {
   return (
-    <div className="mjl-brand text-center">
-      <div className="tiles flex gap-1 justify-center mb-2">
-        {[{t:"中",c:"#dc2626"},{t:"發",c:"#15803d"},{t:"",c:""}].map((x,i)=>(
-          <div key={i} className="w-10 h-14 rounded-md flex items-center justify-center"
-            style={{background:"linear-gradient(145deg, #f5f0e0 0%, #e8dfc8 50%, #d4c9a8 100%)",boxShadow:"2px 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8)",border:"1px solid rgba(180,170,140,0.6)"}}>
-            {x.t ? <span className="text-xl font-black" style={{color:x.c,fontFamily:"serif"}}>{x.t}</span>
-              : <div className="w-6 h-8 rounded-sm" style={{border:"2.5px solid #1a1a1a"}} />}
-          </div>
+    <div className="mjl-brand">
+      <span className="tiles">
+        {BRAND_TILES.map((t) => (
+          <MjTile key={t.id} tile={t} width="var(--brand-tile-w)" height="var(--brand-tile-h)" />
         ))}
-      </div>
-      <h1 className="font-bold tracking-wider text-[#f0d68a] font-heading">
-        台灣麻將
-      </h1>
-      <p className="text-white/50 mt-2 text-sm">Taiwan Mahjong — 4 Players</p>
+      </span>
+      <span className="rule" />
+      <span className="txt">
+        <h1>台灣麻將</h1>
+        <p>TAIWAN MAHJONG · 4 PLAYERS</p>
+      </span>
     </div>
   );
 }

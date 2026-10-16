@@ -565,8 +565,26 @@
   width: auto; /* body 是直向 flex，auto 會撐滿；寫死 100% 時負 margin 撐不開右邊 */
   padding-left: calc(24px + var(--sal)); padding-right: calc(24px + var(--sar));
 }
-.mjl-brand { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; }
-.mjl-brand h1 { font-size: var(--fs-ttl); line-height: 1.1; }
+/* 大廳 Logo（小宜 C 書法橫式）：牌｜細金線｜標題＋英文小字，桌機手機都橫排。
+   標題字型 Noto Serif TC 900（SIL Open Font License 1.1，可免費商用，授權見 public/fonts/noto-serif-tc/OFL.txt），
+   自託管、只含「台灣麻將」四個字（2.6KB）；只有麻將頁用到這個字型，其他頁不會下載。
+   字型還沒到時先用系統明體（swap），中文字等寬，換字型時不會位移 */
+@font-face {
+  font-family: "MjBrandSerif"; font-style: normal; font-weight: 900; font-display: swap;
+  src: url("/fonts/noto-serif-tc/brand-900.woff2") format("woff2");
+  unicode-range: U+53F0, U+5C07, U+7063, U+9EBB;
+}
+.mjl-brand { --brand-tile-w: 44px; --brand-tile-h: 60px; display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
+.mjl-brand .tiles { display: flex; gap: 4px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+.mjl-brand .rule { width: 1px; align-self: stretch; margin: 2px 0; background: linear-gradient(180deg, transparent, rgba(201,169,110,.55), transparent); }
+.mjl-brand .txt { display: flex; flex-direction: column; }
+.mjl-brand h1 {
+  font-size: var(--fs-ttl); line-height: 1.1; font-family: "MjBrandSerif", "Songti TC", "Noto Serif TC", serif; font-weight: 900;
+  letter-spacing: .12em; text-indent: .12em;
+  background: linear-gradient(180deg, #fff6d8 0%, #f0d68a 45%, #c9a96e 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.mjl-brand p { margin-top: 5px; font-size: 11px; letter-spacing: .22em; color: rgba(201,169,110,.72); font-weight: 600; }
 .mjl-col { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 384px; flex: 0 0 auto; }
 .mjl-gate { align-items: center; }
 .mjl-join-ttl { font-size: 24px; font-weight: 800; color: var(--gold-l); letter-spacing: .04em; text-align: center; }
@@ -758,8 +776,9 @@
   /* 內容比畫面高時（建房表單、鍵盤升起）用 margin 置中，捲動時頂端不會被裁掉 */
   .mjl-lobby { align-items: flex-start; }
   .mjl-lobby > .mjl-brand, .mjl-lobby > .mjl-col { margin: auto 0; }
-  .mjl-brand .tiles > div { width: 30px; height: 42px; }
-  .mjl-brand p { font-size: 11px; margin-top: 4px; }
+  .mjl-brand { --brand-tile-w: 30px; --brand-tile-h: 41px; gap: 10px; }
+  .mjl-brand .tiles { gap: 3px; }
+  .mjl-brand p { font-size: 9px; letter-spacing: .18em; margin-top: 3px; }
   .mjl-col { gap: 10px; max-width: 300px; }
   .mjl-col.mjl-form { max-width: 330px; }
   .mjl-join-ttl { font-size: 19px; }
