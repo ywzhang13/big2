@@ -1,6 +1,6 @@
 // 記憶體版 db：模擬 Postgres 的樂觀鎖。讀、寫都會 await 一段時間，讓同時送出的請求真的交錯。
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
-export const rooms: Record<string, { id: string; code: string; game_state: MahjongGameState; status?: string; host_id?: string | null }> = {};
+export const rooms: Record<string, { id: string; code: string; game_state: MahjongGameState; status?: string; host_id?: string | null; updated_at?: string }> = {};
 export const stats = { conflicts: 0, writes: 0 };
 export const opts = {
   unsafe: false, // true：模擬修之前「讀完整筆蓋回去」
@@ -66,6 +66,16 @@ export async function insertRoom(row: { code: string; status: string; host_id: s
 export async function loadSeats(roomId: string) {
   await wait();
   return (seats[roomId] ?? []).map(({ seat, player_id, user_id }) => ({ seat, player_id, user_id })).sort((a, b) => a.seat - b.seat);
+}
+export async function loadSeatsByUser(userId: string) {
+  await wait();
+  const out: { code: string; room_id: string; status: string; seat: number; updated_at: string }[] = [];
+  for (const [roomId, list] of Object.entries(seats)) {
+    const p = list.find((x) => x.user_id === userId);
+    const r = rooms[roomId];
+    if (p && r) out.push({ code: r.code, room_id: roomId, status: r.status ?? "waiting", seat: p.seat, updated_at: r.updated_at ?? "" });
+  }
+  return out.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 export async function insertPlayer(row: { room_id: string; player_id: string; name: string; seat: number; user_id: string | null }) {
   await wait();

@@ -201,6 +201,27 @@ export async function loadSeats(roomId: string): Promise<Pick<MjPlayer, "seat" |
   return data ?? [];
 }
 
+/**
+ * 這個帳號目前坐著的麻將房（房間還在＝這場還沒結束），最近有動靜的在前。
+ * 給「重開頁面／換 Safari、主畫面 App」找回房間用；查詢失敗丟出。
+ */
+export async function loadSeatsByUser(
+  userId: string
+): Promise<{ code: string; room_id: string; status: string; seat: number; updated_at: string }[]> {
+  const supabase = getSupabaseAdmin();
+  const { data: mine, error } = await supabase.from("mj_players").select("room_id, seat").eq("user_id", userId);
+  if (error) throw new Error(`查詢座位失敗：${error.message}`);
+  if (!mine?.length) return [];
+  const { data: rooms, error: e2 } = await supabase
+    .from("mj_rooms")
+    .select("id, code, status, updated_at")
+    .in("id", mine.map((p) => p.room_id));
+  if (e2) throw new Error(`查詢房間失敗：${e2.message}`);
+  return (rooms ?? [])
+    .map((r) => ({ code: r.code, room_id: r.id, status: r.status, updated_at: r.updated_at, seat: mine.find((p) => p.room_id === r.id)!.seat }))
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+}
+
 /** 坐下：座位或玩家 id 重複回 "duplicate"，其他錯誤丟出 */
 export async function insertPlayer(row: {
   room_id: string;
