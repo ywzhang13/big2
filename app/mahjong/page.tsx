@@ -526,6 +526,13 @@ export default function MahjongPage() {
 
           {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
         </div>
+        {/* 牌面素材標示（CC BY-SA 4.0）：只在大廳首頁、一行短字；完整作者與修改說明在 LICENSE.txt */}
+        {screen === "home" && (
+          <p className="mjl-credit">
+            牌面 <a href="/tiles/cj6/LICENSE.txt" target="_blank" rel="noopener noreferrer">Cangjie6</a>・
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>（已修改）
+          </p>
+        )}
         {showRecords && (
           <MjRecords
             user={auth.user}

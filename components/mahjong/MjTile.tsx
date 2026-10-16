@@ -37,13 +37,11 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
   const w = width ?? (tiny ? 26 : small ? 27 : 36);
   const h = height ?? (tiny ? 35 : small ? 38 : 49);
 
+  // 牌面：Cangjie6 中式牌組（Wikimedia Commons，CC BY-SA 4.0，見 public/tiles/cj6/LICENSE.txt）。
+  // SVG 已拿掉立體牌身、只剩牌面圖案（scripts/flatten-cj6-tiles.mjs）；白底、細框、小圓角在這裡畫成平面牌
   const characterSrc = faceDown
     ? null
-    : `/tiles/${getTileSvg(tile)}.svg`;
-
-  // faceDown → render a green-felt gradient div matching the rest of the
-  // board, rather than the bundled red Back.svg which clashes visually.
-  const backdropSrc = faceDown ? null : "/tiles/Front.svg";
+    : `/tiles/cj6/${getTileSvg(tile)}.svg`;
 
   // Use <button> when clickable, <div> otherwise, to avoid nested <button>
   // issues when MjTile is rendered inside another button (e.g. chi action button).
@@ -69,27 +67,8 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
         padding: 0,
       }}
     >
-      {/* Backdrop — Front.svg when face-up, inline green gradient when
-          face-down (matches felt-style opponent tile backs). */}
-      {backdropSrc ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={backdropSrc}
-          alt=""
-          width={typeof w === "number" ? w : undefined}
-          height={typeof h === "number" ? h : undefined}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: w,
-            height: h,
-            objectFit: "contain",
-            display: "block",
-            pointerEvents: "none",
-          }}
-          draggable={false}
-        />
-      ) : (
+      {/* faceDown → inline green gradient (matches felt-style opponent tile backs). */}
+      {faceDown && (
         <div
           aria-hidden
           style={{
@@ -105,7 +84,7 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
           }}
         />
       )}
-      {/* Character overlay (on top of Front.svg) */}
+      {/* 牌面：白底平面牌（細框用 inset 陰影畫，小牌也不會吃掉圖案的空間） */}
       {characterSrc && (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
@@ -121,6 +100,9 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
             objectFit: "contain",
             display: "block",
             pointerEvents: "none",
+            background: "#fff",
+            borderRadius: typeof w === "number" ? Math.max(1.5, Math.round(w * 0.1)) : "10% / 7.5%",
+            boxShadow: "inset 0 0 0 1px #c9c2b2",
           }}
           draggable={false}
         />

@@ -1,0 +1,9 @@
+麻將牌面圖（42 張）來源：Wikimedia Commons
+作者：Cangjie6（萬、條、風牌、三元牌、花牌）
+筒子：Cangjie6（remake）、Jerry Crimson Mann（original）、User:Dewclouds（vectorisation）
+授權：Creative Commons Attribution-Share Alike 4.0（CC BY-SA 4.0）
+https://creativecommons.org/licenses/by-sa/4.0/
+原始檔：https://commons.wikimedia.org/wiki/File:MJw1-.svg 等 MJw1～9、MJt1～9、MJs1～9、MJf1～4、MJd1～3、MJh1～8（下載日期 2026-10-16）
+修改內容：改了檔名（對應遊戲內的牌名）；並移除原圖的立體牌身（綠色牌背、側面、白色牌面、漸層、反光），只保留牌面圖案、viewBox 以圖案為中心重新置中（scripts/flatten-cj6-tiles.mjs，2026-10-16）。白底、細框、圓角由遊戲畫面繪製。
+修改後的圖檔同樣以 CC BY-SA 4.0 授權釋出。
+花牌對應：Flower1～6＝MJh1～6（春夏秋冬梅蘭）、Flower7＝MJh8（竹）、Flower8＝MJh7（菊）
