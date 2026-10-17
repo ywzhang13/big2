@@ -22,7 +22,7 @@ function safeHand(tiles: Tile[]): Tile[] {
   }
   return sortTiles(filtered);
 }
-import type { Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
+import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
@@ -74,6 +74,14 @@ const SLOW_DRAW_PASS = new Set(["mj_draw_tile", "mj_draw", "mj_opponent_hands"])
 const SLOW_DRAW_MS = 800;
 /** 眼牌者摸牌：翻到正面後一律再停 1 秒，才自動打出或進結算 */
 const SLOW_DRAW_PAUSE_MS = 1000;
+/** 牌局節奏（和伺服器 lib/mahjong/pace.ts 同一組數字）：眼牌摸牌 1.8 秒、補花 1 秒 */
+const EYE_PACE_MS = 1800;
+const FLOWER_PACE_MS = 1000;
+/** 輪詢看到的剩餘等待最多顯示這麼久（伺服器最多也只等 4 秒） */
+const PACE_NOTE_MAX_MS = 4000;
+/** 吃碰槓提示（小宜 2026-10-17 方向 C）播放時間 */
+const CLAIM_FX_MS = 750;
+let claimNoticeSeq = 0;
 /** 眼牌者送出摸牌後，等摸到的牌（事件或 API 回應）最多等多久；正常幾百毫秒就到 */
 const SLOW_DRAW_WAIT_MS = 6000;
 
@@ -125,6 +133,10 @@ export interface MjClientState {
   currentTurn: number;
   dealerSeat: number;
   lastDiscard: { tile: Tile; from: number } | null;
+  // 牌桌中間那張大牌：最近打出的一張，一直顯示到下一張打出（被吃碰槓走、換局才拿掉）；伺服器的 lastDiscard 在下一家摸牌後就清掉
+  focusDiscard: { tile: Tile; from: number } | null;
+  // 牌局節奏（老柯 paceUntil）：補花、眼牌摸牌的特效播放中，四家都在等；顯示「X 摸牌中…」「X 補花中…」「等待中…」
+  paceNote: { seat: number; kind: "eye" | "flower" | "wait" } | null;
   availableActions: { type: string; tiles?: Tile[] }[];
   // 搶槓窗口：某家加槓中，等其他家決定要不要搶槓胡
   pendingAddKong: { seat: number; tile: Tile } | null;
@@ -158,13 +170,15 @@ export interface MjClientState {
   hostId: string;
   hasDrawn: boolean;
   drawnTileId: number | null;
-  actionNotice: { seat: number; type: string } | null;
+  actionNotice: { seat: number; type: string; key: number } | null;
   // Round system
   roomSettings?: RoomSettings;
   roundInfo?: RoundInfo;
   playerScores?: number[];
   settlement?: Settlement;
   gameOver?: boolean;
+  /** 整場打完時每家的胡牌／放槍／自摸次數（老柯 2026-10-17，只有 gameOver 時伺服器才帶） */
+  handStats?: HandStats;
   // Dice / door
   dice?: [number, number, number];
   doorSeat?: number;
@@ -216,6 +230,8 @@ export function useMahjong(
     currentTurn: -1,
     dealerSeat: 0,
     lastDiscard: null,
+    focusDiscard: null,
+    paceNote: null,
     availableActions: [],
     pendingAddKong: null,
     robKong: false,
@@ -351,6 +367,14 @@ export function useMahjong(
     clearTimeout(h.timer);
     h.timer = setTimeout(releaseHold, ms);
   }, [releaseHold]);
+  /** 顯示節奏提示 ms 毫秒（新的蓋掉舊的；舊的計時器到了不會清掉新的） */
+  const paceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showPace = useCallback((note: NonNullable<MjClientState["paceNote"]>, ms: number) => {
+    clearTimeout(paceTimerRef.current);
+    setState((prev) => ({ ...prev, paceNote: note }));
+    paceTimerRef.current = setTimeout(() => setState((prev) => (prev.paceNote === null ? prev : { ...prev, paceNote: null })), ms);
+  }, []);
+  useEffect(() => () => clearTimeout(paceTimerRef.current), []);
   /** 訂閱廣播事件；慢慢摸牌期間，除了摸牌本身的事件以外都先排隊 */
   const onHeld = useCallback((ch: RealtimeChannel, event: string, fn: (msg: { payload: Record<string, unknown> }) => void) => {
     ch.on("broadcast", { event }, (msg) => {
@@ -430,6 +454,12 @@ export function useMahjong(
       if (verdict === "refetchAfterHold") { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; }
       if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
       if (verdict === "drop") return;
+      // 牌局節奏：伺服器說特效還沒播完（重新整理、切回前景時接上），剩下的時間用伺服器的兩個時間相減，不用手機時鐘
+      {
+        const g = data.gameState as { paceUntil?: number; serverNow?: number; currentTurn?: number } | null;
+        const left = g?.paceUntil && g.serverNow ? g.paceUntil - g.serverNow : 0;
+        if (left > 0) showPace({ seat: g?.currentTurn ?? -1, kind: "wait" }, Math.min(left, PACE_NOTE_MAX_MS));
+      }
 
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
@@ -507,6 +537,12 @@ export function useMahjong(
         dealerSeat: gs.dealerSeat,
         // 搶槓窗口期間 lastDiscard 是加槓的牌，不是打出去的牌，不當棄牌顯示
         lastDiscard: pendingAddKong ? null : gs.lastDiscard,
+        // 中間的大牌：伺服器有打出的牌就用它；沒有（下一家已經摸牌）就留著上一張，除非那張已經不在打出那家的海底（被吃碰槓胡走）
+        focusDiscard: !pendingAddKong && gs.lastDiscard
+          ? gs.lastDiscard
+          : prev.focusDiscard && gs.players[prev.focusDiscard.from]?.discards?.some((t) => t.id === prev.focusDiscard!.tile.id)
+            ? prev.focusDiscard
+            : null,
         pendingAddKong,
         robKong: pendingAddKong != null && pendingAddKong.seat !== mySeat,
         pendingFlowerRob,
@@ -550,6 +586,7 @@ export function useMahjong(
         playerScores: (gs as Record<string, unknown>).playerScores as number[] | undefined ?? prev.playerScores,
         settlement: (gs as Record<string, unknown>).settlement as Settlement | undefined ?? prev.settlement,
         gameOver: (gs as Record<string, unknown>).gameOver as boolean | undefined ?? prev.gameOver,
+        handStats: (gs as Record<string, unknown>).handStats as HandStats | undefined ?? prev.handStats,
         dice: (gs as Record<string, unknown>).dice as [number, number, number] | undefined ?? prev.dice,
         doorSeat: (gs as Record<string, unknown>).doorSeat as number | undefined ?? prev.doorSeat,
         nextGameReady: (gs as Record<string, unknown>).nextGameReady as string[] | undefined ?? prev.nextGameReady,
@@ -569,7 +606,7 @@ export function useMahjong(
       }
       console.error("[mj] fetchState failed:", err);
     }
-  }, [markClosed, playDeclareFx]);
+  }, [markClosed, playDeclareFx, showPace]);
   const fetchStateRef = useRef<((rid: string) => Promise<void>) | null>(null);
   useEffect(() => { fetchStateRef.current = fetchState; }, [fetchState]);
 
@@ -587,9 +624,12 @@ export function useMahjong(
         };
         if (playerId !== myId) return;
         dealtThisGameRef.current = true;
+        // 莊家開局 17 張：伺服器把最後一張（含補花後補進的那張）當成摸進的牌；照樣分開放在最右邊，和重新整理後一致
+        const dealtDrawn = hand.length % 3 === 2 ? hand[hand.length - 1]?.id ?? null : null;
         setState((prev) => ({
           ...prev,
           myHand: safeHand(hand),
+          drawnTileId: dealtDrawn,
           eyeOptions: eyeOptions ?? [],
           eyeWithTing: eyeWithTing === true,
           // Update my flower count in players list
@@ -814,6 +854,8 @@ export function useMahjong(
         dealerSeat: msg.dealerSeat,
         wallRemaining: msg.wallCount,
         lastDiscard: null,
+        focusDiscard: null,
+        paceNote: null,
         availableActions: [],
         pendingAddKong: null,
         robKong: false,
@@ -827,6 +869,8 @@ export function useMahjong(
         // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
         eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],
         eyeWithTing: dealtThisGameRef.current ? prev.eyeWithTing : false,
+        // 上一局最後摸進的牌 id 不能留到新局（牌 id 每局重複使用）；座位頻道的發牌先到就保留它標的那張
+        drawnTileId: dealtThisGameRef.current ? prev.drawnTileId : null,
         hasDrawn: msg.currentTurn === msg.dealerSeat, // dealer starts with 17
         players: msg.players.map((p) => ({
           id: p.id,
@@ -842,6 +886,7 @@ export function useMahjong(
         winners: undefined,
         settlement: undefined,
         gameOver: false,
+        handStats: undefined,
         ...(msg.roundInfo ? { roundInfo: msg.roundInfo } : {}),
         ...(msg.playerScores ? { playerScores: msg.playerScores } : {}),
         ...(msg.dice ? { dice: msg.dice } : {}),
@@ -864,6 +909,18 @@ export function useMahjong(
         wallCount: number;
         flowers?: Tile[];
       };
+      // 牌局節奏（和伺服器的 paceUntil 一致）：別家是眼牌者時，伺服器在同一個請求裡摸牌＋自動打出，事件一次送來；
+      // 其他三家也要等他翻牌＋停 1 秒（補到花再加 1 秒）才看到打出和輪到下一家，所以接下來的事件先排隊。
+      // 別家補花（不是眼牌者）：伺服器會等膠囊播完才處理下一個動作，這裡只顯示「補花中」
+      const cur = stateRef.current;
+      const gotFlower = !!flowers && flowers.length > (cur.players.find((p) => p.seat === seat)?.flowers.length ?? 0);
+      if (seat !== cur.mySeat && cur.eyeSeats.includes(seat) && !document.hidden) {
+        const ms = EYE_PACE_MS + (gotFlower ? FLOWER_PACE_MS : 0);
+        holdFor(ms);
+        showPace({ seat, kind: "eye" }, ms);
+      } else if (gotFlower && seat !== cur.mySeat) {
+        showPace({ seat, kind: "flower" }, FLOWER_PACE_MS);
+      }
       if (flowers) noteFlowers(seat, flowers);
       setState((prev) => ({
         ...prev,
@@ -891,6 +948,7 @@ export function useMahjong(
       setState((prev) => ({
         ...prev,
         lastDiscard: { tile, from: seat },
+        focusDiscard: { tile, from: seat },
         // Clear actions — new mj_available_actions will re-populate after this
         // arrives (server sends mj_discard first, action broadcasts second).
         // 登入房的按鈕走座位頻道，可能比這個事件先到：這張牌有給我按鈕就保留
@@ -923,6 +981,7 @@ export function useMahjong(
 
     // --- mj_action (chi/pong/kong) ---
     onHeld(channel, "mj_action", ({ payload }) => {
+      const noticeKey = ++claimNoticeSeq;
       dismissedOwnActionsRef.current = null;
       const msg = payload as {
         type: string;
@@ -950,10 +1009,12 @@ export function useMahjong(
           ...prev,
           currentTurn: msg.seat,
           lastDiscard: null,
+          // 被吃碰槓走的那張已經不在海底：中間的大牌一起拿掉
+          focusDiscard: prev.focusDiscard && meldTileIds.has(prev.focusDiscard.tile.id) ? null : prev.focusDiscard,
           // 我槓完補牌的按鈕（槓上開花、再槓）走座位頻道，可能比這個事件先到
           availableActions: keepEarlyActions && msg.seat === prev.mySeat ? prev.availableActions : [],
           hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
-          actionNotice: { seat: msg.seat, type: msg.type },
+          actionNotice: { seat: msg.seat, type: msg.type, key: noticeKey },
           myHand: updatedHand,
           // 被吃碰槓拿走的那張從打出那家的海底拿掉（和伺服器輸出的 state 一致，不用等輪詢）
           players: prev.players.map((p) => {
@@ -972,10 +1033,10 @@ export function useMahjong(
           }),
         };
       });
-      // Auto-clear action notice after 1.5s
+      // 吃碰槓提示（吃碰區原地閃）0.75 秒後收掉；之後又有人吃碰就不動新的那個
       setTimeout(() => {
-        setState((prev) => ({ ...prev, actionNotice: null }));
-      }, 1500);
+        setState((prev) => (prev.actionNotice?.key === noticeKey ? { ...prev, actionNotice: null } : prev));
+      }, CLAIM_FX_MS);
     });
 
     // --- mj_add_kong_pending (public): 加槓中，等其他家決定要不要搶槓 ---
@@ -1033,6 +1094,7 @@ export function useMahjong(
 
     // --- mj_add_kong (public): 加槓完成，把那組碰升成槓（不新增一組） ---
     onHeld(channel, "mj_add_kong", ({ payload }) => {
+      const noticeKey = ++claimNoticeSeq;
       const { seat, tile, tileCount } = payload as {
         seat: number;
         tile: Tile;
@@ -1043,7 +1105,7 @@ export function useMahjong(
         currentTurn: seat,
         pendingAddKong: null,
         robKong: false,
-        actionNotice: { seat, type: "add_kong" },
+        actionNotice: { seat, type: "add_kong", key: noticeKey },
         myHand:
           seat === prev.mySeat
             ? prev.myHand.filter((t) => t.id !== tile.id)
@@ -1064,8 +1126,8 @@ export function useMahjong(
         }),
       }));
       setTimeout(() => {
-        setState((prev) => ({ ...prev, actionNotice: null }));
-      }, 1500);
+        setState((prev) => (prev.actionNotice?.key === noticeKey ? { ...prev, actionNotice: null } : prev));
+      }, CLAIM_FX_MS);
     });
 
     // --- mj_turn_advance (from discard when no actions, to avoid flash) ---
@@ -1188,6 +1250,7 @@ export function useMahjong(
         playerScores?: number[];
         roundInfo?: RoundInfo;
         gameOver?: boolean;
+        handStats?: HandStats;
       };
       // 放槍被胡走的那張（不是自摸）從海底拿掉，和伺服器輸出的 state 一致
       const wonFromDiscard = new Set((msg.winners ?? []).filter((w) => w.from != null && w.winTile).map((w) => w.winTile!.id));
@@ -1226,6 +1289,7 @@ export function useMahjong(
         playerScores: msg.playerScores ?? prev.playerScores,
         roundInfo: msg.roundInfo ?? prev.roundInfo,
         gameOver: msg.gameOver ?? false,
+        handStats: msg.handStats ?? prev.handStats,
       }));
     });
 
@@ -1264,7 +1328,7 @@ export function useMahjong(
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents, playDeclareFx, playFlowerFx, noteFlowers, clearFlowerFx, onHeld]);
+  }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents, playDeclareFx, playFlowerFx, noteFlowers, clearFlowerFx, onHeld, holdFor, showPace]);
 
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
@@ -1372,6 +1436,7 @@ export function useMahjong(
           drawnTileId: null,
           hasDrawn: false,
           lastDiscard: tile ? { tile, from: prev.mySeat } : prev.lastDiscard,
+          focusDiscard: tile ? { tile, from: prev.mySeat } : prev.focusDiscard,
         };
       });
       try {

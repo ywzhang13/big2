@@ -974,6 +974,8 @@ function RoomView({
     currentTurn: state.currentTurn,
     dealerSeat: state.dealerSeat,
     lastDiscard: state.lastDiscard,
+    focusDiscard: state.focusDiscard,
+    paceNote: state.paceNote,
     availableActions: state.availableActions,
     pendingAddKong: state.pendingAddKong,
     robKong: state.robKong,
@@ -1289,6 +1291,7 @@ function RoomView({
           playerScores={state.playerScores}
           hasRounds={!!state.roomSettings}
           gameOver={state.gameOver}
+          handStats={state.handStats}
           nextGameReady={state.nextGameReady}
           onNextGame={nextGame}
           onLeave={() => {

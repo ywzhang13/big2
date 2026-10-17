@@ -8,6 +8,9 @@ import MjTile from "./MjTile";
 import MjHand from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
 import { DeclareFx, Die, fxClass } from "./MjBoardMobile";
+import MjClaimFx from "./MjClaimFx";
+import MjClaimBanner from "./MjClaimBanner";
+import { paceText } from "./paceText";
 import { seatWindChar } from "./seatWind";
 
 export interface MjBoardProps {
@@ -36,7 +39,11 @@ export interface MjBoardProps {
   playerName: string;
   drawnTileId: number | null;
   slowDraw: { tileId: number; win: boolean } | null; // 眼牌後慢慢摸牌（只有自己看得到）
-  actionNotice: { seat: number; type: string } | null;
+  actionNotice: { seat: number; type: string; key?: number } | null;
+  /** 牌桌中間那張大牌：最近打出的一張，一直亮到下一張打出 */
+  focusDiscard?: { tile: Tile; from: number } | null;
+  /** 牌局節奏：補花、眼牌摸牌的特效播放中（四家都在等） */
+  paceNote?: { seat: number; kind: "eye" | "flower" | "wait" } | null;
   onDraw: () => void;
   onDiscard: (tileId: number, declareEye?: boolean) => void;
   onAction: (type: string, tiles?: Tile[]) => void;
@@ -117,19 +124,6 @@ function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
 }
 
 const DREW_RING = { borderRadius: 3, boxShadow: "0 0 0 2px #fbbf24, 0 0 10px rgba(251,191,36,.45)" };
-
-function ActionName(type: string): string {
-  const m: Record<string, string> = {
-    chi: "吃",
-    pong: "碰",
-    kong: "槓",
-    concealed_kong: "暗槓",
-    add_kong: "加槓",
-    win: "胡",
-    pass: "過",
-  };
-  return m[type] || type;
-}
 
 /** Player info panel for table edges */
 function PlayerPanel({
@@ -286,6 +280,7 @@ function PlayerPanel({
         <div
           className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}
           style={{ gap: 10 }}
+          data-claim-seat={player.seat}
         >
           {(opponent?.revealed ?? player.revealed).map((meld, mi) => (
             <div
@@ -433,6 +428,8 @@ export default function MjBoard({
   drawnTileId,
   slowDraw,
   actionNotice,
+  focusDiscard,
+  paceNote,
   onDraw,
   onDiscard,
   onAction,
@@ -463,6 +460,18 @@ export default function MjBoard({
   const eyeKey = eyeOptions.join(",");
   const [eyeArmedKey, setEyeArmedKey] = useState<string | null>(null);
   const eyeArmed = canEye && eyeArmedKey === eyeKey;
+  const eyeButton = (
+    <button
+      type="button"
+      onClick={() => setEyeArmedKey(eyeArmed ? null : eyeKey)}
+      aria-pressed={eyeArmed}
+      className={`px-4 py-2 rounded-xl font-bold text-sm cursor-pointer active:scale-95 transition-all duration-150
+        ${eyeArmed ? "text-[#2b0f55] shadow-lg" : "bg-white/10 text-[#c4b5fd] border border-[#a78bfa]/45"}`}
+      style={eyeArmed ? { background: "linear-gradient(135deg, #7c3aed, #c4b5fd)", boxShadow: "0 2px 10px rgba(167,139,250,.4)" } : undefined}
+    >
+      眼牌
+    </button>
+  );
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
   const migiFx = declareFx.find((f) => f.both);
@@ -585,12 +594,10 @@ export default function MjBoard({
                 </div>
 
                 {/* Center: wind dial + last discard */}
-                <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} />
-                  {/* 中央徽章移除，改以各家 PlayerPanel 上的 連N 小標顯示 */}
-                  {/* Dice (骰子開門) — shown below wind dial when no lastDiscard */}
-                  {dice && !lastDiscard && !pendingAddKong && !pendingFlowerRob && (
-                    <div className="flex flex-col items-center gap-1">
+                {/* 中間：骰子在左、風盤、剛打出的牌在右（一直亮到下一張打出），兩邊不互相蓋到 */}
+                <div className="flex-1 flex flex-row items-center justify-center gap-4 min-w-0">
+                  {dice && !pendingFlowerRob && (
+                    <div className="flex flex-col items-center gap-1" data-center-dice>
                       <div className="flex gap-1">
                         <Die value={dice[0]} size={20} />
                         <Die value={dice[1]} size={20} />
@@ -601,6 +608,7 @@ export default function MjBoard({
                       </span>
                     </div>
                   )}
+                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} />
                   {/* 加槓中的牌：不是打出去的牌，只在中央提示，不進棄牌區 */}
                   {pendingAddKong && (
                     <div className="flex flex-col items-center gap-1">
@@ -627,16 +635,16 @@ export default function MjBoard({
                       <span className="text-[9px] text-[#fca5a5] font-bold">七搶一</span>
                     </div>
                   )}
-                  {lastDiscard && (
-                    <div className="flex flex-col items-center gap-1">
+                  {focusDiscard && !pendingAddKong && !pendingFlowerRob && (
+                    <div className="flex flex-col items-center gap-1" data-focus-discard={focusDiscard.tile.id}>
                       <div className="rounded-lg overflow-hidden shadow-xl"
                         style={{
                           boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 0 2px rgba(201,169,110,0.3)",
                         }}>
-                        <MjTile tile={lastDiscard.tile} />
+                        <MjTile tile={focusDiscard.tile} />
                       </div>
                       <span className="text-[9px] text-[#C9A96E]/60 font-bold">
-                        {players.find(p => p.seat === lastDiscard.from)?.name}
+                        {players.find(p => p.seat === focusDiscard.from)?.name}
                       </span>
                     </div>
                   )}
@@ -690,20 +698,19 @@ export default function MjBoard({
             </div>
           </div>
 
-          {/* Action notice animation (碰!/吃!/槓!) */}
-          {actionNotice && (
-            <div className="flex items-center justify-center gap-2 animate-bounce">
-              <span className="px-4 py-2 rounded-xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg shadow-lg shadow-[#C9A96E]/30">
-                {players.find(p => p.seat === actionNotice.seat)?.name}
-                {" "}
-                {ActionName(actionNotice.type)}！
-              </span>
-            </div>
-          )}
+          {/* 吃碰槓提示：剛吃碰槓的那一副原地閃金框＋標籤（小宜 2026-10-17 方向 C） */}
+          <MjClaimFx notice={actionNotice} name={actionNotice ? players.find((p) => p.seat === actionNotice.seat)?.name ?? "" : ""} mySeat={mySeat} desk />
 
           {/* Turn status */}
           <div className="text-center">
             {(() => {
+              if (paceNote) {
+                return (
+                  <span className="text-[#f0d68a]/80 font-bold text-sm" data-pace-note>
+                    {paceText(paceNote, players.find((p) => p.seat === paceNote.seat)?.name ?? "")}
+                  </span>
+                );
+              }
               if (pendingAddKong) {
                 return (
                   <span className="text-[#f0d68a] font-bold text-sm">
@@ -737,59 +744,19 @@ export default function MjBoard({
             })()}
           </div>
 
-          {/* Action buttons (碰/槓/胡/過/眼牌) */}
-          {(hasActions || canEye) && (
-            <div className="flex gap-2 justify-center flex-wrap">
-              {availableActions.map((action, i) => (
-                <button
-                  key={`${action.type}-${i}`}
-                  onClick={() => onAction(action.type, action.tiles)}
-                  className={`px-3 py-2 rounded-xl font-bold text-sm
-                    cursor-pointer active:scale-95 transition-all duration-150 shadow-lg
-                    flex items-center gap-1.5
-                    ${action.type === "win"
-                      ? "bg-gradient-to-r from-red-600 to-red-500 text-white animate-pulse shadow-red-500/30"
-                      : "bg-gradient-to-r from-[#C9A96E] to-[#e8c97a] text-[#0f2a1a] shadow-[#C9A96E]/20"
-                    }`}
-                >
-                  <span>
-                    {action.type === "win" && robFlower
-                      ? "七搶一"
-                      : action.type === "win" && robKong
-                        ? "搶槓胡"
-                        : ActionName(action.type)}
-                  </span>
-                  {/* Show the chi tile pair / add-kong tile so multiple options are distinguishable */}
-                  {(action.type === "chi" || action.type === "add_kong") && action.tiles && (
-                    <span className="flex gap-[1px]">
-                      {action.tiles.map((t) => (
-                        <MjTile key={t.id} tile={t} tiny />
-                      ))}
-                    </span>
-                  )}
-                </button>
-              ))}
-              {hasActions && (
-                <button
-                  onClick={() => onAction("pass")}
-                  className="px-5 py-2 rounded-xl bg-white/10 text-white/70 font-bold text-sm border border-white/10
-                    cursor-pointer active:scale-95 transition-all duration-150"
-                >
-                  {robKong || robFlower ? "不搶" : "過"}
-                </button>
-              )}
-              {canEye && (
-                <button
-                  onClick={() => setEyeArmedKey(eyeArmed ? null : eyeKey)}
-                  aria-pressed={eyeArmed}
-                  className={`px-4 py-2 rounded-xl font-bold text-sm cursor-pointer active:scale-95 transition-all duration-150
-                    ${eyeArmed ? "text-[#2b0f55] shadow-lg" : "bg-white/10 text-[#c4b5fd] border border-[#a78bfa]/45"}`}
-                  style={eyeArmed ? { background: "linear-gradient(135deg, #7c3aed, #c4b5fd)", boxShadow: "0 2px 10px rgba(167,139,250,.4)" } : undefined}
-                >
-                  眼牌
-                </button>
-              )}
-            </div>
+          {/* 吃碰槓胡：金色橫幅（疊層，底邊貼我的資訊列）；有眼牌鈕時也放進橫幅（橫幅會蓋住這一區） */}
+          {hasActions && (
+            <MjClaimBanner
+              actions={availableActions}
+              onAction={onAction}
+              winLabel={robFlower ? "七搶一" : robKong ? "搶槓胡" : "胡"}
+              passLabel={robKong || robFlower ? "不搶" : "過"}
+              extra={canEye ? eyeButton : null}
+              desk
+            />
+          )}
+          {canEye && !hasActions && (
+            <div className="flex gap-2 justify-center flex-wrap">{eyeButton}</div>
           )}
         </div>
 
@@ -816,8 +783,8 @@ export default function MjBoard({
         background: "linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%)",
         borderTop: "1px solid rgba(201,169,110,0.15)",
       }}>
-        {/* My info bar */}
-        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5">
+        {/* My info bar（data-my-info：吃碰槓胡橫幅的底邊對齊這一列的上緣） */}
+        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5" data-my-info>
           {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變） */}
           <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }} data-fx-seat={mySeat}>
           {/* Wind avatar */}
@@ -864,7 +831,7 @@ export default function MjBoard({
 
           {/* Revealed melds */}
           {me && me.revealed.length > 0 && (
-            <div className="flex gap-2 items-center ml-2">
+            <div className="flex gap-2 items-center ml-2" data-claim-seat={mySeat}>
               {me.revealed.map((meld, mi) => (
                 <div key={mi} className="flex gap-[1px]">
                   {/* 自己的暗槓顯示全部牌面（其他家 PlayerPanel 則全部面朝下） */}

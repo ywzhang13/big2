@@ -1057,3 +1057,86 @@ body {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* ===== 吃碰槓提示（小宜 2026-10-17 方向 C「吃碰區原地閃」）=====
+   掛在 body、position: fixed、pointer-events: none：不被牌桌切掉、不擋按鈕。z-index 58 在眼牌特效（60）底下 */
+.mjm-claimfx { position: fixed; inset: 0; z-index: 58; pointer-events: none; }
+.mjm-claimfx .halo {
+  position: fixed; border-radius: 7px;
+  box-shadow: 0 0 0 2px #f0d68a, 0 0 18px 4px rgba(240,214,138,.75);
+  animation: mjm-claim-halo .75s ease-out both;
+}
+.mjm-claimfx .tagpos { position: fixed; }
+.mjm-claimfx .tag {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 8px 3px; border-radius: 999px; white-space: nowrap;
+  background: linear-gradient(145deg, #f0d68a, #c9a96e);
+  box-shadow: 0 2px 8px rgba(0,0,0,.5), 0 0 12px rgba(240,214,138,.5);
+  animation: mjm-claim-tag .75s cubic-bezier(.2,.9,.25,1) both;
+}
+.mjm-claimfx .tag b { font-size: 14px; font-weight: 900; line-height: 1; color: #3a2a08; }
+.mjm-claimfx .tag span { font-size: 10px; font-weight: 800; line-height: 1; color: #5a4510; }
+.mjm-claimfx.desk .tag { padding: 4px 13px 5px; gap: 7px; }
+.mjm-claimfx.desk .tag b { font-size: 24px; }
+.mjm-claimfx.desk .tag span { font-size: 13px; }
+/* 自己那一家：吃碰區在資訊列裡（上面動作列、下面手牌），標籤小一號、橫向貼在右邊 */
+.mjm-claimfx .tag.small { padding: 0 6px 1px; gap: 3px; }
+.mjm-claimfx .tag.small b { font-size: 10px; }
+.mjm-claimfx .tag.small span { font-size: 9px; }
+.mjm-claimfx.desk .tag.small { padding: 2px 9px 3px; gap: 5px; }
+.mjm-claimfx.desk .tag.small b { font-size: 15px; }
+.mjm-claimfx.desk .tag.small span { font-size: 11px; }
+@keyframes mjm-claim-halo {
+  0%   { opacity: 0; transform: scale(1.5); }
+  14%  { opacity: 1; transform: scale(1); }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes mjm-claim-tag {
+  0%   { opacity: 0; transform: scale(.5); }
+  16%  { opacity: 1; transform: scale(1.12); }
+  28%  { transform: scale(1); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+/* 牌桌中間：骰子在左邊那一格（比剛打出的牌小一號） */
+.mjm-focus.dice .cap { color: rgba(201,169,110,.6); }
+
+/* 整場總結算：每家的胡牌／放槍／自摸次數（接在名字後面） */
+.mjm-result .seat .hstat { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mjm-result .seat .hstat b { color: var(--gold-l); font-weight: 800; }
+.mjm-result.desk .seat .hstat { font-size: 13px; }
+
+/* ===== 輪到你可以吃碰槓胡：金色橫幅（小宜 2026-10-17 方向 A，老闆修改：不顯示誰打出哪張、倒數只是提醒） =====
+   position: fixed 疊層，底邊由 JS 對齊我的資訊列上緣；不動 .mjm-app 的 grid 和 --row-action */
+.mjm-claimbar { position: fixed; left: 0; right: 0; z-index: 70; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none;
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.mjm-claimbar .bar {
+  position: relative; display: flex; align-items: center; gap: 8px; height: 62px; padding: 0 10px; pointer-events: auto;
+  background: linear-gradient(180deg, rgba(201,169,110,.10) 0%, rgba(201,169,110,.26) 55%, rgba(201,169,110,.34) 100%);
+  border-top: 2px solid rgba(240,214,138,.85);
+  box-shadow: 0 -8px 26px rgba(201,169,110,.3), 0 -1px 0 rgba(255,255,255,.18) inset;
+  animation: mjm-claimbar-rise .22s cubic-bezier(.2,.9,.25,1) both;
+}
+@keyframes mjm-claimbar-rise { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
+.mjm-claimbar .btns { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; justify-content: center; min-width: 0; }
+.mjm-claimbar .b {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 48px; min-width: 62px; padding: 0 15px; border-radius: 12px; font-size: 19px; font-weight: 800; line-height: 1; white-space: nowrap; cursor: pointer;
+  background: linear-gradient(135deg, #C9A96E, #e8c97a); color: #0f2a1a;
+  box-shadow: 0 3px 12px rgba(201,169,110,.35), inset 0 1px 0 rgba(255,255,255,.45);
+}
+.mjm-claimbar .b:active { transform: scale(.95); }
+.mjm-claimbar .b .tiles { display: flex; gap: 1px; }
+.mjm-claimbar .b.win { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; box-shadow: 0 3px 16px rgba(220,38,38,.55), inset 0 1px 0 rgba(255,255,255,.3); animation: mjm-claimbar-win 1.1s ease-in-out infinite; }
+@keyframes mjm-claimbar-win { 0%, 100% { box-shadow: 0 3px 16px rgba(220,38,38,.5); } 50% { box-shadow: 0 3px 22px rgba(248,113,113,.95); } }
+.mjm-claimbar .b.pass { margin-left: auto; background: rgba(10,22,14,.9); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.22); box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+/* 上緣 6 秒倒數：只是提醒，走完停在 0，不會自動按「過」 */
+.mjm-claimbar .cd { position: absolute; left: 0; top: -2px; height: 2px; background: linear-gradient(90deg, #f0d68a, #fff3c4); box-shadow: 0 0 8px rgba(240,214,138,.9); animation: mjm-claimbar-cd 6s linear both; }
+@keyframes mjm-claimbar-cd { 0% { width: 100%; } 100% { width: 0%; } }
+.mjm-claimbar.desk .bar { height: 78px; gap: 14px; padding: 0 22px; }
+.mjm-claimbar.desk .b { height: 62px; min-width: 84px; padding: 0 22px; font-size: 26px; border-radius: 16px; }
+/* 667 寬放 7 顆：間距和左右內距收一點 */
+@media (max-width: 700px) { .mjm-claimbar:not(.desk) .bar { gap: 5px; padding: 0 6px; } .mjm-claimbar:not(.desk) .btns { gap: 5px; } .mjm-claimbar:not(.desk) .b { padding: 0 10px; min-width: 52px; } }
+/* 橫幅裡的眼牌鈕（原本在動作列，會被橫幅蓋住所以放進來）：和宣告按鈕同高 */
+.mjm-claimbar .mjm-btn { height: 48px; }

@@ -58,7 +58,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
   // If drawnTileId matches a tile, separate it; otherwise show last tile as drawn
   let drawnTile: Tile | null = null;
   let mainTiles = tiles;
-  if (drawnTileId) {
+  if (drawnTileId != null) { // 牌 id 可能是 0
     drawnTile = tiles.find(t => t.id === drawnTileId) ?? null;
     if (drawnTile) {
       mainTiles = tiles.filter(t => t.id !== drawnTileId);

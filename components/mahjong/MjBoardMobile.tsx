@@ -9,20 +9,13 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
+import { paceText } from "./paceText";
 import MjTile from "./MjTile";
 import { SlowDrawTile } from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
+import MjClaimFx from "./MjClaimFx";
+import MjClaimBanner from "./MjClaimBanner";
 import { seatWindChar } from "./seatWind";
-
-const ACTION_NAMES: Record<string, string> = {
-  chi: "吃",
-  pong: "碰",
-  kong: "槓",
-  concealed_kong: "暗槓",
-  add_kong: "加槓",
-  win: "胡",
-  pass: "過",
-};
 
 interface MjBoardMobileProps extends MjBoardProps {
   roomCode: string;
@@ -59,8 +52,9 @@ function DealerTag({ player, consecutive, withLa, short }: { player: MjPlayer; c
 
 /** 吃碰槓（花改成 MjFlowerTag 收合）。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
  *  rot＝左右家：每張包一格、由 CSS 轉 ±90° 朝向主人，每一副自己一直列，放在靠海底那一欄（沒有吃碰槓也留著，當作和金框的間距） */
-function Melds({ revealed, w, h, mine, reveal, rot }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean }) {
-  if (revealed.length === 0) return rot ? <div className="mjm-meldcol" /> : null;
+function Melds({ revealed, w, h, mine, reveal, rot, seat }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean; seat?: number }) {
+  // data-claim-seat：吃碰槓提示（MjClaimFx）從這裡量剛吃碰的那一副在哪
+  if (revealed.length === 0) return rot ? <div className="mjm-meldcol" data-claim-seat={seat} /> : null;
   const tile = (t: Tile, faceDown: boolean) =>
     rot ? (
       <span key={t.id} className="rcell" style={{ width: h, height: w }}><MjTile tile={t} width={w} height={h} faceDown={faceDown} /></span>
@@ -68,7 +62,7 @@ function Melds({ revealed, w, h, mine, reveal, rot }: { revealed: Meld[]; w: num
       <MjTile key={t.id} tile={t} width={w} height={h} faceDown={faceDown} />
     );
   return (
-    <div className={rot ? "mjm-meldcol" : "mjm-melds"}>
+    <div className={rot ? "mjm-meldcol" : "mjm-melds"} data-claim-seat={seat}>
       {revealed.map((meld, mi) => (
         <div key={mi} className="mjm-meld">
           {meld.tiles.map((t) => tile(t, !mine && !reveal && meld.type === "concealed_kong"))}
@@ -250,7 +244,7 @@ function SidePanel({
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
       <SideHand count={player.tileCount} h={opponent} />
-      <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot />
+      <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot seat={player.seat} />
     </div>
   );
 }
@@ -350,6 +344,8 @@ export default function MjBoardMobile({
   drawnTileId,
   slowDraw,
   actionNotice,
+  focusDiscard,
+  paceNote,
   onDiscard,
   onAction,
   dice,
@@ -400,7 +396,7 @@ export default function MjBoardMobile({
   // 摸進的那張分開顯示（找不到就把最後一張當摸進的）
   let drawnTile: Tile | null = null;
   let mainTiles = myHand;
-  if (drawnTileId) {
+  if (drawnTileId != null) { // 牌 id 可能是 0
     drawnTile = myHand.find((t) => t.id === drawnTileId) ?? null;
     if (drawnTile) {
       mainTiles = myHand.filter((t) => t.id !== drawnTileId);
@@ -443,7 +439,7 @@ export default function MjBoardMobile({
   const status = (() => {
     if (pendingAddKong) return { text: `${nameOf(pendingAddKong.seat)} 加槓中`, me: false };
     if (pendingFlowerRob) return { text: `等待 ${nameOf(pendingFlowerRob.robberSeat)}`, me: false };
-    if (actionNotice) return { text: `${nameOf(actionNotice.seat)} ${ACTION_NAMES[actionNotice.type] ?? actionNotice.type}`, me: true };
+    if (paceNote) return { text: paceText(paceNote, nameOf(paceNote.seat)), me: false };
     if (lastDiscard != null && lastDiscard.from === mySeat && currentTurn === mySeat) return { text: "等待其他玩家", me: false };
     if (isMyTurn) return { text: needsDraw ? "輪到你摸牌" : "輪到你打牌", me: true };
     return { text: `等待 ${nameOf(currentTurn)}`, me: false };
@@ -453,6 +449,7 @@ export default function MjBoardMobile({
 
   return (
     <div className="mjm-app">
+      <MjClaimFx notice={actionNotice} name={actionNotice ? nameOf(actionNotice.seat) : ""} mySeat={mySeat} />
       {/* 左上選單鈕：房號、圈局、底台、離開 */}
       <button type="button" className="mjm-menu" aria-label="選單" onClick={() => setMenuOpen((o) => !o)}>
         <i /><i /><i />
@@ -495,12 +492,12 @@ export default function MjBoardMobile({
               <>
                 {/* 眼牌模式：手牌 16×22 比吃碰槓 12×16 大 */}
                 <EyeHand h={oppOf(top.seat)!} w={16} ht={22} />
-                <Melds revealed={oppOf(top.seat)!.revealed} w={12} h={16} reveal />
+                <Melds revealed={oppOf(top.seat)!.revealed} w={12} h={16} reveal seat={top.seat} />
               </>
             ) : (
               <>
                 <BackBar count={top.tileCount} width={92} />
-                <Melds revealed={top.revealed} w={12} h={16} />
+                <Melds revealed={top.revealed} w={12} h={16} seat={top.seat} />
               </>
             )}
           </>
@@ -534,7 +531,18 @@ export default function MjBoardMobile({
 
           <div className="mjm-mid-row">
             <VerticalDiscards tiles={left?.discards ?? []} side="left" />
+            {/* 中間：骰子在左、剩餘張數、剛打出的牌在右（一直亮到下一張打出），兩邊不互相蓋到 */}
             <div className="mjm-center">
+              {dice && !pendingFlowerRob && (
+                <div className="mjm-focus dice">
+                  <div style={{ display: "flex", gap: 2 }}>
+                    <Die value={dice[0]} size={14} />
+                    <Die value={dice[1]} size={14} />
+                    <Die value={dice[2]} size={14} />
+                  </div>
+                  <span className="cap">{dice[0] + dice[1] + dice[2]} 點開門</span>
+                </div>
+              )}
               <div className="mjm-info">
                 <span className="big">{wallRemaining}</span>
                 <span className="lab">剩餘</span>
@@ -545,19 +553,10 @@ export default function MjBoardMobile({
                   <div className="tile"><MjTile tile={pendingAddKong.tile} width={30} height={41} /></div>
                   <span className="cap">{nameOf(pendingAddKong.seat)} 加槓中</span>
                 </div>
-              ) : lastDiscard ? (
-                <div className="mjm-focus">
-                  <div className="tile"><MjTile tile={lastDiscard.tile} width={30} height={41} /></div>
-                  <span className="cap">{nameOf(lastDiscard.from)} 打出</span>
-                </div>
-              ) : dice && !pendingFlowerRob ? (
-                <div className="mjm-focus">
-                  <div style={{ display: "flex", gap: 3 }}>
-                    <Die value={dice[0]} />
-                    <Die value={dice[1]} />
-                    <Die value={dice[2]} />
-                  </div>
-                  <span className="cap">{dice[0] + dice[1] + dice[2]} 點開門</span>
+              ) : focusDiscard ? (
+                <div className="mjm-focus" data-focus-discard={focusDiscard.tile.id}>
+                  <div className="tile"><MjTile tile={focusDiscard.tile} width={30} height={41} /></div>
+                  <span className="cap">{nameOf(focusDiscard.from)} 打出</span>
                 </div>
               ) : null}
             </div>
@@ -606,27 +605,8 @@ export default function MjBoardMobile({
       <div className="mjm-action">
         {availableActions.length > 0 ? (
           <>
-            {availableActions.map((action, i) => (
-              <button
-                key={`${action.type}-${i}`}
-                type="button"
-                className={`mjm-btn ${action.type === "win" ? "win" : ""}`}
-                onClick={() => onAction(action.type, action.tiles)}
-              >
-                {action.type === "win" ? winLabel : ACTION_NAMES[action.type] ?? action.type}
-                {(action.type === "chi" || action.type === "add_kong") && action.tiles && (
-                  <span style={{ display: "flex", gap: 1 }}>
-                    {action.tiles.map((t) => (
-                      <MjTile key={t.id} tile={t} width={16} height={22} />
-                    ))}
-                  </span>
-                )}
-              </button>
-            ))}
-            <button type="button" className="mjm-btn ghost" onClick={() => onAction("pass")}>
-              {robKong || robFlower ? "不搶" : "過"}
-            </button>
-            {eyeToggle}
+            {/* 吃碰槓胡的按鈕改由金色橫幅（MjClaimBanner，疊層）顯示，眼牌鈕也一起放進去（動作列會被橫幅蓋住） */}
+            <MjClaimBanner actions={availableActions} onAction={onAction} winLabel={winLabel} passLabel={robKong || robFlower ? "不搶" : "過"} extra={eyeToggle} />
           </>
         ) : selected ? (
           <>
@@ -666,7 +646,7 @@ export default function MjBoardMobile({
           </span>
           <Score score={scoreOf(me)} />
           {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
-          {me && <Melds revealed={me.revealed} w={14} h={19} mine />}
+          {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} />}
           <span className="cnt">{myHand.length} 張</span>
         </div>
         <div className="mjm-hand">

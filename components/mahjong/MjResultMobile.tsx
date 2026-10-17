@@ -5,7 +5,7 @@
 // 桌機和手機橫向同一個樣式（老闆選定手機版），desktop 只是放大字和牌。
 
 import { useState } from "react";
-import type { Settlement } from "@/lib/mahjong/gameState";
+import type { HandStats, Settlement } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjWinner, MjHandReveal } from "@/hooks/useMahjong";
 import { RevealTiles, WaitsList } from "./MjReveal";
 import { Die } from "./MjBoardMobile";
@@ -24,6 +24,8 @@ interface MjResultMobileProps {
   playerScores?: number[];
   hasRounds: boolean;
   gameOver?: boolean;
+  /** 整場打完時每家的胡牌／放槍／自摸次數（重新整理後拿不到就不顯示） */
+  handStats?: HandStats;
   nextGameReady?: string[];
   /** 回傳被拒絕時要顯示的訊息（成功或已由登入流程處理時是 null） */
   onNextGame: () => Promise<string | null>;
@@ -61,6 +63,7 @@ export default function MjResultMobile({
   playerScores,
   hasRounds,
   gameOver,
+  handStats,
   nextGameReady,
   onNextGame,
   onLeave,
@@ -162,6 +165,11 @@ export default function MjResultMobile({
                   {p.name}
                   {p.seat === mySeat && "（你）"}
                 </span>
+                {gameOver && handStats && (
+                  <span className="hstat" data-hand-stat={p.seat}>
+                    胡 <b>{handStats.wins[p.seat] ?? 0}</b>・放槍 <b>{handStats.dealIns[p.seat] ?? 0}</b>・自摸 <b>{handStats.selfDraws[p.seat] ?? 0}</b>
+                  </span>
+                )}
                 <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#f0d68a", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {w && (multi ? `胡 ${w.score.totalFan} 台：${w.score.fans.map((f) => f.name).join("、")}` : "胡")}
                 </span>
