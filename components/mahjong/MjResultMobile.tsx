@@ -141,7 +141,6 @@ export default function MjResultMobile({
             <Die value={dice[0]} size={desktop ? 20 : 14} />
             <Die value={dice[1]} size={desktop ? 20 : 14} />
             <Die value={dice[2]} size={desktop ? 20 : 14} />
-            <span>骰 <b>{dice[0] + dice[1] + dice[2]}</b></span>
           </span>
         )}
         {hasWall && (
@@ -202,12 +201,12 @@ export default function MjResultMobile({
         {hasWall && wallOpen && (
           <div className="wall" data-wall>
             <div className="hd">
-              <span>牌庫・剩 <b>{remainingWall!.length}</b> 張・依摸牌順序（金框是下一張）</span>
+              <span>牌庫・剩 <b>{remainingWall!.length}</b> 張</span>
               <button type="button" className="x" onClick={() => setWallOpen(false)}>收起</button>
             </div>
             <div className="tiles">
-              {remainingWall!.map((t, i) => (
-                <span key={t.id} className={i === 0 ? "next" : undefined}>
+              {remainingWall!.map((t) => (
+                <span key={t.id}>
                   <MjTile tile={t} width={tile.w} height={tile.ht} />
                 </span>
               ))}

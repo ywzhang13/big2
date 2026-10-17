@@ -216,15 +216,12 @@
 .mjm-result .who { font-size: 15px; font-weight: 700; color: var(--gold-l); white-space: nowrap; }
 /* 這局的骰子（三顆＋總和）和四家門風：門風東南西北的小方塊，莊家那家金底 */
 .mjm-result .dice { display: flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); white-space: nowrap; }
-.mjm-result .dice b { color: var(--gold-l); font-size: 14px; font-variant-numeric: tabular-nums; }
-.mjm-result .dice > span { margin-left: 3px; }
 .mjm-result .seat .who2 .wind {
   display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px;
   border-radius: 4px; font-style: normal; font-size: 10px; font-weight: 800; color: var(--gold-l); border: 1px solid rgba(201,169,110,.55);
 }
 .mjm-result .seat .who2 .wind.dealer { background: #c9a96e; color: #0f2a1a; border-color: #f0d68a; }
 .mjm-result.desk .dice { font-size: 15px; gap: 5px; }
-.mjm-result.desk .dice b { font-size: 19px; }
 .mjm-result.desk .seat .who2 .wind { width: 20px; height: 20px; font-size: 13px; border-radius: 5px; margin-right: 6px; }
 .mjm-result .from { font-size: 12px; font-weight: 700; color: #f87171; }
 .mjm-result .fans {
@@ -251,7 +248,6 @@
 .mjm-result .wall .hd .x { margin-left: auto; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--gold-l); background: rgba(255,255,255,.08); border: 1px solid rgba(201,169,110,.4); }
 .mjm-result .wall .tiles { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; min-height: 0; overflow-y: auto; }
 .mjm-result .wall .tiles > span { display: flex; border-radius: 3px; }
-.mjm-result .wall .tiles > .next { box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251,191,36,.5); }
 .mjm-result .wallbtn { padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--gold-l); background: rgba(255,255,255,.06); border: 1px solid rgba(201,169,110,.45); white-space: nowrap; }
 .mjm-result .wallbtn.on { background: rgba(201,169,110,.85); color: #0f2a1a; border-color: #f0d68a; }
 .mjm-result.desk .wall { padding: 10px 14px; gap: 10px; border-radius: 12px; }
@@ -1113,9 +1109,8 @@ body {
   70%  { opacity: 1; }
   100% { opacity: 0; transform: translateY(-6px); }
 }
-/* 牌桌中間：骰子放在剩餘張數的框裡（最下面一行，後面接點數） */
+/* 牌桌中間：骰子放在剩餘張數的框裡（最下面一行，只有骰子） */
 .mjm-info .dice { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
-.mjm-info .dice .sum { margin-left: 2px; font-size: 9px; font-weight: 700; line-height: 1; color: rgba(201,169,110,.75); font-variant-numeric: tabular-nums; }
 
 /* 整場總結算：每家的胡牌／放槍／自摸次數（接在名字後面） */
 .mjm-result .seat .hstat { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -1155,3 +1150,11 @@ body {
 @media (max-width: 700px) { .mjm-claimbar:not(.desk) .bar { gap: 5px; padding: 0 6px; } .mjm-claimbar:not(.desk) .btns { gap: 5px; } .mjm-claimbar:not(.desk) .b { padding: 0 10px; min-width: 52px; } }
 /* 橫幅裡的眼牌鈕（原本在動作列，會被橫幅蓋住所以放進來）：和宣告按鈕同高 */
 .mjm-claimbar .mjm-btn { height: 48px; }
+
+/* 選牌比對（小宜方向 A）：場上同一種牌亮金框，1.4 秒呼吸一次（亮度 65%～100%），其他牌不變 */
+.mjm-match { box-shadow: 0 0 0 2px #fbbf24, 0 0 8px 1px rgba(251,191,36,.7); animation: mjm-match-breathe 1.4s ease-in-out infinite; }
+@keyframes mjm-match-breathe {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(251,191,36,1), 0 0 8px 1px rgba(251,191,36,.7); }
+  50%      { box-shadow: 0 0 0 2px rgba(251,191,36,.65), 0 0 5px 0 rgba(251,191,36,.45); }
+}
+@media (prefers-reduced-motion: reduce) { .mjm-match { animation: none; } }

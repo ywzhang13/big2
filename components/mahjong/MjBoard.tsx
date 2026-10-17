@@ -378,13 +378,12 @@ function WindDial({
           {wallRemaining}
         </span>
         <span className="text-[7px] text-[#C9A96E]/50 tracking-wider">剩餘</span>
-        {/* 骰子：剩餘張數下面一行，後面接點數 */}
+        {/* 骰子：剩餘張數下面一行（只顯示骰子，不寫點數） */}
         {dice && (
           <div className="flex items-center gap-[2px] mt-[3px]" data-center-dice>
             <Die value={dice[0]} size={13} />
             <Die value={dice[1]} size={13} />
             <Die value={dice[2]} size={13} />
-            <span className="ml-[2px] text-[10px] leading-none font-bold text-[#C9A96E]/75 tabular-nums">{dice[0] + dice[1] + dice[2]}</span>
           </div>
         )}
       </div>
@@ -491,6 +490,9 @@ export default function MjBoard({
   const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
   // 選中一張手牌還沒打出：海底和吃碰區同一種牌亮起來
   const [pickKind, setPickKind] = useState<string | null>(null);
+  // 開新的一局（剩餘張數變多）時手牌元件重來，上一局的選取不會留到新局（牌 id 每局重複使用）
+  const [handGame, setHandGame] = useState({ n: 0, wall: wallRemaining });
+  if (wallRemaining !== handGame.wall) setHandGame({ n: handGame.n + (wallRemaining > handGame.wall ? 1 : 0), wall: wallRemaining });
 
   return (
     <TileMatchContext.Provider value={pickKind}>
@@ -850,6 +852,7 @@ export default function MjBoard({
         <div className="flex items-end px-1 pt-4 pb-1.5 gap-2">
           <div className="flex-1 min-w-0">
             <MjHand
+              key={handGame.n}
               tiles={myHand}
               canDiscard={needsDiscard && !locked}
               onDiscard={onDiscard}
@@ -858,6 +861,7 @@ export default function MjBoard({
               eyeArmed={eyeArmed}
               eyeOptionIds={eyeOptions}
               onPickKind={setPickKind}
+              turnStage={isMyTurn ? (needsDiscard ? 2 : 1) : 0}
             />
           </div>
         </div>

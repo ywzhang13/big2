@@ -16,6 +16,8 @@ interface MjHandProps {
   slowDraw?: { tileId: number; win: boolean } | null;
   // 選中（還沒打出）的是哪一種牌，給牌桌比對海底和吃碰區；沒選＝null
   onPickKind?: (kind: string | null) => void;
+  // 0＝不是我的回合、1＝輪到我（還沒摸）、2＝輪到我出牌；變大時清掉選取（眼牌、地聽的人 canDiscard 一直是 false，也要清）
+  turnStage?: number;
 }
 
 /** 慢慢摸牌的翻牌（小宜 2026-10-16）：牌背浮起＋金光 → 翻面 → 落定；能胡時翻開那面閃金框。桌機、手機共用 */
@@ -30,20 +32,26 @@ export function SlowDrawTile({ tile, win, width, height }: { tile: Tile; win: bo
   );
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw, onPickKind }: MjHandProps) {
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw, onPickKind, turnStage = 0 }: MjHandProps) {
   const [rawSelectedId, setSelectedId] = useState<number | null>(null);
   const eyePick = (id: number) => !!eyeArmed && (eyeOptionIds ?? []).includes(id);
   const eyeBlocked = (id: number) => !!eyeArmed && !eyePick(id);
   // 按下眼牌後就是「點牌直接打出」，原本選的牌不算
   const selectedId = eyeArmed ? null : rawSelectedId;
-  const picked = canDiscard ? tiles.find((t) => t.id === selectedId) : undefined;
+  // 不是我出牌時也能點牌查場上同一種牌（牌一樣往上抬，沒有「打牌」鈕）；輪到我的那一刻清掉選取，避免誤打
+  const [prevStage, setPrevStage] = useState(turnStage);
+  if (prevStage !== turnStage) {
+    setPrevStage(turnStage);
+    if (turnStage > prevStage) setSelectedId(null);
+  }
+  const picked = tiles.find((t) => t.id === selectedId);
   const pickKind = picked ? tileKind(picked) : null;
   useEffect(() => {
     onPickKind?.(pickKind);
   }, [pickKind, onPickKind]);
 
   function handleTileClick(tile: Tile) {
-    if (!canDiscard || eyeBlocked(tile.id)) return;
+    if (eyeBlocked(tile.id)) return;
     if (eyeArmed) {
       onDiscard(tile.id, true);
       setSelectedId(null);

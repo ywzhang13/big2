@@ -389,9 +389,17 @@ export default function MjBoardMobile({
   // 輪到我打牌或有吃碰槓胡按鈕時，花的展開面板收起來，不擋操作
   const flowerBusy = needsDiscard || availableActions.length > 0;
 
-  // 選取的牌已經不在手上、不能打、或按了眼牌（點牌直接打出）→ 視為沒選
-  const picked = canPick && !eyeArmed ? myHand.find((t) => t.id === selectedId) ?? null : null;
-  const selected = picked;
+  // 不是我出牌時也能點手牌查場上同一種牌（老闆 2026-10-17）：牌一樣往上抬，但沒有「打出」鈕。
+  // 輪到我（摸牌、出牌各一次）或開新的一局（剩餘張數變多）就清掉選取，避免查完剛好輪到我時一按就打掉。
+  // 看 isMyTurn／needsDiscard 而不是 canPick：眼牌、地聽的人 canPick 一直是 false，也要清
+  const turnStage = isMyTurn ? (needsDiscard ? 2 : 1) : 0;
+  const [prevPick, setPrevPick] = useState({ turnStage, wall: wallRemaining });
+  if (prevPick.turnStage !== turnStage || prevPick.wall !== wallRemaining) {
+    setPrevPick({ turnStage, wall: wallRemaining });
+    if (turnStage > prevPick.turnStage || wallRemaining > prevPick.wall) setSelectedId(null);
+  }
+  // 選取的牌已經不在手上、或按了眼牌（點牌直接打出）→ 視為沒選
+  const selected = !eyeArmed ? myHand.find((t) => t.id === selectedId) ?? null : null;
 
   // 摸進的那張分開顯示（找不到就把最後一張當摸進的）
   let drawnTile: Tile | null = null;
@@ -414,7 +422,7 @@ export default function MjBoardMobile({
         height="var(--tile-hand-h)"
         selected={selected?.id === t.id}
         onClick={() => {
-          if (!canPick || eyeBlocked(t.id)) return;
+          if (eyeBlocked(t.id)) return;
           if (eyeArmed) {
             onDiscard(t.id, true);
             return;
@@ -543,7 +551,6 @@ export default function MjBoardMobile({
                     <Die value={dice[0]} size={10} />
                     <Die value={dice[1]} size={10} />
                     <Die value={dice[2]} size={10} />
-                    <span className="sum">{dice[0] + dice[1] + dice[2]}</span>
                   </span>
                 )}
               </div>
@@ -607,7 +614,7 @@ export default function MjBoardMobile({
             {/* 吃碰槓胡的按鈕改由金色橫幅（MjClaimBanner，疊層）顯示，眼牌鈕也一起放進去（動作列會被橫幅蓋住） */}
             <MjClaimBanner actions={availableActions} onAction={onAction} winLabel={winLabel} passLabel={robKong || robFlower ? "不搶" : "過"} extra={eyeToggle} />
           </>
-        ) : selected ? (
+        ) : canPick && selected ? (
           <>
             <span className="mjm-status me">輪到你打牌</span>
             {eyeToggle}
