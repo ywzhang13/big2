@@ -10,6 +10,7 @@ import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { discardTile, declareEyeAndDiscard, eyeDiscardOptions, isLocked } from "@/lib/mahjong/gameLogic";
 import { discardEvents, eyeAutoplay, eyeViewEvents, type MjEvent } from "@/lib/mahjong/events";
 import { closeMahjongIfOver } from "@/lib/records/close";
+import { newPaceBudget, waitPaceOnce, type PaceBudget } from "@/lib/mahjong/pace";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 
 export async function POST(request: Request) {
@@ -19,10 +20,11 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleDiscard(request, body, fresh));
+  const budget = newPaceBudget(); // 這個請求只等一次、最多 4 秒（衝突重試也共用）
+  return retryOnConflict((fresh) => handleDiscard(request, body, fresh, budget));
 }
 
-async function handleDiscard(request: Request, body: unknown, fresh: boolean): Promise<Response> {
+async function handleDiscard(request: Request, body: unknown, fresh: boolean, budget: PaceBudget): Promise<Response> {
   const { roomId, playerId, tileId, declareTing, declareEye } = body as {
     roomId?: string;
     playerId?: string;
@@ -45,6 +47,8 @@ async function handleDiscard(request: Request, body: unknown, fresh: boolean): P
   if (denied) return denied;
 
   const state = room.game_state as MahjongGameState;
+  // 補花／眼牌摸牌的特效還沒播完：等到伺服器記的時間再處理（重新讀最新狀態）
+  if (await waitPaceOnce(state, budget)) return handleDiscard(request, body, true, budget);
   if (state.status !== "playing") {
     return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
   }

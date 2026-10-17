@@ -1,6 +1,7 @@
 // 各路由共用的「結算 + 廣播事件」組裝。只組資料，不存檔、不送出。
 
 import {
+  tallyHandStats,
   allHands,
   advanceTurn,
   applyWinnerOrderRule,
@@ -26,6 +27,7 @@ export function applySettlement(s: MahjongGameState): void {
   if (!s.roomSettings) return;
   const settlement = calculateSettlement(s);
   s.settlement = settlement;
+  tallyHandStats(s); // 整場統計：胡牌、放槍、自摸次數
   if (s.playerScores) {
     s.playerScores = s.playerScores.map((v, i) => v + settlement.deltas[i]);
   }
@@ -49,6 +51,8 @@ export function gameOverEvent(s: MahjongGameState): MjEvent {
       playerScores: s.playerScores,
       roundInfo: s.roundInfo,
       gameOver: s.gameOver,
+      // 整場打完才帶：每家胡牌、放槍、自摸次數（總結算畫面用）
+      ...(s.gameOver && s.handStats ? { handStats: s.handStats } : {}),
     },
   };
 }

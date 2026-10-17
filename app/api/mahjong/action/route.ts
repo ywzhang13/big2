@@ -29,6 +29,7 @@ import {
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
+import { applyPace, paceMs, newPaceBudget, waitPaceOnce, type PaceBudget } from "@/lib/mahjong/pace";
 import { Tile } from "@/lib/mahjong/tiles";
 import {
   applySettlement,
@@ -64,7 +65,8 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleAction(request, body, fresh));
+  const budget = newPaceBudget(); // 這個請求只等一次、最多 4 秒（衝突重試也共用）
+  return retryOnConflict((fresh) => handleAction(request, body, fresh, budget));
 }
 
 /**
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
  * 若同時有人先寫了會丟 StateConflictError，由 retryOnConflict 重新讀取後整個重做，
  * 所以兩個人同時送出的決定不會互相蓋掉。
  */
-async function handleAction(request: Request, body: unknown, fresh: boolean): Promise<Response> {
+async function handleAction(request: Request, body: unknown, fresh: boolean, budget: PaceBudget): Promise<Response> {
   const { roomId, playerId, actionType, tiles } = body as {
     roomId?: string;
     playerId?: string;
@@ -94,9 +96,12 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
   if (denied) return denied;
 
   const state = room.game_state as MahjongGameState;
+  // 補花／眼牌摸牌的特效還沒播完：等到伺服器記的時間再處理（重新讀最新狀態）
+  if (await waitPaceOnce(state, budget)) return handleAction(request, body, true, budget);
   const baseVersion = state.stateVersion;
+  // 槓後補牌補到花：等補花特效播完，別人才能接著動
   const save = (s: MahjongGameState, status?: string) =>
-    saveGameStateIfUnchanged(roomId, baseVersion, s, status);
+    saveGameStateIfUnchanged(roomId, baseVersion, applyPace(s, paceMs(state, s)), status);
   if (state.status !== "playing") {
     return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
   }
@@ -461,6 +466,11 @@ async function handleAction(request: Request, body: unknown, fresh: boolean): Pr
         { status: 409 }
       );
     }
+  }
+
+  // 上家打出的牌不能明槓（只能碰或吃）；加槓、暗槓不受影響
+  if (actionType === "kong" && !isConcealedKong && state.lastDiscard && seat === (state.lastDiscard.from + 1) % 4) {
+    return Response.json({ error: "上家打的牌不能明槓，可以碰" }, { status: 400 });
   }
 
   // Resolve tile objects from IDs

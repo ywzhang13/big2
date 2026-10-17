@@ -10,6 +10,7 @@ import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/e
 import { startNextGame, isAllRoundsComplete, eyeDiscardOptions, canDeclareTingNow } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
+import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -88,6 +89,7 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
   // 開局補花就八仙過海：這局直接結束（先照常送開局事件，最後送 mj_game_over）
   const endedAtDeal = newState.status === "finished";
   if (endedAtDeal) applySettlement(newState);
+  applyPace(newState, dealPaceMs(newState)); // 起手補花的特效播完，莊家才能打第一張
   await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, endedAtDeal ? "finished" : "playing");
 
   // Broadcast public game start

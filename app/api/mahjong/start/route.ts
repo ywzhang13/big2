@@ -7,6 +7,7 @@ import {
 } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
+import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
 import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow } from "@/lib/mahjong/gameLogic";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { closeMahjongIfOver } from "@/lib/records/close";
@@ -104,6 +105,7 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
 
   // Save full state to DB
   const baseVersion = (room.game_state as { stateVersion?: number } | null)?.stateVersion;
+  applyPace(state, dealPaceMs(state)); // 起手補花的特效播完，莊家才能打第一張
   await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
 
   // Broadcast public game start (no hands)

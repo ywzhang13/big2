@@ -10,6 +10,7 @@ import { drawTile, ownTurnActions } from "@/lib/mahjong/gameLogic";
 import { applySettlement, drawEvents, eyeAutoplay, eyeViewEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
+import { applyPace, paceMs, newPaceBudget, waitPaceOnce, type PaceBudget } from "@/lib/mahjong/pace";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -18,10 +19,11 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   }
-  return retryOnConflict((fresh) => handleDraw(request, body, fresh));
+  const budget = newPaceBudget(); // 這個請求只等一次、最多 4 秒（衝突重試也共用）
+  return retryOnConflict((fresh) => handleDraw(request, body, fresh, budget));
 }
 
-async function handleDraw(request: Request, body: unknown, fresh: boolean): Promise<Response> {
+async function handleDraw(request: Request, body: unknown, fresh: boolean, budget: PaceBudget): Promise<Response> {
   const { roomId, playerId } = body as {
     roomId?: string;
     playerId?: string;
@@ -41,6 +43,8 @@ async function handleDraw(request: Request, body: unknown, fresh: boolean): Prom
   if (denied) return denied;
 
   const state = room.game_state as MahjongGameState;
+  // 補花／眼牌摸牌的特效還沒播完：等到伺服器記的時間再處理（重新讀最新狀態）
+  if (await waitPaceOnce(state, budget)) return handleDraw(request, body, true, budget);
   if (state.status !== "playing") {
     return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
   }
@@ -81,6 +85,8 @@ async function handleDraw(request: Request, body: unknown, fresh: boolean): Prom
   const events = drawEvents(newState, seat);
   // 地聽／眼牌的人摸到不能胡的牌：伺服器直接幫他打出這張；眼牌的人能胡就自動胡（也包括別的眼牌者胡這張、七搶一）
   const auto = eyeAutoplay(newState);
+  // 補到花：等補花特效；眼牌的人摸牌：等翻牌＋停 1 秒（自動打出／自動胡要等這段播完，別人才能接著動）
+  applyPace(auto.s, paceMs(state, newState, seat));
   await saveGameStateIfUnchanged(roomId, state.stateVersion, auto.s, auto.finished ? "finished" : undefined);
   await mjBroadcastBatch(room.code, [...events, ...auto.events, ...eyeViewEvents(auto.s)]);
   if (auto.finished) await closeMahjongIfOver(roomId, room.code, auto.s); // 整場打完：寫紀錄後關房

@@ -300,6 +300,9 @@ export interface PublicGameState {
   dice?: MahjongGameState["dice"];
   doorSeat?: MahjongGameState["doorSeat"];
   nextGameReady?: MahjongGameState["nextGameReady"];
+  paceUntil?: MahjongGameState["paceUntil"];
+  handStats?: MahjongGameState["handStats"];
+  serverNow?: number;
   pendingActions?: MahjongGameState["pendingActions"];
   pendingAddKong?: MahjongGameState["pendingAddKong"];
   pendingFlowerRob?: MahjongGameState["pendingFlowerRob"];
@@ -338,6 +341,11 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     dice: state.dice,
     doorSeat: state.doorSeat,
     nextGameReady: state.nextGameReady,
+    // 牌局節奏：特效播完的伺服器時間，附上伺服器現在時間讓前端換算（不依賴手機時鐘）
+    paceUntil: state.paceUntil,
+    // 整場打完才公開每家的胡牌、放槍、自摸次數（總結算畫面用）
+    handStats: state.gameOver ? state.handStats : undefined,
+    serverNow: Date.now(),
     pendingActions: state.pendingActions,
     pendingAddKong: state.pendingAddKong,
     pendingFlowerRob: state.pendingFlowerRob,

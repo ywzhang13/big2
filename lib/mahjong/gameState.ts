@@ -41,6 +41,13 @@ export interface WinnerEntry {
   waits?: WaitTile[];      // 拿掉胡的那張後，手牌原本聽哪些牌；花牌胡＝[]
 }
 
+/** 整場統計：每家這場胡牌、放槍、自摸各幾次（座位 0～3） */
+export interface HandStats {
+  wins: number[];      // 胡牌次數（自摸也算；一砲多響每個胡的人各算一次）
+  dealIns: number[];   // 放槍次數（一砲多響只算一次；搶槓算被搶的人放槍）
+  selfDraws: number[]; // 自摸次數（八仙過海、七搶一照結算規則算自摸）
+}
+
 export interface RoomSettings {
   totalRounds: number;   // 圈數: 1/2/4/8
   basePoints: number;    // 底 (base payment per game)
@@ -118,6 +125,10 @@ export interface MahjongGameState {
   // --- Dice / door (骰子開門) ---
   dice?: [number, number, number]; // 3 dice rolled at game start
   doorSeat?: number;               // 開門 seat (門風=東), used for seat wind scoring
+  // --- 整場統計（每局結算時累加；整場打完才放進公開狀態）---
+  handStats?: HandStats;
+  // --- 牌局節奏（lib/mahjong/pace.ts）---
+  paceUntil?: number;              // 伺服器時間（毫秒）：補花／眼牌摸牌的特效播完前，摸牌、打牌、吃碰胡都等到這時才處理
   // --- Next-game ready check (下一局四家同意) ---
   nextGameReady?: string[];        // playerIds who have confirmed ready for next game
   // --- Leave request (離開需他家同意) ---

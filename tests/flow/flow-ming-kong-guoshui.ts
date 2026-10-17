@@ -71,11 +71,11 @@ function checkLeak(tag: string) {
   for (const seat of [0, 1, 2, 3]) if (/guoShui/i.test(JSON.stringify(toPlayerGameState(st(), "p" + seat)))) leaks.push(`${tag}:state:p${seat}`);
   if (sent.some((e) => /guoShui/i.test(JSON.stringify(e)))) leaks.push(`${tag}:broadcast`);
 }
-/** 上家打五筒，seat1 明槓，補牌是 replacement */
+/** 對家打五筒，seat1 明槓，補牌是 replacement */
 async function mingKong(replacement: string) {
   setup("p5 p5 p5 " + REST);
   setReplacement(replacement);
-  await giveAndDiscard(0, "p5");
+  await giveAndDiscard(3, "p5"); // 對家打出（上家打的牌不能明槓，2026-10-17）
   sent.length = 0;
   const k = await call(action, { playerId: "p1", actionType: "kong", tiles: handIds(1, "p5") });
   checkLeak("明槓");
@@ -85,7 +85,7 @@ async function mingKong(replacement: string) {
 // ---- ① 明槓後補到胡牌：不能自摸 ----
 {
   const k = await mingKong("m2");
-  eq([k.status, st().players[1].revealed[0]?.type, st().currentTurn, st().hasDrawn], [200, "kong", 1, true], "K1 上家打五筒，明槓成功，補了一張牌");
+  eq([k.status, st().players[1].revealed[0]?.type, st().currentTurn, st().hasDrawn], [200, "kong", 1, true], "K1 對家打五筒，明槓成功，補了一張牌");
   eq([drawCanWin(), viewWin(1), gs()], [false, false, [1]], "K2 補到二萬（湊成胡牌）：補牌通知和重新整理都沒有胡的按鈕，已過水");
   const w = await call(action, { playerId: "p1", actionType: "win" });
   eq([w.status, w.body.error, st().status, st().winners ?? []], [400, "現在不能胡", "playing", []], "K3 硬送自摸：伺服器擋下（400），這局繼續");
@@ -150,7 +150,7 @@ async function mingKong(replacement: string) {
   setup("p5 p5 p5 " + REST);
   const w = st().wall;
   w[w.length - 1] = t("f3"); w[w.length - 2] = t("m5");
-  await giveAndDiscard(0, "p5");
+  await giveAndDiscard(3, "p5"); // 對家打出（上家打的牌不能明槓，2026-10-17）
   sent.length = 0;
   const k = await call(action, { playerId: "p1", actionType: "kong", tiles: handIds(1, "p5") });
   eq([k.status, st().players[1].flowers.length, drawCanWin(), viewWin(1), gs()], [200, 1, false, false, [1]], "K17a 明槓補到花、補花後拿到五萬（胡牌）：一樣過水，不能自摸");

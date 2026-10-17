@@ -619,8 +619,9 @@ export function getAvailableActions(
     }
 
     // --- Kong (明槓): player has 3 of the discarded tile ---
+    // 上家打出的牌不能明槓（老闆 2026-10-17）：下家只能碰或吃；對家、上家（打牌者的下下家）照樣可以明槓
     const matchCount = handKeys.filter((k) => k === discKey).length;
-    if (matchCount >= 3 && canKongNow(state)) {
+    if (matchCount >= 3 && canKongNow(state) && seat !== nextSeat(fromSeat)) {
       const kongTiles = player.hand.filter((t) => tileKey(t) === discKey);
       actions.push({ type: "kong", playerSeat: seat, tiles: kongTiles });
     }
@@ -742,6 +743,9 @@ export function executeAction(
     s.lastDiscard = null;
     s.isAfterKong = false;
   } else if (action.type === "kong") {
+    if (action.playerSeat === nextSeat(s.lastDiscard.from)) {
+      throw new Error("上家打的牌不能明槓");
+    }
     if (!canKongNow(s)) {
       throw new Error("牌牆剩 16 張，不能再槓");
     }
@@ -1167,6 +1171,43 @@ export function applyWinnerOrderRule(state: MahjongGameState): MahjongGameState 
  * 流局: no payment
  * 連莊: adds dealerConsecutive as extra 台 (拉莊)
  */
+/**
+ * 這局真正算胡的人（結算和整場統計共用）：流局回空陣列。
+ * Rule: only 三響 (3 winners) may all hu simultaneously. With exactly 2
+ * winners on a single discard (雙響), only the highest-priority seat —
+ * closest in CCW order to the discarder — actually gets the hu; the other
+ * forfeits. (Self-draw can only have 1 winner, so length === 2 implies ron.)
+ */
+export function settledWinners(state: MahjongGameState): WinnerEntry[] {
+  let winners = state.winners && state.winners.length > 0
+    ? state.winners.slice()
+    : state.winner ? [state.winner] : [];
+  if (winners.length === 0 || winners[0].seat < 0) return [];
+  if (winners.length === 2) {
+    const discarder = state.lastDiscard?.from ?? -1;
+    const priority = (seat: number) =>
+      discarder >= 0 ? ((seat - discarder - 1 + 4) % 4) : seat;
+    winners.sort((a, b) => priority(a.seat) - priority(b.seat));
+    winners = winners.slice(0, 1);
+  }
+  return winners;
+}
+
+/** 把這局的胡牌、放槍、自摸加進整場統計（會直接改 s；每局結算時呼叫一次） */
+export function tallyHandStats(s: MahjongGameState): void {
+  const st = s.handStats ?? { wins: [0, 0, 0, 0], dealIns: [0, 0, 0, 0], selfDraws: [0, 0, 0, 0] };
+  const winners = settledWinners(s);
+  let dealIn: number | null = null;
+  for (const w of winners) {
+    st.wins[w.seat]++;
+    // 自摸、八仙過海、七搶一：三家都付，算自摸；放槍、搶槓：記那張牌的來源
+    if (w.from == null || isFlowerWin(w)) st.selfDraws[w.seat]++;
+    else dealIn = w.from;
+  }
+  if (dealIn !== null) st.dealIns[dealIn]++;
+  s.handStats = st;
+}
+
 export function calculateSettlement(state: MahjongGameState): Settlement {
   const settings = state.roomSettings;
   if (!settings) {
@@ -1176,27 +1217,10 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   const { basePoints, fanPoints } = settings;
   const deltas = [0, 0, 0, 0];
 
-  let winners = state.winners && state.winners.length > 0
-    ? state.winners.slice()
-    : state.winner ? [state.winner] : [];
-
-  if (winners.length === 0 || winners[0].seat < 0) {
+  const winners = settledWinners(state);
+  if (winners.length === 0) {
     // 流局
     return { deltas, reason: "draw", fanTotal: 0, paymentPerPlayer: 0 };
-  }
-
-  // Rule: only 三響 (3 winners) may all hu simultaneously. With exactly 2
-  // winners on a single discard (雙響), only the highest-priority seat —
-  // closest in CCW order to the discarder — actually gets the hu; the other
-  // forfeits. (Self-draw can only have 1 winner, so length === 2 implies ron.)
-  const isSelfDrawMulti = winners.length === 1 &&
-    winners[0].score.fans.some(f => f.name.includes("自摸"));
-  if (winners.length === 2 && !isSelfDrawMulti) {
-    const discarder = state.lastDiscard?.from ?? -1;
-    const priority = (seat: number) =>
-      discarder >= 0 ? ((seat - discarder - 1 + 4) % 4) : seat;
-    winners.sort((a, b) => priority(a.seat) - priority(b.seat));
-    winners = winners.slice(0, 1);
   }
 
   const dealerSeat = state.dealerSeat;
