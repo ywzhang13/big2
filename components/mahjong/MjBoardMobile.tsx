@@ -10,7 +10,7 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import { paceText } from "./paceText";
-import MjTile from "./MjTile";
+import MjTile, { TileMatchContext, tileKind } from "./MjTile";
 import { SlowDrawTile } from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
 import MjClaimFx from "./MjClaimFx";
@@ -57,9 +57,9 @@ function Melds({ revealed, w, h, mine, reveal, rot, seat }: { revealed: Meld[]; 
   if (revealed.length === 0) return rot ? <div className="mjm-meldcol" data-claim-seat={seat} /> : null;
   const tile = (t: Tile, faceDown: boolean) =>
     rot ? (
-      <span key={t.id} className="rcell" style={{ width: h, height: w }}><MjTile tile={t} width={w} height={h} faceDown={faceDown} /></span>
+      <span key={t.id} className="rcell" style={{ width: h, height: w }}><MjTile tile={t} width={w} height={h} faceDown={faceDown} matchable /></span>
     ) : (
-      <MjTile key={t.id} tile={t} width={w} height={h} faceDown={faceDown} />
+      <MjTile key={t.id} tile={t} width={w} height={h} faceDown={faceDown} matchable />
     );
   return (
     <div className={rot ? "mjm-meldcol" : "mjm-melds"} data-claim-seat={seat}>
@@ -279,7 +279,7 @@ function VerticalDiscards({ tiles, side }: { tiles: Tile[]; side: "left" | "righ
         <div key={ci} className="col" style={{ gap: fit.gap }}>
           {col.map((t) => (
             <div key={t.id} className="cell">
-              <MjTile tile={t} width={15} height={20} />
+              <MjTile tile={t} width={15} height={20} matchable />
             </div>
           ))}
         </div>
@@ -448,6 +448,7 @@ export default function MjBoardMobile({
   const winLabel = robFlower ? "七搶一" : robKong ? "搶槓胡" : "胡";
 
   return (
+    <TileMatchContext.Provider value={selected ? tileKind(selected) : null}>
     <div className="mjm-app">
       <MjClaimFx notice={actionNotice} name={actionNotice ? nameOf(actionNotice.seat) : ""} mySeat={mySeat} />
       {/* 左上選單鈕：房號、圈局、底台、離開 */}
@@ -525,28 +526,26 @@ export default function MjBoardMobile({
           {/* 對家棄牌：第一張在右、往左長 */}
           <div className="mjm-dis-h rev">
             {(top?.discards ?? []).map((t) => (
-              <MjTile key={t.id} tile={t} width={18} height={24} />
+              <MjTile key={t.id} tile={t} width={18} height={24} matchable />
             ))}
           </div>
 
           <div className="mjm-mid-row">
             <VerticalDiscards tiles={left?.discards ?? []} side="left" />
-            {/* 中間：骰子在左、剩餘張數、剛打出的牌在右（一直亮到下一張打出），兩邊不互相蓋到 */}
+            {/* 中間：剩餘張數＋風圈＋骰子同一個框（老闆 2026-10-17），剛打出的牌在右（一直亮到下一張打出） */}
             <div className="mjm-center">
-              {dice && !pendingFlowerRob && (
-                <div className="mjm-focus dice">
-                  <div style={{ display: "flex", gap: 2 }}>
-                    <Die value={dice[0]} size={14} />
-                    <Die value={dice[1]} size={14} />
-                    <Die value={dice[2]} size={14} />
-                  </div>
-                  <span className="cap">{dice[0] + dice[1] + dice[2]} 點開門</span>
-                </div>
-              )}
               <div className="mjm-info">
                 <span className="big">{wallRemaining}</span>
                 <span className="lab">剩餘</span>
                 {roundLabel && <span className="rnd">{roundLabel}</span>}
+                {dice && (
+                  <span className="dice" data-center-dice>
+                    <Die value={dice[0]} size={10} />
+                    <Die value={dice[1]} size={10} />
+                    <Die value={dice[2]} size={10} />
+                    <span className="sum">{dice[0] + dice[1] + dice[2]}</span>
+                  </span>
+                )}
               </div>
               {pendingAddKong ? (
                 <div className="mjm-focus alert">
@@ -566,7 +565,7 @@ export default function MjBoardMobile({
           {/* 我的棄牌：第一張在左、往右長 */}
           <div className="mjm-dis-h">
             {(me?.discards ?? []).map((t) => (
-              <MjTile key={t.id} tile={t} width={18} height={24} />
+              <MjTile key={t.id} tile={t} width={18} height={24} matchable />
             ))}
           </div>
 
@@ -663,5 +662,6 @@ export default function MjBoardMobile({
         </div>
       </div>
     </div>
+    </TileMatchContext.Provider>
   );
 }

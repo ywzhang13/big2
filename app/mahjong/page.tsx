@@ -1292,6 +1292,7 @@ function RoomView({
           hasRounds={!!state.roomSettings}
           gameOver={state.gameOver}
           handStats={state.handStats}
+          remainingWall={state.remainingWall}
           nextGameReady={state.nextGameReady}
           onNextGame={nextGame}
           onLeave={() => {

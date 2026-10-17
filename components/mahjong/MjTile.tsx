@@ -1,6 +1,11 @@
 "use client";
 
+import { createContext, useContext } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
+
+/** 選中一張手牌還沒打出時，海底和吃碰區同一種牌亮起來、其他牌蓋黑紗（只影響有 matchable 的牌） */
+export const TileMatchContext = createContext<string | null>(null);
+export const tileKind = (t: Tile) => `${t.suit}${t.rank}`;
 
 interface MjTileProps {
   tile: Tile;
@@ -12,6 +17,8 @@ interface MjTileProps {
   // 指定尺寸（手機橫向用 CSS 變數，例如 "var(--tile-hand-w)"），覆蓋 tiny/small
   width?: number | string;
   height?: number | string;
+  // 海底、吃碰區的牌：跟著 TileMatchContext 亮起來或蓋黑紗
+  matchable?: boolean;
 }
 
 // Map tile to SVG filename
@@ -32,7 +39,9 @@ function getTileSvg(tile: Tile): string {
   return "Blank";
 }
 
-export default function MjTile({ tile, selected, onClick, small, tiny, faceDown, width, height }: MjTileProps) {
+export default function MjTile({ tile, selected, onClick, small, tiny, faceDown, width, height, matchable }: MjTileProps) {
+  const matchKind = useContext(TileMatchContext);
+  const match = matchable && matchKind && !faceDown ? (tileKind(tile) === matchKind ? "hit" : "dim") : null;
   // tiny bumped +30% so discard pool is easier to read (26×35 instead of 20×27)
   const w = width ?? (tiny ? 26 : small ? 27 : 36);
   const h = height ?? (tiny ? 35 : small ? 38 : 49);
@@ -53,6 +62,7 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
   return (
     <Tag
       {...interactiveProps}
+      data-match={match ?? undefined}
       className={`flex-shrink-0 transition-all duration-100 active:scale-95 relative
         ${selected ? "-translate-y-3 z-10" : ""}
         ${!onClick ? "cursor-default" : "cursor-pointer"}
@@ -62,7 +72,11 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
         background: "transparent",
         boxShadow: selected
           ? "0 6px 16px rgba(0,0,0,0.5), 0 0 0 2px #fbbf24"
-          : "none",
+          : match === "hit"
+            ? "0 0 0 2px #fbbf24, 0 0 8px 1px rgba(251,191,36,0.7)"
+            : "none",
+        borderRadius: match === "hit" ? 3 : undefined,
+        zIndex: match === "hit" ? 1 : undefined,
         border: "none",
         padding: 0,
       }}
@@ -106,6 +120,10 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
           }}
           draggable={false}
         />
+      )}
+      {/* 選牌比對：不是同一種牌就蓋一層黑紗（和眼牌模式一樣變暗） */}
+      {match === "dim" && (
+        <div aria-hidden style={{ position: "absolute", inset: 0, borderRadius: 2, background: "rgba(0,0,0,0.6)", pointerEvents: "none" }} />
       )}
     </Tag>
   );

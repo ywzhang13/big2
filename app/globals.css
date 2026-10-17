@@ -242,6 +242,22 @@
 .mjm-result .seat .who2 { flex: 0 0 90px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mjm-result .seat .delta { flex: 0 0 auto; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; min-width: 48px; }
 .mjm-result .foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+/* 牌庫：四家攤牌包一層（間距和原本一樣），展開時整片蓋在上面，裡面的牌太多才自己捲 */
+.mjm-result .rows { position: relative; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+.mjm-result.desk .rows { gap: 8px; }
+.mjm-result .wall { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(12,26,17,.97); border: 1px solid rgba(201,169,110,.45); overflow: hidden; }
+.mjm-result .wall .hd { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); white-space: nowrap; }
+.mjm-result .wall .hd b { color: var(--gold-l); }
+.mjm-result .wall .hd .x { margin-left: auto; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--gold-l); background: rgba(255,255,255,.08); border: 1px solid rgba(201,169,110,.4); }
+.mjm-result .wall .tiles { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; min-height: 0; overflow-y: auto; }
+.mjm-result .wall .tiles > span { display: flex; border-radius: 3px; }
+.mjm-result .wall .tiles > .next { box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251,191,36,.5); }
+.mjm-result .wallbtn { padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--gold-l); background: rgba(255,255,255,.06); border: 1px solid rgba(201,169,110,.45); white-space: nowrap; }
+.mjm-result .wallbtn.on { background: rgba(201,169,110,.85); color: #0f2a1a; border-color: #f0d68a; }
+.mjm-result.desk .wall { padding: 10px 14px; gap: 10px; border-radius: 12px; }
+.mjm-result.desk .wall .hd { font-size: 14px; }
+.mjm-result.desk .wall .hd .x { font-size: 14px; padding: 5px 14px; }
+.mjm-result.desk .wallbtn { font-size: 15px; padding: 6px 16px; }
 /* 同意下一局：已同意＝金底＋✓，還沒按＝虛線框＋… ；整場打完時同一列改成總積分榜 */
 .mjm-result .nextline { margin-top: 4px; font-size: 11px; font-weight: 700; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mjm-result .nextline.err { color: #fca5a5; }
@@ -1097,8 +1113,9 @@ body {
   70%  { opacity: 1; }
   100% { opacity: 0; transform: translateY(-6px); }
 }
-/* 牌桌中間：骰子在左邊那一格（比剛打出的牌小一號） */
-.mjm-focus.dice .cap { color: rgba(201,169,110,.6); }
+/* 牌桌中間：骰子放在剩餘張數的框裡（最下面一行，後面接點數） */
+.mjm-info .dice { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
+.mjm-info .dice .sum { margin-left: 2px; font-size: 9px; font-weight: 700; line-height: 1; color: rgba(201,169,110,.75); font-variant-numeric: tabular-nums; }
 
 /* 整場總結算：每家的胡牌／放槍／自摸次數（接在名字後面） */
 .mjm-result .seat .hstat { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; font-variant-numeric: tabular-nums; }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
-import MjTile from "./MjTile";
+import MjTile, { TileMatchContext } from "./MjTile";
 import MjHand from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
 import { DeclareFx, Die, fxClass } from "./MjBoardMobile";
@@ -318,7 +318,7 @@ function PlayerPanel({
                     }
                   >
                     <div style={rotStyle ? { transform: rotStyle } : undefined}>
-                      <MjTile tile={t} width={mw} height={mh} faceDown={isConcealedFaceDown} />
+                      <MjTile tile={t} width={mw} height={mh} faceDown={isConcealedFaceDown} matchable />
                     </div>
                   </div>
                 );
@@ -338,12 +338,14 @@ function WindDial({
   wallRemaining,
   doorSeat,
   dealerSeat,
+  dice,
 }: {
   currentTurn: number;
   mySeat: number;
   wallRemaining: number;
   doorSeat?: number;
   dealerSeat: number;
+  dice?: [number, number, number];
 }) {
   // Position winds relative to player's seat
   const winds = [0, 1, 2, 3].map((offset) => {
@@ -364,7 +366,7 @@ function WindDial({
   ];
 
   return (
-    <div className="relative w-[72px] h-[72px] rounded-xl flex items-center justify-center"
+    <div className="relative w-[92px] h-[92px] rounded-xl flex items-center justify-center"
       style={{
         background: "radial-gradient(circle, rgba(201,169,110,0.08) 0%, rgba(0,0,0,0.3) 100%)",
         border: "1.5px solid rgba(201,169,110,0.25)",
@@ -376,6 +378,15 @@ function WindDial({
           {wallRemaining}
         </span>
         <span className="text-[7px] text-[#C9A96E]/50 tracking-wider">剩餘</span>
+        {/* 骰子：剩餘張數下面一行，後面接點數 */}
+        {dice && (
+          <div className="flex items-center gap-[2px] mt-[3px]" data-center-dice>
+            <Die value={dice[0]} size={13} />
+            <Die value={dice[1]} size={13} />
+            <Die value={dice[2]} size={13} />
+            <span className="ml-[2px] text-[10px] leading-none font-bold text-[#C9A96E]/75 tabular-nums">{dice[0] + dice[1] + dice[2]}</span>
+          </div>
+        )}
       </div>
       {/* Wind markers */}
       {winds.map((w) => (
@@ -478,8 +489,11 @@ export default function MjBoard({
   const eyeFx = declareFx.find((f) => !f.both);
 
   const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
+  // 選中一張手牌還沒打出：海底和吃碰區同一種牌亮起來
+  const [pickKind, setPickKind] = useState<string | null>(null);
 
   return (
+    <TileMatchContext.Provider value={pickKind}>
     <div className="flex flex-col flex-1 overflow-hidden relative"
          style={{
            height: "100%",
@@ -550,7 +564,7 @@ export default function MjBoard({
                   所以第一張在右邊往左長，滿了往畫面上方換列（wrap-reverse）。 */}
               <div className="flex flex-wrap-reverse flex-row-reverse justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
                 {(top?.discards || []).map((t, i) => (
-                  <MjTile key={`top-${t.id}-${i}`} tile={t} tiny />
+                  <MjTile key={`top-${t.id}-${i}`} tile={t} tiny matchable />
                 ))}
               </div>
 
@@ -584,7 +598,7 @@ export default function MjBoard({
                             }}
                           >
                             <div style={{ transform: "rotate(90deg)" }}>
-                              <MjTile tile={t} width={21} height={29} />
+                              <MjTile tile={t} width={21} height={29} matchable />
                             </div>
                           </div>
                         ))}
@@ -594,21 +608,9 @@ export default function MjBoard({
                 </div>
 
                 {/* Center: wind dial + last discard */}
-                {/* 中間：骰子在左、風盤、剛打出的牌在右（一直亮到下一張打出），兩邊不互相蓋到 */}
+                {/* 中間：風盤（剩餘張數＋風位＋骰子同一個框，老闆 2026-10-17）、剛打出的牌在右（一直亮到下一張打出） */}
                 <div className="flex-1 flex flex-row items-center justify-center gap-4 min-w-0">
-                  {dice && !pendingFlowerRob && (
-                    <div className="flex flex-col items-center gap-1" data-center-dice>
-                      <div className="flex gap-1">
-                        <Die value={dice[0]} size={20} />
-                        <Die value={dice[1]} size={20} />
-                        <Die value={dice[2]} size={20} />
-                      </div>
-                      <span className="text-[9px] text-[#C9A96E]/60 font-bold tracking-wider">
-                        {dice[0] + dice[1] + dice[2]} 點開門
-                      </span>
-                    </div>
-                  )}
-                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} />
+                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} dice={dice} />
                   {/* 加槓中的牌：不是打出去的牌，只在中央提示，不進棄牌區 */}
                   {pendingAddKong && (
                     <div className="flex flex-col items-center gap-1">
@@ -677,7 +679,7 @@ export default function MjBoard({
                             }}
                           >
                             <div style={{ transform: "rotate(-90deg)" }}>
-                              <MjTile tile={t} width={21} height={29} />
+                              <MjTile tile={t} width={21} height={29} matchable />
                             </div>
                           </div>
                         ))}
@@ -692,7 +694,7 @@ export default function MjBoard({
                   appended to the right (toward my right side). */}
               <div className="flex flex-wrap justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
                 {(me?.discards || []).map((t, i) => (
-                  <MjTile key={`me-${t.id}-${i}`} tile={t} tiny />
+                  <MjTile key={`me-${t.id}-${i}`} tile={t} tiny matchable />
                 ))}
               </div>
             </div>
@@ -836,7 +838,7 @@ export default function MjBoard({
                 <div key={mi} className="flex gap-[1px]">
                   {/* 自己的暗槓顯示全部牌面（其他家 PlayerPanel 則全部面朝下） */}
                   {meld.tiles.map((t) => (
-                    <MjTile key={t.id} tile={t} width={20} height={28} />
+                    <MjTile key={t.id} tile={t} width={20} height={28} matchable />
                   ))}
                 </div>
               ))}
@@ -855,10 +857,12 @@ export default function MjBoard({
               slowDraw={slowDraw}
               eyeArmed={eyeArmed}
               eyeOptionIds={eyeOptions}
+              onPickKind={setPickKind}
             />
           </div>
         </div>
       </div>
     </div>
+    </TileMatchContext.Provider>
   );
 }

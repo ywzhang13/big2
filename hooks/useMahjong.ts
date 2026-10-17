@@ -179,6 +179,8 @@ export interface MjClientState {
   gameOver?: boolean;
   /** 整場打完時每家的胡牌／放槍／自摸次數（老柯 2026-10-17，只有 gameOver 時伺服器才帶） */
   handStats?: HandStats;
+  /** 這局剩下的牌牆（牌庫），依摸牌順序、第 0 張是下一張要摸的；只有一局結束時伺服器才帶（老柯 2026-10-17） */
+  remainingWall?: Tile[];
   // Dice / door
   dice?: [number, number, number];
   doorSeat?: number;
@@ -587,6 +589,7 @@ export function useMahjong(
         settlement: (gs as Record<string, unknown>).settlement as Settlement | undefined ?? prev.settlement,
         gameOver: (gs as Record<string, unknown>).gameOver as boolean | undefined ?? prev.gameOver,
         handStats: (gs as Record<string, unknown>).handStats as HandStats | undefined ?? prev.handStats,
+        remainingWall: gs.status === "finished" ? (gs as Record<string, unknown>).remainingWall as Tile[] | undefined ?? prev.remainingWall : undefined,
         dice: (gs as Record<string, unknown>).dice as [number, number, number] | undefined ?? prev.dice,
         doorSeat: (gs as Record<string, unknown>).doorSeat as number | undefined ?? prev.doorSeat,
         nextGameReady: (gs as Record<string, unknown>).nextGameReady as string[] | undefined ?? prev.nextGameReady,
@@ -887,6 +890,7 @@ export function useMahjong(
         settlement: undefined,
         gameOver: false,
         handStats: undefined,
+        remainingWall: undefined,
         ...(msg.roundInfo ? { roundInfo: msg.roundInfo } : {}),
         ...(msg.playerScores ? { playerScores: msg.playerScores } : {}),
         ...(msg.dice ? { dice: msg.dice } : {}),
@@ -1251,6 +1255,7 @@ export function useMahjong(
         roundInfo?: RoundInfo;
         gameOver?: boolean;
         handStats?: HandStats;
+        remainingWall?: Tile[];
       };
       // 放槍被胡走的那張（不是自摸）從海底拿掉，和伺服器輸出的 state 一致
       const wonFromDiscard = new Set((msg.winners ?? []).filter((w) => w.from != null && w.winTile).map((w) => w.winTile!.id));
@@ -1290,6 +1295,7 @@ export function useMahjong(
         roundInfo: msg.roundInfo ?? prev.roundInfo,
         gameOver: msg.gameOver ?? false,
         handStats: msg.handStats ?? prev.handStats,
+        remainingWall: msg.remainingWall ?? prev.remainingWall,
       }));
     });
 

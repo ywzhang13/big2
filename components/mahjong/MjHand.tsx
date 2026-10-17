@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
-import MjTile from "./MjTile";
+import MjTile, { tileKind } from "./MjTile";
 
 interface MjHandProps {
   tiles: Tile[];
@@ -14,6 +14,8 @@ interface MjHandProps {
   eyeOptionIds?: number[];
   // 眼牌後慢慢摸牌：摸進的那張先蓋著再翻開（只有眼牌的人自己看得到）
   slowDraw?: { tileId: number; win: boolean } | null;
+  // 選中（還沒打出）的是哪一種牌，給牌桌比對海底和吃碰區；沒選＝null
+  onPickKind?: (kind: string | null) => void;
 }
 
 /** 慢慢摸牌的翻牌（小宜 2026-10-16）：牌背浮起＋金光 → 翻面 → 落定；能胡時翻開那面閃金框。桌機、手機共用 */
@@ -28,12 +30,17 @@ export function SlowDrawTile({ tile, win, width, height }: { tile: Tile; win: bo
   );
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw }: MjHandProps) {
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw, onPickKind }: MjHandProps) {
   const [rawSelectedId, setSelectedId] = useState<number | null>(null);
   const eyePick = (id: number) => !!eyeArmed && (eyeOptionIds ?? []).includes(id);
   const eyeBlocked = (id: number) => !!eyeArmed && !eyePick(id);
   // 按下眼牌後就是「點牌直接打出」，原本選的牌不算
   const selectedId = eyeArmed ? null : rawSelectedId;
+  const picked = canDiscard ? tiles.find((t) => t.id === selectedId) : undefined;
+  const pickKind = picked ? tileKind(picked) : null;
+  useEffect(() => {
+    onPickKind?.(pickKind);
+  }, [pickKind, onPickKind]);
 
   function handleTileClick(tile: Tile) {
     if (!canDiscard || eyeBlocked(tile.id)) return;

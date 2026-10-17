@@ -6,9 +6,11 @@
 
 import { useState } from "react";
 import type { HandStats, Settlement } from "@/lib/mahjong/gameState";
+import type { Tile } from "@/lib/mahjong/tiles";
 import type { MjPlayer, MjWinner, MjHandReveal } from "@/hooks/useMahjong";
 import { RevealTiles, WaitsList } from "./MjReveal";
 import { Die } from "./MjBoardMobile";
+import MjTile from "./MjTile";
 
 const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
@@ -26,6 +28,8 @@ interface MjResultMobileProps {
   gameOver?: boolean;
   /** 整場打完時每家的胡牌／放槍／自摸次數（重新整理後拿不到就不顯示） */
   handStats?: HandStats;
+  /** 這局剩下的牌牆（牌庫），第 0 張是下一張要摸的；沒有就不顯示「看牌庫」 */
+  remainingWall?: Tile[];
   nextGameReady?: string[];
   /** 回傳被拒絕時要顯示的訊息（成功或已由登入流程處理時是 null） */
   onNextGame: () => Promise<string | null>;
@@ -64,6 +68,7 @@ export default function MjResultMobile({
   hasRounds,
   gameOver,
   handStats,
+  remainingWall,
   nextGameReady,
   onNextGame,
   onLeave,
@@ -86,6 +91,9 @@ export default function MjResultMobile({
   // 按下一局：送出中先鎖住按鈕；被拒絕時在按鈕旁顯示原因（之前錯誤被吞掉，看起來像按了沒反應）
   const [sending, setSending] = useState(false);
   const [nextErr, setNextErr] = useState<string | null>(null);
+  // 牌庫：展開時蓋在四家攤牌上面（攤牌的位置照留，下面的按鈕不會動）
+  const [wallOpen, setWallOpen] = useState(false);
+  const hasWall = !!remainingWall && remainingWall.length > 0;
   const pressNext = async () => {
     setSending(true);
     setNextErr(null);
@@ -136,6 +144,11 @@ export default function MjResultMobile({
             <span>骰 <b>{dice[0] + dice[1] + dice[2]}</b></span>
           </span>
         )}
+        {hasWall && (
+          <button type="button" className={`wallbtn${wallOpen ? " on" : ""}`} aria-expanded={wallOpen} onClick={() => setWallOpen((o) => !o)} data-wall-toggle>
+            {wallOpen ? "收起牌庫" : `看牌庫（${remainingWall!.length}）`}
+          </button>
+        )}
         {!isDraw && !multi && (
           <div className="fans">
             {winner.score.fans.map((f, i) => (
@@ -152,6 +165,7 @@ export default function MjResultMobile({
 
       {/* 右欄：四家攤牌＋輸贏 */}
       <div className="rcol">
+        <div className="rows">
         {[...players]
           .sort((a, b) => a.seat - b.seat)
           .map((p) => {
@@ -185,6 +199,22 @@ export default function MjResultMobile({
               </div>
             );
           })}
+        {hasWall && wallOpen && (
+          <div className="wall" data-wall>
+            <div className="hd">
+              <span>牌庫・剩 <b>{remainingWall!.length}</b> 張・依摸牌順序（金框是下一張）</span>
+              <button type="button" className="x" onClick={() => setWallOpen(false)}>收起</button>
+            </div>
+            <div className="tiles">
+              {remainingWall!.map((t, i) => (
+                <span key={t.id} className={i === 0 ? "next" : undefined}>
+                  <MjTile tile={t} width={tile.w} height={tile.ht} />
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        </div>
 
         {/* 下一局的狀態列：被拒絕時顯示原因；有人按了、還沒到齊時列出還在等誰（四家都看得到） */}
         {hasRounds && !gameOver && (nextErr || (readyCount > 0 && waiting.length > 0)) && (
