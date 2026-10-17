@@ -8,6 +8,8 @@ import { rooms } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
 import { asSeat } from "../support/stub-auth";
+import { seatRng } from "../../lib/mahjong/gameLogic";
+seatRng.next = () => 0.999999; // 這支測試照入座順序寫：開局不打亂座位（打亂另見 flow-seats-wall）
 
 async function call(fn: (r: Request) => Promise<Response>, body: object) {
   const r = await fn(new Request("http://x", { method: "POST", headers: asSeat({ roomId: "R", ...body }), body: JSON.stringify({ roomId: "R", ...body }) }));

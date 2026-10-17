@@ -45,7 +45,9 @@ export async function POST(request: Request) {
     // 同一個人已經坐下（換裝置、清掉瀏覽器資料）→ 回到原本的座位，沿用原本的玩家 id
     const mine = existingPlayers.find((p) => p.user_id === user.id);
     if (mine) {
-      return Response.json({ seat: mine.seat, roomId: room.id, rejoined: true, ...seatInfo(mine.player_id) });
+      // 開局後座位已隨機打亂：以牌局狀態裡的座位為準（mj_players.seat 只是入座順序）
+      const gameSeat = (room.game_state as { players?: { id: string; seat: number }[] } | null)?.players?.find((p) => p.id === mine.player_id)?.seat;
+      return Response.json({ seat: gameSeat ?? mine.seat, roomId: room.id, rejoined: true, ...seatInfo(mine.player_id) });
     }
 
     // 這個玩家 id 已經坐下、但不是這個帳號（別人的座位，或上線前沒綁帳號的舊座位）

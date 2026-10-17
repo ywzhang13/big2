@@ -59,6 +59,19 @@ function markDrawn(s: MahjongGameState, seat: number): void {
 /**
  * Create a new game with 4 players. Dealer is seat 0 by default.
  */
+/** 開局排座位用的亂數（測試可以換掉，例如固定成不打亂） */
+export const seatRng = { next: (): number => Math.random() };
+
+/** 開局隨機排座位（Fisher–Yates）：回傳新陣列，第 i 個元素坐座位 i */
+export function shuffleSeats<T>(list: readonly T[], rng: () => number = seatRng.next): T[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function initGame(
   players: { id: string; name: string }[],
   settings?: RoomSettings

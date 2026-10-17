@@ -73,7 +73,8 @@ export async function loadSeatsByUser(userId: string) {
   for (const [roomId, list] of Object.entries(seats)) {
     const p = list.find((x) => x.user_id === userId);
     const r = rooms[roomId];
-    if (p && r) out.push({ code: r.code, room_id: roomId, status: r.status ?? "waiting", seat: p.seat, updated_at: r.updated_at ?? "" });
+    const gameSeat = r?.game_state?.players?.find((x) => x.id === p?.player_id)?.seat; // 開局後以牌局座位為準
+    if (p && r) out.push({ code: r.code, room_id: roomId, status: r.status ?? "waiting", seat: gameSeat ?? p.seat, updated_at: r.updated_at ?? "" });
   }
   return out.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }

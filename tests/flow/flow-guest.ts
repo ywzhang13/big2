@@ -18,6 +18,8 @@ import * as rs from "../support/stub-records-store";
 import { sweepExpiredGuests, GUEST_TTL_MS } from "../../lib/guest/guest";
 import type { MahjongGameState, Meld } from "../../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../../lib/mahjong/tiles";
+import { seatRng } from "../../lib/mahjong/gameLogic";
+seatRng.next = () => 0.999999; // 這支測試照入座順序寫：開局不打亂座位（打亂另見 flow-seats-wall）
 
 opts.autoBind = false; // 座位一律照真的綁帳號
 const PASSWORD = "test-guest-password-for-flow";

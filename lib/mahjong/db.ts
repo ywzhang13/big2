@@ -209,16 +209,21 @@ export async function loadSeatsByUser(
   userId: string
 ): Promise<{ code: string; room_id: string; status: string; seat: number; updated_at: string }[]> {
   const supabase = getSupabaseAdmin();
-  const { data: mine, error } = await supabase.from("mj_players").select("room_id, seat").eq("user_id", userId);
+  const { data: mine, error } = await supabase.from("mj_players").select("room_id, seat, player_id").eq("user_id", userId);
   if (error) throw new Error(`查詢座位失敗：${error.message}`);
   if (!mine?.length) return [];
   const { data: rooms, error: e2 } = await supabase
     .from("mj_rooms")
-    .select("id, code, status, updated_at")
+    .select("id, code, status, updated_at, game_state")
     .in("id", mine.map((p) => p.room_id));
   if (e2) throw new Error(`查詢房間失敗：${e2.message}`);
   return (rooms ?? [])
-    .map((r) => ({ code: r.code, room_id: r.id, status: r.status, updated_at: r.updated_at, seat: mine.find((p) => p.room_id === r.id)!.seat }))
+    .map((r) => {
+      const p = mine.find((x) => x.room_id === r.id)!;
+      // 開局後座位已隨機打亂：以牌局狀態的座位為準
+      const gameSeat = (r.game_state as { players?: { id: string; seat: number }[] } | null)?.players?.find((x) => x.id === p.player_id)?.seat;
+      return { code: r.code, room_id: r.id, status: r.status, updated_at: r.updated_at, seat: gameSeat ?? p.seat };
+    })
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
@@ -302,6 +307,7 @@ export interface PublicGameState {
   nextGameReady?: MahjongGameState["nextGameReady"];
   paceUntil?: MahjongGameState["paceUntil"];
   handStats?: MahjongGameState["handStats"];
+  remainingWall?: Tile[];
   serverNow?: number;
   pendingActions?: MahjongGameState["pendingActions"];
   pendingAddKong?: MahjongGameState["pendingAddKong"];
@@ -345,6 +351,9 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     paceUntil: state.paceUntil,
     // 整場打完才公開每家的胡牌、放槍、自摸次數（總結算畫面用）
     handStats: state.gameOver ? state.handStats : undefined,
+    // 牌庫：這局結束（胡牌、流局）後才公開剩下的牌牆，照摸牌順序（第 0 張是下一張要摸的；補花、槓的補牌從最後一張拿）。
+    // 局還在進行（playing）時絕不給
+    remainingWall: state.status === "finished" ? state.wall : undefined,
     serverNow: Date.now(),
     pendingActions: state.pendingActions,
     pendingAddKong: state.pendingAddKong,

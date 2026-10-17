@@ -8,7 +8,7 @@ import {
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
-import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow } from "@/lib/mahjong/gameLogic";
+import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow, shuffleSeats } from "@/lib/mahjong/gameLogic";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { closeMahjongIfOver } from "@/lib/records/close";
 
@@ -61,8 +61,12 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
     return Response.json({ error: "需要 4 位玩家才能開始" }, { status: 400 });
   }
 
+  // 開局隨機排座位（老闆 2026-10-17）：牌局狀態的座位以這個順序為準；mj_players.seat 只代表入座順序，不再改它。
+  // userId 跟著玩家走，所以 LINE 帳號認座位、找回房間、對局紀錄、整場統計都用新座位
+  const seated = shuffleSeats(players);
+
   // Initialize game — pass room settings if present
-  const playerInfos = players.map((p) => ({
+  const playerInfos = seated.map((p) => ({
     id: p.player_id,
     name: p.name,
   }));
@@ -74,7 +78,7 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   let state = initGame(playerInfos, savedSettings);
   state.roomCode = room.code;
   // 記下每個座位綁定的使用者，之後每個動作都用它確認本人、整場結束寫進對局紀錄
-  state.players.forEach((p, i) => (p.userId = players[i].user_id ?? null));
+  state.players.forEach((p, i) => (p.userId = seated[i].user_id ?? null));
 
   // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
   // 起莊者 = 開門者（第一局同一顆骰子）

@@ -51,6 +51,8 @@ export function gameOverEvent(s: MahjongGameState): MjEvent {
       playerScores: s.playerScores,
       roundInfo: s.roundInfo,
       gameOver: s.gameOver,
+      // 這局剩下的牌牆（牌庫），照摸牌順序；只有局結束的這個事件才帶
+      remainingWall: s.status === "finished" ? s.wall : undefined,
       // 整場打完才帶：每家胡牌、放槍、自摸次數（總結算畫面用）
       ...(s.gameOver && s.handStats ? { handStats: s.handStats } : {}),
     },

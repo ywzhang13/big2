@@ -25,6 +25,8 @@ import * as rs from "../support/stub-records-store";
 import { privateChannelName, PRIVATE_EVENTS } from "../../lib/mahjong/access";
 import { buildBig2Record } from "../../lib/records/build";
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
+import { seatRng } from "../../lib/mahjong/gameLogic";
+seatRng.next = () => 0.999999; // 這支測試照入座順序寫：開局不打亂座位（打亂另見 flow-seats-wall）
 
 opts.autoBind = false; // 這個檔要測「沒綁帳號的座位」，不讓 stub 自動綁
 
