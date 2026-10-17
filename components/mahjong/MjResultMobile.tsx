@@ -177,7 +177,6 @@ export default function MjResultMobile({
                 {settlement && (
                   <span className="delta" style={{ color: deltaColor(delta) }}>{signed(delta)}</span>
                 )}
-                {playerScores && <span className="tot">總{signed(playerScores[p.seat])}</span>}
                 {h && (
                   <div style={{ flexBasis: "100%", minWidth: 0 }}>
                     <RevealTiles h={h} winner={w} nameOf={nameOf} w={tile.w} ht={tile.ht} />

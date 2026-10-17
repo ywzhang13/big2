@@ -241,7 +241,6 @@
 .mjm-result .seat.win { background: rgba(201,169,110,.15); border-color: rgba(201,169,110,.35); }
 .mjm-result .seat .who2 { flex: 0 0 90px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mjm-result .seat .delta { flex: 0 0 auto; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; min-width: 48px; }
-.mjm-result .seat .tot { flex: 0 0 auto; font-size: 10px; color: rgba(255,255,255,.4); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
 .mjm-result .foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 /* 同意下一局：已同意＝金底＋✓，還沒按＝虛線框＋… ；整場打完時同一列改成總積分榜 */
 .mjm-result .nextline { margin-top: 4px; font-size: 11px; font-weight: 700; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -281,7 +280,6 @@
 .mjm-result.desk .seat { gap: 12px; padding: 8px 12px; border-radius: 10px; }
 .mjm-result.desk .seat .who2 { flex-basis: 136px; font-size: 14px; }
 .mjm-result.desk .seat .delta { font-size: 18px; min-width: 64px; }
-.mjm-result.desk .seat .tot { font-size: 12px; min-width: 60px; }
 .mjm-result.desk .foot { gap: 14px; margin-top: 8px; }
 .mjm-result.desk .cnt { font-size: 13px; }
 .mjm-result.desk .chip { font-size: 13px; padding: 5px 10px; border-radius: 8px; max-width: 120px; gap: 5px; }
