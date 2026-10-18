@@ -3,14 +3,15 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const groups = [
   ["單元測試", readdirSync(here).filter((f) => /^_.*\.ts$/.test(f)).map((f) => path.join(here, f))],
   ["API 流程測試", readdirSync(path.join(here, "flow")).filter((f) => f.endsWith(".ts")).map((f) => path.join(here, "flow", f))],
 ];
-const register = path.join(here, "support", "register.mjs");
+// --import 要給 file:// 網址：Windows 的 C:\... 絕對路徑會被當成 "c:" 協定而載入失敗（Mac 給網址也照常）
+const register = pathToFileURL(path.join(here, "support", "register.mjs")).href;
 let failed = 0;
 for (const [label, files] of groups) {
   let pass = 0, fail = 0;

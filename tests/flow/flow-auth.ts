@@ -233,7 +233,7 @@ let roomId = "", code = "";
     for (const f of readdirSync(d)) {
       const p = path.join(d, f);
       if (statSync(p).isDirectory()) walk(p);
-      else if (/\.tsx?$/.test(f)) files.push(path.relative(ROOT, p));
+      else if (/\.tsx?$/.test(f)) files.push(path.relative(ROOT, p).split(path.sep).join("/")); // Windows 的 \ 統一成 /
     }
   };
   for (const d of ["app", "lib", "hooks", "components"]) walk(path.join(ROOT, d));
