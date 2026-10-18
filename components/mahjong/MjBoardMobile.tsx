@@ -86,11 +86,10 @@ function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
   } else {
     cells = Array.from({ length: count }, (_, i) => ({ key: `b${i}`, tile: BACK_TILE, drew: false, back: true }));
   }
-  // 牌背不轉：窄邊朝自己，像從側面看那家立著的牌（9×12 剛好放進原本 12px 高的格子）；眼牌翻開的牌面照舊轉向那家
   const cell = (c: Cell) => (
-    <span key={c.key} className={c.back ? "cell back" : "cell"}>
+    <span key={c.key} className="cell">
       <div className={c.drew ? "drew" : undefined}>
-        {c.back ? <MjTile tile={c.tile} width={9} height={12} faceDown /> : <MjTile tile={c.tile} width={12} height={16} />}
+        <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
       </div>
     </span>
   );

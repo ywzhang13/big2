@@ -254,18 +254,17 @@ function PlayerPanel({
       ) : (
       /* Face-down tiles (outside edge) */
       <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
-        {/* 左右家的牌背不轉：窄邊朝自己（14×19，每張佔的高度和原本一樣），像從側面看那家立著的牌 */}
         {Array.from({ length: player.tileCount }).map((_, i) => (
           <div
             key={i}
             className="rounded-[2px]"
-            data-side-back={isHorizontal ? undefined : ""}
             style={{
-              width: isHorizontal ? tileSize - 2 : 14,
-              height: isHorizontal ? tileH - 4 : 19,
+              width: isHorizontal ? tileSize - 2 : tileH - 6,
+              height: isHorizontal ? tileH - 4 : tileSize - 4,
               background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
+              ...(rotStyle ? { transform: rotStyle } : {}),
             }}
           />
         ))}

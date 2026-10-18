@@ -501,7 +501,6 @@
 .mjm-sidehand .cell { width: 16px; height: 12px; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .mjm-side.left  .mjm-sidehand .cell > * { transform: rotate(90deg); }
 .mjm-side.right .mjm-sidehand .cell > * { transform: rotate(-90deg); }
-.mjm-side .mjm-sidehand .cell.back > * { transform: none; }
 .mjm-sidehand .drew { border-radius: 2px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
 /* 吃碰槓欄：每一副自己一直列、由上往下排；放不下就往海底方向長出第二列，不會溢出。
    和金框的 8px 間距由這一欄留（沒有吃碰槓時是空的一欄） */
