@@ -46,10 +46,82 @@ export function canKongNow(state: MahjongGameState): boolean {
   return state.wall.length > 16;
 }
 
-/** 剛摸進（或補進）手牌的那張：hand 最後一張（補花後也是最後補進的那張） */
+/** 還能從牌牆摸幾張（剩 16 張就流局） */
+export function drawableCount(state: MahjongGameState): number {
+  return Math.max(0, state.wall.length - 16);
+}
+
+/**
+ * 吃碰槓別人打的牌，牌底要夠自己再摸一張（老闆 2026-10-19）：
+ * 吃、碰後其他三家各摸一張，自己還要摸得到 → 可摸張數 ≥ 4；
+ * 明槓多一張補牌 → ≥ 5。暗槓、加槓照 canKongNow；胡不受影響
+ */
+export function wallAllowsClaim(state: MahjongGameState, type: "chi" | "pong" | "kong"): boolean {
+  return drawableCount(state) >= (type === "kong" ? 5 : 4);
+}
+
+/**
+ * 碰的過水（老闆 2026-10-19）：能碰（或明槓）某張打出的牌卻按過，
+ * 在自己下一次摸牌（從牌牆摸、槓後補牌、補花都算）或打出一張牌之前，同一種牌都不能碰、也不能明槓。
+ * 只在伺服器，不公開，每局重來
+ */
+export function isPongPassBlocked(state: MahjongGameState, seat: number, key: string): boolean {
+  return !!state.pongPassKeys?.[seat]?.includes(key);
+}
+
+/**
+ * 有人 pass 時呼叫：他本來能碰或明槓這張打出的牌卻沒要，就記下這種牌。
+ * 回傳新的狀態（不能碰槓就原樣回傳）。搶槓窗口沒有碰槓，所以不會記
+ */
+export function markPongPassOnPass(state: MahjongGameState, seat: number): MahjongGameState {
+  if (!state.lastDiscard) return state;
+  const couldClaim = getAvailableActions(state).some(
+    (a) => a.playerSeat === seat && (a.type === "pong" || a.type === "kong")
+  );
+  if (!couldClaim) return state;
+  const key = tileKey(state.lastDiscard.tile);
+  if (isPongPassBlocked(state, seat, key)) return state;
+  const s = cloneState(state);
+  const keys = { ...(s.pongPassKeys ?? {}) };
+  keys[seat] = [...(keys[seat] ?? []), key];
+  s.pongPassKeys = keys;
+  return s;
+}
+
+/** 自己摸牌（從牌牆摸、槓後補牌、補花）或打出一張牌：解除碰的過水。直接改 s */
+function clearPongPass(s: MahjongGameState, seat: number): void {
+  if (!s.pongPassKeys?.[seat]) return;
+  const keys = { ...s.pongPassKeys };
+  delete keys[seat];
+  s.pongPassKeys = Object.keys(keys).length > 0 ? keys : undefined;
+}
+
+/**
+ * 吃碰明槓別人打的牌被規則擋下的原因（可以就回 null）。
+ * getAvailableActions、action API、executeAction 共用，三層判斷一致
+ */
+export function claimBlockReason(
+  state: MahjongGameState,
+  seat: number,
+  type: "chi" | "pong" | "kong"
+): string | null {
+  if (!wallAllowsClaim(state, type)) {
+    return type === "kong" ? "牌底不夠補牌再摸，不能明槓" : "牌底不夠再摸一張，不能吃碰";
+  }
+  if (type !== "chi" && state.lastDiscard && isPongPassBlocked(state, seat, tileKey(state.lastDiscard.tile))) {
+    return "這種牌剛才沒碰，要等自己摸牌或打牌後才能碰";
+  }
+  return null;
+}
+
+/**
+ * 剛摸進（或補進）手牌的那張：hand 最後一張（補花後也是最後補進的那張）。
+ * 從牌牆摸、槓後補牌、補花都會走這裡，所以也在這裡解除碰的過水
+ */
 function markDrawn(s: MahjongGameState, seat: number): void {
   const hand = s.players[seat].hand;
   s.drawnTileId = hand.length > 0 ? hand[hand.length - 1].id : undefined;
+  clearPongPass(s, seat);
 }
 
 // ---------------------------------------------------------------------------
@@ -564,6 +636,8 @@ export function discardTile(
   // 過水：打出的是自己（打完後）聽的牌就進入；打出不是聽的牌就解除
   const waits = findWaitingTiles(player.hand.filter((t) => !isFlower(t)), player.revealed.length);
   setGuoShui(s, s.currentTurn, waits.includes(tileKey(discarded)));
+  // 碰的過水：自己打出一張牌就解除（過水中吃碰了別種牌、沒有摸牌的情況）
+  clearPongPass(s, s.currentTurn);
 
   return s;
 }
@@ -634,13 +708,13 @@ export function getAvailableActions(
     // --- Kong (明槓): player has 3 of the discarded tile ---
     // 上家打出的牌不能明槓（老闆 2026-10-17）：下家只能碰或吃；對家、上家（打牌者的下下家）照樣可以明槓
     const matchCount = handKeys.filter((k) => k === discKey).length;
-    if (matchCount >= 3 && canKongNow(state) && seat !== nextSeat(fromSeat)) {
+    if (matchCount >= 3 && canKongNow(state) && seat !== nextSeat(fromSeat) && !claimBlockReason(state, seat, "kong")) {
       const kongTiles = player.hand.filter((t) => tileKey(t) === discKey);
       actions.push({ type: "kong", playerSeat: seat, tiles: kongTiles });
     }
 
     // --- Pong: player has 2 of the discarded tile ---
-    if (matchCount >= 2) {
+    if (matchCount >= 2 && !claimBlockReason(state, seat, "pong")) {
       const pongTiles = player.hand
         .filter((t) => tileKey(t) === discKey)
         .slice(0, 2);
@@ -648,7 +722,7 @@ export function getAvailableActions(
     }
 
     // --- Chi: only from left player (上家) ---
-    if (seat === nextSeat(fromSeat)) {
+    if (seat === nextSeat(fromSeat) && !claimBlockReason(state, seat, "chi")) {
       const suit = disc.suit;
       const rank = disc.rank;
 
@@ -709,6 +783,10 @@ export function executeAction(
 
   const disc = s.lastDiscard.tile;
   const player = s.players[action.playerSeat];
+  const blocked = claimBlockReason(s, action.playerSeat, action.type as "chi" | "pong" | "kong");
+  if (action.type !== "win" && blocked) {
+    throw new Error(blocked);
+  }
 
   if (action.type === "chi") {
     if (!action.tiles || action.tiles.length !== 2) {
@@ -1386,6 +1464,7 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
   s.tingSeats = undefined;
   s.eyeSeats = undefined;
   s.guoShuiSeats = undefined;
+  s.pongPassKeys = undefined;
   s.gameOver = false;
 
   // Reset players

@@ -113,6 +113,9 @@ export interface MahjongGameState {
   // 過水中的座位（不公開，只在伺服器）：打出自己聽的牌、或能胡別人的牌卻沒胡（pass）就進入；
   // 過水中不能胡任何牌（自摸、放槍、搶槓）。打出一張不是自己聽的牌就解除。每局重來
   guoShuiSeats?: number[];
+  // 碰的過水（不公開，只在伺服器）：座位 → 按過沒碰（或沒明槓）的牌種（tileKey）。
+  // 自己下一次摸牌或打牌前，這些牌都不能碰、也不能明槓；自己摸牌（從牌牆摸、槓後補牌、補花都算）或打出一張牌就清掉。每局重來
+  pongPassKeys?: Record<number, string[]>;
   // 對局紀錄用：新版開局時寫入。上線前開局的房間沒有這兩個欄位 → 不補記紀錄
   startedAt?: string;       // 開局時間（ISO）
   handsCompleted?: number;  // 這場已打完（已結算）幾局，含流局

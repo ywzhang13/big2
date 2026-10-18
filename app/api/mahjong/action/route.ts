@@ -26,6 +26,8 @@ import {
   eyeDiscardOptions,
   canDeclareTingNow,
   markGuoShuiOnPass,
+  markPongPassOnPass,
+  claimBlockReason,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
@@ -316,8 +318,9 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   if (actionType === "pass") {
     // Multi-player action window: track who has passed
     if (state.pendingActions) {
-      // 本來能胡這張（放槍或搶槓）卻 pass：進入過水，之後的狀態都從這裡接著算
-      const passState = markGuoShuiOnPass(state, seat);
+      // 本來能胡這張（放槍或搶槓）卻 pass：進入過水；本來能碰或明槓卻 pass：記下這種牌（碰的過水）。
+      // 之後的狀態都從這裡接著算
+      const passState = markPongPassOnPass(markGuoShuiOnPass(state, seat), seat);
       const pending = { ...state.pendingActions };
       // Add this player to passedActors if they are a potential actor
       if (
@@ -471,6 +474,12 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   // 上家打出的牌不能明槓（只能碰或吃）；加槓、暗槓不受影響
   if (actionType === "kong" && !isConcealedKong && state.lastDiscard && seat === (state.lastDiscard.from + 1) % 4) {
     return Response.json({ error: "上家打的牌不能明槓，可以碰" }, { status: 400 });
+  }
+
+  // 牌底不夠再摸一張（吃碰 ≥4、明槓 ≥5）、碰的過水中：不能吃碰明槓別人打的牌
+  if ((actionType === "chi" || actionType === "pong" || actionType === "kong") && !isConcealedKong) {
+    const blocked = claimBlockReason(state, seat, actionType);
+    if (blocked) return Response.json({ error: blocked }, { status: 400 });
   }
 
   // Resolve tile objects from IDs

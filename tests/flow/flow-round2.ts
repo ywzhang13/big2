@@ -137,7 +137,8 @@ function flowerSetup() {
   const k = await call(action, { playerId: "p2", actionType: "kong", tiles: st().players[2].hand.filter((x) => x.display === "p5").map((x) => x.id) });
   eq([k.status, st().players[2].revealed.length], [400, 0], "⑨b 剩 16 張硬送明槓：400，狀態沒變");
   const p = await call(action, { playerId: "p2", actionType: "pong", tiles: st().players[2].hand.filter((x) => x.display === "p5").slice(0, 2).map((x) => x.id) });
-  eq([p.status, st().players[2].revealed[0]?.type], [200, "pong"], "⑨c 同一張牌改碰：照常可以");
+  // 2026-10-19 起牌底不夠再摸一張就不能碰（吃碰要可摸 ≥4 張），剩 16 張改碰也擋下；可摸 4 張能碰、5 張才能明槓見 flow-claim-limits
+  eq([p.status, p.body.error, st().players[2].revealed.length], [400, "牌底不夠再摸一張，不能吃碰", 0], "⑨c 同一張牌改碰：牌底不夠，也是 400、狀態沒變");
 }
 
 // ⑧ 其他路由同時寫入：每種 30 次，對照組關掉樂觀鎖
