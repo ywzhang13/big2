@@ -254,17 +254,18 @@ function PlayerPanel({
       ) : (
       /* Face-down tiles (outside edge) */
       <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
+        {/* 左右家的牌背不轉：窄邊朝自己（14×19，每張佔的高度和原本一樣），像從側面看那家立著的牌 */}
         {Array.from({ length: player.tileCount }).map((_, i) => (
           <div
             key={i}
             className="rounded-[2px]"
+            data-side-back={isHorizontal ? undefined : ""}
             style={{
-              width: isHorizontal ? tileSize - 2 : tileH - 6,
-              height: isHorizontal ? tileH - 4 : tileSize - 4,
+              width: isHorizontal ? tileSize - 2 : 14,
+              height: isHorizontal ? tileH - 4 : 19,
               background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
-              ...(rotStyle ? { transform: rotStyle } : {}),
             }}
           />
         ))}
@@ -789,6 +790,8 @@ export default function MjBoard({
       }}>
         {/* My info bar（data-my-info：吃碰槓胡橫幅的底邊對齊這一列的上緣） */}
         <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5" data-my-info>
+          {/* 左右兩邊等寬，吃碰區夾在中間就會置中；左邊放不下時不縮，吃碰區往右讓 */}
+          <div className="flex flex-[1_0_0] items-center gap-3">
           {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變） */}
           <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }} data-fx-seat={mySeat}>
           {/* Wind avatar */}
@@ -824,18 +827,11 @@ export default function MjBoard({
               {playerScores[mySeat] > 0 ? "+" : ""}{playerScores[mySeat]}
             </span>
           )}
-          <span className="text-[10px] text-white/30 ml-auto">{myHand.length} 張</span>
-
-          {/* Flowers：收成一顆「花×N」，點一下展開 */}
-          {me && (
-            <div className="flex items-center ml-2">
-              <MjFlowerTag flowers={me.flowers} name={me.name} w={20} h={28} popW={26} popH={35} busy={flowerBusy} />
-            </div>
-          )}
+          </div>
 
           {/* Revealed melds */}
           {me && me.revealed.length > 0 && (
-            <div className="flex gap-2 items-center ml-2" data-claim-seat={mySeat}>
+            <div className="flex gap-2 items-center" data-claim-seat={mySeat}>
               {me.revealed.map((meld, mi) => (
                 <div key={mi} className="flex gap-[1px]">
                   {/* 自己的暗槓顯示全部牌面（其他家 PlayerPanel 則全部面朝下） */}
@@ -846,6 +842,17 @@ export default function MjBoard({
               ))}
             </div>
           )}
+
+          <div className="flex flex-[1_0_0] items-center justify-end">
+            <span className="text-[10px] text-white/30">{myHand.length} 張</span>
+
+            {/* Flowers：收成一顆「花×N」，點一下展開 */}
+            {me && (
+              <div className="flex items-center ml-2">
+                <MjFlowerTag flowers={me.flowers} name={me.name} w={20} h={28} popW={26} popH={35} busy={flowerBusy} />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Hand — extra top padding for selected tile float */}

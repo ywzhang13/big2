@@ -86,10 +86,11 @@ function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
   } else {
     cells = Array.from({ length: count }, (_, i) => ({ key: `b${i}`, tile: BACK_TILE, drew: false, back: true }));
   }
+  // 牌背不轉：窄邊朝自己，像從側面看那家立著的牌（9×12 剛好放進原本 12px 高的格子）；眼牌翻開的牌面照舊轉向那家
   const cell = (c: Cell) => (
-    <span key={c.key} className="cell">
+    <span key={c.key} className={c.back ? "cell back" : "cell"}>
       <div className={c.drew ? "drew" : undefined}>
-        <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
+        {c.back ? <MjTile tile={c.tile} width={9} height={12} faceDown /> : <MjTile tile={c.tile} width={12} height={16} />}
       </div>
     </span>
   );
@@ -643,17 +644,22 @@ export default function MjBoardMobile({
       {/* 我的資訊列＋手牌 */}
       <div className="mjm-me">
         <div className="mjm-me-info">
-          {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變，分數留在外面） */}
-          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} data-fx-seat={mySeat}>
-            <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
-            <span className="mjm-nm">{playerName}</span>
-            {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
-            <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
-          </span>
-          <Score score={scoreOf(me)} />
-          {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
+          {/* 左右兩邊等寬，吃碰區夾在中間就會置中；左邊放不下時不縮，吃碰區往右讓 */}
+          <div className="mjm-me-l">
+            {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變，分數留在外面） */}
+            <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} data-fx-seat={mySeat}>
+              <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
+              <span className="mjm-nm">{playerName}</span>
+              {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
+              <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
+            </span>
+            <Score score={scoreOf(me)} />
+            {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
+          </div>
           {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} />}
-          <span className="cnt">{myHand.length} 張</span>
+          <div className="mjm-me-r">
+            <span className="cnt">{myHand.length} 張</span>
+          </div>
         </div>
         <div className="mjm-hand">
           <div className="main">{mainTiles.map(handTile)}</div>

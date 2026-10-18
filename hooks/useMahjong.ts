@@ -27,6 +27,12 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
 
+/** 兩組按鈕一樣（種類和牌都一樣）：沿用舊的，不換掉陣列 */
+function sameActions(a: { type: string; tiles?: Tile[] }[], b: { type: string; tiles?: Tile[] }[]): boolean {
+  const sig = (xs: { type: string; tiles?: Tile[] }[]) => xs.map((x) => `${x.type}:${(x.tiles ?? []).map((t) => t.id).join(".")}`).join("|");
+  return sig(a) === sig(b);
+}
+
 function getMjId(): string {
   if (typeof window === "undefined") return "";
   // 遊客分頁各自一個玩家 id（localStorage 是所有分頁共用）
@@ -377,9 +383,14 @@ export function useMahjong(
     paceTimerRef.current = setTimeout(() => setState((prev) => (prev.paceNote === null ? prev : { ...prev, paceNote: null })), ms);
   }, []);
   useEffect(() => () => clearTimeout(paceTimerRef.current), []);
+  // 牌局有新進展的編號（收到任何廣播、自己按吃碰槓過都加 1）：state 請求在路上時有進展，回應裡的吃碰槓按鈕已經過時，不能補回畫面
+  const progressRef = useRef(0);
+  // 我送出、還沒回來的吃碰槓過請求數：這段期間伺服器可能還沒處理到，state 回應裡的按鈕不能信
+  const actionsInFlightRef = useRef(0);
   /** 訂閱廣播事件；慢慢摸牌期間，除了摸牌本身的事件以外都先排隊 */
   const onHeld = useCallback((ch: RealtimeChannel, event: string, fn: (msg: { payload: Record<string, unknown> }) => void) => {
     ch.on("broadcast", { event }, (msg) => {
+      progressRef.current++;
       const m = { payload: (msg.payload ?? {}) as Record<string, unknown> };
       const h = holdRef.current;
       if (h.on && !SLOW_DRAW_PASS.has(event)) h.queue.push(() => fn(m));
@@ -409,6 +420,8 @@ export function useMahjong(
     if (holdRef.current.on) { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; } // 慢慢摸牌中：伺服器已經是打出後的狀態，翻完再說
     const holdGen = holdRef.current.gen;
     const reqId = stateGateRef.current.begin();
+    const progressAtSend = progressRef.current;
+    const actionInFlightAtSend = actionsInFlightRef.current > 0;
     const myId = myIdRef.current; // applyJoin 換了玩家 id 後，還沒重新 render 也要用新的
     try {
       const data = await api<{
@@ -553,14 +566,13 @@ export function useMahjong(
         drawnTileId: gs.myDrawnTileId ?? prev.drawnTileId,
         wallRemaining: gs.wallCount,
         hasDrawn: gs.hasDrawn,
-        // availableActions: prefer broadcast-delivered value (fresh), but
-        // fall back to polled myAvailableActions if the broadcast was missed
-        // so chi/pong/kong buttons appear even after realtime drops.
-        availableActions: prev.availableActions.length > 0
+        // 請求送出時我的動作還在路上，或送出後已經有新進展（例如我按了過、上家已經打牌）：這份的按鈕是舊的，保留畫面上的。
+        // 其他情況這份比收到的所有事件都新，以伺服器為準：漏接廣播時補出按鈕，畫面上殘留的舊按鈕（例如晚到的私人事件）也清掉
+        availableActions: actionInFlightAtSend || progressRef.current !== progressAtSend
           ? prev.availableActions
           : turnKey != null && turnKey === dismissedOwnActionsRef.current
             ? []
-            : (polledActions ?? []),
+            : sameActions(prev.availableActions, polledActions ?? []) ? prev.availableActions : (polledActions ?? []),
         tingSeats: gs.tingSeats ?? prev.tingSeats,
         eyeSeats: gs.eyeSeats ?? prev.eyeSeats,
         opponentHands: gs.status === "playing" ? gs.opponentHands ?? null : null,
@@ -1491,7 +1503,10 @@ export function useMahjong(
       }
       // Optimistically clear action buttons immediately
       freshPrivateActionsRef.current = false;
+      progressRef.current++;
+      actionsInFlightRef.current++;
       setState((prev) => ({ ...prev, availableActions: [] }));
+      let failed = false;
       try {
         const res = await call("/api/mahjong/action", {
           roomId: rid,
@@ -1502,9 +1517,14 @@ export function useMahjong(
         console.log(`[mj] action ${actionType} success`, res);
       } catch (err) {
         console.error(`[mj] action ${actionType} failed:`, err, { tiles: tiles?.map(t => ({ id: t.id, display: t.display })) });
-        // Resync state from server to recover
-        fetchState(rid);
+        failed = true;
+      } finally {
+        // 請求回來了：在路上時送出的 state 請求，回應一律當作過時
+        actionsInFlightRef.current--;
+        progressRef.current++;
       }
+      // Resync state from server to recover（要在上面放行之後，這份回應的按鈕才會採用）
+      if (failed) fetchState(rid);
     },
     [myId, fetchState, discardTile, call]
   );
