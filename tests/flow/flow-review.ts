@@ -20,7 +20,7 @@ function setup(others: Record<number, string>, wallSize = 40) {
     players: [0, 1, 2, 3].map((seat) => ({ id: "p" + seat, name: "P" + seat, seat, hand: tiles(others[seat] ?? NOT_WAIT), revealed: [] as Meld[], flowers: [], discards: [t("m9")], isDealer: seat === 0 })),
     wall: tiles(Array(wallSize).fill("m2").join(" ")),
     currentTurn: 2, lastDiscard: null, dealerSeat: 0, doorSeat: 0, prevalentWind: 1, turnCount: 8,
-    hasDrawn: true, isFirstRound: false, isAfterKong: false, stateVersion: 7,
+    hasDrawn: true, drawnTileId: 1, isFirstRound: false, isAfterKong: false, stateVersion: 7, // 剛摸過牌（加槓要有 drawnTileId）
     roomSettings: { totalRounds: 1, basePoints: 100, fanPoints: 20 },
     roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0, initialDealerSeat: 0 },
     playerScores: [0, 0, 0, 0],

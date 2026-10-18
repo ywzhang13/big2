@@ -924,6 +924,10 @@ export function executeConcealedKong(
   if (tiles.length !== 4) {
     throw new Error("Concealed kong requires exactly 4 tiles");
   }
+  // 只能在自己剛摸進（或補進）一張牌後暗槓：吃碰後 hasDrawn 也是 true，但還沒摸牌
+  if (s.drawnTileId === undefined) {
+    throw new Error("現在不能暗槓");
+  }
   if (!canKongNow(s)) {
     throw new Error("牌牆剩 16 張，不能再槓");
   }
@@ -1033,7 +1037,8 @@ export function startAddKong(
 ): MahjongGameState {
   const seat = state.currentTurn;
   const player = state.players[seat];
-  if (!state.hasDrawn || state.lastDiscard || state.pendingAddKong || state.pendingFlowerRob) {
+  // 只能在自己剛摸進（或補進）一張牌後加槓：吃碰後 hasDrawn 也是 true，碰完馬上加槓等於把上家打的牌槓走
+  if (!state.hasDrawn || state.drawnTileId === undefined || state.lastDiscard || state.pendingAddKong || state.pendingFlowerRob) {
     throw new Error("現在不能加槓");
   }
   if (!canKongNow(state)) {

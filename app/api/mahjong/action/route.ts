@@ -179,6 +179,16 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     return Response.json({ error: "地聽、眼牌後不能吃碰槓" }, { status: 400 });
   }
 
+  // 暗槓、加槓只能在自己剛摸進（或補進）一張牌後（和畫面給按鈕的 ownTurnActions 一致）。
+  // 吃碰後 hasDrawn 也是 true：碰完馬上加槓會把上家打的牌槓走，繞過「上家的牌不能明槓」
+  if (
+    (actionType === "add_kong" || (actionType === "kong" && !state.lastDiscard)) &&
+    state.currentTurn === seat &&
+    state.drawnTileId === undefined
+  ) {
+    return Response.json({ error: "吃碰後要先打牌，摸牌後才能槓" }, { status: 400 });
+  }
+
   if ((actionType === "kong" || actionType === "add_kong") && !canKongNow(state)) {
     return Response.json({ error: "牌牆剩 16 張，不能再槓" }, { status: 400 });
   }

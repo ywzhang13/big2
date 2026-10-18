@@ -32,7 +32,7 @@ function baseState(kongSeat: number, others: Record<number, string>): MahjongGam
     })),
     wall: tiles(Array(40).fill("m1").join(" ")),
     currentTurn: kongSeat, lastDiscard: null, dealerSeat: 0, doorSeat: 0, prevalentWind: 1,
-    turnCount: 8, hasDrawn: true, isFirstRound: false, isAfterKong: false,
+    turnCount: 8, hasDrawn: true, drawnTileId: 1, isFirstRound: false, isAfterKong: false, // 剛摸過牌（加槓、暗槓要有 drawnTileId）
     roomSettings: { totalRounds: 1, basePoints: 100, fanPoints: 20 },
     roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0, initialDealerSeat: 0 },
     playerScores: [0, 0, 0, 0],

@@ -80,7 +80,7 @@ const kinds = (seat: number) => getAvailableActions(st()).filter((a) => a.player
   eq(kinds(3), ["kong", "pong"], "K6 下家打的牌（我是他的上家）：照樣可以明槓");
 }
 {
-  setup({ 1: "p5 p5 p5 p5 m1 m3 m4 m6 m8 m9 s1 s3 s9 z1 z2 z3" }, (s) => { s.currentTurn = 1; s.hasDrawn = true; });
+  setup({ 1: "p5 p5 p5 p5 m1 m3 m4 m6 m8 m9 s1 s3 s9 z1 z2 z3" }, (s) => { s.currentTurn = 1; s.hasDrawn = true; s.drawnTileId = 1; });
   const k = await call(action, { playerId: "p1", actionType: "kong", tiles: ids(1, "p5", 4) });
   eq([k.status, st().players[1].revealed[0]?.type], [200, "concealed_kong"], "K7 暗槓不受影響");
 }

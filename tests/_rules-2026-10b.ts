@@ -99,7 +99,7 @@ function ronSeat1(hand: string, winKey: string) {
 // ④ 八仙過海也會在槓後補花時觸發
 {
   const s = baseState();
-  s.currentTurn = 1; s.hasDrawn = true;
+  s.currentTurn = 1; s.hasDrawn = true; s.drawnTileId = 1;
   s.players[1].flowers = tiles(FLOWERS7);
   s.players[1].hand = tiles("m1 m2 m3 s1 s2 s3 s4 s5 s6 z2 z2 p5 p5 p5 p5 z6 z6");
   s.wall[s.wall.length - 1] = t("f8"); // 補牌從牌尾拿
@@ -140,7 +140,7 @@ function ronSeat1(hand: string, winKey: string) {
   eq(ownTurnActions(s, 1).map((a) => a.type).filter((x) => x !== "declare_eye"), [], "⑤c 剩 16 張：摸牌後不提供暗槓");
 
   const a = baseState(16);
-  a.currentTurn = 1; a.hasDrawn = true;
+  a.currentTurn = 1; a.hasDrawn = true; a.drawnTileId = 1;
   a.players[1].revealed = [meld("pong", "p5 p5 p5")];
   a.players[1].hand = tiles("m1 m2 m3 s1 s2 s3 s4 s5 s6 z2 z2 z2 z6 p5");
   throws(() => startAddKong(a, a.players[1].hand.find((x) => x.display === "p5")!), "⑤d 剩 16 張加槓：擋下");
