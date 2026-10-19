@@ -81,7 +81,7 @@ function ronSeat1(hand: string, winKey: string) {
     seatWind: 1, prevalentWind: 1, flowers: tiles("f1 f2 f3 f4 f5"), isLastTile: false,
     isAfterKong: false, isRobbingKong: false, isFirstDraw: false,
   });
-  const flowerFans = score.fans.filter((f) => ["正花", "春夏秋冬", "梅蘭竹菊"].includes(f.name));
+  const flowerFans = score.fans.filter((f) => ["正花", "春夏秋冬", "梅蘭菊竹"].includes(f.name));
   eq([flowerFans.map((f) => f.name + f.value), flowerFans.reduce((n, f) => n + f.value, 0)], [["正花2", "春夏秋冬1"], 3],
     "③ 東家春夏秋冬＋梅：本花 2＋花槓 1＝3 台");
 }
