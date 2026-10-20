@@ -530,7 +530,7 @@ export default function MjBoardMobile({
           windChar={left ? windOf(left.seat) : ""}
         />
 
-        <div className="mjm-table">
+        <div className="mjm-table" data-mj-table>
           {/* 對家棄牌：第一張在右、往左長 */}
           <div className="mjm-dis-h rev">
             {(top?.discards ?? []).map((t) => (

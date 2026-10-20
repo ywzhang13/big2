@@ -1,6 +1,7 @@
 // 一場結束（打完、解散、閒置）→ 在同一個資料庫交易裡寫對局紀錄＋刪房（close_room_with_record）。
 // 寫紀錄失敗：房間和紀錄都維持原狀、不丟錯誤給呼叫端（遊戲不會卡住），之後建房時的清理會再試一次。
 import * as store from "@/lib/records/store";
+import { deleteRoomEffects } from "@/lib/mahjong/effects/store";
 import type { CloseExpect } from "@/lib/records/store";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { broadcast as big2Broadcast } from "@/lib/broadcast";
@@ -25,6 +26,14 @@ async function closeAtomically(game: GameKind, roomId: string, rec: MatchRecordI
   try {
     const result = await store.closeRoom(game, roomId, rec, expect);
     if (result !== "closed") console.info(`[records] ${game} 房 ${roomId} 沒有關閉：${result}`);
+    if (result === "closed" && game === "mahjong") {
+      // 房間關了：刪掉這房的特效冷卻紀錄（失敗只記 log，不影響關房；漏刪的列一天後由 mj_effect_take 清掉）
+      try {
+        await deleteRoomEffects(roomId);
+      } catch (err) {
+        console.error(`[mj-effect] 刪除房 ${roomId} 的特效冷卻紀錄失敗：`, err instanceof Error ? err.message : err);
+      }
+    }
     return result === "closed";
   } catch (err) {
     console.error(`[records] 關閉 ${game} 房 ${roomId} 失敗，房間和紀錄都沒變：`, err instanceof Error ? err.message : err);

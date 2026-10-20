@@ -544,7 +544,7 @@ export default function MjBoard({
           {/* Table surface with wood-frame border — size driven by viewport:
               max-width up to 900px (or 78vw on narrower screens), max-height
               up to 600px (or 62vh). Aspect ratio 3:2 locked. */}
-          <div className="relative w-full rounded-xl overflow-hidden"
+          <div className="relative w-full rounded-xl overflow-hidden" data-mj-table
             style={{
               maxWidth: "min(900px, 78vw)",
               maxHeight: "min(600px, 62vh)",

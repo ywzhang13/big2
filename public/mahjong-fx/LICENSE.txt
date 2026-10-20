@@ -1,0 +1,22 @@
+麻將互動特效素材（小宜〈互動特效-5種定案規格-2026-10-20〉）
+
+圖片
+- heart-glossy.png：Openclipart #21138 Glossy Heart，公眾領域
+- bill-classic.png、bill-green.png：Openclipart #314373、#181030，公眾領域
+- coins-stack-melle.png：OpenGameArt Fantasy Coin Set（MELLE），CC0
+- glove-red.png：OpenGameArt Boxing Gloves（looneybits），CC0（現在只用在 🎯 面板的拳擊圖示）
+- glove-front.webp：老闆提供的正面拳套（拳套.png），依透明邊界裁切後置中成正方形、縮成 640×640（老馬加工，2026-10-21）；用在「別人丟我」
+- glove-side.png：由 glove-red.png 轉成拳頭朝右的側面（老馬加工，CC0）；之後換成老闆生成的側面出拳圖
+- glass-crack-thin.webp：Openclipart #167298 Hole in the Glass（公眾領域），小宜加工
+- star_06.png、star_07.png、spark_05.png、light_01.png：Kenney Particle Pack，CC0
+- lottie-egg-broken.json、egg-lottie-whole.webp：LottieFiles「egg broken」，Lottie Simple License（免標註）
+- bucket-water.webp、splash-crown-ice.webp、splash-overlay.webp：老闆自行以 AI 生成（2026-10-20），不需標註
+
+音效（s/）
+- heart-*：Kenney Interface Sounds，CC0
+- bill-swish、coin-*：Kenney Casino Audio，CC0
+- thud：Kenney Impact Sounds，CC0
+- egg-crack1、punch1、punch2、splash1、splash2、shatter1、glass-heavy：OpenGameArt（qubodup / Independent.nu、ezwa、Till Behrend、rubberduck），CC0
+
+程式
+- lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md

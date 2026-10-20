@@ -26,6 +26,7 @@ import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement,
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
+import { receiveFx, setFxRoom, type FxEvent } from "@/lib/mahjong/fx/transport";
 
 /** 兩組按鈕一樣（種類和牌都一樣）：沿用舊的，不換掉陣列 */
 function sameActions(a: { type: string; tiles?: Tile[] }[], b: { type: string; tiles?: Tile[] }[]): boolean {
@@ -266,6 +267,7 @@ export function useMahjong(
   stateRef.current = state;
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
+  useEffect(() => setFxRoom(roomId), [roomId]);
   const discardingRef = useRef(false);
   // 房間已關閉（整場打完或解散後刪房）：顯示「這場已結束」，不再輪詢
   const [closed, setClosed] = useState<RoomClosedInfo | null>(null);
@@ -754,6 +756,12 @@ export function useMahjong(
           drawnTileId: drawnTileId ?? null,
           ...(eyeOptions ? { eyeOptions, eyeWithTing: eyeWithTing === true } : {}),
         }));
+      });
+
+      // --- mj_effect (private)：互動特效。不跟牌局節奏排隊，收到就交給特效模組（id 去重） ---
+      ch.on("broadcast", { event: "mj_effect" }, ({ payload }) => {
+        const { playerId, effect } = payload as { playerId: string; effect: FxEvent };
+        if (playerId === myId) receiveFx(effect);
       });
 
       // --- mj_opponent_hands (private)：我眼牌時，三家手牌的完整快照（直接整份取代） ---

@@ -30,8 +30,8 @@ export async function seatOwnerError(
 // 廣播頻道
 // ---------------------------------------------------------------------------
 
-/** 只給 payload.playerId 那個人看的事件 */
-export const PRIVATE_EVENTS = new Set(["mj_deal_hand", "mj_draw_tile", "mj_hand_update", "mj_available_actions", "mj_opponent_hands"]);
+/** 只給 payload.playerId 那個人看的事件。mj_effect（互動特效）也走座位頻道：同桌每人各送一份，外人收不到 */
+export const PRIVATE_EVENTS = new Set(["mj_deal_hand", "mj_draw_tile", "mj_hand_update", "mj_available_actions", "mj_opponent_hands", "mj_effect"]);
 
 /**
  * 座位專屬頻道名稱：用伺服器金鑰做 HMAC，只有伺服器算得出來，

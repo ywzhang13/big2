@@ -1154,3 +1154,32 @@ body {
   50%      { box-shadow: 0 0 0 2px rgba(251,191,36,.65), 0 0 5px 0 rgba(251,191,36,.45); }
 }
 @media (prefers-reduced-motion: reduce) { .mjm-match { animation: none; } }
+
+/* ---------------------------------------------------------------------------
+   互動特效（小宜〈互動特效-5種定案規格-2026-10-20〉）：特效層 pointer-events:none 不能拿掉
+   --------------------------------------------------------------------------- */
+.mjfx-layer { position: fixed; inset: 0; z-index: 900; pointer-events: none; overflow: hidden; }
+.mjfx-layer img, .mjfx-layer .p, .mjfx-layer .tint { position: absolute; left: 0; top: 0; will-change: transform, opacity; pointer-events: none; }
+.mjfx-layer .tint { -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+.mjfx-glow-love { box-shadow: 0 0 0 2px #ff7aa8, 0 0 22px rgba(255,90,150,.85) !important; }
+.mjfx-glow-cash { box-shadow: 0 0 0 2px #f6d365, 0 0 22px rgba(246,200,80,.85) !important; }
+.mjfx-glow-hit { box-shadow: 0 0 0 2px #ef4444, 0 0 18px rgba(239,68,68,.7) !important; }
+.mjfx-shk { animation: mjfx-shk .34s cubic-bezier(.36,.07,.19,.97) both; }
+.mjfx-shk-s { animation: mjfx-shk-s .3s both; }
+@keyframes mjfx-shk { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-7px, 3px); } 40%, 60% { transform: translate(7px, -3px); } }
+@keyframes mjfx-shk-s { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.mjfx-btn { position: fixed; z-index: 45; border-radius: 999px; background: rgba(0,0,0,.5); border: 1px solid rgba(201,169,110,.45); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.mjfx-btn::before { content: ""; position: absolute; inset: -4px; }
+.mjfx-toasts { position: fixed; z-index: 44; display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: 200px; }
+.mjfx-toast { font-size: 12px; color: #fff; padding: 4px 8px; border-radius: 8px; background: rgba(120,20,20,.72); border: 1px solid rgba(239,68,68,.5); }
+.mjfx-panel { position: fixed; z-index: 60; width: 286px; padding: 8px; border-radius: 12px; color: #fff; background: linear-gradient(200deg, #20321f, #101c14); border: 1px solid rgba(201,169,110,.4); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.mjfx-panel .who { display: flex; gap: 4px; margin-bottom: 6px; }
+.mjfx-panel .who button { flex: 1; height: 30px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,.07); color: rgba(255,255,255,.8); cursor: pointer; }
+.mjfx-panel .who button.on { background: rgba(201,169,110,.25); color: #f0d68a; box-shadow: inset 0 0 0 1px rgba(201,169,110,.5); }
+.mjfx-panel .kinds { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.mjfx-panel .kinds button { position: relative; height: 54px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #fff; cursor: pointer; }
+.mjfx-panel .kinds button:disabled { opacity: .35; }
+.mjfx-panel .kinds img { width: 26px; height: 26px; object-fit: contain; }
+.mjfx-panel .kinds span { font-size: 10px; color: rgba(255,255,255,.7); }
+.mjfx-panel .kinds .cd { position: absolute; inset: 0; border-radius: 10px; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; font-size: 18px; color: #f0d68a; }
+.mjfx-panel .hint { margin: 6px 0 0; font-size: 11px; color: rgba(255,255,255,.6); }

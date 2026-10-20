@@ -15,6 +15,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
+import MjFx from "@/components/mahjong/MjFx";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -999,7 +1000,9 @@ function RoomView({
   };
 
   return (
-    <div className="flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative">
+    <div className="flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative" data-mj-shake>
+      {/* 互動特效：選一位玩家送 5 種特效；結算畫面出現時收掉 */}
+      <MjFx players={state.players} mySeat={state.mySeat} suspended={!!isFinished} desk={!isMobileLandscape} />
       {/* 手機直向：蓋轉向提示（牌桌照常掛著，連線不中斷） */}
       <PortraitHint label="離開房間" onClick={handleLeave} />
 
