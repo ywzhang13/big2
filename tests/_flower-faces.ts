@@ -1,12 +1,12 @@
 // 正花號碼要和牌面印的數字一致（2026-10-20 老闆：花牌偶爾算錯）。
-// 牌面（public/tiles/cj6/Flower1～8.svg，逐張目視確認）：春1 夏2 秋3 冬4、梅1 蘭2、Flower7 竹4、Flower8 菊3。
+// 牌面（public/tiles/faces/Flower1～8.webp，逐張目視確認）：春1 夏2 秋3 冬4、梅1 蘭2、Flower7 竹4、Flower8 菊3。
 // 規則：開門那家（doorSeat）1 號，逆時針下一家 2 號…；同號兩張都算，雙 1 花 2 台。
 import { declareWin } from "../lib/mahjong/gameLogic";
 import { calculateScore } from "../lib/mahjong/scoring";
 import type { MahjongGameState, Meld } from "../lib/mahjong/gameState";
 import { tileDisplay, type Tile, type TileSuit } from "../lib/mahjong/tiles";
 
-// 牌面印的名稱和號碼（rank 1～8 對應 Flower1～8.svg）
+// 牌面印的名稱和號碼（rank 1～8 對應 Flower1～8.webp）
 const FACE: Record<number, [string, number]> = {
   1: ["春", 1], 2: ["夏", 2], 3: ["秋", 3], 4: ["冬", 4],
   5: ["梅", 1], 6: ["蘭", 2], 7: ["竹", 4], 8: ["菊", 3],

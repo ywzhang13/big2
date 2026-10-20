@@ -83,7 +83,7 @@ function NameField({
   );
 }
 
-// 大廳 Logo（小宜 C 書法橫式）：遊戲裡的 Cangjie6 平面牌＋細金線＋明體金漸層標題，橫排一行最省高度
+// 大廳 Logo（小宜 C 書法橫式）：遊戲裡的平面牌（MjTile）＋細金線＋明體金漸層標題，橫排一行最省高度
 const BRAND_TILES: Tile[] = [
   { id: 0, suit: "z", rank: 5, display: "中" },
   { id: 1, suit: "z", rank: 6, display: "發" },
@@ -589,13 +589,6 @@ export default function MahjongPage() {
 
           {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
         </div>
-        {/* 牌面素材標示（CC BY-SA 4.0）：只在大廳首頁、一行短字；完整作者與修改說明在 LICENSE.txt */}
-        {screen === "home" && (
-          <p className="mjl-credit">
-            牌面 <a href="/tiles/cj6/LICENSE.txt" target="_blank" rel="noopener noreferrer">Cangjie6</a>・
-            <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>
-          </p>
-        )}
         {showRecords && (
           <MjRecords
             user={auth.user}

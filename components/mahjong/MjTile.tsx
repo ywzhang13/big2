@@ -21,8 +21,8 @@ interface MjTileProps {
   matchable?: boolean;
 }
 
-// Map tile to SVG filename
-function getTileSvg(tile: Tile): string {
+// 牌 → 牌面圖檔名（public/tiles/faces/<名稱>.webp）
+function getTileFace(tile: Tile): string {
   if (tile.suit === "m") return `Man${tile.rank}`;
   if (tile.suit === "p") return `Pin${tile.rank}`;
   if (tile.suit === "s") return `Sou${tile.rank}`;
@@ -46,11 +46,11 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
   const w = width ?? (tiny ? 26 : small ? 27 : 36);
   const h = height ?? (tiny ? 35 : small ? 38 : 49);
 
-  // 牌面：Cangjie6 中式牌組（Wikimedia Commons，CC BY-SA 4.0，見 public/tiles/cj6/LICENSE.txt）。
-  // SVG 已拿掉立體牌身、只剩牌面圖案（scripts/flatten-cj6-tiles.mjs）；白底、細框、小圓角在這裡畫成平面牌
+  // 牌面：老闆提供的牌面圖（2026-10-21 換掉 Cangjie6，來源和切圖方式見 public/tiles/faces/README.txt）。
+  // 圖檔只有牌面圖案（透明底）；白底、細框、小圓角在這裡畫成平面牌
   const characterSrc = faceDown
     ? null
-    : `/tiles/cj6/${getTileSvg(tile)}.svg`;
+    : `/tiles/faces/${getTileFace(tile)}.webp`;
 
   // Use <button> when clickable, <div> otherwise, to avoid nested <button>
   // issues when MjTile is rendered inside another button (e.g. chi action button).
