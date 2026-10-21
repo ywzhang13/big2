@@ -5,6 +5,7 @@
 //     "gameLogic" 換成 forced-deal（沒指定花牌時和真的完全一樣，用來測開局花牌）；
 //     "records/store"（對局紀錄的資料庫存取）換成記憶體版本；"auth"（驗證登入 token）、"guest/store"（遊客帳號與猜錯次數）、"pairing/store"（主畫面登入交接）換成記憶體版本；
 //     "mahjong/donate/store"（斗內的自摸次數）換成記憶體 PostgreSQL 版本（跑真的 SQL 函式）；
+//     "mahjong/userPrefs/store"（帳號的偏好設定）換成記憶體 PostgreSQL 版本（跑真的 migration）；
 //     "mahjong/effects/store"（互動特效冷卻）換成記憶體 PostgreSQL 版本（跑真的 SQL 函式）；
 //     "next/server" 的 after() 在測試裡不跑
 import { existsSync, readFileSync } from "node:fs";
@@ -23,6 +24,7 @@ const STUBS = {
   "@/lib/guest/store": "tests/support/stub-guest-store.ts",
   "@/lib/pairing/store": "tests/support/stub-pairing-store.ts",
   "@/lib/mahjong/donate/store": "tests/support/stub-donate-store.ts",
+  "@/lib/mahjong/userPrefs/store": "tests/support/stub-prefs-store.ts",
   "@/lib/mahjong/effects/store": "tests/support/stub-effects-store.ts",
   "next/server": "tests/support/stub-next-server.ts",
 };
