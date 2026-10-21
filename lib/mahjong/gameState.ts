@@ -116,6 +116,9 @@ export interface MahjongGameState {
   // 碰的過水（不公開，只在伺服器）：座位 → 按過沒碰（或沒明槓）的牌種（tileKey）。
   // 自己下一次摸牌或打牌前，這些牌都不能碰、也不能明槓；自己摸牌（從牌牆摸、槓後補牌、補花都算）或打出一張牌就清掉。每局重來
   pongPassKeys?: Record<number, string[]>;
+  // 食替（老闆 2026-10-21）：吃完要打牌的座位，和這次不能打的牌種（tileKey）——會和吃牌用的兩張湊成順子的牌。
+  // 吃的時候設、打出一張牌就清掉。只在伺服器；本人的牌局狀態另外給 chiForbidden
+  chiForbid?: { seat: number; keys: string[] };
   // 對局紀錄用：新版開局時寫入。上線前開局的房間沒有這兩個欄位 → 不補記紀錄
   startedAt?: string;       // 開局時間（ISO）
   handsCompleted?: number;  // 這場已打完（已結算）幾局，含流局

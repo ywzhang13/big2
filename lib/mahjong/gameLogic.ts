@@ -115,6 +115,38 @@ export function claimBlockReason(
 }
 
 /**
+ * 食替（老闆 2026-10-21）：用手上兩張吃了之後，同一輪不能打出和這兩張湊成順子的牌。
+ * 兩張相連（6、7）→ 兩頭（5、8）都不能打；中間隔一張（5、7）→ 中洞（6）不能打。被吃的那張一定在裡面
+ */
+export function chiForbiddenKeysFor(t1: Tile, t2: Tile): string[] {
+  const [a, b] = [t1.rank, t2.rank].sort((x, y) => x - y);
+  const ranks = b - a === 1 ? [a - 1, b + 1] : b - a === 2 ? [a + 1] : [];
+  return ranks.filter((r) => r >= 1 && r <= 9).map((r) => `${t1.suit}${r}`);
+}
+
+/** 這一手吃完還有沒有能打的牌（吃法的兩張拿掉後，手上至少一張不在禁打的牌種裡） */
+function chiLeavesDiscard(hand: Tile[], use: Tile[]): boolean {
+  const forbid = chiForbiddenKeysFor(use[0], use[1]);
+  return hand.some((t) => !use.some((u) => u.id === t.id) && !isFlower(t) && !forbid.includes(tileKey(t)));
+}
+
+/**
+ * 輪到 seat 打牌時不能打的牌種（剛吃完才有，平常是空陣列）。
+ * 保險：萬一手上全部都是禁打的牌（例如資料被手動改過），就不限制，免得卡局
+ */
+export function chiForbiddenKeys(state: MahjongGameState, seat: number): string[] {
+  const f = state.chiForbid;
+  if (!f || f.seat !== seat || state.currentTurn !== seat) return [];
+  const hand = state.players[seat].hand.filter((t) => !isFlower(t));
+  return hand.some((t) => !f.keys.includes(tileKey(t))) ? f.keys : [];
+}
+
+/** 打出這張是不是被食替擋下 */
+export function isChiForbidden(state: MahjongGameState, seat: number, tile: Tile): boolean {
+  return chiForbiddenKeys(state, seat).includes(tileKey(tile));
+}
+
+/**
  * 剛摸進（或補進）手牌的那張：hand 最後一張（補花後也是最後補進的那張）。
  * 從牌牆摸、槓後補牌、補花都會走這裡，所以也在這裡解除碰的過水
  */
@@ -520,7 +552,7 @@ export function eyeDiscardOptions(state: MahjongGameState, seat: number): Tile[]
   const p = state.players[seat];
   return p.hand.filter((t) => {
     const rest = p.hand.filter((x) => x.id !== t.id && !isFlower(x));
-    return !isFlower(t) && findWaitingTiles(rest, p.revealed.length).length > 0;
+    return !isFlower(t) && !isChiForbidden(state, seat, t) && findWaitingTiles(rest, p.revealed.length).length > 0;
   });
 }
 
@@ -624,8 +656,12 @@ export function discardTile(
   if (tileIndex === -1) {
     throw new Error("Tile not in hand");
   }
+  if (isChiForbidden(s, s.currentTurn, player.hand[tileIndex])) {
+    throw new Error("吃完這輪不能打出和吃的那兩張湊成順子的牌");
+  }
 
   const [discarded] = player.hand.splice(tileIndex, 1);
+  s.chiForbid = undefined; // 食替只管吃完後的這一次出牌
   player.discards.push(discarded);
   s.lastDiscard = { tile: discarded, from: s.currentTurn };
   s.hasDrawn = false;
@@ -740,7 +776,8 @@ export function getAvailableActions(
           const k2 = `${suit}${r2}`;
           const t1 = player.hand.find((t) => tileKey(t) === k1);
           const t2 = player.hand.find((t) => tileKey(t) === k2);
-          if (t1 && t2) {
+          // 食替：這種吃法吃完沒有能打的牌，就不給這種吃法
+          if (t1 && t2 && chiLeavesDiscard(player.hand, [t1, t2])) {
             actions.push({ type: "chi", playerSeat: seat, tiles: [t1, t2] });
           }
         }
@@ -792,6 +829,9 @@ export function executeAction(
     if (!action.tiles || action.tiles.length !== 2) {
       throw new Error("Chi requires exactly 2 tiles from hand");
     }
+    if (!chiLeavesDiscard(player.hand, action.tiles)) {
+      throw new Error("這樣吃完沒有能打的牌，不能這樣吃");
+    }
     // Remove tiles from hand
     for (const t of action.tiles) {
       const idx = player.hand.findIndex((h) => h.id === t.id);
@@ -812,6 +852,7 @@ export function executeAction(
     s.drawnTileId = undefined;
     s.lastDiscard = null;
     s.isAfterKong = false;
+    s.chiForbid = { seat: action.playerSeat, keys: chiForbiddenKeysFor(t1, t2) };
   } else if (action.type === "pong") {
     if (!action.tiles || action.tiles.length < 2) {
       throw new Error("Pong requires at least 2 tiles from hand");
@@ -1477,6 +1518,7 @@ export function startNextGame(state: MahjongGameState): MahjongGameState {
   s.eyeSeats = undefined;
   s.guoShuiSeats = undefined;
   s.pongPassKeys = undefined;
+  s.chiForbid = undefined;
   s.gameOver = false;
 
   // Reset players

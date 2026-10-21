@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from "../supabase-admin";
 import { MahjongGameState, PlayerState } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
-import { allHands, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
+import { allHands, chiForbiddenKeys, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
 import { opponentHands } from "./events";
 import { recordZimoWins } from "./donate/record";
 
@@ -389,6 +389,7 @@ export function toPlayerGameState(
   myAvailableActions?: { type: string; tiles?: Tile[]; ting?: boolean }[];
   myDrawnTileId?: number;
   opponentHands?: ReturnType<typeof opponentHands>;
+  chiForbidden?: string[];
 } {
   const pub = toPublicGameState(state);
   const player = state.players.find((p) => p.id === playerId);
@@ -442,6 +443,8 @@ export function toPlayerGameState(
     hand,
     myAvailableActions,
     myDrawnTileId,
+    // 食替：輪到我、剛吃完時，這次不能打的牌種（tileKey，例如 "s5"）；平常是空陣列。只在本人的 state 裡
+    chiForbidden: player ? chiForbiddenKeys(state, player.seat) : [],
     // 眼牌的人才看得到三家手牌（只在本人的 state 裡）
     ...(player && state.status === "playing" && state.eyeSeats?.includes(player.seat)
       ? { opponentHands: opponentHands(state, player.seat) }

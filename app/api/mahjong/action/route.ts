@@ -28,6 +28,7 @@ import {
   markGuoShuiOnPass,
   markPongPassOnPass,
   claimBlockReason,
+  chiForbiddenKeys,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
@@ -503,6 +504,13 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     });
   }
 
+  // 食替（老闆 2026-10-21）：吃完沒有能打的牌的吃法不給（getAvailableActions 已經濾掉），這裡擋直接送來的請求
+  if (actionType === "chi") {
+    const ids = (actionTiles ?? []).map((t) => t.id).sort().join(",");
+    const offered = getAvailableActions(state).some((a) => a.playerSeat === seat && a.type === "chi" && a.tiles!.map((t) => t.id).sort().join(",") === ids);
+    if (!offered) return Response.json({ error: "不能這樣吃（吃完沒有能打的牌，或不是能吃的組合）", reason: "chi_not_allowed" }, { status: 400 });
+  }
+
   if (isConcealedKong) {
     // 暗槓: 4 tiles from own hand, no discard involved
     if (!actionTiles || actionTiles.length !== 4) {
@@ -568,6 +576,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
         drawnTileId,
         eyeOptions: eyeDiscardOptions(newState, seat).map((t) => t.id),
         eyeWithTing: canDeclareTingNow(newState, seat),
+        // 食替：吃完這次不能打的牌種（碰、槓是空陣列）
+        chiForbidden: chiForbiddenKeys(newState, seat),
       },
     },
     // 槓：補牌後能不能自摸（槓上開花）／再槓，以及補到第 8 張花時的七搶一
@@ -577,5 +587,5 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   ]);
   if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
-  return Response.json({ success: true });
+  return Response.json({ success: true, chiForbidden: chiForbiddenKeys(newState, seat) });
 }

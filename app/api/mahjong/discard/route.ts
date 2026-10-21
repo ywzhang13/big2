@@ -7,7 +7,7 @@ import {
 } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import { discardTile, declareEyeAndDiscard, eyeDiscardOptions, isLocked } from "@/lib/mahjong/gameLogic";
+import { discardTile, declareEyeAndDiscard, eyeDiscardOptions, isChiForbidden, isLocked } from "@/lib/mahjong/gameLogic";
 import { discardEvents, eyeAutoplay, eyeViewEvents, type MjEvent } from "@/lib/mahjong/events";
 import { closeMahjongIfOver } from "@/lib/records/close";
 import { newPaceBudget, waitPaceOnce, type PaceBudget } from "@/lib/mahjong/pace";
@@ -66,6 +66,12 @@ async function handleDiscard(request: Request, body: unknown, fresh: boolean, bu
   }
   if (state.pendingFlowerRob) {
     return Response.json({ error: "等待其他玩家決定是否七搶一" }, { status: 409 });
+  }
+
+  // 食替（老闆 2026-10-21）：吃完這輪不能打出和吃的那兩張湊成順子的牌；狀態不變
+  const tile = state.players[seat].hand.find((t) => t.id === tileId);
+  if (tile && isChiForbidden(state, seat, tile)) {
+    return Response.json({ error: "吃完這輪不能打出和吃的那兩張湊成順子的牌", reason: "chi_forbidden" }, { status: 400 });
   }
 
   if (declareTing) {
