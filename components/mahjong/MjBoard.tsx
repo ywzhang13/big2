@@ -566,8 +566,8 @@ export default function MjBoard({
             <div className="absolute inset-0 flex flex-col p-3">
               {/* Top discards — 從對家自己看：由左到右、由上到下。
                   對家的左手邊是畫面右邊、「上」是靠牌桌中央（畫面下方），
-                  所以第一張在右邊往左長，滿了往畫面上方換列（wrap-reverse）。 */}
-              <div className="flex flex-wrap-reverse flex-row-reverse justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
+                  所以第一張在右邊往左長，滿了往畫面上方換列（wrap-reverse）。每張轉 180 度，字朝向對家（mj-dis-top）。 */}
+              <div className="mj-dis-top flex flex-wrap-reverse flex-row-reverse justify-start gap-[1px] mx-auto" style={{ maxWidth: 312 }}>
                 {(top?.discards || []).map((t, i) => (
                   <MjTile key={`top-${t.id}-${i}`} tile={t} tiny matchable />
                 ))}

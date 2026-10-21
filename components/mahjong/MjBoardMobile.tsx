@@ -184,11 +184,15 @@ function EyeHand({ h, w, ht }: { h: MjOpponentHand; w: number; ht: number }) {
   );
 }
 
-function BackBar({ count, width }: { count: number; width: number }) {
+/** 對家沒眼牌時的手牌：一張一張的牌背（和左右家一樣，顏色跟著偏好設定的牌背）。
+ *  張數是 3n＋2（16 張＋剛摸進一張）時，最後一張是摸進來的，和其他牌隔開一點（老闆 2026-10-22） */
+function TopBacks({ count }: { count: number }) {
+  const drew = count % 3 === 2;
+  const tile = (i: number) => <MjTile key={i} tile={BACK_TILE} width={12} height={16} faceDown />;
   return (
-    <div className="mjm-backbar">
-      <div className="bar" style={{ width }} />
-      <span className="n">{count}</span>
+    <div className="mjm-topbacks" data-top-backs={count}>
+      {Array.from({ length: drew ? count - 1 : count }, (_, i) => tile(i))}
+      {drew && <span className="drew" data-top-drew>{tile(count - 1)}</span>}
     </div>
   );
 }
@@ -523,7 +527,7 @@ export default function MjBoardMobile({
               </>
             ) : (
               <>
-                <BackBar count={top.tileCount} width={92} />
+                <TopBacks count={top.tileCount} />
                 <Melds revealed={top.revealed} w={12} h={16} seat={top.seat} mySeat={mySeat} />
               </>
             )}

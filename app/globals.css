@@ -98,14 +98,9 @@
 .mjm-plate-v .l2 .mjm-tag.migi { font-size: 8px; padding: 1px 4px; letter-spacing: .02em; box-shadow: 0 0 6px rgba(52, 211, 153, .55); }
 .mjm-plate-v .l3 { display: flex; align-items: center; height: 10px; }
 
-/* 牌背條 */
-.mjm-backbar { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-.mjm-backbar .bar {
-  height: 11px; border-radius: 3px;
-  background: repeating-linear-gradient(90deg, var(--mj-back-2) 0 6px, var(--mj-back-3) 6px 7px);
-  border: 1px solid rgba(255,255,255,.1); box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
-}
-.mjm-backbar .n { font-size: 9px; font-weight: 700; line-height: 1; color: rgba(255,255,255,.45); font-variant-numeric: tabular-nums; }
+/* 對家的牌背：一張一張（摸進的那張隔開 4px） */
+.mjm-topbacks { display: flex; align-items: center; gap: 1px; flex: 0 0 auto; }
+.mjm-topbacks .drew { display: flex; margin-left: 4px; }
 
 /* 吃碰槓、花 */
 .mjm-melds { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; min-width: 0; }
@@ -133,6 +128,8 @@
 }
 /* 海底一律從該家自己看「由左到右、由上到下」：對家第一張在右、往左長，滿了往畫面上方換列 */
 .mjm-dis-h.rev { flex-direction: row-reverse; flex-wrap: wrap-reverse; }
+/* 對家的海底整片轉 180 度，字朝向對家自己（老闆 2026-10-22）；排列順序不變。用 rotate 屬性，不影響牌本身的 transform／scale */
+.mjm-dis-h.rev > *, .mj-dis-top > * { rotate: 180deg; }
 .mjm-mid-row { display: flex; align-items: center; min-height: 0; overflow: hidden; }
 .mjm-dis-v { display: flex; gap: 2px; flex: 0 0 auto; }
 .mjm-dis-v .col { display: flex; flex-direction: column; gap: 1px; }
