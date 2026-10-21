@@ -1,7 +1,7 @@
-// 2026-10-21 老闆規則：天胡只和莊家台（含連莊、拉莊）、花台、風台一起算；門清、自摸、門清自摸（不求人）、獨聽等牌型台都不加。
+// 2026-10-21 老闆規則：天胡不另算門清、自摸、門清自摸，其他台（三暗刻、清一色、四喜、碰碰胡、三元牌、獨聽…）照一般規則算。
 //   T1 固定種子產生 2000 手各式胡牌：非天胡的每一手，台數和台名都和改前（fixtures 基準檔）完全一樣
-//   T2 同一批裡的天胡：只剩 天胡／莊家／正花／春夏秋冬／梅蘭菊竹／八仙過海／風牌
-//   T3 指定牌型：莊家起手自摸、帶正花和風刻 → 天胡 24＋莊家 1＋正花＋風牌，沒有門清自摸、獨聽
+//   T2 同一批裡的天胡：剛好等於改前的結果拿掉門清、自摸、門清自摸，其他台一個不少
+//   T3 指定牌型：天胡疊獨聽、三元牌、清一色、碰碰胡、暗刻、大小四喜照算，沒有門清、自摸
 //   T4 真實結算流程（declareWin）：連 2 拉 2 照加；結算照自摸三家付；整場統計、斗內共用的自摸判斷照樣算自摸
 // 重產基準檔（只能在改規則之前跑）：WRITE_GOLDEN=1 node --import ./tests/support/register.mjs tests/_tianhu-scoring.ts
 import { readFileSync, writeFileSync } from "node:fs";
@@ -13,12 +13,12 @@ import type { MahjongGameState, Meld } from "../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../lib/mahjong/tiles";
 
 const results: string[] = [];
-function eq(a: unknown, e: unknown, msg: string) {
+function eq(a: unknown, e: unknown, msg: string, note = "") {
   const ok = JSON.stringify(a) === JSON.stringify(e);
-  results.push(`${ok ? "✅" : "❌"} ${msg}${ok ? "" : `\n   預期=${JSON.stringify(e)}\n   實際=${JSON.stringify(a)}`}`);
+  results.push(`${ok ? "✅" : "❌"} ${msg}${ok ? "" : `\n   預期=${JSON.stringify(e)}\n   實際=${JSON.stringify(a)}${note ? `\n   ${note}` : ""}`}`);
 }
 const GOLDEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "fixtures/scoring-golden-2026-10-21.json");
-const TIANHU_OK = ["天胡", "莊家", "正花", "春夏秋冬", "梅蘭菊竹", "八仙過海", "風牌"];
+const TIANHU_DROPS = ["門清", "自摸", "門清自摸"];
 
 let nextId = 9000;
 const t = (key: string): Tile => ({ id: nextId++, suit: key[0] as TileSuit, rank: parseInt(key.slice(1), 10), display: key });
@@ -77,26 +77,37 @@ if (process.env.WRITE_GOLDEN) {
   eq([golden.length, diff.length, diff.slice(0, 3).map((i) => [i, golden[i], out[i]])], [cases.length, 0, []],
     `T1 非天胡 ${non.length} 手（含地胡、地聽、門清自摸、獨聽、平胡、四喜、八仙等 ${names.size} 種台）：台數、台名和改前完全一樣`);
   const th = cases.map((c, i) => i).filter((i) => isTianhu(cases[i]));
-  const badTh = th.filter((i) => !out[i].split("|")[1].split(",").every((f) => TIANHU_OK.includes(f.replace(/\d+$/, ""))) || !out[i].includes("天胡24"));
+  // 門清、自摸、門清自摸只看整手（不看拆法），每種拆法都少一樣的台，選到的拆法不變：改後應該剛好等於改前拿掉這三種台
+  const strip = (g: string) => { const [, f] = g.split("|"); const kept = f.split(",").filter((x) => x && !TIANHU_DROPS.includes(x.replace(/\d+$/, ""))); return `${kept.reduce((n, x) => n + Number(x.match(/\d+$/)![0]), 0)}|${kept.join(",")}`; };
+  const bad = th.filter((i) => out[i] !== strip(golden[i]));
   const changed = th.filter((i) => out[i] !== golden[i]).length;
-  eq([th.length > 100, badTh.map((i) => out[i]).slice(0, 3)], [true, []], `T2 天胡 ${th.length} 手（其中 ${changed} 手原本疊了其他台）：只剩天胡、莊家、花台、風台`);
+  eq([th.length > 100, bad.slice(0, 3).map((i) => [golden[i], out[i]])], [true, []], `T2 天胡 ${th.length} 手（其中 ${changed} 手原本有門清或自摸）：剛好是改前拿掉門清、自摸、門清自摸，其他台一個不少`);
 }
 
 // ---- T3：指定牌型 ----
-// 莊家（東家、東風圈）起手 17 張自摸：東風刻、中刻、三副順子、眼 5p；花：春（正花）、夏
+const names = (r: { fans: { name: string }[] }) => r.fans.map((f) => f.name);
+const NO_ZIMO = (r: { fans: { name: string }[] }) => !names(r).some((n) => TIANHU_DROPS.includes(n));
+const base: Omit<ScoringContext, "concealed" | "winTile"> = { revealed: [], isSelfDraw: true, isDealer: true, seatWind: 1, prevalentWind: 1,
+  flowers: [], isLastTile: false, isAfterKong: false, isRobbingKong: false, isFirstDraw: true, isTing: false };
+const hand = (keys: string) => { const c = tiles(keys); return { concealed: c, winTile: c[c.length - 1] }; };
+// 莊家（東家、東風圈）起手 17 張自摸：東風刻、中刻、三副順子、單吊 5p；花：春（正花）、夏
 {
-  const concealed = tiles("z1 z1 z1 z5 z5 z5 m1 m2 m3 m4 m5 m6 s7 s8 s9 p5 p5");
-  const ctx: ScoringContext = { concealed, revealed: [], winTile: concealed[concealed.length - 1], isSelfDraw: true, isDealer: true, seatWind: 1, prevalentWind: 1,
-    flowers: tiles("f1 f2"), isLastTile: false, isAfterKong: false, isRobbingKong: false, isFirstDraw: true, isTing: false };
-  const r = calculateScore(ctx);
-  eq([r.fans.map((f) => f.name + f.value), r.totalFan], [["天胡24", "莊家1", "風牌1", "風牌1", "正花1"], 28],
-    "T3 天胡帶東風刻（門風＋圈風）和正花：天胡 24＋莊家 1＋風牌 2＋正花 1＝28；沒有門清自摸、獨聽、三元牌");
-  const non = calculateScore({ ...ctx, isFirstDraw: false });
-  eq(non.fans.some((f) => f.name === "門清自摸") && non.fans.some((f) => f.name === "三元牌"), true, "T3b 同一手不是天胡時：門清自摸、三元牌照算（只限制天胡）");
-  // 大四喜也是天胡：四喜不算，四副風刻照門風、圈風算風牌
-  const sixi = tiles("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 m1 m2 m3 p5 p5");
-  const s4 = calculateScore({ ...ctx, concealed: sixi, winTile: sixi[16], flowers: [] });
-  eq(s4.fans.map((f) => f.name + f.value), ["天胡24", "莊家1", "風牌1", "風牌1"], "T3c 天胡＋大四喜：不加大四喜，東風刻照算風牌 2");
+  const r = calculateScore({ ...base, ...hand("z1 z1 z1 z5 z5 z5 m1 m2 m3 m4 m5 m6 s7 s8 s9 p5 p5"), flowers: tiles("f1 f2") });
+  eq([r.fans.map((f) => f.name + f.value), r.totalFan], [["天胡24", "莊家1", "獨聽1", "三元牌1", "風牌1", "風牌1", "正花1"], 30],
+    "T3 天胡帶東風刻、中刻、單吊、正花：只少了門清自摸 3，獨聽、三元牌、風牌、正花照算＝30");
+  const non = calculateScore({ ...base, ...hand("z1 z1 z1 z5 z5 z5 m1 m2 m3 m4 m5 m6 s7 s8 s9 p5 p5"), flowers: tiles("f1 f2"), isFirstDraw: false });
+  eq(names(non).includes("門清自摸"), true, "T3b 同一手不是天胡時：門清自摸照算（只限制天胡）");
+}
+{
+  const r = calculateScore({ ...base, ...hand("m1 m1 m1 m2 m2 m2 m3 m3 m3 m5 m5 m5 m7 m7 m7 m9 m9") });
+  eq([["清一色", "碰碰胡", "五暗刻"].every((n) => names(r).includes(n)), NO_ZIMO(r), names(r).includes("天胡")], [true, true, true],
+    "T3c 天胡＋清一色＋碰碰胡＋五暗刻：大牌型全部照算，沒有門清、自摸", names(r).join("+"));
+  const three = calculateScore({ ...base, ...hand("p2 p2 p2 s4 s4 s4 z6 z6 z6 m1 m2 m3 m4 m5 m6 s8 s8") });
+  eq([names(three).includes("三暗刻"), NO_ZIMO(three)], [true, true], "T3d 天胡＋三暗刻：三暗刻照算", names(three).join("+"));
+  const big = calculateScore({ ...base, ...hand("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 m1 m2 m3 p5 p5") });
+  const small = calculateScore({ ...base, ...hand("z1 z1 z1 z2 z2 z2 z3 z3 z3 m1 m2 m3 m4 m5 m6 z4 z4") });
+  eq([names(big).includes("大四喜"), names(small).includes("小四喜"), names(big).includes("風牌"), NO_ZIMO(big) && NO_ZIMO(small)], [true, true, false, true],
+    "T3e 天胡＋大四喜、天胡＋小四喜：四喜照一般規則算（有四喜不另加風牌），沒有門清、自摸", `${names(big).join("+")}｜${names(small).join("+")}`);
 }
 
 // ---- T4：真實結算流程 ----
@@ -111,11 +122,11 @@ if (process.env.WRITE_GOLDEN) {
   } as unknown as MahjongGameState;
   const r = declareWin(s, 0, true);
   const w = r.winners![0];
-  eq([w.score.fans.map((f) => f.name + f.value), w.score.totalFan], [["天胡24", "莊家1", "風牌1", "風牌1", "正花1", "連22", "拉22"], 32],
-    "T4 莊家連 2 拉 2 天胡：天胡、莊家、風牌、正花，再加連 2、拉 2＝32");
+  eq([w.score.fans.map((f) => f.name + f.value), w.score.totalFan], [["天胡24", "莊家1", "獨聽1", "三元牌1", "風牌1", "風牌1", "正花1", "連22", "拉22"], 34],
+    "T4 莊家連 2 拉 2 天胡：天胡、莊家、獨聽、三元牌、風牌、正花，再加連 2、拉 2＝34（沒有門清自摸）");
   const set = calculateSettlement(r);
-  eq([set.reason, set.deltas], ["self_draw", [3 * (100 + 32 * 20), -(100 + 32 * 20), -(100 + 32 * 20), -(100 + 32 * 20)]],
-    "T4c 結算照自摸算：三家各付 底 100＋32 台×20＝740（天胡沒有自摸台，也不會被當成放槍而沒人付）");
+  eq([set.reason, set.deltas], ["self_draw", [3 * (100 + 34 * 20), -(100 + 34 * 20), -(100 + 34 * 20), -(100 + 34 * 20)]],
+    "T4c 結算照自摸算：三家各付 底 100＋34 台×20＝780（天胡沒有自摸台，也不會被當成放槍而沒人付）");
   tallyHandStats(r);
   eq([isSelfDrawWin(w), r.handStats!.selfDraws], [true, [1, 0, 0, 0]], "T4b 整場統計、斗內共用的自摸判斷：天胡照樣算莊家自摸一次（自摸台拿掉不影響）");
 }
