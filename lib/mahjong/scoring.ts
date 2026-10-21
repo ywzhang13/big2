@@ -187,10 +187,11 @@ function scoreDecomposition(
 ): ScoreResult {
   const fans: { name: string; value: number }[] = [];
   const isConcealed = ctx.revealed.length === 0; // 門清: no revealed melds
+  const isTianhu = ctx.isFirstDraw && ctx.isDealer;
 
   // --- 天胡 / 地聽 / 地胡 ---
   // 天胡 24 只有莊家有；地聽 8、地胡 8 不疊加，同一手最多 8 台
-  if (ctx.isFirstDraw && ctx.isDealer) {
+  if (isTianhu) {
     fans.push({ name: "天胡", value: 24 });
   } else if (ctx.isTing) {
     fans.push({ name: "地聽", value: 8 });
@@ -341,8 +342,8 @@ function scoreDecomposition(
   const windPairCount = windKeys.includes(hand.pair) ? 1 : 0;
   const hasSiXi =
     windPongCount === 4 || (windPongCount === 3 && windPairCount === 1);
-  // 有大四喜或小四喜時（任何牌型）不另外加風牌台
-  const skipWindFans = hasSiXi;
+  // 有大四喜或小四喜時（任何牌型）不另外加風牌台；天胡不算四喜，所以風刻照算風牌
+  const skipWindFans = hasSiXi && !isTianhu;
 
   for (const wk of windKeys) {
     if (!skipWindFans && pongMelds.some((m) => m.tileKeys[0] === wk)) {
@@ -430,9 +431,15 @@ function scoreDecomposition(
     fans.push({ name: "搶槓胡", value: 1 });
   }
 
-  const totalFan = fans.reduce((sum, f) => sum + f.value, 0);
-  return { fans, totalFan };
+  // 天胡（2026-10-21 老闆規則）：只和莊家台、花台、風台一起算，門清、自摸、獨聽、牌型台都不加。
+  // 連莊、拉莊在 gameLogic 的 declareWin 另外加，不受影響
+  const counted = isTianhu ? fans.filter((f) => TIANHU_STACKS.has(f.name)) : fans;
+  const totalFan = counted.reduce((sum, f) => sum + f.value, 0);
+  return { fans: counted, totalFan };
 }
+
+/** 天胡可以一起算的台：莊家台、花台（正花、花槓、八仙過海）、風台（門風、圈風刻） */
+const TIANHU_STACKS = new Set(["天胡", "莊家", "正花", "春夏秋冬", "梅蘭菊竹", "八仙過海", "風牌"]);
 
 /**
  * Calculate the best score for a winning hand.

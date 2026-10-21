@@ -730,7 +730,7 @@ function RoomView({
   const isZimoWin =
     state.winner != null &&
     state.winner.seat >= 0 &&
-    state.winner.score.fans.some((f) => f.name.includes("自摸"));
+    state.winner.score.fans.some((f) => f.name.includes("自摸") || f.name === "天胡"); // 天胡沒有自摸台，但一定是自摸
   const isRonWin =
     state.winner != null &&
     state.winner.seat >= 0 &&

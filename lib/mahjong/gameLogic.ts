@@ -1332,8 +1332,9 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
 
   // Self-draw can only be a single winner.
   // 八仙過海／七搶一也是三家都付，照自摸算（莊家台已在 finishFlowerWin 加好）
+  // 天胡一定是莊家自摸，但不另算自摸台（2026-10-21），所以看台名時要把天胡也算進來
   const isSelfDraw = winners.length === 1 &&
-    (winners[0].score.fans.some(f => f.name.includes("自摸")) || isFlowerWin(winners[0]));
+    (winners[0].score.fans.some(f => f.name.includes("自摸") || f.name === "天胡") || isFlowerWin(winners[0]));
 
   if (isSelfDraw) {
     const winnerSeat = winners[0].seat;
