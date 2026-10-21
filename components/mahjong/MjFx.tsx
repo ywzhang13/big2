@@ -95,7 +95,7 @@ export default function MjFx({
     const table = document.querySelector("[data-mj-table]")?.getBoundingClientRect();
     if (!plate || !table) return; // 量不到（畫面正在換）：選單留在畫面外，4 秒沒操作會自己收起
     const m = menuRef.current;
-    const avoid = [...document.querySelectorAll(".mjm-menu, .mjm-menu-pop")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
+    const avoid = [...document.querySelectorAll(".mjm-menu, .mjm-menu-pop, .mjm-gear")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
     setPlace({ seat: target, ...placeFxMenu(rel, plate, table, m.offsetWidth, m.offsetHeight, innerWidth, innerHeight, avoid) });
   }, [target, rel, desk]);
 

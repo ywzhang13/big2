@@ -16,6 +16,8 @@ export type MjAuthStatus = "checking" | "out" | "redirecting" | "error" | "in" |
 export type MjHandoff = { ok: true; name: string } | { ok: false } | null;
 
 export interface MjAuthUser {
+  /** 登入帳號 id（偏好設定跟著帳號走時用來分辨是誰） */
+  id: string;
   displayName: string;
   pictureUrl: string | null;
   isGuest?: boolean;
@@ -110,6 +112,7 @@ function userOf(session: Session | null, isGuest = false): MjAuthUser | null {
   const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
   return {
+    id: session.user.id,
     displayName: str(meta.name) ?? str(meta.full_name) ?? str(meta.nickname) ?? "",
     pictureUrl: isGuest ? null : str(meta.picture) ?? str(meta.avatar_url),
     ...(isGuest ? { isGuest: true } : {}),

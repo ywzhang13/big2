@@ -10,6 +10,7 @@ import MjFlowerTag from "./MjFlowerTag";
 import { DeclareFx, Die, fxClass } from "./MjBoardMobile";
 import MjClaimFx from "./MjClaimFx";
 import MjClaimBanner from "./MjClaimBanner";
+import { MjMeldArrow } from "./MjMeldArrow";
 import { paceText } from "./paceText";
 import { seatWindChar } from "./seatWind";
 
@@ -261,7 +262,7 @@ function PlayerPanel({
             style={{
               width: isHorizontal ? tileSize - 2 : tileH - 6,
               height: isHorizontal ? tileH - 4 : tileSize - 4,
-              background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
+              background: "linear-gradient(180deg, var(--mj-back-1) 0%, var(--mj-back-2) 50%, var(--mj-back-3) 100%)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
               ...(rotStyle ? { transform: rotStyle } : {}),
@@ -323,6 +324,8 @@ function PlayerPanel({
                   </div>
                 );
               })}
+              {/* 我的座位：對家＝我 +2、左（上家）＝我 +3、右（下家）＝我 +1，反推回來 */}
+              <MjMeldArrow meld={meld} owner={player.seat} mySeat={(player.seat + { top: 2, left: 1, right: 3 }[position]) % 4} size={12} vertical={!isHorizontal} />
             </div>
           ))}
         </div>
@@ -500,7 +503,7 @@ export default function MjBoard({
          style={{
            height: "100%",
            maxHeight: "100%",
-           background: "radial-gradient(ellipse at center, #1a3f25 0%, #0f2a1a 60%, #091a10 100%)",
+           background: "radial-gradient(ellipse at center, var(--mj-amb-1) 0%, var(--mj-amb-2) 60%, var(--mj-amb-3) 100%)",
          }}>
 
       {/* Top opponent */}
@@ -549,7 +552,7 @@ export default function MjBoard({
               maxWidth: "min(900px, 78vw)",
               maxHeight: "min(600px, 62vh)",
               aspectRatio: "3 / 2",
-              background: "linear-gradient(145deg, #1e4a2e 0%, #153a22 50%, #0f2a1a 100%)",
+              background: "linear-gradient(145deg, var(--mj-felt-1) 0%, var(--mj-felt-2) 50%, var(--mj-felt-3) 100%)",
               border: "3px solid #8B6914",
               boxShadow: "0 0 0 1px #5a4510, 0 0 0 5px #3a2a08, 0 8px 32px rgba(0,0,0,0.5), inset 0 2px 20px rgba(0,0,0,0.3)",
             }}>
@@ -837,6 +840,7 @@ export default function MjBoard({
                   {meld.tiles.map((t) => (
                     <MjTile key={t.id} tile={t} width={20} height={28} matchable />
                   ))}
+                  <MjMeldArrow meld={meld} owner={mySeat} mySeat={mySeat} size={12} />
                 </div>
               ))}
             </div>

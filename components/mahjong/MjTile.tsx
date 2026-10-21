@@ -82,7 +82,7 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
         padding: 0,
       }}
     >
-      {/* faceDown → inline green gradient (matches felt-style opponent tile backs). */}
+      {/* faceDown → 牌背漸層（顏色跟著偏好設定；外框和三段陰影不能省，蓋牌才分得出桌布） */}
       {faceDown && (
         <div
           aria-hidden
@@ -92,7 +92,7 @@ export default function MjTile({ tile, selected, onClick, small, tiny, faceDown,
             width: w,
             height: h,
             borderRadius: typeof w === "number" ? Math.round(w * 0.12) : "12%",
-            background: "linear-gradient(180deg, #4a8a5a 0%, #2a6038 50%, #1a4828 100%)",
+            background: "linear-gradient(180deg, var(--mj-back-1) 0%, var(--mj-back-2) 50%, var(--mj-back-3) 100%)",
             border: "1px solid rgba(255,255,255,0.08)",
             boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.35)",
             pointerEvents: "none",

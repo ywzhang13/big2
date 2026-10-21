@@ -385,6 +385,12 @@ export function useMahjong(
     paceTimerRef.current = setTimeout(() => setState((prev) => (prev.paceNote === null ? prev : { ...prev, paceNote: null })), ms);
   }, []);
   useEffect(() => () => clearTimeout(paceTimerRef.current), []);
+  // 「解散被取消」（有人按了不同意）的紅字提示 3 秒後自動收掉（再發起新的投票時 mj_leave_request 也會清掉）
+  useEffect(() => {
+    if (state.leaveResult !== "denied") return;
+    const t = setTimeout(() => setState((prev) => (prev.leaveResult === "denied" ? { ...prev, leaveResult: null } : prev)), 3000);
+    return () => clearTimeout(t);
+  }, [state.leaveResult]);
   // 牌局有新進展的編號（收到任何廣播、自己按吃碰槓過都加 1）：state 請求在路上時有進展，回應裡的吃碰槓按鈕已經過時，不能補回畫面
   const progressRef = useRef(0);
   // 我送出、還沒回來的吃碰槓過請求數：這段期間伺服器可能還沒處理到，state 回應裡的按鈕不能信

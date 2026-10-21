@@ -16,6 +16,8 @@ import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
+import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
+import { bindPrefsAccount, openPrefs } from "@/lib/mahjong/prefs";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -110,6 +112,13 @@ function Brand() {
 
 export default function MahjongPage() {
   const auth = useMjAuth();
+  // 偏好設定跟著登入的人：LINE 帳號用帳號的、訪客和沒登入用這台的；換帳號、登出就換主人（不沿用上一個帳號的顏色）
+  const prefsUserId = auth.status === "in" ? auth.user?.id ?? null : null;
+  const prefsGuest = !!auth.user?.isGuest;
+  useEffect(() => {
+    if (auth.status === "checking") return; // 還不知道是誰：先用這台的
+    bindPrefsAccount(prefsUserId ? { id: prefsUserId, isGuest: prefsGuest } : null);
+  }, [auth.status, prefsUserId, prefsGuest]);
   const [screen, setScreen] = useState<"home" | "create" | "join" | "room">("home");
   const [roomCode, setRoomCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -383,6 +392,7 @@ export default function MahjongPage() {
       <div className={`mjl mjl-lobby flex-1 bg-[#0f2a1a]${screen === "create" ? " is-create" : ""}`}>
         <PortraitHint label="返回首頁" onClick={goHome} />
         <AuthBar user={auth.user} onSignOut={auth.signOut} />
+        <MjPrefsPanel />
         {auth.pairedAs !== null && <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} />}
         <Brand />
         <div className={`mjl-col${screen === "create" ? " mjl-form" : ""}`}>
@@ -1001,6 +1011,7 @@ function RoomView({
 
   return (
     <div className="flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative" data-mj-shake>
+      <MjPrefsPanel />
       {/* 互動特效：選一位玩家送 5 種特效；結算畫面出現時收掉 */}
       <MjFx players={state.players} mySeat={state.mySeat} suspended={!!isFinished} desk={!isMobileLandscape}
         hand={`${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`} />
@@ -1038,7 +1049,15 @@ function RoomView({
             </p>
           )}
         </div>
-        <div className="w-10" />
+        {/* 右上齒輪：偏好設定 */}
+        <button
+          type="button"
+          aria-label="偏好設定"
+          onClick={() => openPrefs()}
+          className="w-10 h-10 rounded-full bg-black/35 border border-[#C9A96E]/35 text-[#f0d68a] text-lg cursor-pointer hover:bg-black/50 active:scale-95"
+        >
+          ⚙
+        </button>
       </div>
 
       <MjBoard {...boardProps} />

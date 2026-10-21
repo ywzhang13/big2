@@ -54,23 +54,20 @@ export default function Lobby() {
           >
             <div className="flex items-center gap-4">
               <div className="flex gap-0.5" style={{perspective:"200px"}}>
+                {/* 和遊戲裡同一套新牌面（public/tiles/faces，透明底 webp；白底、細框照 MjTile 畫）。大小維持 40×56 */}
                 {[
-                  {text:"中", color:"#dc2626"},
-                  {text:"發", color:"#15803d"},
-                  {text:"", color:""},
+                  {face:"Chun", alt:"中"},
+                  {face:"Hatsu", alt:"發"},
+                  {face:"Haku", alt:"白"},
                 ].map((t, i) => (
-                  <div key={i} className="w-10 h-14 rounded-md flex items-center justify-center relative"
+                  <div key={i} className="w-10 h-14 rounded-md overflow-hidden relative"
                     style={{
-                      background:"linear-gradient(145deg, #f5f0e0 0%, #e8dfc8 50%, #d4c9a8 100%)",
-                      boxShadow:"2px 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8), inset -1px -1px 0 rgba(0,0,0,0.1)",
-                      border:"1px solid rgba(180,170,140,0.6)",
+                      background:"#fff",
+                      boxShadow:"2px 3px 6px rgba(0,0,0,0.5), inset 0 0 0 1px #c9c2b2",
                       transform:`rotateY(${(i-1)*3}deg)`,
                     }}>
-                    {t.text ? (
-                      <span className="text-xl font-black" style={{color:t.color, fontFamily:"serif", textShadow:"0 1px 1px rgba(0,0,0,0.1)"}}>{t.text}</span>
-                    ) : (
-                      <div className="w-6 h-8 rounded-sm" style={{border:"2.5px solid #1a1a1a"}} />
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/tiles/faces/${t.face}.webp`} alt={t.alt} width={40} height={56} className="absolute inset-0 w-full h-full object-contain" />
                   </div>
                 ))}
               </div>

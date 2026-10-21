@@ -7,6 +7,8 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
+import { MjMeldArrow } from "./MjMeldArrow";
+import { openPrefs } from "@/lib/mahjong/prefs";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import { paceText } from "./paceText";
@@ -52,7 +54,7 @@ function DealerTag({ player, consecutive, withLa, short }: { player: MjPlayer; c
 
 /** 吃碰槓（花改成 MjFlowerTag 收合）。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
  *  rot＝左右家：每張包一格、由 CSS 轉 ±90° 朝向主人，每一副自己一直列，放在靠海底那一欄（沒有吃碰槓也留著，當作和金框的間距） */
-function Melds({ revealed, w, h, mine, reveal, rot, seat }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean; seat?: number }) {
+function Melds({ revealed, w, h, mine, reveal, rot, seat, mySeat }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean; seat: number; mySeat: number }) {
   // data-claim-seat：吃碰槓提示（MjClaimFx）從這裡量剛吃碰的那一副在哪
   if (revealed.length === 0) return rot ? <div className="mjm-meldcol" data-claim-seat={seat} /> : null;
   const tile = (t: Tile, faceDown: boolean) =>
@@ -66,6 +68,7 @@ function Melds({ revealed, w, h, mine, reveal, rot, seat }: { revealed: Meld[]; 
       {revealed.map((meld, mi) => (
         <div key={mi} className="mjm-meld">
           {meld.tiles.map((t) => tile(t, !mine && !reveal && meld.type === "concealed_kong"))}
+          <MjMeldArrow meld={meld} owner={seat} mySeat={mySeat} size={9} vertical={rot} />
         </div>
       ))}
     </div>
@@ -204,6 +207,7 @@ function SidePanel({
   windChar,
   side,
   busy,
+  mySeat,
 }: {
   side: "left" | "right";
   player: MjPlayer | undefined;
@@ -217,6 +221,7 @@ function SidePanel({
   fx?: { both: boolean };
   opponent?: MjOpponentHand;
   busy?: boolean;
+  mySeat: number;
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
@@ -244,7 +249,7 @@ function SidePanel({
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
       <SideHand count={player.tileCount} h={opponent} />
-      <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot seat={player.seat} />
+      <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot seat={player.seat} mySeat={mySeat} />
     </div>
   );
 }
@@ -459,7 +464,7 @@ export default function MjBoardMobile({
     <TileMatchContext.Provider value={selected ? tileKind(selected) : null}>
     <div className="mjm-app">
       <MjClaimFx notice={actionNotice} name={actionNotice ? nameOf(actionNotice.seat) : ""} mySeat={mySeat} />
-      {/* 左上選單鈕：房號、圈局、底台、離開 */}
+      {/* 左上選單鈕：偏好設定、房號、圈局、底台、離開 */}
       <button type="button" className="mjm-menu" aria-label="選單" onClick={() => setMenuOpen((o) => !o)}>
         <i /><i /><i />
       </button>
@@ -467,6 +472,16 @@ export default function MjBoardMobile({
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setMenuOpen(false)} />
           <div className="mjm-menu-pop">
+            <button
+              type="button"
+              className="prefs"
+              onClick={() => {
+                setMenuOpen(false);
+                openPrefs();
+              }}
+            >
+              ⚙ 偏好設定
+            </button>
             <span className="info">房號 {roomCode}</span>
             {roundLabel && <span className="info">{roundLabel}</span>}
             {basePoints != null && fanPoints != null && (
@@ -485,6 +500,9 @@ export default function MjBoardMobile({
         </>
       )}
 
+      {/* 右上齒輪：偏好設定（和左上 ☰ 裡那一列開同一個面板） */}
+      <button type="button" className="mjm-gear" aria-label="偏好設定" onClick={() => openPrefs()}>⚙</button>
+
       {/* 對家 */}
       <div className="mjm-top">
         {top && (
@@ -501,12 +519,12 @@ export default function MjBoardMobile({
               <>
                 {/* 眼牌模式：手牌 16×22 比吃碰槓 12×16 大 */}
                 <EyeHand h={oppOf(top.seat)!} w={16} ht={22} />
-                <Melds revealed={oppOf(top.seat)!.revealed} w={12} h={16} reveal seat={top.seat} />
+                <Melds revealed={oppOf(top.seat)!.revealed} w={12} h={16} reveal seat={top.seat} mySeat={mySeat} />
               </>
             ) : (
               <>
                 <BackBar count={top.tileCount} width={92} />
-                <Melds revealed={top.revealed} w={12} h={16} seat={top.seat} />
+                <Melds revealed={top.revealed} w={12} h={16} seat={top.seat} mySeat={mySeat} />
               </>
             )}
           </>
@@ -516,6 +534,7 @@ export default function MjBoardMobile({
       {/* 左家 | 牌桌 | 右家 */}
       <div className="mjm-mid">
         <SidePanel
+          mySeat={mySeat}
           side="left"
           player={left}
           isCurrent={left?.seat === currentTurn}
@@ -592,6 +611,7 @@ export default function MjBoardMobile({
         </div>
 
         <SidePanel
+          mySeat={mySeat}
           side="right"
           player={right}
           isCurrent={right?.seat === currentTurn}
@@ -655,7 +675,7 @@ export default function MjBoardMobile({
             <Score score={scoreOf(me)} />
             {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
           </div>
-          {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} />}
+          {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} mySeat={mySeat} />}
           <div className="mjm-me-r">
             <span className="cnt">{myHand.length} 張</span>
           </div>

@@ -2,6 +2,10 @@
 @import "tailwindcss";
 
 :root {
+  /* 偏好設定的顏色（lib/mahjong/prefs.ts 會覆寫）：牌背、桌布、外圈（牌面固定白色，不在這裡） */
+  --mj-back-1: #4a8a5a; --mj-back-2: #2a6038; --mj-back-3: #1a4828;
+  --mj-felt-1: #1e4a2e; --mj-felt-2: #153a22; --mj-felt-3: #0f2a1a;
+  --mj-amb-1: #1a3f25; --mj-amb-2: #0f2a1a; --mj-amb-3: #091a10;
   --felt-green: #1a472a;
   --felt-light: #2d6b45;
   --gold: #C9A96E;
@@ -35,7 +39,7 @@
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   overflow: hidden;
   color: #fff;
-  background: radial-gradient(ellipse at center, #1a3f25 0%, #0f2a1a 60%, #091a10 100%);
+  background: radial-gradient(ellipse at center, var(--mj-amb-1) 0%, var(--mj-amb-2) 60%, var(--mj-amb-3) 100%);
 }
 
 /* 左上選單鈕 */
@@ -98,7 +102,7 @@
 .mjm-backbar { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .mjm-backbar .bar {
   height: 11px; border-radius: 3px;
-  background: repeating-linear-gradient(90deg, #2a6038 0 6px, #1a4828 6px 7px);
+  background: repeating-linear-gradient(90deg, var(--mj-back-2) 0 6px, var(--mj-back-3) 6px 7px);
   border: 1px solid rgba(255,255,255,.1); box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
 }
 .mjm-backbar .n { font-size: 9px; font-weight: 700; line-height: 1; color: rgba(255,255,255,.45); font-variant-numeric: tabular-nums; }
@@ -118,7 +122,7 @@
 
 .mjm-table {
   position: relative; margin: 2px 0; border-radius: 10px; min-height: 0; min-width: 0;
-  background: linear-gradient(145deg, #1e4a2e 0%, #153a22 50%, #0f2a1a 100%);
+  background: linear-gradient(145deg, var(--mj-felt-1) 0%, var(--mj-felt-2) 50%, var(--mj-felt-3) 100%);
   border: 2px solid #8B6914;
   box-shadow: 0 0 0 1px #5a4510, 0 0 0 3px #3a2a08, 0 4px 18px rgba(0,0,0,.5), inset 0 2px 16px rgba(0,0,0,.3);
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; padding: 4px 6px; gap: 2px; overflow: hidden;
@@ -1252,3 +1256,58 @@ body {
 .mjfx-note.l { transform: translateY(-50%); white-space: nowrap; }
 /* 對方的名牌可以點（自己的名牌 .mjm-me-who 不行） */
 [data-fx-seat]:not(.mjm-me-who) { cursor: pointer; }
+
+/* ---------------------------------------------------------------------------
+   偏好設定面板（小宜規格 2026-10-20）：這次只有「外觀」，沒有分頁列。
+   桌機 620 寬、預覽在下；手機橫向 720×332、預覽在右
+   --------------------------------------------------------------------------- */
+.mjp-mask { position: fixed; inset: 0; z-index: 950; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; animation: mjp-fade .12s ease-out; }
+.mjp-card {
+  width: 620px; max-height: min(660px, 96dvh); border-radius: 16px; overflow: hidden; color: #fff;
+  background: linear-gradient(200deg, #20321f, #101c14); border: 1px solid rgba(201,169,110,.4); box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  display: grid; grid-template: "head" 44px "body" minmax(0, 1fr) "pv" auto "foot" 52px / 1fr;
+  animation: mjp-pop .14s ease-out;
+}
+@keyframes mjp-fade { from { opacity: 0; } }
+@keyframes mjp-pop { from { opacity: 0; transform: scale(.96); } }
+.mjp-head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 16px; color: #f0d68a; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.mjp-x { position: relative; width: 32px; height: 32px; border-radius: 999px; background: rgba(255,255,255,.06); color: #fff; cursor: pointer; }
+.mjp-x::before { content: ""; position: absolute; inset: -6px; }
+.mjp-x:hover { background: rgba(255,255,255,.12); } .mjp-x:active { transform: scale(.92); }
+.mjp-body { grid-area: body; overflow-y: auto; padding: 4px 16px 10px; }
+.mjp-sec { font-size: 12px; color: rgba(255,255,255,.55); margin: 10px 0 6px; }
+.mjp-themes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.mjp-theme { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 62px; padding: 6px 4px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #fff; font-size: 12px; cursor: pointer; }
+.mjp-theme:hover { border-color: rgba(201,169,110,.5); } .mjp-theme:active { transform: scale(.98); }
+.mjp-theme.on { border-color: #f0d68a; background: rgba(201,169,110,.14); color: #f0d68a; }
+.mjp-theme .sw { width: 64px; height: 34px; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.mjp-theme .sw i { width: 16px; height: 22px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.mjp-sws { display: flex; flex-wrap: wrap; gap: 10px; }
+.mjp-sw { position: relative; width: 42px; height: 42px; margin: 1px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); cursor: pointer; }
+.mjp-sw:hover { transform: translateY(-1px); } .mjp-sw:active { transform: scale(.96); }
+.mjp-sw.on { box-shadow: 0 0 0 2px #f0d68a, 0 0 12px rgba(240,214,138,.45); }
+.mjp-sw.on::after { content: "✓"; position: absolute; right: -5px; bottom: -5px; width: 16px; height: 16px; border-radius: 999px; background: #f0d68a; color: #0f2a1a; font-size: 11px; line-height: 16px; font-weight: 800; }
+.mjp-preview { grid-area: pv; padding: 8px 16px 0; }
+.mjp-preview .felt { border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center;
+  background: linear-gradient(145deg, var(--mj-felt-1), var(--mj-felt-2) 50%, var(--mj-felt-3)); border: 2px solid #8B6914; }
+.mjp-preview .row { display: flex; gap: 3px; }
+.mjp-preview .cap { font-size: 11px; color: rgba(255,255,255,.55); text-align: center; margin-top: 4px; }
+.mjp-foot { grid-area: foot; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-top: 1px solid rgba(255,255,255,.06); }
+.mjp-reset { color: rgba(255,255,255,.55); font-size: 13px; cursor: pointer; min-height: 44px; }
+.mjp-done { min-height: 40px; padding: 8px 26px; border-radius: 10px; font-weight: 800; color: #0f2a1a; background: linear-gradient(135deg, #C9A96E, #e8c97a); cursor: pointer; }
+.mjp-done:hover { filter: brightness(1.08); } .mjp-done:active { transform: scale(.96); }
+.mjp-card button:focus-visible { outline: 2px solid #f0d68a; outline-offset: 2px; }
+@media (max-height: 500px) {
+  .mjp-card { width: min(720px, 96vw); height: min(332px, 94dvh);
+    grid-template: "head head" 40px "body pv" minmax(0, 1fr) "foot foot" 44px / minmax(0, 1fr) 196px; }
+  .mjp-body { padding: 0 12px 8px; }
+  .mjp-preview { padding: 10px 10px 0 0; }
+  .mjp-preview .row { gap: 2px; }
+  .mjp-themes { gap: 6px; }
+}
+
+/* 偏好設定入口：牌桌右上齒輪（手機 30×30 和 ☰ 對稱，點擊範圍往外補到 44）、大廳登入列旁 40×40 */
+.mjm-gear { position: absolute; right: 6px; top: 4px; z-index: 40; width: 30px; height: 30px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid rgba(201,169,110,.35); color: #f0d68a; font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.mjm-gear::before { content: ""; position: absolute; inset: -7px; }
+.mjl-gear { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 999px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,169,110,.35); color: #f0d68a; font-size: 18px; cursor: pointer; }
+.mjm-menu-pop button.prefs { color: #f0d68a; } /* 偏好設定那一列不是危險操作，不用紅字 */
