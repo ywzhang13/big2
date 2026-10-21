@@ -1002,7 +1002,8 @@ function RoomView({
   return (
     <div className="flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative" data-mj-shake>
       {/* 互動特效：選一位玩家送 5 種特效；結算畫面出現時收掉 */}
-      <MjFx players={state.players} mySeat={state.mySeat} suspended={!!isFinished} desk={!isMobileLandscape} />
+      <MjFx players={state.players} mySeat={state.mySeat} suspended={!!isFinished} desk={!isMobileLandscape}
+        hand={`${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`} />
       {/* 手機直向：蓋轉向提示（牌桌照常掛著，連線不中斷） */}
       <PortraitHint label="離開房間" onClick={handleLeave} />
 

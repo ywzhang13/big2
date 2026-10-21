@@ -1168,18 +1168,32 @@ body {
 .mjfx-shk-s { animation: mjfx-shk-s .3s both; }
 @keyframes mjfx-shk { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-7px, 3px); } 40%, 60% { transform: translate(7px, -3px); } }
 @keyframes mjfx-shk-s { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-.mjfx-btn { position: fixed; z-index: 45; border-radius: 999px; background: rgba(0,0,0,.5); border: 1px solid rgba(201,169,110,.45); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.mjfx-btn::before { content: ""; position: absolute; inset: -4px; }
-.mjfx-toasts { position: fixed; z-index: 44; display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: 200px; }
-.mjfx-toast { font-size: 12px; color: #fff; padding: 4px 8px; border-radius: 8px; background: rgba(120,20,20,.72); border: 1px solid rgba(239,68,68,.5); }
-.mjfx-panel { position: fixed; z-index: 60; width: 286px; padding: 8px; border-radius: 12px; color: #fff; background: linear-gradient(200deg, #20321f, #101c14); border: 1px solid rgba(201,169,110,.4); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
-.mjfx-panel .who { display: flex; gap: 4px; margin-bottom: 6px; }
-.mjfx-panel .who button { flex: 1; height: 30px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,.07); color: rgba(255,255,255,.8); cursor: pointer; }
-.mjfx-panel .who button.on { background: rgba(201,169,110,.25); color: #f0d68a; box-shadow: inset 0 0 0 1px rgba(201,169,110,.5); }
-.mjfx-panel .kinds { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.mjfx-panel .kinds button { position: relative; height: 54px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #fff; cursor: pointer; }
-.mjfx-panel .kinds button:disabled { opacity: .35; }
-.mjfx-panel .kinds img { width: 26px; height: 26px; object-fit: contain; }
-.mjfx-panel .kinds span { font-size: 10px; color: rgba(255,255,255,.7); }
-.mjfx-panel .kinds .cd { position: absolute; inset: 0; border-radius: 10px; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; font-size: 18px; color: #f0d68a; }
-.mjfx-panel .hint { margin: 6px 0 0; font-size: 11px; color: rgba(255,255,255,.6); }
+/* 互動特效選單：點對方名牌後在名牌旁邊跳出（2026-10-21）。按鈕沿用原本面板的圖示和樣式；手機上每顆至少 44×44 */
+.mjfx-menu { position: fixed; z-index: 60; padding: 6px; border-radius: 12px; color: #fff; background: linear-gradient(200deg, #20321f, #101c14); border: 1px solid rgba(201,169,110,.4); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.mjfx-menu .kinds { display: grid; grid-template-columns: repeat(5, 48px); gap: 4px; }
+.mjfx-menu.d .kinds { grid-template-columns: repeat(5, 54px); }
+.mjfx-menu .kinds button { position: relative; height: 52px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #fff; cursor: pointer; }
+.mjfx-menu.d .kinds button { height: 56px; }
+.mjfx-menu .kinds button:active { transform: scale(.95); }
+.mjfx-menu .kinds button:disabled { opacity: .35; }
+.mjfx-menu .kinds img { width: 26px; height: 26px; object-fit: contain; }
+.mjfx-menu .kinds span { font-size: 10px; color: rgba(255,255,255,.7); }
+.mjfx-menu .kinds .cd { position: absolute; inset: 0; border-radius: 10px; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; font-size: 18px; color: #f0d68a; }
+/* 左右家：直排（名牌旁邊比較窄，不往海底伸）；手機按鈕 44×44、對家橫排 48×46 */
+.mjfx-menu.m.row .kinds button { height: 46px; }
+.mjfx-menu.col .kinds { grid-template-columns: 54px; }
+.mjfx-menu.m.col { padding: 3px; }
+.mjfx-menu.m.col .kinds { grid-template-columns: 44px; gap: 2px; }
+.mjfx-menu.m.col .kinds button { height: 44px; gap: 0; }
+.mjfx-menu.m.col .kinds img { width: 22px; height: 22px; }
+/* 小箭頭指著名牌（轉 45° 的方塊，只畫朝外的兩條邊） */
+.mjfx-menu .arr { position: absolute; width: 10px; height: 10px; background: #182a1b; border: 0 solid rgba(201,169,110,.4); transform: rotate(45deg); }
+.mjfx-menu .arr.l { left: -6px; margin-top: -5px; border-left-width: 1px; border-bottom-width: 1px; }
+.mjfx-menu .arr.r { right: -6px; margin-top: -5px; border-top-width: 1px; border-right-width: 1px; }
+.mjfx-menu .arr.t { top: -6px; margin-left: -5px; border-top-width: 1px; border-left-width: 1px; }
+/* 提示（冷卻中、對方剛被打過…）：放在名牌下面或旁邊，不放進海底；點不到（不擋點名牌、出牌） */
+.mjfx-note { position: fixed; z-index: 60; pointer-events: none; margin: 0; padding: 3px 6px; border-radius: 8px; font-size: 11px; line-height: 1.3; color: #fff; text-align: center; background: rgba(10,20,14,.92); border: 1px solid rgba(201,169,110,.45); box-shadow: 0 4px 12px rgba(0,0,0,.45); }
+.mjfx-note.r { transform: translate(-100%, -50%); white-space: nowrap; }
+.mjfx-note.l { transform: translateY(-50%); white-space: nowrap; }
+/* 對方的名牌可以點（自己的名牌 .mjm-me-who 不行） */
+[data-fx-seat]:not(.mjm-me-who) { cursor: pointer; }
