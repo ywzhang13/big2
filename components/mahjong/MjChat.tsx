@@ -254,7 +254,6 @@ export default function MjChat({
                   <span className="pp" aria-hidden>{playing ? "Ⅱ" : "▶"}</span>
                   <span className="wave" aria-hidden>{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>
                   <span className="sec">{b.blocked ? "點一下播放" : mmss(left)}</span>
-                  <span className="vol" aria-hidden>🔊</span>
                 </button>
               );
             })}

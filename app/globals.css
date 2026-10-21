@@ -1338,7 +1338,6 @@ body {
 .mjc-b.v.on .wave i { background: #F0D68A; animation: mjc-wave .9s ease-in-out infinite alternate; }
 .mjc-b.v.on .wave i:nth-child(2n) { animation-delay: -.3s; } .mjc-b.v.on .wave i:nth-child(3n) { animation-delay: -.6s; }
 .mjc-b.v .sec { font-size: 11px; line-height: 16px; color: rgba(255,255,255,.68); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mjc-b.v .vol { font-size: 12px; }
 @keyframes mjc-in { from { opacity: 0; transform: translateY(2px); } }
 @keyframes mjc-wave { to { transform: scaleY(.45); } }
 .mjc-note { padding: 4px 10px; border-radius: 10px; font-size: 11px; line-height: 16px; color: #F0D68A; background: rgba(8,27,47,.94); border: 1px solid rgba(201,169,110,.6); white-space: nowrap; }
