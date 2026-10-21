@@ -171,9 +171,10 @@ function PlayerPanel({
 
   return (
     <div className={`flex ${isHorizontal ? "flex-col" : position === "left" ? "flex-row" : "flex-row-reverse"} items-center gap-1.5 transition-all duration-300
-      ${isCurrent ? "scale-105" : "opacity-60"}`}>
-      {/* 名牌＋花膠囊：對家花在名牌右邊，左右家在名牌下面 */}
-      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center gap-1`}>
+      ${isCurrent ? "" : "opacity-60"}`}>
+      {/* 名牌＋花膠囊：對家花在名牌右邊，左右家在名牌下面。
+          輪到這家時只放大這一塊：原本整區 scale-105，牌背 18px 變 18.9px，3 倍螢幕上牌和縫各自捨入，縫一寬一窄（老闆 2026-10-21） */}
+      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center gap-1 transition-transform duration-300 ${isCurrent ? "scale-105" : ""}`}>
       {/* Avatar + Name badge */}
       <div data-fx-seat={player.seat} className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300 ${fxClass(fx)}
         ${isCurrent
