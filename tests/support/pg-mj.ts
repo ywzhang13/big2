@@ -25,7 +25,7 @@ export function db(): Promise<PGlite> {
   dbp ??= (async () => {
     const d = new PGlite();
     await d.exec(SUPABASE_SETUP);
-    for (const f of ["20261022_mahjong_prefs.sql", "20261023_mahjong_chat.sql"]) await d.exec(readFileSync(path.join(MIGRATIONS, f), "utf8"));
+    for (const f of ["20261022_mahjong_prefs.sql", "20261023_mahjong_chat.sql", "20261024_mahjong_prefs_v4.sql"]) await d.exec(readFileSync(path.join(MIGRATIONS, f), "utf8"));
     return d;
   })();
   return dbp;
