@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import MjTile, { tileKind } from "./MjTile";
+import { isChiForbidden } from "@/lib/mahjong/chiForbid";
 
 interface MjHandProps {
   tiles: Tile[];
@@ -18,6 +19,9 @@ interface MjHandProps {
   onPickKind?: (kind: string | null) => void;
   // 0＝不是我的回合、1＝輪到我（還沒摸）、2＝輪到我出牌；變大時清掉選取（眼牌、地聽的人 canDiscard 一直是 false，也要清）
   turnStage?: number;
+  // 吃牌限制：剛吃完這輪不能打的牌型（變暗、點了不選取，改呼叫 onForbidden 顯示提示）
+  chiForbidden?: string[];
+  onForbidden?: () => void;
 }
 
 /** 慢慢摸牌的翻牌（小宜 2026-10-16）：牌背浮起＋金光 → 翻面 → 落定；能胡時翻開那面閃金框。桌機、手機共用 */
@@ -32,7 +36,7 @@ export function SlowDrawTile({ tile, win, width, height }: { tile: Tile; win: bo
   );
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw, onPickKind, turnStage = 0 }: MjHandProps) {
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw, onPickKind, turnStage = 0, chiForbidden = [], onForbidden }: MjHandProps) {
   const [rawSelectedId, setSelectedId] = useState<number | null>(null);
   const eyePick = (id: number) => !!eyeArmed && (eyeOptionIds ?? []).includes(id);
   const eyeBlocked = (id: number) => !!eyeArmed && !eyePick(id);
@@ -50,7 +54,10 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
     onPickKind?.(pickKind);
   }, [pickKind, onPickKind]);
 
+  const chiBlocked = (t: Tile) => canDiscard && isChiForbidden(t, chiForbidden);
+
   function handleTileClick(tile: Tile) {
+    if (chiBlocked(tile)) { onForbidden?.(); return; }
     if (eyeBlocked(tile.id)) return;
     if (eyeArmed) {
       onDiscard(tile.id, true);
@@ -66,8 +73,8 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
     setSelectedId(null);
   }
 
-  const dim = (id: number) =>
-    !canDiscard ? undefined : eyeBlocked(id) ? { opacity: 0.35 } : eyePick(id) ? { transform: "translateY(-6px)" } : undefined;
+  const dim = (t: Tile) =>
+    !canDiscard ? undefined : eyeBlocked(t.id) || chiBlocked(t) ? { opacity: 0.35 } : eyePick(t.id) ? { transform: "translateY(-6px)" } : undefined;
 
   // Separate drawn tile from the rest
   // If drawnTileId matches a tile, separate it; otherwise show last tile as drawn
@@ -92,7 +99,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
         {/* Main hand */}
         <div className="flex gap-[2px]">
           {mainTiles.map((t) => (
-            <div key={t.id} style={dim(t.id)}>
+            <div key={t.id} style={dim(t)} data-chi-forbidden={chiBlocked(t) ? "1" : undefined}>
               <MjTile
                 tile={t}
                 selected={selectedId === t.id}
@@ -103,7 +110,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
         </div>
         {/* Drawn tile separated */}
         {drawnTile && (
-          <div className="ml-3 pl-3 border-l border-white/10" style={dim(drawnTile.id)}>
+          <div className="ml-3 pl-3 border-l border-white/10" style={dim(drawnTile)} data-chi-forbidden={chiBlocked(drawnTile) ? "1" : undefined}>
             {slowDraw?.tileId === drawnTile.id ? (
               <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} />
             ) : (
@@ -118,7 +125,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
       </div>
 
       {/* Discard button */}
-      {canDiscard && selectedId !== null && (
+      {canDiscard && picked && !chiBlocked(picked) && (
         <button
           onClick={handleDiscard}
           className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#C9A96E] to-[#e8c97a] text-[#0f2a1a] font-bold text-sm

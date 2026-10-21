@@ -28,6 +28,7 @@ import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./room
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
 import { receiveFx, setFxRoom, type FxEvent } from "@/lib/mahjong/fx/transport";
 import { receiveChat, type ChatMessage } from "@/lib/mahjong/chatClient";
+import { chiKinds } from "@/lib/mahjong/chiForbid";
 
 /** 兩組按鈕一樣（種類和牌都一樣）：沿用舊的，不換掉陣列 */
 function sameActions(a: { type: string; tiles?: Tile[] }[], b: { type: string; tiles?: Tile[] }[]): boolean {
@@ -162,6 +163,8 @@ export interface MjClientState {
   eyeOptions: number[];
   // 這次宣告眼牌會同時算地聽（第一輪）
   eyeWithTing: boolean;
+  // 剛吃完、輪到我打牌時，不能打的牌型（和吃牌用的兩張湊成順子的牌，例如 "s5"；格式同 tileKind）；空陣列＝沒有限制
+  chiForbidden: string[];
   // 我眼牌時才有：其他三家的手牌（暗槓含牌面）；null＝沒有資料，照舊畫牌背
   opponentHands: MjOpponentHand[] | null;
   // 正在播宣告特效的座位（播完自動移除）；both＝第一輪眼牌同時地聽（MIGI）
@@ -251,6 +254,7 @@ export function useMahjong(
     eyeSeats: [],
     eyeOptions: [],
     eyeWithTing: false,
+    chiForbidden: [],
     opponentHands: null,
     declareFx: [],
     flowerFx: [],
@@ -588,6 +592,8 @@ export function useMahjong(
         // 輪詢有帶（摸牌後）就用輪詢的；沒帶時（例如莊家開局沒摸牌）還是我的打牌回合就保留
         eyeOptions: polledEyeIds ?? (gs.myAvailableActions ? [] : stillMyDiscard ? prev.eyeOptions : []),
         eyeWithTing: polledEye ? polledEye.ting === true : gs.myAvailableActions ? false : stillMyDiscard ? prev.eyeWithTing : false,
+        // 吃牌限制：伺服器的牌局狀態為準（剛吃完、輪到我打牌時才有）
+        chiForbidden: chiKinds((gs as { chiForbidden?: unknown }).chiForbidden),
         // 一局結束後 state 會帶四家手牌（allHands）；舊版沒有就保留廣播收到的
         winner: gs.winner
           ? {
@@ -749,12 +755,13 @@ export function useMahjong(
 
       // --- mj_hand_update (private, after action) ---
       onHeld(ch, "mj_hand_update", ({ payload }) => {
-        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing } = payload as {
+        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing, chiForbidden } = payload as {
           playerId: string;
           hand: Tile[];
           drawnTileId?: number;
           eyeOptions?: number[]; // 吃、碰後要打牌：可以一起宣告眼牌的牌
           eyeWithTing?: boolean;
+          chiForbidden?: unknown; // 吃完後這一輪不能打的牌型
         };
         if (playerId !== myId) return;
         setState((prev) => ({
@@ -763,6 +770,7 @@ export function useMahjong(
           // Authoritative: kong → replacement tile id; chi/pong → null
           drawnTileId: drawnTileId ?? null,
           ...(eyeOptions ? { eyeOptions, eyeWithTing: eyeWithTing === true } : {}),
+          chiForbidden: chiKinds(chiForbidden),
         }));
       });
 
@@ -907,6 +915,7 @@ export function useMahjong(
         // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
         eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],
         eyeWithTing: dealtThisGameRef.current ? prev.eyeWithTing : false,
+        chiForbidden: [],
         // 上一局最後摸進的牌 id 不能留到新局（牌 id 每局重複使用）；座位頻道的發牌先到就保留它標的那張
         drawnTileId: dealtThisGameRef.current ? prev.drawnTileId : null,
         hasDrawn: msg.currentTurn === msg.dealerSeat, // dealer starts with 17
@@ -997,6 +1006,7 @@ export function useMahjong(
             : [],
         eyeOptions: [],
         eyeWithTing: false,
+        chiForbidden: [],
         drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
         players: prev.players.map((p) =>
           p.seat === seat
@@ -1474,6 +1484,7 @@ export function useMahjong(
           availableActions: [],
           eyeOptions: [],
           eyeWithTing: false,
+          chiForbidden: [],
           drawnTileId: null,
           hasDrawn: false,
           lastDiscard: tile ? { tile, from: prev.mySeat } : prev.lastDiscard,

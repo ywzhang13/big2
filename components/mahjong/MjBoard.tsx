@@ -13,6 +13,7 @@ import MjClaimBanner from "./MjClaimBanner";
 import { MjMeldArrow } from "./MjMeldArrow";
 import { paceText } from "./paceText";
 import { seatWindChar } from "./seatWind";
+import { CHI_FORBID_HINT, useChiHint } from "@/lib/mahjong/chiForbid";
 
 export interface MjBoardProps {
   players: MjPlayer[];
@@ -30,6 +31,7 @@ export interface MjBoardProps {
   eyeSeats: number[];
   eyeOptions: number[]; // 這次打牌可以一起宣告眼牌的牌
   eyeWithTing: boolean;
+  chiForbidden?: string[]; // 剛吃完這一輪不能打的牌型（例如 "s5"）
   opponentHands: MjOpponentHand[] | null; // 我眼牌時才有
   declareFx: { seat: number; both: boolean }[]; // 正在播宣告特效的座位
   wallRemaining: number;
@@ -433,6 +435,7 @@ export default function MjBoard({
   tingSeats,
   eyeSeats,
   eyeOptions,
+  chiForbidden = [],
   opponentHands,
   declareFx,
   wallRemaining,
@@ -497,6 +500,7 @@ export default function MjBoard({
   const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
   // 選中一張手牌還沒打出：海底和吃碰區同一種牌亮起來
   const [pickKind, setPickKind] = useState<string | null>(null);
+  const [chiHint, showChiHint] = useChiHint();
   // 開新的一局（剩餘張數變多）時手牌元件重來，上一局的選取不會留到新局（牌 id 每局重複使用）
   const [handGame, setHandGame] = useState({ n: 0, wall: wallRemaining });
   if (wallRemaining !== handGame.wall) setHandGame({ n: handGame.n + (wallRemaining > handGame.wall ? 1 : 0), wall: wallRemaining });
@@ -740,6 +744,9 @@ export default function MjBoard({
               if (iJustDiscarded) {
                 return <span className="text-white/40 text-xs">等待其他玩家...</span>;
               }
+              if (isMyTurn && chiHint && needsDiscard) {
+                return <span className="text-[#f0d68a] font-bold text-sm" data-chi-hint>{CHI_FORBID_HINT}</span>;
+              }
               if (isMyTurn) {
                 return (
                   <span className="text-[#f0d68a] font-bold text-sm animate-pulse">
@@ -875,6 +882,8 @@ export default function MjBoard({
               slowDraw={slowDraw}
               eyeArmed={eyeArmed}
               eyeOptionIds={eyeOptions}
+              chiForbidden={chiForbidden}
+              onForbidden={showChiHint}
               onPickKind={setPickKind}
               turnStage={isMyTurn ? (needsDiscard ? 2 : 1) : 0}
             />

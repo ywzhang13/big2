@@ -9,6 +9,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import { MjMeldArrow } from "./MjMeldArrow";
 import MjTableMenu from "./MjTableMenu";
+import { CHI_FORBID_HINT, isChiForbidden, useChiHint } from "@/lib/mahjong/chiForbid";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import { paceText } from "./paceText";
@@ -343,6 +344,7 @@ export default function MjBoardMobile({
   tingSeats,
   eyeSeats,
   eyeOptions,
+  chiForbidden = [],
   opponentHands,
   declareFx,
   wallRemaining,
@@ -391,6 +393,9 @@ export default function MjBoardMobile({
   // 按下眼牌：可以打的牌往上浮、點一下就打出並宣告；其他的變暗不能點
   const eyePick = (id: number) => eyeArmed && eyeOptions.includes(id);
   const eyeBlocked = (id: number) => eyeArmed && !eyeOptions.includes(id);
+  // 吃牌限制：剛吃完這輪不能打的牌變暗、點了不選取（只在輪到我打牌時；其他時候照常能點牌查場上同一種牌）
+  const chiBlocked = (t: Tile) => needsDiscard && isChiForbidden(t, chiForbidden);
+  const [chiHint, showChiHint] = useChiHint();
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
   const migiFx = declareFx.find((f) => f.both);
   const eyeFx = declareFx.find((f) => !f.both);
@@ -424,13 +429,15 @@ export default function MjBoardMobile({
   }
 
   const handTile = (t: Tile) => (
-    <div key={t.id} className={eyePick(t.id) ? "mjm-pick" : undefined} style={eyeBlocked(t.id) ? { opacity: 0.35 } : undefined}>
+    <div key={t.id} className={eyePick(t.id) && !chiBlocked(t) ? "mjm-pick" : undefined} style={eyeBlocked(t.id) || chiBlocked(t) ? { opacity: 0.35 } : undefined}
+      data-chi-forbidden={chiBlocked(t) ? "1" : undefined}>
       <MjTile
         tile={t}
         width="var(--tile-hand-w)"
         height="var(--tile-hand-h)"
         selected={selected?.id === t.id}
         onClick={() => {
+          if (chiBlocked(t)) { showChiHint(); return; }
           if (eyeBlocked(t.id)) return;
           if (eyeArmed) {
             onDiscard(t.id, true);
@@ -602,7 +609,9 @@ export default function MjBoardMobile({
             {/* 吃碰槓胡的按鈕改由金色橫幅（MjClaimBanner，疊層）顯示，眼牌鈕也一起放進去（動作列會被橫幅蓋住） */}
             <MjClaimBanner actions={availableActions} onAction={onAction} winLabel={winLabel} passLabel={robKong || robFlower ? "不搶" : "過"} extra={eyeToggle} />
           </>
-        ) : canPick && selected ? (
+        ) : chiHint && needsDiscard ? (
+          <span className="mjm-status me" data-chi-hint>{CHI_FORBID_HINT}</span>
+        ) : canPick && selected && !chiBlocked(selected) ? (
           <>
             <span className="mjm-status me">輪到你打牌</span>
             {eyeToggle}
