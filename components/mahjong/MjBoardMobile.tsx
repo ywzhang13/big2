@@ -366,6 +366,7 @@ export default function MjBoardMobile({
   basePoints,
   fanPoints,
   onLeave,
+  chatButton,
 }: MjBoardMobileProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -485,6 +486,17 @@ export default function MjBoardMobile({
               }}
             >
               ⚙ 偏好設定
+            </button>
+            {/* 聊天設定（自動播放語音、語音音量）：開同一個偏好設定面板 */}
+            <button
+              type="button"
+              className="prefs"
+              onClick={() => {
+                setMenuOpen(false);
+                openPrefs();
+              }}
+            >
+              💬 聊天設定
             </button>
             <span className="info">房號 {roomCode}</span>
             {roundLabel && <span className="info">{roundLabel}</span>}
@@ -681,6 +693,7 @@ export default function MjBoardMobile({
           </div>
           {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} mySeat={mySeat} />}
           <div className="mjm-me-r">
+            {chatButton}
             <span className="cnt">{myHand.length} 張</span>
           </div>
         </div>

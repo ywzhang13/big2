@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import MjTile from "./MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
-import { BACKS, FELTS, THEMES, DEFAULT_PREFS, usePrefs, setPrefs, type BackId, type FeltId } from "@/lib/mahjong/prefs";
+import { BACKS, FELTS, THEMES, VOICE_VOLS, DEFAULT_PREFS, usePrefs, setPrefs, type BackId, type FeltId, type VoiceVol } from "@/lib/mahjong/prefs";
 
 const PREVIEW_TILES: Tile[] = [
   { id: -11, suit: "m", rank: 5, display: "五萬" },
@@ -14,6 +14,7 @@ const PREVIEW_TILES: Tile[] = [
 
 /** 偏好設定面板（小宜規格 2026-10-20）：這次只有「外觀」（聲音、互動分頁之後再上）。
  *  只換牌背、桌布；牌面一律原本的白色（老闆 2026-10-22），沒有牌面底色。
+ *  「聲音訊息」：收到語音時自動播放、語音音量三段（〈麻將聊天與語音訊息〉規格；老闆 2026-10-23）。
  *  改了立刻生效；點遮罩、✕、「完成」或 Esc 關閉 */
 export default function MjPrefsPanel() {
   const [open, setOpen] = useState(false);
@@ -71,6 +72,25 @@ export default function MjPrefsPanel() {
                 className={`mjp-sw ${prefs.felt === id ? "on" : ""}`}
                 style={{ background: `linear-gradient(145deg, ${FELTS[id].table.join(",")})` }} onClick={() => setPrefs({ felt: id })} />
             ))}
+          </div>
+          <div className="mjp-sec">聲音訊息</div>
+          <div className="mjp-row">
+            <span className="lb">收到語音時自動播放</span>
+            <button type="button" role="switch" aria-checked={prefs.autoVoice} data-prefs-autovoice className={`mjp-switch ${prefs.autoVoice ? "on" : ""}`}
+              onClick={() => setPrefs({ autoVoice: !prefs.autoVoice })}>
+              <i />
+            </button>
+          </div>
+          <div className="mjp-row">
+            <span className="lb">語音音量</span>
+            <span className="mjp-seg" role="radiogroup" aria-label="語音音量">
+              {(Object.keys(VOICE_VOLS) as VoiceVol[]).map((id) => (
+                <button key={id} type="button" role="radio" aria-checked={prefs.voiceVol === id} data-prefs-voicevol={id}
+                  className={prefs.voiceVol === id ? "on" : ""} onClick={() => setPrefs({ voiceVol: id })}>
+                  {VOICE_VOLS[id].name}
+                </button>
+              ))}
+            </span>
           </div>
         </div>
         <div className="mjp-preview" aria-hidden>

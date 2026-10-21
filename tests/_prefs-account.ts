@@ -36,16 +36,16 @@ ok(back() === BACK("jade") && gets.length === 0, "P1 沒登入：用這台的（
 P.bindPrefsAccount(G);
 P.setPrefs({ back: "sakura" });
 await sleep(1100);
-ok(back() === BACK("sakura") && JSON.parse(store.get("mj.prefs.v2")!).back === "sakura" && gets.length === 0 && puts.length === 0, "P2 訪客換成櫻花粉：存在這台（mj.prefs.v2），完全不呼叫偏好設定 API");
+ok(back() === BACK("sakura") && JSON.parse(store.get("mj.prefs.v3")!).back === "sakura" && gets.length === 0 && puts.length === 0, "P2 訪客換成櫻花粉：存在這台（mj.prefs.v3），完全不呼叫偏好設定 API");
 
 // ---------- LINE 帳號 A：用帳號的，不沿用訪客的 ----------
 P.bindPrefsAccount(A);
 ok(back() === BACK("jade"), "P3 換成 LINE 帳號 A（這台沒有 A 的快取）：立刻變回預設，不沿用訪客的櫻花粉");
 ok(gets.length === 1, "P4 LINE 帳號：去伺服器讀 A 的設定");
-gets[0].resolve({ account: A.id, persisted: true, prefs: { v: 2, back: "coral", felt: "night" } });
+gets[0].resolve({ account: A.id, persisted: true, prefs: { v: 3, back: "coral", felt: "night", autoVoice: false, voiceVol: "high" } });
 await sleep(0);
 ok(back() === BACK("coral") && vars.get("--mj-felt-1") === P.FELTS.night.table[0], "P5 伺服器回 A 的珊瑚粉／靜夜藍：套用到畫面");
-ok(JSON.stringify(JSON.parse(store.get("mj.prefs.v2:aaaa-line")!)) === JSON.stringify({ v: 2, back: "coral", felt: "night" }), "P6 A 的設定另外快取在這台（mj.prefs.v2:<A>，只有 v、back、felt），重整時先套用");
+ok(JSON.stringify(JSON.parse(store.get("mj.prefs.v3:aaaa-line")!)) === JSON.stringify({ v: 3, back: "coral", felt: "night", autoVoice: false, voiceVol: "high" }) && P.getPrefs().autoVoice === false && P.getPrefs().voiceVol === "high", "P6 A 的設定另外快取在這台（mj.prefs.v3:<A>），語音兩項也跟著帳號（自動播放關、音量高），重整時先套用");
 P.bindPrefsAccount(A);
 ok(gets.length === 1, "P7 同一個帳號重複綁定：不重讀");
 
@@ -63,22 +63,22 @@ reset(); store.clear();
 P.bindPrefsAccount(A);
 const lateA = gets[0];
 P.bindPrefsAccount(B);
-lateA.resolve({ account: A.id, persisted: true, prefs: { v: 2, back: "vermilion", felt: "wine" } });
+lateA.resolve({ account: A.id, persisted: true, prefs: { v: 3, back: "vermilion", felt: "wine", autoVoice: true, voiceVol: "mid" } });
 await sleep(0);
-ok(back() === BACK("jade") && !store.has("mj.prefs.v2:bbbb-line"), "P12 A 的讀取在換成 B 之後才回來：作廢，B 的畫面和快取都不會變成 A 的");
-gets[1].resolve({ account: A.id, persisted: true, prefs: { v: 2, back: "ink", felt: "black" } });
+ok(back() === BACK("jade") && !store.has("mj.prefs.v3:bbbb-line"), "P12 A 的讀取在換成 B 之後才回來：作廢，B 的畫面和快取都不會變成 A 的");
+gets[1].resolve({ account: A.id, persisted: true, prefs: { v: 3, back: "ink", felt: "black", autoVoice: true, voiceVol: "mid" } });
 await sleep(0);
 ok(back() === BACK("jade"), "P13 綁定 B 時送出的讀取，回來的卻是 A 的（session 還沒換過來）：不套用");
 
 // ---------- 登出 ----------
 reset(); store.clear();
-store.set("mj.prefs.v2", JSON.stringify({ v: 2, back: "indigo", felt: "night" }));
-store.set("mj.prefs.v2:aaaa-line", JSON.stringify({ v: 2, back: "brass", felt: "black" }));
+store.set("mj.prefs.v3", JSON.stringify({ v: 3, back: "indigo", felt: "night", autoVoice: true, voiceVol: "mid" }));
+store.set("mj.prefs.v3:aaaa-line", JSON.stringify({ v: 3, back: "brass", felt: "black", autoVoice: true, voiceVol: "mid" }));
 P.bindPrefsAccount(A);
 ok(back() === BACK("brass"), "P14 重整後登入 A：先用 A 在這台的快取（金棕），不用等伺服器");
 P.bindPrefsAccount(null);
 ok(back() === BACK("indigo"), "P15 登出：換回這台的設定（靛青藍），不沿用 A 的金棕");
-gets[0].resolve({ account: A.id, persisted: true, prefs: { v: 2, back: "coral", felt: "green" } });
+gets[0].resolve({ account: A.id, persisted: true, prefs: { v: 3, back: "coral", felt: "green", autoVoice: true, voiceVol: "mid" } });
 await sleep(0);
 ok(back() === BACK("indigo"), "P16 登出之後 A 的讀取才回來：不套用");
 
@@ -86,15 +86,15 @@ ok(back() === BACK("indigo"), "P16 登出之後 A 的讀取才回來：不套用
 reset(); store.clear();
 P.bindPrefsAccount(A);
 P.setPrefs({ felt: "wine" });
-gets[0].resolve({ account: A.id, persisted: true, prefs: { v: 2, back: "jade", felt: "green" } });
+gets[0].resolve({ account: A.id, persisted: true, prefs: { v: 3, back: "jade", felt: "green", autoVoice: true, voiceVol: "mid" } });
 await sleep(0);
 ok(vars.get("--mj-felt-1") === P.FELTS.wine.table[0], "P17 讀取還沒回來時自己換了桌布：伺服器的舊值不蓋掉剛改的");
 await sleep(1100);
-ok(puts.length === 1 && puts[0].account === A.id && JSON.stringify(puts[0].prefs) === JSON.stringify({ v: 2, back: "jade", felt: "wine" }), "P18 1 秒後存到 A：格式是 { v: 2, back, felt }，沒有 face（和伺服器格式一樣）");
+ok(puts.length === 1 && puts[0].account === A.id && JSON.stringify(puts[0].prefs) === JSON.stringify({ v: 3, back: "jade", felt: "wine", autoVoice: true, voiceVol: "mid" }), "P18 1 秒後存到 A：格式是 { v: 3, back, felt, autoVoice, voiceVol }，沒有 face（和伺服器格式一樣）");
 
 // ---------- 帳號還沒存過、讀不到、格式不合 ----------
 reset(); store.clear();
-store.set("mj.prefs.v2:aaaa-line", JSON.stringify({ v: 2, back: "sakura", felt: "night" }));
+store.set("mj.prefs.v3:aaaa-line", JSON.stringify({ v: 3, back: "sakura", felt: "night", autoVoice: true, voiceVol: "mid" }));
 P.bindPrefsAccount(A);
 gets[0].resolve({ account: A.id, persisted: true, prefs: null });
 await sleep(0);
@@ -104,14 +104,21 @@ P.bindPrefsAccount(A);
 gets[0].resolve(null);
 await sleep(0);
 ok(back() === BACK("sakura"), "P20 讀取失敗：照用這台的快取，不報錯");
-ok(P.normalizePrefs({ v: 3, back: "jade", felt: "green" }) === null && P.normalizePrefs(null) === null && P.normalizePrefs({ v: 2, back: "nope", felt: "green" })?.back === "jade", "P21 版本不符回 null；不認得的欄位用預設");
-ok(JSON.stringify(P.normalizePrefs({ v: 1, back: "coral", face: "rice", felt: "wine" })) === JSON.stringify({ v: 2, back: "coral", felt: "wine" }), "P23 讀到舊格式 v1（有 face）：照樣讀牌背和桌布，face 丟掉，轉成 v2");
+ok(P.normalizePrefs({ v: 4, back: "jade", felt: "green" }) === null && P.normalizePrefs(null) === null && P.normalizePrefs({ v: 3, back: "nope", felt: "green", autoVoice: "x", voiceVol: "max" })?.back === "jade" && P.normalizePrefs({ v: 3, back: "jade", felt: "green", autoVoice: "x", voiceVol: "max" })?.voiceVol === "mid", "P21 版本不符回 null；不認得的欄位用預設");
+ok(JSON.stringify(P.normalizePrefs({ v: 2, back: "coral", felt: "wine" })) === JSON.stringify({ v: 3, back: "coral", felt: "wine", autoVoice: true, voiceVol: "mid" }), "P21b 讀到 v2（上線前的格式）：牌背、桌布照用，語音兩項補預設（自動播放開、音量一般），轉成 v3");
+ok(JSON.stringify(P.normalizePrefs({ v: 1, back: "coral", face: "rice", felt: "wine" })) === JSON.stringify({ v: 3, back: "coral", felt: "wine", autoVoice: true, voiceVol: "mid" }), "P23 讀到舊格式 v1（有 face）：照樣讀牌背和桌布，face 丟掉，轉成 v3");
 reset(); store.clear(); vars.clear();
 store.set("mj.prefs.v1", JSON.stringify({ v: 1, back: "rosepink", face: "celadon", felt: "black" }));
 P.bindPrefsAccount(null);
 ok(back() === BACK("rosepink") && vars.get("--mj-felt-1") === P.FELTS.black.table[0] && !vars.has("--mj-face-bg"), "P24 這台只有改格式前存的舊設定：牌背、桌布照用，牌面底色不套用（沒有 --mj-face-bg）");
 P.setPrefs({ back: "coral" });
-ok(JSON.stringify(JSON.parse(store.get("mj.prefs.v2")!)) === JSON.stringify({ v: 2, back: "coral", felt: "black" }), "P25 之後再改就存成新格式（mj.prefs.v2）");
+ok(JSON.stringify(JSON.parse(store.get("mj.prefs.v3")!)) === JSON.stringify({ v: 3, back: "coral", felt: "black", autoVoice: true, voiceVol: "mid" }), "P25 之後再改就存成新格式（mj.prefs.v3）");
+reset(); store.clear(); vars.clear();
+store.set("mj.prefs.v2", JSON.stringify({ v: 2, back: "sakura", felt: "night" }));
+P.bindPrefsAccount(null);
+ok(back() === BACK("sakura") && P.getPrefs().autoVoice === true && P.getPrefs().voiceVol === "mid", "P27 這台只有上一版（v2）存的設定：牌背照用，語音用預設");
+P.setPrefs({ autoVoice: false, voiceVol: "low" });
+ok(JSON.stringify(JSON.parse(store.get("mj.prefs.v3")!)) === JSON.stringify({ v: 3, back: "sakura", felt: "night", autoVoice: false, voiceVol: "low" }), "P28 在偏好設定關掉自動播放、音量改低：存成 v3");
 reset(); store.clear(); vars.clear();
 P.bindPrefsAccount(null);
 for (const t of P.THEMES) P.setPrefs({ back: t.back, felt: t.felt });

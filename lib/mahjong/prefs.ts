@@ -1,10 +1,12 @@
-// 麻將偏好設定—外觀（小宜〈偏好設定面板-設計規格-2026-10-20〉＋粉紅牌背 3 款）：牌背、桌布。
+// 麻將偏好設定（小宜〈偏好設定面板-設計規格-2026-10-20〉＋粉紅牌背 3 款＋〈麻將聊天與語音訊息〉的「聲音訊息」）：
+// 牌背、桌布、收到語音時自動播放、語音音量。
 // 牌面一律白底（老闆 2026-10-22：牌面顏色只留原本的白色），MjTile 不跟偏好設定。
 // 只影響自己的畫面。顏色收斂成 CSS 變數掛在 <html>：改色只改變數，不重畫牌桌。
 // 存哪裡（誰的設定）由 bindPrefsAccount 決定：
 //   ・LINE 帳號：跟著帳號存在伺服器（GET/PUT /api/mahjong/prefs，老柯〈userPrefs〉），這台另外留一份該帳號的快取（重整時先套用）
-//   ・訪客、沒登入：只存這台（localStorage "mj.prefs.v2"）
-//   格式 { v: 2, back, felt }；讀到舊的 v1（多一個 face）時照樣讀 back、felt，face 忽略
+//   ・訪客、沒登入：只存這台（localStorage "mj.prefs.v3"）
+//   格式 { v: 3, back, felt, autoVoice, voiceVol }；讀到舊的 v2（沒有語音兩項）、v1（多一個 face）照樣讀 back、felt，
+//   語音兩項補預設（自動播放開、音量一般），face 忽略
 // 換帳號、登出時（審伯 2026-10-20 退回的跨帳號殘留）：
 //   ・立刻換成新主人的設定，不沿用上一個帳號的顏色
 //   ・上一個帳號還沒送出的修改先送出（帶上一個帳號的 id；伺服器 session 已經換人就回 409，不會寫進新帳號）
@@ -41,25 +43,37 @@ export const THEMES: { id: string; name: string; back: BackId; felt: FeltId }[] 
   { id: "sakuranight", name: "櫻花夜", back: "sakura", felt: "night" },
 ];
 
-/** 和伺服器存的格式一樣（lib/mahjong/userPrefs/rules.ts）：只有牌背、桌布 */
+/** 語音音量三段（規格：低、一般、高，預設一般＝70%） */
+export const VOICE_VOLS = {
+  low: { name: "低", gain: 0.4 },
+  mid: { name: "一般", gain: 0.7 },
+  high: { name: "高", gain: 1 },
+} as const;
+export type VoiceVol = keyof typeof VOICE_VOLS;
+
+/** 和伺服器存的格式一樣（lib/mahjong/userPrefs/rules.ts）：牌背、桌布、自動播放語音、語音音量 */
 export interface MjPrefs {
-  v: 2;
+  v: 3;
   back: BackId;
   felt: FeltId;
+  autoVoice: boolean;
+  voiceVol: VoiceVol;
 }
 
-export const DEFAULT_PREFS: MjPrefs = { v: 2, back: "jade", felt: "green" };
+export const DEFAULT_PREFS: MjPrefs = { v: 3, back: "jade", felt: "green", autoVoice: true, voiceVol: "mid" };
 
-/** 讀到的東西不合格就回 null；個別欄位不認得就用預設。舊的 v1（多一個 face）照樣讀 back、felt，face 忽略 */
+/** 讀到的東西不合格就回 null；個別欄位不認得就用預設。舊的 v2、v1 照樣讀 back、felt，語音兩項用預設，face 忽略 */
 export function normalizePrefs(raw: unknown): MjPrefs | null {
   const v = raw && typeof raw === "object" ? (raw as { v?: unknown }).v : undefined;
-  if (v !== 2 && v !== 1) return null;
+  if (v !== 3 && v !== 2 && v !== 1) return null;
   const r = raw as Record<string, unknown>;
   const d = DEFAULT_PREFS;
   return {
-    v: 2,
+    v: 3,
     back: typeof r.back === "string" && r.back in BACKS ? (r.back as BackId) : d.back,
     felt: typeof r.felt === "string" && r.felt in FELTS ? (r.felt as FeltId) : d.felt,
+    autoVoice: typeof r.autoVoice === "boolean" ? r.autoVoice : d.autoVoice,
+    voiceVol: typeof r.voiceVol === "string" && r.voiceVol in VOICE_VOLS ? (r.voiceVol as VoiceVol) : d.voiceVol,
   };
 }
 
@@ -78,9 +92,9 @@ const httpIO: PrefsIO = {
   },
 };
 
-const DEVICE_KEY = "mj.prefs.v2"; // 訪客、沒登入
-const accountKey = (id: string) => `mj.prefs.v2:${id}`; // LINE 帳號在這台的快取
-const oldKey = (key: string) => key.replace("mj.prefs.v2", "mj.prefs.v1"); // 改格式前存的（有 face）
+const DEVICE_KEY = "mj.prefs.v3"; // 訪客、沒登入
+const accountKey = (id: string) => `mj.prefs.v3:${id}`; // LINE 帳號在這台的快取
+const OLD_VERSIONS = ["mj.prefs.v2", "mj.prefs.v1"]; // 改格式前存的（v2 沒有語音兩項、v1 多一個 face）
 const PUT_DELAY_MS = 1000; // 停手約 1 秒再存到帳號
 
 let current: MjPrefs = DEFAULT_PREFS;
@@ -96,7 +110,8 @@ const listeners = new Set<() => void>();
 
 function readKey(key: string): MjPrefs | null {
   try {
-    return normalizePrefs(JSON.parse(localStorage.getItem(key) ?? localStorage.getItem(oldKey(key)) ?? "null"));
+    const raw = [key, ...OLD_VERSIONS.map((old) => key.replace("mj.prefs.v3", old))].map((k) => localStorage.getItem(k)).find((x) => x != null);
+    return normalizePrefs(JSON.parse(raw ?? "null"));
   } catch {
     return null;
   }
@@ -168,7 +183,7 @@ export function getPrefs(): MjPrefs {
 
 export function setPrefs(patch: Partial<Omit<MjPrefs, "v">>) {
   ensureStarted();
-  const next: MjPrefs = { ...current, ...patch, v: 2 };
+  const next: MjPrefs = { ...current, ...patch, v: 3 };
   editedSinceBind = true;
   writeKey(ownKey(), next);
   show(next);

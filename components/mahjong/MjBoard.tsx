@@ -52,6 +52,8 @@ export interface MjBoardProps {
   doorSeat?: number;
   playerScores?: number[];
   dealerConsecutive?: number;
+  /** 自己資訊列右側的「聊天」鈕（MjChatButton；聊天與語音訊息規格的入口） */
+  chatButton?: React.ReactNode;
 }
 
 /** 已宣告地聽的標示（小宜規格的聽牌標）；pop＝宣告特效期間彈入 */
@@ -450,6 +452,7 @@ export default function MjBoard({
   doorSeat,
   playerScores,
   dealerConsecutive,
+  chatButton,
 }: MjBoardProps) {
   const getOpponent = (offset: number) => {
     const seat = (mySeat + offset) % 4;
@@ -847,6 +850,7 @@ export default function MjBoard({
           )}
 
           <div className="flex flex-[1_0_0] items-center justify-end">
+            {chatButton}
             <span className="text-[10px] text-white/30">{myHand.length} 張</span>
 
             {/* Flowers：收成一顆「花×N」，點一下展開 */}

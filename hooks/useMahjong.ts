@@ -27,6 +27,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
 import { receiveFx, setFxRoom, type FxEvent } from "@/lib/mahjong/fx/transport";
+import { receiveChat, type ChatMessage } from "@/lib/mahjong/chatClient";
 
 /** 兩組按鈕一樣（種類和牌都一樣）：沿用舊的，不換掉陣列 */
 function sameActions(a: { type: string; tiles?: Tile[] }[], b: { type: string; tiles?: Tile[] }[]): boolean {
@@ -635,7 +636,8 @@ export function useMahjong(
 
   // 只給本人的事件（手牌、摸到的牌、可以吃碰槓胡）。舊房送在房間頻道、登入房送在座位頻道，
   // 兩邊都掛上；payload 一樣帶 playerId，不是我的就略過
-  const bindPrivateEvents = useCallback((ch: RealtimeChannel, myId: string) => {
+  // chRoom＝這個頻道屬於哪個房號（mj_chat 交給聊天模組核對，換房後才送達的舊房事件丟掉）
+  const bindPrivateEvents = useCallback((ch: RealtimeChannel, myId: string, chRoom: string) => {
       // --- mj_deal_hand (private) ---
       onHeld(ch, "mj_deal_hand", ({ payload }) => {
         const { playerId, hand, flowers, eyeOptions, eyeWithTing } = payload as {
@@ -770,6 +772,12 @@ export function useMahjong(
         if (playerId === myId) receiveFx(effect);
       });
 
+      // --- mj_chat (private)：打字聊天、語音訊息（老柯〈聊天與語音訊息〉）。不跟牌局節奏排隊；聊天模組用 id 去重，不是目前這一場的丟掉 ---
+      ch.on("broadcast", { event: "mj_chat" }, ({ payload }) => {
+        const { playerId, message } = payload as { playerId: string; message: ChatMessage };
+        if (playerId === myId) receiveChat(message, playerId, chRoom);
+      });
+
       // --- mj_opponent_hands (private)：我眼牌時，三家手牌的完整快照（直接整份取代） ---
       onHeld(ch, "mj_opponent_hands", ({ payload }) => {
         const { playerId, opponentHands } = payload as { playerId: string; opponentHands: MjOpponentHand[] };
@@ -783,7 +791,8 @@ export function useMahjong(
     if (!privateChannel || !playerName) return;
     const supabase = getSupabase();
     const ch = supabase.channel(privateChannel);
-    bindPrivateEvents(ch, myId);
+    // 座位頻道名稱是 mj-<房號>-p-<雜湊>（lib/mahjong/access.ts privateChannelName）
+    bindPrivateEvents(ch, myId, /^mj-(.+?)-p-/.exec(privateChannel)?.[1] ?? "");
     ch.subscribe((status) => {
       // 訂閱好之前送的私人事件收不到，用 state 補
       if (status === "SUBSCRIBED" && roomIdRef.current) fetchState(roomIdRef.current);
@@ -929,7 +938,7 @@ export function useMahjong(
       for (const p of opening) playFlowerFx(p.seat, p.flowers, mySeat < 0 ? 0 : ((p.seat - mySeat + 4) % 4) * 0.12);
     });
 
-    bindPrivateEvents(channel, myId);
+    bindPrivateEvents(channel, myId, roomCode);
 
     // --- mj_draw (public) ---
     onHeld(channel, "mj_draw", ({ payload }) => {
@@ -1675,5 +1684,7 @@ export function useMahjong(
     markClosed,
     createRoom,
     joinRoom,
+    /** 目前的房間 id（聊天綁定「這一場」用） */
+    roomId,
   };
 }

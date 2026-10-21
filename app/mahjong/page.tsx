@@ -16,6 +16,7 @@ import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
+import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import { bindPrefsAccount, openPrefs } from "@/lib/mahjong/prefs";
 
@@ -638,6 +639,8 @@ export default function MahjongPage() {
       playerName={name}
       nameReady={nameReady}
       nameFromLine={nameSource === "line" && !auth.user.isGuest}
+      accountId={auth.user.id}
+      guest={!!auth.user.isGuest}
       initialJoin={joined}
       onSetName={(n) => {
         setName(n);
@@ -690,7 +693,12 @@ function RoomView({
   onNameEdited,
   onAuthError,
   onGoHome,
+  accountId,
+  guest,
 }: {
+  /** 登入帳號 id、是不是訪客（聊天：換帳號就清空；訪客只能看、聽） */
+  accountId: string;
+  guest: boolean;
   code: string;
   playerName: string;
   nameReady: boolean;
@@ -721,6 +729,7 @@ function RoomView({
     applyJoin,
     closed,
     markClosed,
+    roomId,
   } = useMahjong(code, nameReady ? playerName : "", onAuthError);
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -971,7 +980,11 @@ function RoomView({
 
   const nameOfSeat = (seat: number) => state.players.find((p) => p.seat === seat)?.name ?? "";
 
+  // 打字聊天與語音訊息：LINE 登入、已入座才能發；輪到自己、可以吃碰槓胡時底板收起
+  const chatCanSend = !guest && state.mySeat >= 0;
+  const chatButton = <MjChatButton canSend={chatCanSend} desk={!isMobileLandscape} />;
   const boardProps = {
+    chatButton,
     players: state.players,
     mySeat: state.mySeat,
     myHand: state.myHand,
@@ -1015,6 +1028,17 @@ function RoomView({
       {/* 互動特效：選一位玩家送 5 種特效；結算畫面出現時收掉 */}
       <MjFx players={state.players} mySeat={state.mySeat} suspended={!!isFinished} desk={!isMobileLandscape}
         hand={`${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`} />
+      {/* 打字聊天與語音訊息：泡泡貼名牌、聊天底板、送出狀態（房間關了就清空） */}
+      <MjChat
+        mySeat={state.mySeat}
+        myId={state.myId}
+        roomId={closed ? "" : roomId}
+        roomCode={code}
+        account={accountId}
+        canSend={chatCanSend}
+        claiming={state.availableActions.length > 0}
+        desk={!isMobileLandscape}
+      />
       {/* 手機直向：蓋轉向提示（牌桌照常掛著，連線不中斷） */}
       <PortraitHint label="離開房間" onClick={handleLeave} />
 
