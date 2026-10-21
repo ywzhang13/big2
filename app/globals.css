@@ -1243,6 +1243,12 @@ body {
 .mjfx-menu.m.col .kinds button { height: 44px; gap: 0; }
 .mjfx-menu.m.col .kinds img { width: 22px; height: 22px; }
 /* 小箭頭指著名牌（轉 45° 的方塊，只畫朝外的兩條邊） */
+/* 個人控制「關閉互動」：五種特效下面一條細分隔線；橫排＝文字左、開關右（列高 44）。手機左右家直排只有 44 寬：9px 一行字、開關縮小放下面（整列約 44 高） */
+.mjfx-menu .block { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; margin-top: 6px; padding: 0 4px; border-top: 1px solid rgba(255,255,255,.12); font-size: 13px; font-weight: 700; color: rgba(255,255,255,.88); }
+.mjfx-menu.col .block { flex-direction: column; justify-content: center; gap: 3px; min-height: 0; margin-top: 4px; padding: 4px 0 2px; font-size: 9px; line-height: 11px; white-space: nowrap; }
+.mjfx-menu.col .block .mjp-switch { width: 40px; height: 22px; }
+.mjfx-menu.col .block .mjp-switch i { top: 2px; left: 2px; width: 18px; height: 18px; }
+.mjfx-menu.col .block .mjp-switch.on i { left: 20px; }
 .mjfx-menu .arr { position: absolute; width: 10px; height: 10px; background: #182a1b; border: 0 solid rgba(201,169,110,.4); transform: rotate(45deg); }
 .mjfx-menu .arr.l { left: -6px; margin-top: -5px; border-left-width: 1px; border-bottom-width: 1px; }
 .mjfx-menu .arr.r { right: -6px; margin-top: -5px; border-top-width: 1px; border-right-width: 1px; }
@@ -1268,7 +1274,13 @@ body {
 @keyframes mjp-fade { from { opacity: 0; } }
 @keyframes mjp-pop { from { opacity: 0; transform: scale(.96); } }
 .mjp-head { grid-area: head; display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 16px; color: #f0d68a; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
-.mjp-x { position: relative; width: 32px; height: 32px; border-radius: 999px; background: rgba(255,255,255,.06); color: #fff; cursor: pointer; }
+/* 分頁「外觀／聲音」：標題列中間的金色膠囊（觸控高度補到 44） */
+.mjp-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.25); border: 1px solid rgba(201,169,110,.4); }
+.mjp-tabs button { position: relative; min-width: 76px; height: 30px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 700; color: rgba(255,255,255,.7); cursor: pointer; }
+.mjp-tabs button::before { content: ""; position: absolute; inset: -7px 0; }
+.mjp-tabs button.on { background: linear-gradient(135deg, #C9A96E, #e8c97a); color: #0f2a1a; }
+.mjp-tabs button:not(.on):hover { color: #f0d68a; }
+.mjp-x { position: relative; width: 32px; height: 32px; border-radius: 999px; background: rgba(255,255,255,.06); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .mjp-x::before { content: ""; position: absolute; inset: -6px; }
 .mjp-x:hover { background: rgba(255,255,255,.12); } .mjp-x:active { transform: scale(.92); }
 .mjp-body { grid-area: body; overflow-y: auto; padding: 4px 16px 10px; }
@@ -1297,17 +1309,32 @@ body {
 @media (max-height: 500px) {
   .mjp-card { width: min(720px, 96vw); height: min(332px, 94dvh);
     grid-template: "head head" 40px "body pv" minmax(0, 1fr) "foot foot" 44px / minmax(0, 1fr) 196px; }
-  .mjp-body { padding: 0 12px 8px; }
-  .mjp-preview { padding: 10px 10px 0 0; }
+  .mjp-card.sound { grid-template: "head" 40px "body" minmax(0, 1fr) "foot" 44px / minmax(0, 1fr); }
+  .mjp-body { padding: 0 12px 6px; }
+  /* 和左邊內容至少隔 12px（萬一真的要捲，捲動軸也不會貼著預覽） */
+  .mjp-preview { padding: 10px 10px 0 12px; }
   .mjp-preview .row { gap: 2px; }
   .mjp-themes { gap: 6px; }
+  /* 外觀分頁一頁放得下（老闆 2026-10-21：手機不要捲動）：標題和色塊間距收緊，色塊 38px 一排放得下 9 個 */
+  .mjp-sec { margin: 8px 0 4px; }
+  .mjp-theme { min-height: 58px; padding: 5px 4px; }
+  .mjp-sws { gap: 8px; }
+  .mjp-sw { width: 38px; height: 38px; }
 }
+/* 牌桌上會捲動的區塊（設定內容、結算畫面的牌牆）：細的金色捲動軸，不用瀏覽器原生的白色 */
+.mjp-body, .mjm-result .wall .tiles { scrollbar-width: thin; scrollbar-color: rgba(201,169,110,.7) transparent; }
+.mjp-body::-webkit-scrollbar, .mjm-result .wall .tiles::-webkit-scrollbar { width: 4px; height: 4px; }
+.mjp-body::-webkit-scrollbar-track, .mjm-result .wall .tiles::-webkit-scrollbar-track { background: transparent; }
+.mjp-body::-webkit-scrollbar-thumb, .mjm-result .wall .tiles::-webkit-scrollbar-thumb { background: rgba(201,169,110,.7); border-radius: 999px; }
 
-/* 偏好設定入口：牌桌右上齒輪（手機 30×30 和 ☰ 對稱，點擊範圍往外補到 44）、大廳登入列旁 40×40 */
-.mjm-gear { position: absolute; right: 6px; top: 4px; z-index: 40; width: 30px; height: 30px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid rgba(201,169,110,.35); color: #f0d68a; font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.mjm-gear::before { content: ""; position: absolute; inset: -7px; }
-.mjl-gear { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 999px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,169,110,.35); color: #f0d68a; font-size: 18px; cursor: pointer; }
-.mjm-menu-pop button.prefs { color: #f0d68a; } /* 偏好設定那一列不是危險操作，不用紅字 */
+/* 設定入口：牌桌只在左上 ☰ 裡（右上齒輪拿掉了）；大廳登入列旁 40×40 齒輪（金色線條 SVG） */
+.mjl-gear { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 999px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,169,110,.35); color: #f0d68a; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.mjm-menu-pop button.prefs { color: #f0d68a; display: flex; align-items: center; gap: 8px; } /* 設定那一列不是危險操作，不用紅字 */
+/* 桌機：☰ 放在上方標題列左邊（不是蓋在牌桌上） */
+.mjm-menu.d { position: relative; left: auto; top: auto; width: 40px; height: 40px; cursor: pointer; }
+.mjm-menu.d i { width: 16px; background: #f0d68a; } /* --gold-l 只定義在手機牌桌（.mjm-app）裡，桌機直接給顏色 */
+.mjm-menu-pop.d { position: absolute; left: 0; top: 48px; min-width: 180px; }
+.mjm-menu-pop.d button { cursor: pointer; }
 
 /* ---------------------------------------------------------------------------
    打字聊天與語音訊息（小宜〈麻將聊天與語音訊息-UIUX設計規格-2026-10-21〉）
@@ -1315,9 +1342,9 @@ body {
    --------------------------------------------------------------------------- */
 .mjc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; border-radius: 999px; color: #f0d68a; font-weight: 700;
   background: rgba(8,27,47,.7); border: 1px solid rgba(201,169,110,.55); cursor: pointer; position: relative; }
-.mjc-btn.m { height: 24px; padding: 0 10px; font-size: 12px; }
-.mjc-btn.m::before { content: ""; position: absolute; inset: -10px -4px; } /* 手機點擊範圍補到 44 高 */
-.mjc-btn.d { width: 128px; height: 48px; font-size: 16px; border-radius: 12px; margin-right: 12px; }
+.mjc-btn.m { height: 22px; padding: 0 8px; font-size: 11px; gap: 3px; }
+.mjc-btn.m::before { content: ""; position: absolute; inset: -9px -4px; } /* 手機看起來 22 高，點擊範圍補到 40 高（老闆 2026-10-21：聊天鈕小一點，觸控區不小於 36） */
+.mjc-btn.d { height: 36px; padding: 0 14px; font-size: 14px; margin-right: 12px; } /* 桌機原本 128×48，縮成跟文字一樣寬的 36 高膠囊 */
 .mjc-btn.on { background: rgba(201,169,110,.22); }
 .mjc-btn:active { transform: scale(.97); }
 .mjc-btn:focus-visible, .mjc-panel button:focus-visible, .mjc-panel input:focus-visible, .mjc-b:focus-visible { outline: 2px solid #F0D68A; outline-offset: 2px; }
@@ -1340,6 +1367,7 @@ body {
 .mjc-b.v .sec { font-size: 11px; line-height: 16px; color: rgba(255,255,255,.68); font-variant-numeric: tabular-nums; white-space: nowrap; }
 @keyframes mjc-in { from { opacity: 0; transform: translateY(2px); } }
 @keyframes mjc-wave { to { transform: scaleY(.45); } }
+.mjc-note.off { display: inline-flex; align-items: center; gap: 4px; }
 .mjc-note { padding: 4px 10px; border-radius: 10px; font-size: 11px; line-height: 16px; color: #F0D68A; background: rgba(8,27,47,.94); border: 1px solid rgba(201,169,110,.6); white-space: nowrap; }
 
 .mjc-status { position: fixed; z-index: 58; transform: translateY(-50%); display: flex; align-items: center; min-width: 144px; height: 28px; padding: 0 10px; border-radius: 10px;
@@ -1398,10 +1426,23 @@ body {
 .mjp-switch.on { background: linear-gradient(90deg, #C9A96E, #e8c97a); }
 .mjp-switch i { position: absolute; top: 2.5px; left: 3px; width: 20px; height: 20px; border-radius: 999px; background: #fff; transition: left .16s; }
 .mjp-switch.on i { left: 21px; }
-.mjp-seg { display: inline-flex; padding: 2px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(201,169,110,.35); }
-.mjp-seg button { min-width: 52px; height: 32px; padding: 0 10px; border-radius: 999px; font-size: 13px; color: rgba(255,255,255,.7); cursor: pointer; position: relative; }
-.mjp-seg button::before { content: ""; position: absolute; inset: -6px 0; }
-.mjp-seg button.on { background: #C9A96E; color: #0f2a1a; font-weight: 700; }
+/* 設定面板的分組標題（外觀、聲音）和聲音區（小宜〈設定整併與雙音量及關閉互動〉）：
+   拉霸視覺軌 12px、可拖曳範圍 44px 高、滑塊 28px；靜音鈕至少 112×44；靜音時拉霸 45% 透明、停用 */
+.mjp-cap { margin: -2px 0 4px; font-size: 11px; line-height: 16px; color: rgba(255,255,255,.5); }
+.mjp-vol .top { display: flex; align-items: baseline; justify-content: space-between; margin-top: 8px; font-size: 14px; }
+.mjp-vol .pct { font-weight: 700; color: #f0d68a; font-variant-numeric: tabular-nums; }
+.mjp-vol .ctl { display: flex; align-items: center; gap: 16px; }
+.mjp-vol input[type=range] { flex: 1 1 auto; min-width: 0; height: 44px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+.mjp-vol input[type=range]::-webkit-slider-runnable-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #C9A96E 0 var(--p), rgba(255,255,255,.18) var(--p) 100%); }
+.mjp-vol input[type=range]::-moz-range-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #C9A96E 0 var(--p), rgba(255,255,255,.18) var(--p) 100%); }
+.mjp-vol input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 28px; height: 28px; margin-top: -8px; border-radius: 999px; background: #f0d68a; border: 2px solid #fff8dc; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+.mjp-vol input[type=range]::-moz-range-thumb { width: 28px; height: 28px; border-radius: 999px; background: #f0d68a; border: 2px solid #fff8dc; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+.mjp-vol input[type=range]:focus-visible { outline: 2px solid #f0d68a; outline-offset: 2px; border-radius: 8px; }
+.mjp-vol.muted input[type=range] { opacity: .45; cursor: default; }
+.mjp-vol.muted .pct { color: rgba(255,255,255,.4); }
+.mjp-mute { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 112px; height: 44px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 700; color: #f0d68a; border: 1px solid rgba(201,169,110,.55); background: rgba(0,0,0,.25); cursor: pointer; }
+.mjp-mute.on { background: rgba(201,169,110,.22); border-color: #C9A96E; }
+.mjp-mute:active { transform: scale(.97); }
 .mjc-panel.m { width: 308px; }
 .mjc-panel.d { width: 420px; }
 /* 手機底板：四個快捷短語要一次看得到（不用滑） */

@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { openPrefs } from "@/lib/mahjong/prefs";
+import { GearIcon } from "./MjIcons";
 import type { GuestLoginError, MjAuthStatus, MjAuthUser, MjHandoff } from "@/hooks/useMjAuth";
 
 /** LINE 登入按鈕：icon 用官方素材 public/line/btn_base.png，文字用「使用 LINE 登入」 */
@@ -217,9 +218,9 @@ export function AuthBar({ user, onSignOut }: { user: MjAuthUser; onSignOut: () =
       <button type="button" className="mjl-txtbtn" onClick={onSignOut}>
         登出
       </button>
-      {/* 偏好設定（開局前先調好；和牌桌上的齒輪開同一個面板） */}
-      <button type="button" className="mjl-gear" aria-label="偏好設定" onClick={() => openPrefs()}>
-        ⚙
+      {/* 設定（開局前先調好；和牌桌 ☰ 裡的「設定」開同一個面板） */}
+      <button type="button" className="mjl-gear" aria-label="設定" onClick={() => openPrefs()}>
+        <GearIcon size={18} />
       </button>
     </div>
   );

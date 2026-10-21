@@ -50,7 +50,9 @@ const io: ChatIO = {
     plays.push(p);
     return () => { p.stopped = true; };
   },
+  setVolume: (v) => { volumeSets.push(v); },
 };
+let volumeSets: number[] = [];
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const ME = { account: "acc-A", roomId: "room-1", roomCode: "1111", myId: "p0", mySeat: 0 };
 const msg = (over: Partial<ChatMessage>): ChatMessage => ({ id: crypto.randomUUID(), kind: "text", from: "p1", fromName: "阿華", fromSeat: 1, text: "好牌", ts: t, ...over });
@@ -105,7 +107,7 @@ ok(plays[1].stopped && st().playing === null, "V7 播放中再按一次：停");
 // 關掉自動播放
 reset();
 P.bindPrefsAccount(null);
-P.setPrefs({ autoVoice: false, voiceVol: "high" });
+P.setPrefs({ autoVoice: false, voiceVol: 100 });
 C.bindChatSession(ME);
 const v3 = voice("p3", 3), v4 = voice("p1", 1);
 C.receiveChat(v3, "p0"); C.receiveChat(v4, "p0");
@@ -113,7 +115,7 @@ ok(plays.length === 0 && st().autoOffNotice?.seat === 3, "V8 自動播放關閉�
 advance(2100);
 ok(st().autoOffNotice === null, "V9 提示 2 秒後消失，第二則語音不再提示（不重複打擾）");
 C.toggleVoice(v4.id);
-ok(plays.length === 1 && Math.abs(plays[0].volume - 1) < 1e-9, "V10 自動播放關閉時按泡泡照樣能播，音量照偏好設定（高＝1.0）");
+ok(plays.length === 1 && Math.abs(plays[0].volume - 1) < 1e-9, "V10 自動播放關閉時按泡泡照樣能播，音量照設定（語音 100＝1.0）");
 plays[0].end();
 const vMine3 = voice("p0", 0, 2000);
 C.receiveChat(vMine3, "p0");
@@ -122,7 +124,29 @@ advance(4800);
 ok(st().bubbles.some((b) => b.id === vMine3.id), "V10c 語音長度（2 秒）＋3 秒內泡泡還在");
 advance(400);
 ok(!st().bubbles.some((b) => b.id === vMine3.id), "V10d 語音長度＋3 秒後泡泡淡出（不留 12 秒）");
-P.setPrefs({ autoVoice: true, voiceVol: "mid" });
+P.setPrefs({ autoVoice: true, voiceVol: 70 });
+// 語音拉霸、靜音（〈設定整併與雙音量及關閉互動〉）
+reset();
+volumeSets = [];
+C.bindChatSession(ME);
+const vm1 = voice("p1", 1, 3000), vm2 = voice("p2", 2, 3000);
+C.receiveChat(vm1, "p0"); C.receiveChat(vm2, "p0");
+P.setPrefs({ voiceVol: 40 });
+ok(volumeSets.at(-1) === 0.4 && plays.length === 1, "V13 播放中把語音拉霸拉到 40：正在播的那則馬上變成 0.4");
+P.setPrefs({ voiceMuted: true });
+ok(plays[0].stopped && st().playing === null && plays.length === 1, "V14 播放中按語音靜音：馬上停，排隊的下一則也不播");
+const vm3 = voice("p3", 3, 2000);
+C.receiveChat(vm3, "p0");
+ok(plays.length === 1 && st().autoOffNotice === null && st().bubbles.some((b) => b.id === vm3.id), "V15 語音靜音時收到語音：泡泡照樣出現，但不自動播、也不提示「自動播放已關閉」");
+C.toggleVoice(vm3.id);
+ok(plays.length === 1 && st().note?.text === "語音已靜音", "V16 語音靜音時按泡泡：不播，提示「語音已靜音」");
+const vm4 = voice("p0", 0, 1000);
+C.receiveChat(vm4, "p0");
+ok(plays.length === 1 && st().bubbles.find((b) => b.id === vm4.id)!.until === t + 1000 + 3000, "V17 語音靜音時自己的語音：不播，語音長度＋3 秒後淡出");
+P.setPrefs({ voiceMuted: false });
+C.toggleVoice(vm3.id);
+ok(plays.length === 2 && Math.abs(plays[1].volume - 0.4) < 1e-9, "V18 取消靜音：按泡泡照常播，音量回到原本的 40（0.4）");
+P.setPrefs({ voiceVol: 70 });
 // 瀏覽器擋自動播放
 reset();
 C.bindChatSession(ME);

@@ -12,7 +12,7 @@ const FROM_API: Record<string, FxKind> = { heart: "love", money: "cash", egg: "e
 
 /** 伺服器送來的特效（mj_effect 的 effect，也是 API 回應裡的 effect） */
 export interface FxEvent { id: string; effect: string; from: string; fromName: string; fromSeat: number; to: string; toName: string; toSeat: number; ts: number }
-export interface FxMessage { id: string; kind: FxKind; from: number; to: number; fromName: string; toName: string }
+export interface FxMessage { id: string; kind: FxKind; from: number; to: number; fromId: string; fromName: string; toName: string }
 // cooldown：自己這一組還在冷卻；target_protected：對方剛被重組打過，還在保護期（自己的冷卻不會開始）
 export type SendFxResult = { ok: true } | { ok: false; reason: "loading" | "busy" | "cooldown" | "target_protected" | "no_target" | "failed"; leftMs?: number };
 
@@ -27,7 +27,7 @@ export function receiveFx(e: FxEvent) {
   if (!kind || !e.id || seen.has(e.id)) return;
   seen.add(e.id);
   if (seen.size > 300) seen.delete(seen.values().next().value!);
-  const m: FxMessage = { id: e.id, kind, from: e.fromSeat, to: e.toSeat, fromName: e.fromName, toName: e.toName };
+  const m: FxMessage = { id: e.id, kind, from: e.fromSeat, to: e.toSeat, fromId: e.from, fromName: e.fromName, toName: e.toName };
   listeners.forEach((l) => l(m));
 }
 

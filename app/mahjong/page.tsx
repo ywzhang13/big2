@@ -18,7 +18,8 @@ import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
-import { bindPrefsAccount, openPrefs } from "@/lib/mahjong/prefs";
+import MjTableMenu from "@/components/mahjong/MjTableMenu";
+import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -1027,7 +1028,7 @@ function RoomView({
       <MjPrefsPanel />
       {/* 互動特效：選一位玩家送 5 種特效；結算畫面出現時收掉 */}
       <MjFx players={state.players} mySeat={state.mySeat} suspended={!!isFinished} desk={!isMobileLandscape}
-        hand={`${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`} />
+        hand={`${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`} roomId={closed ? "" : roomId} />
       {/* 打字聊天與語音訊息：泡泡貼名牌、聊天底板、送出狀態（房間關了就清空） */}
       <MjChat
         mySeat={state.mySeat}
@@ -1055,12 +1056,10 @@ function RoomView({
       <>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
-        <button
-          onClick={handleLeave}
-          className="text-sm text-white/60 cursor-pointer active:text-[#f0d68a]"
-        >
-          離開
-        </button>
+        {/* 左上 ☰：設定、房號、圈局、底台、離開房間（和手機版同一個選單；唯一的設定入口） */}
+        <div className="relative w-10 h-10">
+          <MjTableMenu desk roomCode={code} roundLabel={roundLabel} basePoints={state.roomSettings?.basePoints} fanPoints={state.roomSettings?.fanPoints} onLeave={handleLeave} />
+        </div>
         <div className="text-center">
           <h1 className="text-sm font-bold text-[#f0d68a] font-heading">
             台灣麻將 · {code}
@@ -1073,15 +1072,8 @@ function RoomView({
             </p>
           )}
         </div>
-        {/* 右上齒輪：偏好設定 */}
-        <button
-          type="button"
-          aria-label="偏好設定"
-          onClick={() => openPrefs()}
-          className="w-10 h-10 rounded-full bg-black/35 border border-[#C9A96E]/35 text-[#f0d68a] text-lg cursor-pointer hover:bg-black/50 active:scale-95"
-        >
-          ⚙
-        </button>
+        {/* 右邊留同寬的空位，標題才會置中（右上齒輪拿掉了，設定在左上 ☰） */}
+        <div className="w-10 h-10" aria-hidden />
       </div>
 
       <MjBoard {...boardProps} />

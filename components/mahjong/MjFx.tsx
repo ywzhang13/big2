@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { FX_KINDS, FX_LABEL, abortFx, enqueueFx, preloadFx, setFxLayer, unlockAudio, type FxKind } from "@/lib/mahjong/fx/engine";
+import { FX_KINDS, FX_LABEL, abortFx, enqueueFx, preloadFx, setFxLayer, setFxVolume, unlockAudio, type FxKind } from "@/lib/mahjong/fx/engine";
+import { bindFxBlockRoom, setFxBlocked, shouldPlayFx, useFxBlocked } from "@/lib/mahjong/fx/block";
+import { fxGain, usePrefs } from "@/lib/mahjong/prefs";
 import { fxCooldownLeft, sendFx, setFxTable, subscribeFx, type FxMessage } from "@/lib/mahjong/fx/transport";
 import { canUseFx, createFxMenu, isColumn, placeFxMenu, relOf, type FxMenuPlace } from "@/lib/mahjong/fx/menu";
 import { isGuestTab } from "@/lib/mahjong/clientAuth";
@@ -16,15 +18,19 @@ const MIN_HIT = 44; // 手機點擊範圍至少 44px
  *  選單貼在名牌旁邊、有箭頭指著名牌，不放進海底（位置規則見 lib/mahjong/fx/menu.ts）。
  *  點自己的名牌沒反應；點選單外面或 4 秒沒操作就收起。全螢幕特效層 pointer-events:none，不擋出牌、吃碰胡。
  *  只有 LINE 登入、已入座的人能用；訪客、觀戰者、結算畫面都不行。
- *  suspended＝結算畫面：特效全部收掉。hand＝第幾局：結算、換局、卸載時選單和提示立刻清空、計時器全部取消 */
+ *  suspended＝結算畫面：特效全部收掉。hand＝第幾局：結算、換局、卸載時選單和提示立刻清空、計時器全部取消。
+ *  選單最下面「關閉互動」：不播這位玩家丟給自己的特效，只在這一房有效（lib/mahjong/fx/block.ts）。
+ *  互動音效的音量、靜音跟著設定（usePrefs），改了立刻生效 */
 export default function MjFx({
-  players, mySeat, suspended, desk, hand,
+  players, mySeat, suspended, desk, hand, roomId,
 }: {
   players: { id: string; name: string; seat: number }[];
   mySeat: number;
   suspended: boolean;
   desk: boolean;
   hand: string;
+  /** 目前的房間 id（關閉互動只在這一房有效；換房、離開就清空） */
+  roomId: string;
 }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -45,6 +51,17 @@ export default function MjFx({
 
   useEffect(() => setFxTable(players.map((p) => ({ id: p.id, seat: p.seat })), mySeat), [players, mySeat]);
 
+  // 互動音效音量、靜音（設定面板的拉霸、靜音鈕）
+  const prefs = usePrefs();
+  const gain = fxGain(prefs);
+  useEffect(() => setFxVolume(gain), [gain]);
+
+  // 關閉互動綁「這一房的這個座位」：房間、自己的玩家 id、座位一變就清空；離開牌桌也清空
+  const myId = players.find((p) => p.seat === mySeat)?.id ?? "";
+  const blockKey = roomId && myId ? `${roomId}|${myId}|${mySeat}` : null;
+  useEffect(() => { bindFxBlockRoom(blockKey); }, [blockKey]);
+  useEffect(() => () => bindFxBlockRoom(null), []);
+
   // 結算畫面出現：整層清空
   useEffect(() => { if (suspended) abortFx(); }, [suspended]);
 
@@ -54,7 +71,7 @@ export default function MjFx({
 
   // 收到特效：交給播放引擎（重組排隊、輕組同時播）
   useEffect(() => subscribeFx((m: FxMessage) => {
-    if (suspended) return;
+    if (suspended || !shouldPlayFx(m, mySeat)) return; // 被關閉互動的玩家丟給我的：動畫和聲音都不播
     enqueueFx({ kind: m.kind, from: m.from, to: m.to, mySeat, crack: true, muted: false });
   }), [mySeat, suspended]);
 
@@ -95,7 +112,7 @@ export default function MjFx({
     const table = document.querySelector("[data-mj-table]")?.getBoundingClientRect();
     if (!plate || !table) return; // 量不到（畫面正在換）：選單留在畫面外，4 秒沒操作會自己收起
     const m = menuRef.current;
-    const avoid = [...document.querySelectorAll(".mjm-menu, .mjm-menu-pop, .mjm-gear")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
+    const avoid = [...document.querySelectorAll(".mjm-menu, .mjm-menu-pop")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
     setPlace({ seat: target, ...placeFxMenu(rel, plate, table, m.offsetWidth, m.offsetHeight, innerWidth, innerHeight, avoid) });
   }, [target, rel, desk]);
 
@@ -115,6 +132,7 @@ export default function MjFx({
   };
 
   const who = players.find((p) => p.seat === target);
+  const blocked = useFxBlocked(who?.id);
   const pos = place && place.seat === target ? place : null;
   const tip = note ?? (!ready ? "素材載入中…" : null);
   const open = enabled && target != null && rel !== 0 && !!who;
@@ -146,6 +164,14 @@ export default function MjFx({
                 </button>
               );
             })}
+          </div>
+          {/* 個人控制：只有「關閉互動」四個字和開關，沒有說明文字、提示或名牌標籤 */}
+          <div className="block">
+            <span id={`mjfx-block-${target}`}>關閉互動</span>
+            <button type="button" role="switch" aria-checked={blocked} aria-labelledby={`mjfx-block-${target}`} data-fx-block={who.id}
+              className={`mjp-switch ${blocked ? "on" : ""}`} onClick={() => { menu.touch(); setFxBlocked(who.id, !blocked); }}>
+              <i />
+            </button>
           </div>
         </div>
       )}

@@ -44,7 +44,9 @@ const MASTER: Partial<Record<ImgKey, HTMLImageElement[]>> = {};
 const POOL: Partial<Record<ImgKey, HTMLImageElement[]>> = {};
 const BUF: Partial<Record<SoundKey, AudioBuffer>> = {};
 let AC: AudioContext | null = null;
-let MIX: AudioNode | null = null; // 所有特效音效的總出口：壓縮器 → 喇叭，疊在一起也不會爆音
+let MIX: AudioNode | null = null; // 所有特效音效的總出口：總音量 → 壓縮器 → 喇叭，疊在一起也不會爆音
+let FX_GAIN: GainNode | null = null; // 互動音效總音量（設定的「互動音效」拉霸、靜音；0＝不出聲，動畫照播）
+let masterGain = 1;
 let eggLottie: { txt: string; w: number; h: number; fr: number; op: number } | null = null;
 type LottieAnim = { addEventListener: (e: string, f: () => void) => void; setSpeed: (n: number) => void; playSegments: (s: number[], f: boolean) => void; goToAndStop: (f: number, isFrame: boolean) => void; destroy: () => void };
 type LottieLib = { loadAnimation: (o: Record<string, unknown>) => LottieAnim };
@@ -104,7 +106,10 @@ async function loadSounds() {
       const c = AC.createDynamicsCompressor();
       c.threshold.value = -14; c.knee.value = 8; c.ratio.value = 8; c.attack.value = 0.003; c.release.value = 0.25;
       c.connect(AC.destination);
-      MIX = c;
+      FX_GAIN = AC.createGain();
+      FX_GAIN.gain.value = masterGain;
+      FX_GAIN.connect(c);
+      MIX = FX_GAIN;
     }
   } catch { return; }
   await Promise.all(SOUNDS.map(async (n) => {
@@ -114,6 +119,13 @@ async function loadSounds() {
     } catch { /* 這個音效載不到就安靜，動畫照播 */ }
   }));
 }
+
+/** 互動音效總音量（0＝靜音；1＝原本的大小）。改了立刻生效，正在播的音效也跟著變 */
+export function setFxVolume(gain: number) {
+  masterGain = Math.max(0, gain);
+  if (FX_GAIN && AC) FX_GAIN.gain.setTargetAtTime(masterGain, AC.currentTime, 0.02);
+}
+export const getFxVolume = () => masterGain;
 
 /** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋） */
 export function preloadFx(): Promise<boolean> {
@@ -285,7 +297,7 @@ function vignette(run: Run, color: string, dur = 1200) {
   return anim(run, d, [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: dur });
 }
 function snd(run: Run, n: SoundKey, rate = 1, vol = 0.8, delay = 0) {
-  if (run.muted || run.aborted || !AC || !BUF[n]) return;
+  if (run.muted || run.aborted || !AC || !BUF[n] || masterGain === 0) return; // 互動音效靜音：不開始播（動畫照播）
   try {
     const s = AC.createBufferSource(), g = AC.createGain();
     s.buffer = BUF[n]!;
@@ -540,6 +552,7 @@ export interface FxJob { kind: FxKind; from: number; to: number; mySeat: number;
 export interface FxRunLog {
   kind: FxKind; view: FxView; lane: "light" | "heavy"; at: number; ms: number; anims: number; done: number; imgs: number; notReady: number; sounds: number; left: number; aborted: boolean;
   dropped?: "queue_full" | "light_full" | "hidden" | "not_ready";
+  gain?: number; // 播放時的互動音效總音量（0＝靜音）
 }
 // 重組排隊上限 20（照舊）：超過的新來那則不播、記在 fxLog。
 export const QUEUE_MAX = 20;
@@ -632,7 +645,7 @@ async function play(job: FxJob, start: (r: Run) => void, end: (r: Run) => void) 
   clearTimeout(guard);
   const left = sub.children.length;
   run.cleanup();
-  logRun({ kind: job.kind, view, lane: isLightFx(job.kind) ? "light" : "heavy", at: Math.round(t0), ms: Math.round(performance.now() - t0), ...run.stats, left, aborted: run.aborted });
+  logRun({ kind: job.kind, view, lane: isLightFx(job.kind) ? "light" : "heavy", at: Math.round(t0), ms: Math.round(performance.now() - t0), ...run.stats, left, aborted: run.aborted, gain: masterGain });
   end(run);
   emit();
 }

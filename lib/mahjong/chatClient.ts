@@ -8,7 +8,7 @@
 // 狀態放在這個模組（不放 React state）：畫面用 useChatState 訂閱；node 測試可以用假的 IO 和時鐘直接跑（tests/_chat-client.ts）。
 import { useSyncExternalStore } from "react";
 import { authHeaders, mjFetch } from "./clientAuth";
-import { VOICE_VOLS, getPrefs } from "./prefs";
+import { getPrefs, onPrefsChange, voiceGain } from "./prefs";
 
 /** 快捷短語（老闆 2026-10-22 定案；送 id，伺服器換成文字） */
 export const PHRASES = [
@@ -77,7 +77,10 @@ export type ChatIO = {
   postVoice(roomId: string, blob: Blob): Promise<{ status: number; body: Record<string, unknown> }>;
   /** 播一段語音；回傳停止函式。onEnd 播完（或失敗）時呼叫；blocked＝瀏覽器擋了自動播放 */
   play(url: string, volume: number, onEnd: (r: { blocked?: boolean }) => void): () => void;
+  /** 正在播的那一段改音量（設定裡拉語音拉霸時，播放中的也馬上跟著變） */
+  setVolume?(volume: number): void;
 };
+let playingAudio: HTMLAudioElement | null = null;
 
 const browserIO: ChatIO = {
   now: () => Date.now(),
@@ -98,13 +101,15 @@ const browserIO: ChatIO = {
   play(url, volume, onEnd) {
     const a = new Audio(url);
     a.volume = volume;
+    playingAudio = a;
     let done = false;
-    const end = (r: { blocked?: boolean } = {}) => { if (!done) { done = true; onEnd(r); } };
+    const end = (r: { blocked?: boolean } = {}) => { if (!done) { done = true; if (playingAudio === a) playingAudio = null; onEnd(r); } };
     a.onended = () => end();
     a.onerror = () => end();
     a.play().catch((e: { name?: string }) => end({ blocked: e?.name === "NotAllowedError" }));
-    return () => { done = true; a.pause(); a.src = ""; };
+    return () => { done = true; if (playingAudio === a) playingAudio = null; a.pause(); a.src = ""; };
   },
+  setVolume(volume) { if (playingAudio) playingAudio.volume = volume; },
 };
 
 // ---- 一場（帳號＋房間＋座位） ----
@@ -178,17 +183,18 @@ function addBubble(m: ChatMessage) {
     ...(m.kind === "text" ? { text: m.text ?? "" } : { url: m.url, durationMs: m.durationMs ?? 0 }),
     until: now + (m.kind === "text" ? TEXT_TTL : VOICE_TTL),
   };
-  // 自己的語音、自動播放關閉：不播，語音長度過後 3 秒淡出（不用留著等人按）
-  if (m.kind === "voice" && mine && !getPrefs().autoVoice) b.until = now + (m.durationMs ?? 0) + MINE_AFTER;
+  // 這台會不會自動播：自動播放開、語音沒靜音
+  const auto = getPrefs().autoVoice && !getPrefs().voiceMuted;
+  // 自己的語音、不會自動播：語音長度過後 3 秒淡出（不用留著等人按）
+  if (m.kind === "voice" && mine && !auto) b.until = now + (m.durationMs ?? 0) + MINE_AFTER;
   // 每個座位最多三則（新的貼名牌、舊的往外推）；超過的從最舊的拿掉
   const sameSeat = state.bubbles.filter((x) => x.seat === b.seat);
   const drop = new Set(sameSeat.slice(0, Math.max(0, sameSeat.length - (MAX_PER_SEAT - 1))).map((x) => x.id));
   emit({ now, bubbles: [...state.bubbles.filter((x) => !drop.has(x.id)), b] });
   if (m.kind !== "voice") return;
-  const prefs = getPrefs();
-  if (!prefs.autoVoice) {
+  if (getPrefs().voiceMuted) return; // 語音靜音：不播、也不提示「自動播放已關閉」
+  if (!auto) {
     if (mine) return; // 自己的：不播、也不提示
-
     if (!autoOffShown) { autoOffShown = true; emit({ autoOffNotice: { seat: b.seat, until: now + 2000 } }); }
     return;
   }
@@ -215,17 +221,27 @@ function playNext() {
   }
 }
 
-/** 按泡泡：沒在播就播（自動播放關閉、被瀏覽器擋了也能按）；正在播這一則就停 */
+/** 按泡泡：沒在播就播（自動播放關閉、被瀏覽器擋了也能按）；正在播這一則就停。語音靜音時不播 */
 export function toggleVoice(id: string) {
   if (state.playing?.id === id) { stopPlaying(); return; }
+  if (getPrefs().voiceMuted) { noteText("語音已靜音", NOTE_MS); return; }
   const b = state.bubbles.find((x) => x.id === id);
   if (b?.url) { stopPlaying(false); play(b); }
 }
 
+// 設定改了：播放中的語音馬上跟著改音量；按了語音靜音就停掉，排隊的也不播
+let prefsHooked = false;
+function onPrefs() {
+  if (!state.playing) return;
+  if (getPrefs().voiceMuted) { queue = []; stopPlaying(false); return; }
+  io.setVolume?.(voiceGain(getPrefs()));
+}
+
 function play(b: Bubble) {
+  if (!prefsHooked) { prefsHooked = true; onPrefsChange(onPrefs); }
   const mine = epoch;
   const now = io.now();
-  const vol = VOICE_VOLS[getPrefs().voiceVol].gain;
+  const vol = voiceGain(getPrefs());
   emit({ playing: { id: b.id, startedAt: now, durationMs: b.durationMs ?? 0 }, bubbles: state.bubbles.map((x) => (x.id === b.id ? { ...x, blocked: false } : x)) });
   stopAudio = io.play(b.url!, vol, (r) => {
     if (mine !== epoch) return;

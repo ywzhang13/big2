@@ -13,6 +13,7 @@ import {
   setChatOpen, startRecording, toggleVoice, useChatState, type Bubble, type MicError,
 } from "@/lib/mahjong/chatClient";
 import { createChatMic } from "@/lib/mahjong/chatMic";
+import { SpeakerIcon } from "./MjIcons";
 
 const GUEST_TIP = "登入 LINE 後就能聊天與傳語音。";
 const mmss = (ms: number) => `00:${String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, "0")}`;
@@ -28,7 +29,7 @@ export function MjChatButton({ canSend, desk }: { canSend: boolean; desk: boolea
       aria-expanded={st.open}
       onClick={() => (canSend ? setChatOpen(!st.open) : noteText(GUEST_TIP, 2500))}
     >
-      <svg viewBox="0 0 24 24" width={desk ? 20 : 15} height={desk ? 20 : 15} aria-hidden>
+      <svg viewBox="0 0 24 24" width={desk ? 16 : 13} height={desk ? 16 : 13} aria-hidden>
         <path d="M4 5h16v10H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       </svg>
       聊天
@@ -241,7 +242,7 @@ export default function MjChat({
             style={{ visibility: "hidden" }}
             data-chat-stack={seat}
           >
-            {notice && <div className="mjc-note off" data-chat-autooff>🔇 自動播放已關閉</div>}
+            {notice && <div className="mjc-note off" data-chat-autooff><SpeakerIcon size={12} muted />自動播放已關閉</div>}
             {list.map((b) => {
               const out = b.until - st.now < 220 && st.playing?.id !== b.id;
               if (b.kind === "text") {

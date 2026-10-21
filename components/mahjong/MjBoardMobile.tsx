@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import { MjMeldArrow } from "./MjMeldArrow";
-import { openPrefs } from "@/lib/mahjong/prefs";
+import MjTableMenu from "./MjTableMenu";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import { paceText } from "./paceText";
@@ -368,7 +368,6 @@ export default function MjBoardMobile({
   onLeave,
   chatButton,
 }: MjBoardMobileProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // 眼牌：記住是對哪一組選項按下的，換回合自動失效
   const [eyeArmedKey, setEyeArmedKey] = useState<string | null>(null);
@@ -469,55 +468,8 @@ export default function MjBoardMobile({
     <TileMatchContext.Provider value={selected ? tileKind(selected) : null}>
     <div className="mjm-app">
       <MjClaimFx notice={actionNotice} name={actionNotice ? nameOf(actionNotice.seat) : ""} mySeat={mySeat} />
-      {/* 左上選單鈕：偏好設定、房號、圈局、底台、離開 */}
-      <button type="button" className="mjm-menu" aria-label="選單" onClick={() => setMenuOpen((o) => !o)}>
-        <i /><i /><i />
-      </button>
-      {menuOpen && (
-        <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setMenuOpen(false)} />
-          <div className="mjm-menu-pop">
-            <button
-              type="button"
-              className="prefs"
-              onClick={() => {
-                setMenuOpen(false);
-                openPrefs();
-              }}
-            >
-              ⚙ 偏好設定
-            </button>
-            {/* 聊天設定（自動播放語音、語音音量）：開同一個偏好設定面板 */}
-            <button
-              type="button"
-              className="prefs"
-              onClick={() => {
-                setMenuOpen(false);
-                openPrefs();
-              }}
-            >
-              💬 聊天設定
-            </button>
-            <span className="info">房號 {roomCode}</span>
-            {roundLabel && <span className="info">{roundLabel}</span>}
-            {basePoints != null && fanPoints != null && (
-              <span className="info">底{basePoints} / 台{fanPoints}</span>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onLeave();
-              }}
-            >
-              離開房間
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* 右上齒輪：偏好設定（和左上 ☰ 裡那一列開同一個面板） */}
-      <button type="button" className="mjm-gear" aria-label="偏好設定" onClick={() => openPrefs()}>⚙</button>
+      {/* 左上選單：設定、房號、圈局、底台、離開（唯一的設定入口） */}
+      <MjTableMenu roomCode={roomCode} roundLabel={roundLabel} basePoints={basePoints} fanPoints={fanPoints} onLeave={onLeave} />
 
       {/* 對家 */}
       <div className="mjm-top">
