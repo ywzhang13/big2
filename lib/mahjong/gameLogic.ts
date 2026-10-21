@@ -1289,6 +1289,11 @@ export function settledWinners(state: MahjongGameState): WinnerEntry[] {
   return winners;
 }
 
+/** 這個胡算不算自摸：自摸、八仙過海、七搶一（三家都付）算；放槍、搶槓不算。整場統計和斗內計數共用 */
+export function isSelfDrawWin(w: WinnerEntry): boolean {
+  return w.from == null || isFlowerWin(w);
+}
+
 /** 把這局的胡牌、放槍、自摸加進整場統計（會直接改 s；每局結算時呼叫一次） */
 export function tallyHandStats(s: MahjongGameState): void {
   const st = s.handStats ?? { wins: [0, 0, 0, 0], dealIns: [0, 0, 0, 0], selfDraws: [0, 0, 0, 0] };
@@ -1297,8 +1302,8 @@ export function tallyHandStats(s: MahjongGameState): void {
   for (const w of winners) {
     st.wins[w.seat]++;
     // 自摸、八仙過海、七搶一：三家都付，算自摸；放槍、搶槓：記那張牌的來源
-    if (w.from == null || isFlowerWin(w)) st.selfDraws[w.seat]++;
-    else dealIn = w.from;
+    if (isSelfDrawWin(w)) st.selfDraws[w.seat]++;
+    else dealIn = w.from ?? null;
   }
   if (dealIn !== null) st.dealIns[dealIn]++;
   s.handStats = st;

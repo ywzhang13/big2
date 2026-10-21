@@ -2,6 +2,8 @@
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
 export const rooms: Record<string, { id: string; code: string; game_state: MahjongGameState; status?: string; host_id?: string | null; updated_at?: string }> = {};
 export const stats = { conflicts: 0, writes: 0 };
+/** 存檔成功後的掛鉤（真的 db.ts 存檔後會呼叫 recordZimoWins）；flow-donate 設成同一個函式，其他測試不設 */
+export const hooks: { onSaved?: (id: string, s: MahjongGameState) => Promise<void> } = {};
 export const opts = {
   unsafe: false, // true：模擬修之前「讀完整筆蓋回去」
   delayMs: 5,
@@ -25,6 +27,7 @@ export async function saveGameState(id: string, s: MahjongGameState, status?: st
   s.stateVersion = (s.stateVersion ?? 0) + 1;
   rooms[id].game_state = clone(s); stats.writes++;
   if (status) rooms[id].status = status;
+  await hooks.onSaved?.(id, s);
 }
 export async function saveGameStateIfUnchanged(id: string, base: number | undefined, s: MahjongGameState, status?: string) {
   await wait();
@@ -32,6 +35,7 @@ export async function saveGameStateIfUnchanged(id: string, base: number | undefi
   s.stateVersion = (base ?? 0) + 1;
   rooms[id].game_state = clone(s); stats.writes++;
   if (status) rooms[id].status = status;
+  await hooks.onSaved?.(id, s);
 }
 export function findSeatByPlayerId(s: MahjongGameState, pid: string) { const p = s.players.find((x) => x.id === pid); return p ? p.seat : -1; }
 export async function retryOnConflict(handler: (fresh: boolean) => Promise<Response>): Promise<Response> {

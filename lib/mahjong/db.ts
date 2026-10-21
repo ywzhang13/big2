@@ -4,6 +4,7 @@ import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
 import { allHands, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
 import { opponentHands } from "./events";
+import { recordZimoWins } from "./donate/record";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows
@@ -97,6 +98,7 @@ export async function saveGameState(
   if (error) {
     throw new Error(`Failed to save game state: ${error.message}`);
   }
+  await recordZimoWins(roomId, state); // 這局結算了：記下自摸的人（斗內卡用；失敗只記 log）
   // Fire-and-forget cache write: Postgres is already authoritative, and we
   // don't want to add HTTP latency to the critical path of every action.
   // A dropped cache write just means the next read falls back to Postgres.
@@ -138,6 +140,7 @@ export async function saveGameStateIfUnchanged(
   if (!data || data.length === 0) {
     throw new StateConflictError();
   }
+  await recordZimoWins(roomId, state); // 這局結算了：記下自摸的人（斗內卡用；失敗只記 log）
   void cacheGameState(roomId, state).catch(() => {});
 }
 
