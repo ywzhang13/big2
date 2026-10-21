@@ -746,6 +746,45 @@
 .mjl-rec-sum .k { font-size: 12px; color: rgba(255,255,255,.45); }
 .mjl-rec-sum .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold-l); }
 .mjl-rec-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+/* 斗內給阿瑋（小宜規格 2026-10-21；老闆：按鈕改小放右側、拿掉「不會開啟付款或跳轉」那行）。只用 .mjl-donate-*，不動 .mjl-rec-* */
+.mjl-rec-head h2:focus { outline: none; }
+.mjl-donate { flex: 0 0 auto; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "t c b" "f f f"; align-items: center; column-gap: 12px; row-gap: 8px; margin: 0 0 10px; padding: 14px 16px 12px;
+  border: 1px solid rgba(240,214,138,.34); border-radius: 16px; background: linear-gradient(115deg, rgba(201,169,110,.17), rgba(255,255,255,.045) 55%, rgba(25,81,49,.22)); box-shadow: 0 12px 28px rgba(0,0,0,.16);
+  animation: mjl-donate-in .15s ease-out; }
+@keyframes mjl-donate-in { from { opacity: 0; transform: translateY(6px); } }
+.mjl-donate-trophy { grid-area: t; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; background: linear-gradient(145deg, #f7df8c, #bd8e32); box-shadow: inset 0 1px rgba(255,255,255,.55), 0 5px 13px rgba(0,0,0,.2); }
+.mjl-donate-copy { grid-area: c; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mjl-donate-copy .cnt { font-size: 15px; font-weight: 800; color: #fff; }
+.mjl-donate-copy .cnt b { color: var(--gold-l); font-variant-numeric: tabular-nums; }
+.mjl-donate-copy .sub { font-size: 12px; line-height: 1.5; color: rgba(255,255,255,.64); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 精簡按鈕：右側、不滿版；點擊範圍至少 44px（::after 往外擴；z-index 讓它蓋過下面「下次自摸再說」的擴大範圍） */
+.mjl-donate-btn { grid-area: b; position: relative; z-index: 1; height: 38px; padding: 0 14px; border-radius: 11px; background: #f0d68a; color: #142216; font-size: 14px; font-weight: 900; white-space: nowrap; cursor: pointer;
+  box-shadow: 0 3px 0 #937331, 0 6px 12px rgba(0,0,0,.18); transition: transform .14s ease, box-shadow .14s ease, filter .14s ease; }
+.mjl-donate-btn::after { content: ""; position: absolute; inset: -4px -2px; }
+.mjl-donate-btn:hover { filter: brightness(1.06); }
+.mjl-donate-btn:active { transform: translateY(2px) scale(.99); box-shadow: 0 1px 0 #937331, 0 3px 7px rgba(0,0,0,.2); }
+.mjl-donate-btn:disabled { opacity: .6; }
+.mjl-donate-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.mjl-donate-foot { grid-area: f; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; color: rgba(255,255,255,.49); }
+.mjl-donate-later { position: relative; padding: 2px 0; color: rgba(240,214,138,.9); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.mjl-donate-later::after { content: ""; position: absolute; inset: -12px -6px; }
+.mjl-donate-hidden { flex: 0 0 auto; margin: 0 0 10px; padding: 8px 13px; border: 1px dashed rgba(255,255,255,.18); border-radius: 13px; font-size: 12px; color: rgba(255,255,255,.58); text-align: center; }
+.mjl-donate-hidden button { margin-left: 7px; color: var(--gold-l); text-decoration: underline; cursor: pointer; }
+.mjl-donate-shade { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(3,12,7,.72); backdrop-filter: blur(4px); animation: mjl-donate-fade .18s ease; }
+@keyframes mjl-donate-fade { from { opacity: 0; } }
+.mjl-donate-thanks { position: relative; width: min(420px, 100%); padding: 29px 26px 25px; border: 1px solid rgba(240,214,138,.48); border-radius: 22px; text-align: center; color: #fff;
+  background: linear-gradient(145deg, #153a25, #0b2115); box-shadow: 0 24px 80px rgba(0,0,0,.55); animation: mjl-donate-pop .2s ease; }
+@keyframes mjl-donate-pop { from { transform: translateY(10px) scale(.97); } }
+.mjl-donate-thanks .x { position: absolute; right: 11px; top: 11px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.06); color: rgba(255,255,255,.8); font-size: 21px; line-height: 1; cursor: pointer; }
+.mjl-donate-thanks .x::after { content: ""; position: absolute; inset: -5px; }
+.mjl-donate-thanks .linepay { display: inline-grid; place-items: center; width: 46px; height: 46px; border-radius: 15px; background: #06c755; color: #fff; font-size: 10px; line-height: 1; font-weight: 900; letter-spacing: -.04em; box-shadow: 0 7px 16px rgba(0,0,0,.25); }
+.mjl-donate-thanks h3 { margin: 14px 0 7px; font-size: 20px; font-weight: 800; }
+.mjl-donate-thanks p { font-size: 15px; color: rgba(255,255,255,.72); }
+.mjl-donate-thanks .pay { margin: 18px auto 0; padding: 11px 14px; border-radius: 13px; background: rgba(6,199,85,.11); border: 1px solid rgba(6,199,85,.4); font-size: 13px; color: rgba(255,255,255,.86); }
+.mjl-donate-thanks .pay strong { display: block; margin-top: 4px; font-size: 25px; letter-spacing: .02em; color: #fff; }
+.mjl-donate-thanks .done { width: 100%; height: 44px; margin-top: 18px; border-radius: 12px; background: rgba(255,255,255,.1); color: var(--gold-l); font-weight: 800; cursor: pointer; }
+.mjl-donate-thanks .done:active { transform: scale(.98); }
+@media (prefers-reduced-motion: reduce) { .mjl-donate, .mjl-donate-thanks { animation: mjl-donate-fade .18s ease; } }
 .mjl-row {
   flex: 0 0 auto; min-height: var(--rec-row); border-radius: 14px; padding: 8px 12px; background: rgba(255,255,255,.035);
   border: 1px solid rgba(255,255,255,.07); display: flex; flex-direction: column; gap: 6px; justify-content: center;
@@ -781,12 +820,7 @@
 .mjl-more:disabled { cursor: wait; }
 .mjl-end { flex: 0 0 auto; text-align: center; font-size: 12px; color: rgba(255,255,255,.3); padding: 8px 0 12px; }
 .mjl-hollow { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
-.mjl-hollow .ic {
-  width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  display: flex; align-items: center; justify-content: center; font-size: 26px;
-}
 .mjl-hollow .t1 { font-size: 17px; font-weight: 700; color: rgba(255,255,255,.75); }
-.mjl-hollow .t2 { font-size: 13px; color: rgba(255,255,255,.4); line-height: 1.6; }
 .mjl-sk {
   flex: 0 0 auto; min-height: var(--rec-row); border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
   padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; justify-content: center;
@@ -823,8 +857,29 @@
   .mjl-rec-sum { padding: 7px 12px; margin: 8px 0; gap: 14px; }
   .mjl-rec-sum .v { font-size: 18px; }
   .mjl-hollow { gap: 10px; }
-  .mjl-hollow .ic { width: 50px; height: 50px; font-size: 21px; }
   .mjl-rec-list { gap: 6px; }
+  /* 斗內卡（橫拿手機）：一行就好，紀錄列表才放得下 4 列；按鈕看起來 34px、點擊範圍 44px */
+  .mjl-donate { grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 9px; row-gap: 4px; margin-bottom: 7px; padding: 7px 10px 6px; border-radius: 14px; }
+  .mjl-donate-trophy { width: 32px; height: 32px; border-radius: 10px; font-size: 18px; }
+  .mjl-donate-copy { gap: 0; }
+  .mjl-donate-copy .cnt { font-size: 13px; }
+  .mjl-donate-copy .sub { font-size: 10px; }
+  .mjl-donate-btn { height: 34px; padding: 0 12px; border-radius: 10px; font-size: 13px; box-shadow: 0 3px 0 #937331, 0 5px 10px rgba(0,0,0,.18); }
+  .mjl-donate-btn::after { inset: -5px -2px; }
+  .mjl-donate-foot { font-size: 10px; }
+  .mjl-donate-later { font-size: 11px; }
+  .mjl-donate-hidden { margin-bottom: 7px; padding: 5px 10px; font-size: 11px; }
+  .mjl-donate-thanks { width: min(390px, 100%); padding: 20px 22px 18px; border-radius: 18px; }
+  .mjl-donate-thanks .linepay { width: 36px; height: 36px; border-radius: 12px; }
+  .mjl-donate-thanks h3 { margin: 8px 0 4px; font-size: 17px; }
+  .mjl-donate-thanks p { font-size: 13px; }
+  .mjl-donate-thanks .pay { margin-top: 12px; padding: 7px 12px; }
+  .mjl-donate-thanks .pay strong { font-size: 21px; }
+  .mjl-donate-thanks .done { margin-top: 12px; }
+  .mjl-donate-thanks .x { right: 8px; top: 8px; width: 30px; height: 30px; font-size: 19px; }
+  .mjl-donate-thanks .x::after { inset: -7px; }
+  /* 斗內卡出現時列表變矮：一屏改成剛好 3 整列（列高和沒有卡片時差不多，座位那一行不會被壓扁），其他照樣往下捲 */
+  .mjl-donate ~ .mjl-rec-list .mjl-row { height: calc((100cqh - 12px) / 3); }
   .mjl-row { padding: 6px 10px; gap: 4px; border-radius: 12px; }
   .mjl-row .meta { font-size: 11px; gap: 6px; }
   .mjl-row .meta .mine { font-size: 14px; }

@@ -2,10 +2,11 @@
 
 // 歷史紀錄面板（小宜規格 v2 §9）：摘要列固定、一場一列（不可點）、載入更多
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
 import type { MjAuthUser } from "@/hooks/useMjAuth";
 import { Avatar } from "./MjLobbyAuth";
+import MjDonate from "./MjDonate";
 
 interface RecordPlayer {
   seat: number;
@@ -112,6 +113,8 @@ export default function MjRecords({
   const [loaded, setLoaded] = useState(false); // 第一頁回來了
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const focusTitle = useCallback(() => titleRef.current?.focus(), []);
 
   const load = useCallback(
     async (cursor: string | null) => {
@@ -149,7 +152,7 @@ export default function MjRecords({
     <div className="mjl mjl-rec">
       <div className="mjl-rec-head">
         <button type="button" className="back" onClick={onClose} aria-label="返回">‹</button>
-        <h2>歷史紀錄</h2>
+        <h2 ref={titleRef} tabIndex={-1}>歷史紀錄</h2>
         <span className="sp" />
         <div className="mjl-who">
           <Avatar user={user} />
@@ -167,18 +170,15 @@ export default function MjRecords({
             <span className={`v ${scoreClass(total)}`}>{scoreText(total)}</span>
           </div>
         </div>
+        {/* 斗內卡：摘要列下面、紀錄列表上面（LINE 玩家、累計自摸 > 0 才出現） */}
+        <MjDonate user={user} focusBack={focusTitle} />
 
         {!loaded && loading ? (
           <Skeleton />
         ) : loaded && items.length === 0 ? (
           <div className="mjl-hollow">
-            <div className="ic">🀄</div>
+            {/* 老闆 2026-10-21：空狀態只留「還沒有紀錄」和「建立房間」 */}
             <p className="t1">還沒有紀錄</p>
-            <p className="t2">
-              打完一整場，或四家同意解散後，
-              <br />
-              這一場就會記下來。
-            </p>
             <button type="button" className="mjl-btn primary" style={{ width: 220 }} onClick={onCreate}>
               建立房間
             </button>
