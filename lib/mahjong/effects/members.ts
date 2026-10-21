@@ -1,6 +1,6 @@
-// 誰在這一桌：伺服器用登入帳號認人，不信任前端送來的 playerId／名字。
+// 誰在這一桌：伺服器用登入帳號認人，不信任前端送來的 playerId／名字。互動特效、聊天、語音共用。
 // 開局後以牌局狀態的座位為準（座位打亂後也對），開局前用 mj_players。
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { loadPlayers, loadRoom } from "@/lib/mahjong/db";
 import type { MahjongGameState } from "@/lib/mahjong/gameState";
 
@@ -18,7 +18,7 @@ export async function resolveMember(
   request: Request,
   roomId: unknown,
   claimedPlayerId?: unknown
-): Promise<{ roomCode: string; roomId: string; me: Member; members: Member[] } | Response> {
+): Promise<{ roomCode: string; roomId: string; me: Member; members: Member[]; user: AuthUser } | Response> {
   if (typeof roomId !== "string" || !roomId) return fail(400, "bad_request");
   const user = await getAuthUser(request);
   if (!user) return fail(401, "not_logged_in");
@@ -32,5 +32,5 @@ export async function resolveMember(
   if (!me) return fail(403, "not_in_room");
   // 前端可以帶自己的 playerId，但必須是本人；名字、座位一律用伺服器的
   if (claimedPlayerId !== undefined && claimedPlayerId !== me.playerId) return fail(403, "not_your_seat");
-  return { roomCode: room.code, roomId, me, members };
+  return { roomCode: room.code, roomId, me, members, user };
 }

@@ -7,6 +7,7 @@
 //     "mahjong/donate/store"（斗內的自摸次數）換成記憶體 PostgreSQL 版本（跑真的 SQL 函式）；
 //     "mahjong/userPrefs/store"（帳號的偏好設定）換成記憶體 PostgreSQL 版本（跑真的 migration）；
 //     "mahjong/effects/store"（互動特效冷卻）換成記憶體 PostgreSQL 版本（跑真的 SQL 函式）；
+//     "mahjong/chat/store"（聊天冷卻、語音檔）換成記憶體版本（冷卻跑真的 SQL 函式，語音檔存在記憶體）；
 //     "next/server" 的 after() 在測試裡不跑
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -26,6 +27,7 @@ const STUBS = {
   "@/lib/mahjong/donate/store": "tests/support/stub-donate-store.ts",
   "@/lib/mahjong/userPrefs/store": "tests/support/stub-prefs-store.ts",
   "@/lib/mahjong/effects/store": "tests/support/stub-effects-store.ts",
+  "@/lib/mahjong/chat/store": "tests/support/stub-chat-store.ts",
   "next/server": "tests/support/stub-next-server.ts",
 };
 

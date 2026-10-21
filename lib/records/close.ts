@@ -2,6 +2,7 @@
 // 寫紀錄失敗：房間和紀錄都維持原狀、不丟錯誤給呼叫端（遊戲不會卡住），之後建房時的清理會再試一次。
 import * as store from "@/lib/records/store";
 import { deleteRoomEffects } from "@/lib/mahjong/effects/store";
+import { deleteRoomChat, sweepVoices } from "@/lib/mahjong/chat/store";
 import type { CloseExpect } from "@/lib/records/store";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { broadcast as big2Broadcast } from "@/lib/broadcast";
@@ -32,6 +33,12 @@ async function closeAtomically(game: GameKind, roomId: string, rec: MatchRecordI
         await deleteRoomEffects(roomId);
       } catch (err) {
         console.error(`[mj-effect] 刪除房 ${roomId} 的特效冷卻紀錄失敗：`, err instanceof Error ? err.message : err);
+      }
+      // 語音檔和聊天冷卻紀錄也刪（失敗只記 log；漏刪的由 sweepVoices 定期清掉）
+      try {
+        await deleteRoomChat(roomId);
+      } catch (err) {
+        console.error(`[mj-chat] 刪除房 ${roomId} 的語音失敗：`, err instanceof Error ? err.message : err);
       }
     }
     return result === "closed";
@@ -132,6 +139,12 @@ export async function sweepIdleRooms(nowMs = Date.now(), limit = 10): Promise<{ 
     }
   } catch (err) {
     console.error("[records] 清理大老二閒置房失敗：", err instanceof Error ? err.message : err);
+  }
+  // 順便清語音檔：房間已經不在（關房時漏刪）的整包刪、房間還在的刪超過 24 小時的
+  try {
+    await sweepVoices(nowMs);
+  } catch (err) {
+    console.error("[mj-chat] 清理語音檔失敗：", err instanceof Error ? err.message : err);
   }
   return done;
 }

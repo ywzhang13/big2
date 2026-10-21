@@ -31,6 +31,14 @@ export interface MjPlayer {
 // Room helpers
 // ---------------------------------------------------------------------------
 
+/** 這些房間 id 裡，哪些房間還在（語音檔定期清除用：房間已經不在的資料夾整包刪）。ids 要是 uuid，一次最多 100 個（呼叫端分批） */
+export async function existingRoomIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { data, error } = await getSupabaseAdmin().from("mj_rooms").select("id").in("id", ids);
+  if (error) throw new Error(`查詢房間失敗：${error.message}`);
+  return new Set((data ?? []).map((r) => String(r.id)));
+}
+
 export async function loadRoom(
   roomId: string,
   opts?: { fresh?: boolean }

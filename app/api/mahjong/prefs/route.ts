@@ -1,9 +1,9 @@
-// 偏好設定跟著 LINE 帳號：GET 讀、PUT 存。只有外觀兩項：牌背、桌布（格式見 lib/mahjong/userPrefs/rules.ts）。
+// 偏好設定跟著 LINE 帳號：GET 讀、PUT 存。格式 v3：牌背、桌布、語音自動播放、語音音量（見 lib/mahjong/userPrefs/rules.ts）。
 // 帳號一律由登入 session 決定，讀寫不到別人的設定。回應都帶 account（這份設定屬於哪個帳號），
 // PUT 也要帶 account：和 session 不符就 409，前端切換帳號後晚到的舊請求不會寫進新帳號。
 // 訪客不存：回 persisted:false，前端照樣只用本機設定。
 import { getAuthUser } from "@/lib/auth";
-import { parseAccountPrefs } from "@/lib/mahjong/userPrefs/rules";
+import { parseAccountPrefs, readStoredPrefs } from "@/lib/mahjong/userPrefs/rules";
 import { loadAccountPrefs, saveAccountPrefs } from "@/lib/mahjong/userPrefs/store";
 
 const fail = (status: number, error: string) => Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
@@ -14,8 +14,8 @@ export async function GET(request: Request) {
   if (!user) return fail(401, "not_logged_in");
   if (user.isGuest) return ok({ account: user.id, persisted: false, prefs: null });
   try {
-    // 存的格式萬一對不上（例如之後白名單改了），就當沒存：前端套本機或預設
-    return ok({ account: user.id, persisted: true, prefs: parseAccountPrefs(await loadAccountPrefs(user.id)) });
+    // 上線前存的 v2 補上語音預設值轉成 v3；格式萬一對不上（例如之後白名單改了），就當沒存：前端套本機或預設
+    return ok({ account: user.id, persisted: true, prefs: readStoredPrefs(await loadAccountPrefs(user.id)) });
   } catch (err) {
     console.error("[mj-prefs]", err instanceof Error ? err.message : err);
     return fail(500, "server_error");
