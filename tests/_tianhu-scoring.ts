@@ -2,6 +2,7 @@
 //   T1 固定種子產生 2000 手各式胡牌：非天胡的每一手，台數和台名都和改前（fixtures 基準檔）完全一樣
 //   T2 同一批裡的天胡：剛好等於改前的結果拿掉門清、自摸、門清自摸，其他台一個不少
 //   T3 指定牌型：天胡疊獨聽、三元牌、清一色、碰碰胡、暗刻、大小四喜照算，沒有門清、自摸
+//   T5 河底撈魚（2026-10-21 新增）只出現在「最後一張＋胡別人打的牌」的手，其他台不變
 //   T4 真實結算流程（declareWin）：連 2 拉 2 照加；結算照自摸三家付；整場統計、斗內共用的自摸判斷照樣算自摸
 // 重產基準檔（只能在改規則之前跑）：WRITE_GOLDEN=1 node --import ./tests/support/register.mjs tests/_tianhu-scoring.ts
 import { readFileSync, writeFileSync } from "node:fs";
@@ -64,7 +65,11 @@ function makeCase(): ScoringContext {
 }
 const cases = Array.from({ length: 2000 }, makeCase);
 const fmt = (r: { fans: { name: string; value: number }[]; totalFan: number }) => `${r.totalFan}|${r.fans.map((f) => f.name + f.value).join(",")}`;
-const out = cases.map((c) => fmt(calculateScore(c)));
+const raw = cases.map((c) => fmt(calculateScore(c)));
+// 2026-10-21 新增河底撈魚：基準檔是加之前產的。「最後一張＋胡別人打的牌（不是搶槓）」的手拿掉河底撈魚 1 台後比對，其他手原樣比對（T5 另外驗河底撈魚只出現在這些手）
+const isHedi = (c: ScoringContext) => c.isLastTile && !c.isSelfDraw && !c.isRobbingKong;
+const noHedi = (g: string) => { const [n, f] = g.split("|"); const kept = f.split(",").filter((x) => x !== "河底撈魚1"); return kept.length === f.split(",").length ? g : `${Number(n) - 1}|${kept.join(",")}`; };
+const out = raw.map((r, i) => (isHedi(cases[i]) ? noHedi(r) : r));
 const isTianhu = (c: ScoringContext) => c.isFirstDraw && c.isDealer;
 if (process.env.WRITE_GOLDEN) {
   writeFileSync(GOLDEN, JSON.stringify(out, null, 0).replace(/","/g, '",\n"') + "\n");
@@ -82,6 +87,10 @@ if (process.env.WRITE_GOLDEN) {
   const bad = th.filter((i) => out[i] !== strip(golden[i]));
   const changed = th.filter((i) => out[i] !== golden[i]).length;
   eq([th.length > 100, bad.slice(0, 3).map((i) => [golden[i], out[i]])], [true, []], `T2 天胡 ${th.length} 手（其中 ${changed} 手原本有門清或自摸）：剛好是改前拿掉門清、自摸、門清自摸，其他台一個不少`);
+  const hedi = cases.map((c, i) => i).filter((i) => isHedi(cases[i]));
+  const has = (i: number) => raw[i].split("|")[1].split(",").includes("河底撈魚1");
+  eq([hedi.length > 50, hedi.filter((i) => !has(i)).length, cases.map((c, i) => i).filter((i) => !isHedi(cases[i]) && raw[i].includes("河底撈魚")).length], [true, 0, 0],
+    `T5 河底撈魚：${hedi.length} 手「最後一張＋胡別人打的牌」每手都多 1 台河底撈魚（其他台和改前一樣，見 T1、T2）；自摸、搶槓、不是最後一張的 ${cases.length - hedi.length} 手都沒有`);
 }
 
 // ---- T3：指定牌型 ----

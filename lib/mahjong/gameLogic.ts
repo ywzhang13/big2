@@ -1153,7 +1153,8 @@ export function declareWin(
     seatWind,
     prevalentWind: s.prevalentWind,
     flowers: player.flowers,
-    isLastTile: s.wall.length === 0,
+    // 剩 16 張就流局（drawTile），所以「沒有可摸的牌」是 drawableCount＝0，不是牌牆空了（原本 wall.length === 0 永遠不會成立）
+    isLastTile: drawableCount(s) === 0,
     isAfterKong: s.isAfterKong,
     isRobbingKong: !isSelfDraw && !!s.pendingAddKong,
     isTing: !!s.tingSeats?.includes(seat),

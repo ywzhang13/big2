@@ -13,7 +13,7 @@ export interface ScoringContext {
   seatWind: number; // 自風 (1-4: 東南西北)
   prevalentWind: number; // 場風
   flowers: Tile[]; // 花牌
-  isLastTile: boolean; // 海底撈月
+  isLastTile: boolean; // 牌牆已經沒有可摸的牌（剩 16 張）：自摸＝海底撈月、胡別人打的＝河底撈魚
   isAfterKong: boolean; // 槓上開花
   isRobbingKong: boolean; // 搶槓
   isFirstDraw: boolean; // 天/地胡
@@ -416,9 +416,13 @@ function scoreDecomposition(
     fans.push({ name: "八仙過海", value: 8 });
   }
 
-  // --- 海底撈月 ---
+  // --- 海底撈月：摸到最後一張可摸的牌自摸 ---
   if (ctx.isLastTile && ctx.isSelfDraw) {
     fans.push({ name: "海底撈月", value: 1 });
+  }
+  // --- 河底撈魚：最後一張可摸的牌摸完後，胡別人打出的牌（搶槓不是打出的牌，不算） ---
+  if (ctx.isLastTile && !ctx.isSelfDraw && !ctx.isRobbingKong) {
+    fans.push({ name: "河底撈魚", value: 1 });
   }
 
   // --- 槓上開花 ---
