@@ -17,6 +17,7 @@ import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
+import { useTableSounds } from "@/hooks/useTableSounds";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
@@ -807,6 +808,16 @@ function RoomView({
     }
     prevIsMyTurn.current = isMyTurn;
   }, [isMyTurn, state.status]);
+
+  // 牌桌音效：任何人打出一張牌響一次出牌聲；輪到自己要打牌超過 8 秒沒打響提醒聲（每 8 秒、最多 3 次）。
+  // 輪到自己有自摸、暗槓、眼牌按鈕時照樣計時；結算、不是在打牌時不計時；都走互動音效的音量和靜音
+  useTableSounds({
+    roomId: closed ? "" : roomId,
+    hand: `${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`,
+    focusDiscard: state.status === "playing" ? state.focusDiscard : null,
+    needsDiscard,
+    status: state.status,
+  });
 
   // 房間已關閉：整場打完的最終結算畫面本身就有「回大廳」，其他情況（解散、重新整理、
   // 用房號加入已刪的房）顯示「這場已結束」

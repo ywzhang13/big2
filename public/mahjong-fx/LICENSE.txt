@@ -1,4 +1,4 @@
-麻將互動特效素材（小宜〈互動特效-5種定案規格-2026-10-20〉；第 6 種拍手 2026-10-22 加入）
+麻將互動特效素材（小宜〈互動特效-5種定案規格-2026-10-20〉；第 6 種拍手、出牌聲和提醒聲 2026-10-22 加入）
 
 圖片
 - heart-glossy.png：Openclipart #21138 Glossy Heart，公眾領域
@@ -21,6 +21,9 @@
 - thud：Kenney Impact Sounds，CC0
 - egg-crack1、punch1、punch2、splash1、splash2、shatter1、glass-heavy：OpenGameArt（qubodup / Independent.nu、ezwa、Till Behrend、rubberduck），CC0
 - clap-hit-1～5：Mixkit「Clapping fast」#480（https://mixkit.co/free-sound-effects/clapping/ ），Mixkit 音效免費授權（可商用、不用標註），從原檔剪出 5 段單拍（老馬加工，2026-10-22）
+- tile（出牌聲）：Freesound「Domino_sfx_moveTile」poenia #745028（https://freesound.org/people/poenia/sounds/745028/ ），CC0；
+  老馬加工（2026-10-22）：取原檔開頭那一下（14～36ms，一聲乾淨的「喀」），放大並限幅，聽起來和金幣聲一樣大
+- turn-remind（輪到自己太久的提醒聲「滴滴」）：阿妍用程式合成（2000Hz 方波、兩聲各 60ms、間隔 0.1 秒，2026-10-22），自製，無授權限制
 
 程式
 - lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md

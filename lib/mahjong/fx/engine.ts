@@ -38,7 +38,8 @@ const arOf = (k: ImgKey, fallback: number) => { const i = MASTER[k]?.[0]; return
 const COPIES: Partial<Record<ImgKey, number>> = { heart: 44, billA: 22, billB: 22, coins: 5, clap: 4 };
 const SOUNDS = ["heart-tick", "heart-pluck1", "heart-pluck2", "heart-chime", "bill-swish", "coin-1", "coin-2", "coin-3", "coin-stack",
   "egg-crack1", "thud", "splash1", "splash2", "punch1", "punch2", "shatter1", "glass-heavy",
-  "clap-hit-1", "clap-hit-2", "clap-hit-3", "clap-hit-4", "clap-hit-5"] as const;
+  "clap-hit-1", "clap-hit-2", "clap-hit-3", "clap-hit-4", "clap-hit-5",
+  "tile", "turn-remind"] as const;
 type SoundKey = (typeof SOUNDS)[number];
 
 // ---------------- 預載 ----------------
@@ -141,6 +142,34 @@ export function setFxVolume(gain: number) {
 }
 export const getFxVolume = () => masterGain;
 
+// ---------------- 牌桌音效：出牌聲、8 秒提醒聲（老闆 2026-10-22 選定；什麼時候響見 lib/mahjong/tableSound.ts） ----------------
+// 和特效走同一條路（互動音效的音量、靜音、壓縮器），不佔特效的播放名額。
+// 音量照「聽起來多大」對齊（K 加權最大 30ms RMS）：出牌聲和砸錢的金幣聲一樣大；提醒聲在金幣和愛心最後那聲叮的中間（稍大但比愛心小）。
+// 出牌聲只用一個樣本（老闆 2026-10-22：聽得出有兩三種），每次都是同一聲
+const TABLE_SND = { tile: { n: "tile", vol: 0.726 }, remind: { n: "turn-remind", vol: 1 } } as const;
+export type TableSoundResult = { played: boolean; ac: string };
+/** 播一聲牌桌音效：tile＝出牌聲、remind＝輪到自己太久的提醒。
+ *  音訊被手機暫停（iPhone 沒有經過點擊解鎖、切回前景後變成 interrupted）時先叫醒再播；叫不醒就不算有出聲。
+ *  回傳有沒有真的出聲（靜音、還沒載好、音訊叫不醒都是 false）和當下的音訊狀態 */
+export async function playTableSound(kind: "tile" | "remind"): Promise<TableSoundResult> {
+  const { n, vol } = TABLE_SND[kind];
+  if (!AC || !BUF[n] || masterGain === 0) return { played: false, ac: AC?.state ?? "none" };
+  if (AC.state !== "running") {
+    // 叫醒最多等 0.3 秒：等太久聲音就和畫面對不上了，不如不播
+    await Promise.race([AC.resume().catch(() => {}), new Promise((r) => setTimeout(r, 300))]);
+    const now = AC.state as AudioContextState; // resume 之後狀態可能變了（TypeScript 以為還是原本的）
+    if (now !== "running") return { played: false, ac: now };
+  }
+  try {
+    const s = AC.createBufferSource(), g = AC.createGain();
+    s.buffer = BUF[n]!;
+    g.gain.value = vol;
+    s.connect(g).connect(MIX ?? AC.destination);
+    s.start();
+    return { played: true, ac: AC.state };
+  } catch { return { played: false, ac: AC.state }; }
+}
+
 /** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋） */
 export function preloadFx(): Promise<boolean> {
   readyPromise ??= (async () => {
@@ -157,10 +186,12 @@ export function preloadFx(): Promise<boolean> {
   return readyPromise;
 }
 
-/** 手機要在使用者點擊時解鎖音效 */
+/** 手機要在使用者點擊時解鎖音效（iPhone 上暫停或被打斷 interrupted 時都要叫醒） */
 export function unlockAudio() {
   if (AC && AC.state !== "running") void AC.resume().catch(() => {});
 }
+/** 目前音訊的狀態（running／suspended／interrupted；還沒建立是 none），預覽站的紀錄用 */
+export const fxAudioState = () => AC?.state ?? "none";
 
 // ---------------- 一次播放（Run）：所有動畫、計時器都登記在這裡 ----------------
 class Run {
