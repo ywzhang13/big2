@@ -1,8 +1,8 @@
-// 遊戲內互動特效的規則（純資料，不連任何服務）。規格：小宜〈互動特效-5種定案規格-2026-10-20〉，冷卻依老闆 2026-10-21 定案。
+// 遊戲內互動特效的規則（純資料，不連任何服務）。規格：小宜〈互動特效-5種定案規格-2026-10-20〉，冷卻依老闆 2026-10-21 定案；拍手 2026-10-22 加入。
 // 每一種都要指定同桌另一位玩家當目標；冷卻在伺服器擋（前端倒數只是提示）。
-//   ・發送冷卻分兩組共用：輕組（愛心、砸錢）5 秒、重組（雞蛋、潑水、拳擊）10 秒，兩組互不影響
+//   ・發送冷卻分兩組共用：輕組（愛心、砸錢、拍手）5 秒、重組（雞蛋、潑水、拳擊）10 秒，兩組互不影響
 //   ・重組另有接收保護：同一個目標被任何人用重組打中後，10 秒內任何人都不能再用重組打他；輕組不受影響
-export const EFFECTS = ["heart", "money", "egg", "water", "punch"] as const;
+export const EFFECTS = ["heart", "money", "egg", "water", "punch", "clap"] as const;
 export type EffectKind = (typeof EFFECTS)[number];
 export const isEffect = (x: unknown): x is EffectKind => typeof x === "string" && (EFFECTS as readonly string[]).includes(x);
 
@@ -13,6 +13,7 @@ export const EFFECT_GROUP: Record<EffectKind, EffectGroup> = {
   egg: "heavy",
   water: "heavy",
   punch: "heavy",
+  clap: "light",
 };
 /** 發送冷卻（同組共用） */
 export const GROUP_COOLDOWN_MS: Record<EffectGroup, number> = { light: 5000, heavy: 10000 };

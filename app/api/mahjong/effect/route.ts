@@ -1,5 +1,5 @@
-// 遊戲內互動特效：POST { roomId, effect: "heart"|"money"|"egg"|"water"|"punch", to: <同桌另一位的 playerId> }
-// 只有同一桌的玩家能送；發送者由登入帳號認定，目標必須是同桌的另一位。
+// 遊戲內互動特效：POST { roomId, effect: "heart"|"money"|"egg"|"water"|"punch"|"clap", to: <同桌另一位的 playerId> }
+// 只有同一桌、LINE 登入的玩家能送（訪客 403 guest_not_allowed，和前端「訪客點名牌沒反應」一致）；發送者由登入帳號認定，目標必須是同桌的另一位。
 // 冷卻在伺服器擋（429）：發送者同組冷卻中 reason="cooldown"、目標在重組保護期 reason="target_protected"。
 // 確認後走同桌四人各自的座位頻道廣播 mj_effect（公開頻道 mj-<房號> 收不到）。不入庫。
 import { randomUUID } from "node:crypto";
@@ -31,6 +31,7 @@ async function handle(request: Request): Promise<Response> {
   const who = await resolveMember(request, body.roomId, body.playerId);
   if (who instanceof Response) return who;
   const { roomCode, roomId, me, members } = who;
+  if (who.user.isGuest) return fail(403, "guest_not_allowed");
 
   if (!isEffect(body.effect)) return fail(400, "unknown_effect");
   if (body.to === undefined || body.to === null) return fail(400, "target_required");

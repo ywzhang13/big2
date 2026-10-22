@@ -4,6 +4,8 @@
 //   T 目標：沒指定、打自己、目標在別桌、目標格式錯、未知特效
 //   C 冷卻（2026-10-21 老闆定案）：輕組（愛心、砸錢）共用 5 秒、重組（雞蛋、潑水、拳擊）共用 10 秒、兩組互不影響；
 //     重組有接收保護 10 秒（任何人都不能再用重組打他，輕組照常）；被擋下的不扣冷卻、不刷新保護期；三家同時打同一人只成功一個
+//   K 拍手（2026-10-22）：可以送、廣播 effect="clap"；和愛心、砸錢共用輕組 5 秒；不受重組接收保護影響；不影響重組冷卻
+//   G 訪客：送任何特效（含拍手）都 403 guest_not_allowed，什麼都不寫、不廣播
 //   X 關房：冷卻紀錄刪掉、之後再送 404
 import { POST as effectApi } from "../../app/api/mahjong/effect/route";
 import { closeMahjongRoom } from "../../lib/records/close";
@@ -167,6 +169,44 @@ tokens.outsider = { id: "u:zz", displayName: "路人", pictureUrl: null, isGuest
     "C13 429 的 error 和 reason 相同，附剩餘毫秒和秒數（無條件進位）；成功回同組的冷卻長度");
   const rows = await (await db()).query<{ n: number }>("select count(*)::int n from mj_effect_rate where room_id = 'R' and slot = 'recv_heavy'");
   eq(rows.rows[0].n > 0, true, "C14 接收保護紀錄存在 R");
+}
+
+// ---------- K 拍手 ----------
+{
+  const fresh = () => tick(60000);
+  const seq = async (steps: [number, string, string, string][]) => {
+    const out: (string | number)[] = [];
+    for (const [dt, pid, effect, to] of steps) { tick(dt); out.push(st(await send(pid, effect, to))); }
+    return out;
+  };
+  fresh(); sent.length = 0;
+  const r = await send("p3", "clap", "p0");
+  const got = fx().map((e) => [e.payload.playerId, (e.payload.effect as { effect: string }).effect]);
+  eq([r.status, r.body.effect?.effect, r.body.cooldownMs, got.length, got.every(([, k]) => k === "clap")], [200, "clap", 5000, 4, true],
+    "K1 拍手可以送：200、回應和廣播的 effect 都是 clap（同桌四人各一份），冷卻長度 5000（輕組）");
+  fresh();
+  eq(await seq([[0, "p3", "clap", "p0"], [1000, "p3", "heart", "p1"], [0, "p3", "money", "p2"], [3999, "p3", "clap", "p1"], [1, "p3", "clap", "p1"]]),
+    [200, "429:cooldown:4000", "429:cooldown:4000", "429:cooldown:1", 200], "K2 拍手和愛心、砸錢共用輕組 5 秒：拍手後愛心、砸錢都要等；5 秒後才能再拍");
+  fresh();
+  eq(await seq([[0, "p0", "heart", "p1"], [2000, "p0", "clap", "p2"]]), [200, "429:cooldown:3000"], "K2b 反過來：愛心後 2 秒拍手還要 3000ms");
+  fresh();
+  eq(await seq([[0, "p0", "egg", "p1"], [0, "p2", "clap", "p1"], [0, "p3", "water", "p1"]]), [200, 200, "429:target_protected:10000"],
+    "K3 拍手不受重組接收保護影響：p1 剛被丟雞蛋（保護期中），p2 照樣能拍手給他；保護期也沒被拍手刷新或解除（p3 潑水照樣被擋）");
+  fresh();
+  eq(await seq([[0, "p1", "clap", "p0"], [0, "p1", "punch", "p2"], [0, "p1", "clap", "p3"]]), [200, 200, "429:cooldown:5000"],
+    "K4 拍手只佔輕組：拍手後馬上可以用重組；重組不會讓拍手的冷卻重算");
+}
+
+// ---------- G 訪客 ----------
+{
+  tick(60000); sent.length = 0;
+  tokens.guestP3 = { id: "u:p3", displayName: "訪客", pictureUrl: null, isGuest: true }; // p3 的座位，但用訪客身分登入
+  const before = JSON.stringify((await (await db()).query("select * from mj_effect_rate order by 1, 2, 3")).rows);
+  const res = [];
+  for (const k of ["clap", "heart", "punch"]) res.push(st(await call({ roomId: "R", effect: k, to: "p0" }, "guestP3")));
+  const after = JSON.stringify((await (await db()).query("select * from mj_effect_rate order by 1, 2, 3")).rows);
+  eq([res, fx().length, before === after], [["403:guest_not_allowed", "403:guest_not_allowed", "403:guest_not_allowed"], 0, true],
+    "G1 訪客送拍手、愛心、拳擊：都 403 guest_not_allowed，沒有廣播、冷卻表沒寫入");
 }
 
 // ---------- X 關房 ----------
