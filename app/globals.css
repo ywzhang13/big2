@@ -1226,8 +1226,8 @@ body {
 @keyframes mjfx-shk-s { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 /* 互動特效選單：點對方名牌後在名牌旁邊跳出（2026-10-21）。按鈕沿用原本面板的圖示和樣式；手機上每顆至少 44×44 */
 .mjfx-menu { position: fixed; z-index: 60; padding: 6px; border-radius: 12px; color: #fff; background: linear-gradient(200deg, #20321f, #101c14); border: 1px solid rgba(201,169,110,.4); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
-.mjfx-menu .kinds { display: grid; grid-template-columns: repeat(5, 48px); gap: 4px; }
-.mjfx-menu.d .kinds { grid-template-columns: repeat(5, 54px); }
+.mjfx-menu .kinds { display: grid; grid-template-columns: repeat(6, 48px); gap: 4px; }
+.mjfx-menu.d .kinds { grid-template-columns: repeat(6, 54px); }
 .mjfx-menu .kinds button { position: relative; height: 52px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #fff; cursor: pointer; }
 .mjfx-menu.d .kinds button { height: 56px; }
 .mjfx-menu .kinds button:active { transform: scale(.95); }
@@ -1235,11 +1235,12 @@ body {
 .mjfx-menu .kinds img { width: 26px; height: 26px; object-fit: contain; }
 .mjfx-menu .kinds span { font-size: 10px; color: rgba(255,255,255,.7); }
 .mjfx-menu .kinds .cd { position: absolute; inset: 0; border-radius: 10px; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; font-size: 18px; color: #f0d68a; }
-/* 左右家：直排（名牌旁邊比較窄，不往海底伸）；手機按鈕 44×44、對家橫排 48×46 */
+/* 左右家：直排（名牌旁邊比較窄，不往海底伸）；手機按鈕 44×44（2 欄）、對家橫排 48×46 */
 .mjfx-menu.m.row .kinds button { height: 46px; }
 .mjfx-menu.col .kinds { grid-template-columns: 54px; }
 .mjfx-menu.m.col { padding: 3px; }
-.mjfx-menu.m.col .kinds { grid-template-columns: 44px; gap: 2px; }
+/* 手機左右家：6 種排成 2 欄×3 列（單欄 6×44 會超過牌桌底，蓋到動作列和手牌；拍手加入後改，2026-10-22） */
+.mjfx-menu.m.col .kinds { grid-template-columns: repeat(2, 44px); gap: 2px; }
 .mjfx-menu.m.col .kinds button { height: 44px; gap: 0; }
 .mjfx-menu.m.col .kinds img { width: 22px; height: 22px; }
 /* 小箭頭指著名牌（轉 45° 的方塊，只畫朝外的兩條邊） */

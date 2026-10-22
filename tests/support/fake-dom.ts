@@ -1,13 +1,13 @@
 // 測試用的最小假 DOM：讓 lib/mahjong/fx/engine.ts（Web Animations、圖片池、Lottie）能在 node 裡跑。
-// 動畫照 duration 用 setTimeout 結束、cancel 時 reject；Lottie 只送 DOMLoaded、不送 complete（逼引擎走保險計時器）。
+// 動畫照 duration 用 setTimeout 結束、cancel 時 reject（ready 馬上好、startTime＝0，document.timeline 停在 0）；Lottie 只送 DOMLoaded、不送 complete（逼引擎走保險計時器）。
 // 要在 import engine 之前呼叫 installFakeDom()（engine 載入時會看 document）。
-type Anim = { finished: Promise<void>; cancel: () => void; done: boolean };
+type Anim = { finished: Promise<void>; ready: Promise<void>; startTime: number; cancel: () => void; done: boolean };
 const live = new Set<Anim>();
 /** 現在還在跑的假動畫數（測試用：中止後應該是 0） */
 export const liveAnims = () => live.size;
 function fakeAnim(ms: number): Anim {
   let ok!: () => void, bad!: (e: Error) => void;
-  const a: Anim = { finished: new Promise<void>((r, j) => { ok = r; bad = j; }), done: false, cancel: () => {} };
+  const a: Anim = { finished: new Promise<void>((r, j) => { ok = r; bad = j; }), ready: Promise.resolve(), startTime: 0, done: false, cancel: () => {} };
   a.finished.catch(() => {});
   const t = setTimeout(() => { if (a.done) return; a.done = true; live.delete(a); ok(); }, ms);
   a.cancel = () => { if (a.done) return; a.done = true; live.delete(a); clearTimeout(t); bad(new Error("AbortError")); };
@@ -42,7 +42,7 @@ export function installFakeDom(extra: Record<string, unknown> = {}) {
   g.window = globalThis;
   g.innerWidth = 844;
   g.innerHeight = 390;
-  g.document = { hidden: false, head: el(), body: el(), createElement: el, querySelector: () => null, querySelectorAll: () => [], addEventListener() {} };
+  g.document = { hidden: false, head: el(), body: el(), createElement: el, querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, timeline: { currentTime: 0 } };
   g.Image = function Image() { return el(); };
   // Lottie：只送出 DOMLoaded，播放時不送 complete，逼引擎走「保險計時器」那條路
   g.lottie = { loadAnimation: () => ({ addEventListener: (ev: string, f: () => void) => { if (ev === "DOMLoaded") f(); }, setSpeed() {}, playSegments() {}, goToAndStop() {}, destroy() {} }) };

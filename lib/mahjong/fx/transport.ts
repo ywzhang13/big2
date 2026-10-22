@@ -7,8 +7,8 @@ import { mjFetch } from "../clientAuth";
 import { isFxReady, isLightFx, type FxKind } from "./engine";
 
 /** 伺服器的特效名稱 ↔ 前端的 */
-const API_NAME: Record<FxKind, string> = { love: "heart", cash: "money", egg: "egg", water: "water", punch: "punch" };
-const FROM_API: Record<string, FxKind> = { heart: "love", money: "cash", egg: "egg", water: "water", punch: "punch" };
+const API_NAME: Record<FxKind, string> = { love: "heart", cash: "money", egg: "egg", water: "water", punch: "punch", clap: "clap" };
+const FROM_API: Record<string, FxKind> = { heart: "love", money: "cash", egg: "egg", water: "water", punch: "punch", clap: "clap" };
 
 /** 伺服器送來的特效（mj_effect 的 effect，也是 API 回應裡的 effect） */
 export interface FxEvent { id: string; effect: string; from: string; fromName: string; fromSeat: number; to: string; toName: string; toSeat: number; ts: number }
@@ -31,7 +31,7 @@ export function receiveFx(e: FxEvent) {
   listeners.forEach((l) => l(m));
 }
 
-// 冷卻：輕組（愛心、砸錢）、重組（雞蛋、潑水、拳擊）各自共用一個（伺服器為準，畫面倒數只是提示）
+// 冷卻：輕組（愛心、砸錢、拍手）、重組（雞蛋、潑水、拳擊）各自共用一個（伺服器為準，畫面倒數只是提示）
 type Group = "light" | "heavy";
 const groupOf = (k: FxKind): Group => (isLightFx(k) ? "light" : "heavy");
 const readyAt: Partial<Record<Group, number>> = {};

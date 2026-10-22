@@ -6,15 +6,15 @@
 //   4. 播完一定清乾淨：取消殘留動畫、清空特效層、拿掉名牌上的發光和抖動
 //   5. 音效只在預載完成、圖片已經放上畫面之後才播
 //   6. 分頁切到背景：正在播的立刻收掉、排隊的丟掉，回來時畫面是乾淨的
-export type FxKind = "love" | "cash" | "egg" | "water" | "punch";
+export type FxKind = "love" | "cash" | "egg" | "water" | "punch" | "clap";
 export type FxView = "sender" | "victim" | "bystander";
-export const FX_KINDS: FxKind[] = ["love", "cash", "egg", "water", "punch"];
-export const FX_LABEL: Record<FxKind, string> = { love: "愛心", cash: "砸錢", egg: "丟雞蛋", water: "潑水桶", punch: "拳擊" };
-// 分兩組（老闆 2026-10-21）：輕組（愛心、砸錢）可以同時播、也能疊在重組上；重組（雞蛋、潑水、拳擊）一次只播一個、排隊。
-// 發送冷卻每組共用：輕組 5 秒、重組 10 秒（伺服器擋，畫面倒數只是提示）
-export const FX_LIGHT: readonly FxKind[] = ["love", "cash"];
+export const FX_KINDS: FxKind[] = ["love", "cash", "egg", "water", "punch", "clap"];
+export const FX_LABEL: Record<FxKind, string> = { love: "愛心", cash: "砸錢", egg: "丟雞蛋", water: "潑水桶", punch: "拳擊", clap: "拍手" };
+// 分兩組（老闆 2026-10-21）：輕組（愛心、砸錢、拍手）可以同時播、也能疊在重組上；重組（雞蛋、潑水、拳擊）一次只播一個、排隊。
+// 發送冷卻每組共用：輕組 5 秒、重組 10 秒（伺服器擋，畫面倒數只是提示）。拍手是第 6 種（老闆 2026-10-22 定案「D-五下」），歸輕組
+export const FX_LIGHT: readonly FxKind[] = ["love", "cash", "clap"];
 export const isLightFx = (k: FxKind) => FX_LIGHT.includes(k);
-export const FX_COOLDOWN: Record<FxKind, number> = { love: 5000, cash: 5000, egg: 10000, water: 10000, punch: 10000 };
+export const FX_COOLDOWN: Record<FxKind, number> = { love: 5000, cash: 5000, egg: 10000, water: 10000, punch: 10000, clap: 5000 };
 
 const BASE = "/mahjong-fx/";
 const IMG = {
@@ -26,6 +26,8 @@ const IMG = {
   light1: "light_01.png", eggWhole: "egg-lottie-whole.webp",
   // 潑水：老闆用 AI 生成的 3 張（2026-10-20），砸中名牌的水花和被潑的人中間的皇冠是同一張冰藍水花皇冠
   bucket: "bucket-water.webp", burst: "splash-crown-ice.webp", overlay: "splash-overlay.webp",
+  // 拍手：飛過去用 Microsoft Fluent Emoji 的立體拍手靜態圖（MIT，授權文字在 public/mahjong-fx/LICENSE-MIT-Microsoft.txt）
+  clap: "clap-fluent.png",
 } as const;
 type ImgKey = keyof typeof IMG;
 // 圖檔的高寬比（畫的時候照比例，不拉變形）
@@ -33,9 +35,10 @@ const BUCKET_AR = 652 / 640, CROWN_AR = 1109 / 1200, OVERLAY_AR = 806 / 1400;
 /** 圖的高寬比，從預載好的圖讀（換圖不用改程式） */
 const arOf = (k: ImgKey, fallback: number) => { const i = MASTER[k]?.[0]; return i && i.naturalWidth ? i.naturalHeight / i.naturalWidth : fallback; };
 // 每張圖預先建幾份：輕組最多 4 則同時播（LIGHT_MAX），愛心一則用 10 顆、砸錢一則用鈔票各 5 張＋金幣 1 疊，所以備 4 則的量
-const COPIES: Partial<Record<ImgKey, number>> = { heart: 44, billA: 22, billB: 22, coins: 5 };
+const COPIES: Partial<Record<ImgKey, number>> = { heart: 44, billA: 22, billB: 22, coins: 5, clap: 4 };
 const SOUNDS = ["heart-tick", "heart-pluck1", "heart-pluck2", "heart-chime", "bill-swish", "coin-1", "coin-2", "coin-3", "coin-stack",
-  "egg-crack1", "thud", "splash1", "splash2", "punch1", "punch2", "shatter1", "glass-heavy"] as const;
+  "egg-crack1", "thud", "splash1", "splash2", "punch1", "punch2", "shatter1", "glass-heavy",
+  "clap-hit-1", "clap-hit-2", "clap-hit-3", "clap-hit-4", "clap-hit-5"] as const;
 type SoundKey = (typeof SOUNDS)[number];
 
 // ---------------- 預載 ----------------
@@ -48,6 +51,7 @@ let MIX: AudioNode | null = null; // 所有特效音效的總出口：總音量 
 let FX_GAIN: GainNode | null = null; // 互動音效總音量（設定的「互動音效」拉霸、靜音；0＝不出聲，動畫照播）
 let masterGain = 1;
 let eggLottie: { txt: string; w: number; h: number; fr: number; op: number } | null = null;
+let clapAnim: Blob | null = null; // 拍手的動態 WebP（每次播用新的 blob 網址，動畫才會從第一格開始）
 type LottieAnim = { addEventListener: (e: string, f: () => void) => void; setSpeed: (n: number) => void; playSegments: (s: number[], f: boolean) => void; goToAndStop: (f: number, isFrame: boolean) => void; destroy: () => void };
 type LottieLib = { loadAnimation: (o: Record<string, unknown>) => LottieAnim };
 let lottie: LottieLib | null = null;
@@ -99,6 +103,16 @@ async function loadEgg() {
   box.remove();
 }
 
+async function loadClap() {
+  const blob = await fetch(BASE + "clap-anim.webp").then((r) => { if (!r.ok) throw new Error("clap-anim.webp"); return r.blob(); });
+  clapAnim = blob;
+  // 先解碼一次，第一次播不會等
+  const u = URL.createObjectURL(blob), i = new Image();
+  i.src = u;
+  await i.decode().catch(() => {});
+  URL.revokeObjectURL(u);
+}
+
 async function loadSounds() {
   try {
     AC ??= new AudioContext();
@@ -131,7 +145,7 @@ export const getFxVolume = () => masterGain;
 export function preloadFx(): Promise<boolean> {
   readyPromise ??= (async () => {
     try {
-      await Promise.all([...(Object.keys(IMG) as ImgKey[]).map(loadImg), loadEgg(), loadSounds()]);
+      await Promise.all([...(Object.keys(IMG) as ImgKey[]).map(loadImg), loadEgg(), loadClap(), loadSounds()]);
       ready = true;
       return true;
     } catch (e) {
@@ -155,6 +169,8 @@ class Run {
   /** 這一則借走的池子圖片、加在名牌上的發光／抖動：收尾時只還自己的、只拿掉自己的 */
   imgs: [ImgKey, HTMLImageElement][] = [];
   marks: [Element, string][] = [];
+  /** 這一則排進音訊時鐘的聲音（拍手會先排好之後才響的聲音）：中止時只停自己的，還沒到點的就不會響 */
+  srcs: AudioScheduledSourceNode[] = [];
   // 計時器 → 時間到要做的事。中止時一樣要做（讓等它的 Promise 結束），不然 pump 會一直等下去
   private timers = new Map<ReturnType<typeof setTimeout>, () => void>();
   stats = { anims: 0, done: 0, imgs: 0, notReady: 0, sounds: 0 };
@@ -182,9 +198,12 @@ class Run {
     this.marks.forEach(([el, cls]) => el.classList.remove(cls));
     this.marks = [];
   }
-  /** 中止：還沒到時間的計時器全部取消，但馬上收尾（later 的 fn 因為已中止不會執行），等它們的 Promise 都會結束 */
+  /** 中止：還沒到時間的計時器全部取消，但馬上收尾（later 的 fn 因為已中止不會執行），等它們的 Promise 都會結束；
+   *  這一則排好的聲音也停掉（還沒到點的不會響） */
   stop() {
     this.aborted = true;
+    this.srcs.forEach((s) => { try { s.stop(); } catch { /* 已經停了 */ } });
+    this.srcs = [];
     const pending = [...this.timers.entries()];
     this.timers.clear();
     pending.forEach(([t, done]) => { clearTimeout(t); done(); });
@@ -305,11 +324,12 @@ function snd(run: Run, n: SoundKey, rate = 1, vol = 0.8, delay = 0) {
     g.gain.value = vol / Math.sqrt(Math.max(1, playing())); // 同時播 n 則：每則音量 ÷ √n，再經過壓縮器
     s.connect(g).connect(MIX ?? AC.destination);
     s.start(AC.currentTime + delay / 1000);
+    run.srcs.push(s);
     run.stats.sounds++;
   } catch { /* 安靜 */ }
 }
 
-// ---------------- 5 種特效（尺寸、秒數、音效照定案規格） ----------------
+// ---------------- 6 種特效（尺寸、秒數、音效照定案規格） ----------------
 type Ctx = { run: Run; A: Pt; B: Pt; view: FxView };
 
 async function stream(c: Ctx, love: boolean) {
@@ -545,6 +565,58 @@ async function punch(c: Ctx, crackOn: boolean) {
   await punchFly(run, A, B);
 }
 
+// 拍手（老闆 2026-10-22 定案預覽站的「D-五下」）：Fluent 靜態拍手圖飛到名牌 → 換成拍手動圖拍 5 下，一拍一聲 → 往上飄、淡出。
+// 動圖 clap-anim.webp 是 Microsoft 官方動畫（28 格×42ms、10 格拍一下）的第 0～19 格，後面接第 10～19 格重複，
+// 所以 5 下間隔都是 420ms，拍合在動圖開始後 336／756／1176／1596／2016ms。
+export const CLAP_HITS = [336, 756, 1176, 1596, 2016];
+const CLAP_SND = ["clap-hit-1", "clap-hit-2", "clap-hit-3", "clap-hit-4", "clap-hit-5"] as const; // 5 聲各自一段單拍（Mixkit 480 ClappingFast 剪出來）
+const CLAP_RATE = [1, 0.95, 1.05, 0.97, 1.02]; // 每聲音高稍微不同，聽起來不像同一聲重複
+const CLAP_VOL = [0.6, 0.55, 0.62, 0.42, 0.24]; // 第 4、5 下漸弱（約 71%、41%）
+// 收尾照原始拍手 D：1970ms 起一邊往上飄 22px、放大到 1.1 倍、一邊淡出，546ms 收完、越後面越慢（下面是每 1/8 時間走到的進度）
+const CLAP_END = 2516, CLAP_FADE_AT = 1970, CLAP_FADE = [0, 0.211, 0.402, 0.571, 0.716, 0.834, 0.923, 0.98, 1];
+
+async function clap(c: Ctx) {
+  const { run, A, B } = c;
+  if (c.view === "victim") vignette(run, "rgba(255,210,90,.30)", 1700);
+  const fw = z(56), bw = z(96); // 飛的時候和飛行中的愛心差不多大，到了和愛心最後那顆大愛心一樣大
+  const f = mk(run, "clap", fw, fw);
+  f.style.opacity = "1";
+  snd(run, "heart-tick", 1.2, 0.2);
+  await flyPath(run, f, A, B, { dur: 520, bend: 50, spin: -12, s0: 0.5, s1: 1, w: fw, h: fw, ease: "cubic-bezier(.3,.1,.4,1)" });
+  if (run.aborted) return;
+  glow(run, B.el, "mjfx-glow-cash", 1800);
+  burst(run, "light1", B, 150, "radial-gradient(circle,rgba(255,240,200,.9),rgba(255,200,80,.35) 60%,transparent)", 700);
+  // 名牌貼著畫面邊（手機對家在最上面、自己在左下）：拍手整個收進畫面內，不被切掉
+  const lim = (v: number, max: number) => Math.min(max - bw / 2 - 4, Math.max(bw / 2 + 4, v));
+  const x = lim(B.x, innerWidth), y = lim(B.y - z(8), innerHeight);
+  // 換成動圖：每次用新的 blob 網址，從第一格開始播
+  const url = URL.createObjectURL(clapAnim!);
+  const d = new Image();
+  d.src = url;
+  d.dataset.k = "clapAnim";
+  d.style.cssText = `width:${bw}px;height:${bw}px`;
+  await d.decode().catch(() => {});
+  if (run.aborted) { URL.revokeObjectURL(url); return; }
+  run.layer.appendChild(d);
+  f.remove();
+  const a = d.animate([
+    { transform: T(x, y, 0.6, 0, bw, bw), opacity: 1, offset: 0, easing: "ease-out" },
+    { transform: T(x, y, 1, 0, bw, bw), opacity: 1, offset: 124 / CLAP_END },
+    ...CLAP_FADE.map((q, k) => ({ transform: T(x, y - z(22) * q, 1 + 0.1 * q, 0, bw, bw), opacity: 1 - q, offset: (CLAP_FADE_AT + (546 * k) / 8) / CLAP_END })),
+  ], { duration: CLAP_END, easing: "linear", fill: "forwards" });
+  run.stats.anims++;
+  const done = run.track(a.finished.then(() => { d.remove(); run.stats.done++; }, () => d.remove()));
+  // 從動圖真正畫上畫面那一格起算（加進畫面到第一次畫出來可能差到 0.1 秒），拍合時閃金星、響一聲（音效用音訊時鐘排程）
+  await a.ready.catch(() => {});
+  const lag = Number(document.timeline.currentTime ?? 0) - Number(a.startTime ?? document.timeline.currentTime ?? 0);
+  CLAP_HITS.forEach((t, i) => {
+    void run.later(t - lag, () => burst(run, "star6", { x: x + rand(-z(26), z(26)), y: y - z(20) - rand(0, z(14)) }, 34, "radial-gradient(circle,#fff,#ffe27a 50%,#e0a100)", 320));
+    snd(run, CLAP_SND[i], CLAP_RATE[i], CLAP_VOL[i], t - lag);
+  });
+  await done;
+  URL.revokeObjectURL(url);
+}
+
 // ---------------- 播放：重組一次只播一個、排隊；輕組馬上播、可以同時好幾則；切到背景就收掉 ----------------
 export interface FxJob { kind: FxKind; from: number; to: number; mySeat: number; crack: boolean; muted: boolean }
 // lane：light＝輕組（同時播）、heavy＝重組（排隊）；at：開始播的時間（performance.now）；
@@ -636,7 +708,7 @@ async function play(job: FxJob, start: (r: Run) => void, end: (r: Run) => void) 
   SC = fxScale(); // 每次播放開始時照當下的畫面大小重算
   const c: Ctx = { run, A: plate(job.from), B: plate(job.to), view };
   const work = job.kind === "love" || job.kind === "cash" ? stream(c, job.kind === "love")
-    : job.kind === "egg" ? egg(c) : job.kind === "water" ? water(c) : punch(c, job.crack);
+    : job.kind === "egg" ? egg(c) : job.kind === "water" ? water(c) : job.kind === "clap" ? clap(c) : punch(c, job.crack);
   run.p.push(work.catch(() => {}));
   // 保險：任何情況 4 秒內一定收尾
   const guard = setTimeout(() => run.stop(), 4000);

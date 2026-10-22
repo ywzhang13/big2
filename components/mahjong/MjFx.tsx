@@ -10,11 +10,11 @@ import { isGuestTab } from "@/lib/mahjong/clientAuth";
 
 const ICON: Record<FxKind, string> = {
   love: "/mahjong-fx/heart-glossy.png", cash: "/mahjong-fx/bill-classic.png", egg: "/mahjong-fx/egg-lottie-whole.webp",
-  water: "/mahjong-fx/bucket-water.webp", punch: "/mahjong-fx/glove-red.png",
+  water: "/mahjong-fx/bucket-water.webp", punch: "/mahjong-fx/glove-red.png", clap: "/mahjong-fx/clap-fluent.png",
 };
 const MIN_HIT = 44; // 手機點擊範圍至少 44px
 
-/** 互動特效（小宜〈互動特效-5種定案規格〉；入口改版 2026-10-21 老闆）：點對方的名牌 → 名牌旁邊跳出 5 種特效 → 點一下就丟給他。
+/** 互動特效（小宜〈互動特效-5種定案規格〉；入口改版 2026-10-21 老闆）：點對方的名牌 → 名牌旁邊跳出 6 種特效 → 點一下就丟給他。
  *  選單貼在名牌旁邊、有箭頭指著名牌，不放進海底（位置規則見 lib/mahjong/fx/menu.ts）。
  *  點自己的名牌沒反應；點選單外面或 4 秒沒操作就收起。全螢幕特效層 pointer-events:none，不擋出牌、吃碰胡。
  *  只有 LINE 登入、已入座的人能用；訪客、觀戰者、結算畫面都不行。
@@ -44,7 +44,7 @@ export default function MjFx({
   useEffect(() => {
     setFxLayer(layerRef.current);
     void preloadFx().then((ok) => setReady(ok));
-    // 選單的 5 個圖示先載好、解碼好：第一次點名牌時圖示就在，不會先空白一下
+    // 選單的 6 個圖示先載好、解碼好：第一次點名牌時圖示就在，不會先空白一下
     Object.values(ICON).forEach((u) => { const i = new Image(); i.src = u; void i.decode().catch(() => {}); });
     return () => { abortFx(); setFxLayer(null); };
   }, []);

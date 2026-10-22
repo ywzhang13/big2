@@ -59,7 +59,7 @@ function deliver() {
 }
 const seen: string[] = [];
 T.subscribeFx((m) => { seen.push(`${m.fromName}→${m.toName}:${m.kind}`); E.enqueueFx({ kind: m.kind, from: m.from, to: m.to, mySeat: ME, crack: true, muted: true }); });
-const API: Record<FxKind, string> = { love: "heart", cash: "money", egg: "egg", water: "water", punch: "punch" };
+const API: Record<FxKind, string> = { love: "heart", cash: "money", egg: "egg", water: "water", punch: "punch", clap: "clap" };
 // 別人送：直接打 API（他自己的分頁不在這個測試裡），送完把廣播送到我這裡
 async function other(from: string, kind: FxKind, to: string) {
   const r = await effectApi(new Request("http://x", { method: "POST", headers: { authorization: `Bearer as:${from}` }, body: JSON.stringify({ roomId: "R", effect: API[kind], to }) }));
