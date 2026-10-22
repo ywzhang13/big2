@@ -872,7 +872,7 @@ export default function MjBoard({
 
         {/* Hand — extra top padding for selected tile float */}
         <div className="flex items-end px-1 pt-4 pb-1.5 gap-2">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" data-mj-myhand>
             <MjHand
               key={handGame.n}
               tiles={myHand}

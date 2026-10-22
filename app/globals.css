@@ -1222,6 +1222,15 @@ body {
 .mjfx-glow-hit { box-shadow: 0 0 0 2px #ef4444, 0 0 18px rgba(239,68,68,.7) !important; }
 .mjfx-shk { animation: mjfx-shk .34s cubic-bezier(.36,.07,.19,.97) both; }
 .mjfx-shk-s { animation: mjfx-shk-s .3s both; }
+/* 提醒聲「滴滴」時自己的手牌像鬧鐘在桌上震動的輕抖（老闆 2026-10-22 選定；lib/mahjong/remindShake.ts）：
+   左右 2px、0.45 秒，牌不會被抖到點不到；系統設定「減少動態」的人不抖 */
+.mj-remind-shake { animation: mj-remind-buzz .45s linear both; }
+@keyframes mj-remind-buzz {
+  0%, 100% { transform: none; }
+  9%, 27%, 45%, 63%, 81% { transform: translateX(-2px); }
+  18%, 36%, 54%, 72%, 90% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) { .mj-remind-shake { animation: none !important; } }
 @keyframes mjfx-shk { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-7px, 3px); } 40%, 60% { transform: translate(7px, -3px); } }
 @keyframes mjfx-shk-s { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 /* 互動特效選單：點對方名牌後在名牌旁邊跳出（2026-10-21）。按鈕沿用原本面板的圖示和樣式；手機上每顆至少 44×44 */

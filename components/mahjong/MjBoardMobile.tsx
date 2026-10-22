@@ -658,7 +658,7 @@ export default function MjBoardMobile({
             <span className="cnt">{myHand.length} 張</span>
           </div>
         </div>
-        <div className="mjm-hand">
+        <div className="mjm-hand" data-mj-myhand>
           <div className="main">{mainTiles.map(handTile)}</div>
           {drawnTile && (
             <div className="drawn">

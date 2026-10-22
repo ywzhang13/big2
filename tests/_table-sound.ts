@@ -1,6 +1,7 @@
-// 牌桌音效（老闆 2026-10-22 選定：出牌聲 Q1、8 秒提醒聲 B2「滴滴」）：
-//   R  提醒聲計時：輪到自己要打牌 8 秒響第 1 次，之後每 8 秒，最多 3 次；各種情況停掉並歸零（假時鐘）
-//   S  什麼時候算「輪到自己要打牌」：打出去了、輪到別人（含等自己決定吃碰胡別人的牌）、結算、離開房間、切到背景都不算；
+// 牌桌音效（老闆 2026-10-22 選定：出牌聲 Q1、提醒聲 B2「滴滴」；提醒 6 秒（同日從 8 秒改））：
+//   R  提醒聲計時：輪到自己要打牌 6 秒響第 1 次，之後每 6 秒，最多 3 次；各種情況停掉並歸零（假時鐘）
+//   S  什麼時候算「輪到自己要打牌」：打出去了、輪到別人（含等自己決定吃碰胡別人的牌）、結算、離開房間都不算；
+//      切到別的分頁照樣算（老闆 2026-10-22：切換分頁就沒有滴滴），切回來不補響、不從頭算；
 //      輪到自己時有自摸、暗槓、加槓、眼牌按鈕照樣算（老闆 2026-10-22 電腦版沒聽到滴滴聲：伺服器送來這些按鈕後計時 0.5 秒就被停掉）
 //   D  出牌聲：四家任何一家打出一張牌都響一次；同一張牌的重複更新、剛進房看到的那張、沒有牌時都不響
 //   E  出聲：走互動音效的音量和靜音；出牌聲只用一個樣本（每次同一聲）；提醒聲只用 turn-remind；
@@ -38,11 +39,11 @@ const advance = (ms: number) => {
   now = 0; timers = [];
   r.set(true);
   advance(REMIND_MS - 1);
-  ok(at.length === 0, "R1 輪到自己要打牌，未滿 8 秒不響");
+  ok(at.length === 0, "R1 輪到自己要打牌，未滿 6 秒不響");
   advance(1);
-  ok(at.join() === "8000", `R2 滿 8 秒響第 1 次（${at.join("、")}ms）`);
+  ok(at.join() === "6000", `R2 滿 6 秒響第 1 次（${at.join("、")}ms）`);
   advance(REMIND_MS * 5);
-  ok(at.join() === "8000,16000,24000" && REMIND_MAX === 3, `R3 之後每 8 秒再響，最多 3 次就不再響（${at.join("、")}ms，再等 40 秒也沒有第 4 次）`);
+  ok(at.join() === "6000,12000,18000" && REMIND_MAX === 3, `R3 之後每 6 秒再響，最多 3 次就不再響（${at.join("、")}ms，再等 40 秒也沒有第 4 次）`);
   ok(!r.state().pending && r.state().count === 3, "R4 響完 3 次後沒有計時器在跑");
   r.set(false);
   ok(r.state().count === 0 && !r.state().active, "R5 打出牌（不再輪到自己）：停掉、次數歸零");
@@ -51,37 +52,36 @@ const advance = (ms: number) => {
   const at: number[] = [];
   const r = createTurnReminder(() => at.push(now), clock);
   now = 0; timers = [];
-  r.set(true); advance(7999); r.set(false); advance(30000);
-  ok(at.length === 0 && !r.state().pending, "R6 8 秒內打出牌：一次都不響，計時器清掉");
+  r.set(true); advance(5999); r.set(false); advance(30000);
+  ok(at.length === 0 && !r.state().pending, "R6 6 秒內打出牌：一次都不響，計時器清掉");
   const t0 = now;
-  r.set(true); advance(8000);
-  ok(at.length === 1 && at[0] - t0 === 8000, `R7 下一次輪到自己：重新從 0 算 8 秒（第 1 響在重新開始後 ${at[0] - t0}ms）`);
+  r.set(true); advance(6000);
+  ok(at.length === 1 && at[0] - t0 === 6000, `R7 下一次輪到自己：重新從 0 算 6 秒（第 1 響在重新開始後 ${at[0] - t0}ms）`);
 }
 {
-  // 響過 2 次後中斷（例如換局、切到背景），再回來：重新算、又可以響 3 次
+  // 響過 2 次後中斷（例如換局），再回來：重新算、又可以響 3 次
   const at: number[] = [];
   const r = createTurnReminder(() => at.push(now), clock);
   now = 0; timers = [];
-  r.set(true); advance(16000);
-  ok(at.length === 2, "R8 響了 2 次（16 秒）");
+  r.set(true); advance(12000);
+  ok(at.length === 2, "R8 響了 2 次（12 秒）");
   r.set(false); advance(5000); const t0 = now;
-  r.set(true); advance(24000);
+  r.set(true); advance(18000);
   const again = at.slice(2).map((x) => x - t0);
-  ok(at.length === 5 && again.join() === "8000,16000,24000", `R9 中斷後再輪到自己：重新計時，又是 8／16／24 秒各響一次（${again.join("、")}ms）`);
+  ok(at.length === 5 && again.join() === "6000,12000,18000", `R9 中斷後再輪到自己：重新計時，又是 6／12／18 秒各響一次（${again.join("、")}ms）`);
   r.set(true); advance(30000);
   ok(at.length === 5, "R10 狀態沒變（重複 set(true)）不會重新開始，也不會多響");
 }
 
 // ---------- S 什麼時候算「輪到自己要打牌」 ----------
 {
-  const base = { needsDiscard: true, status: "playing", visible: true, inRoom: true };
-  ok(remindActive(base), "S1 輪到自己要打牌、沒有按鈕、在打牌、前景、在房間：計時");
+  const base = { needsDiscard: true, status: "playing", inRoom: true };
+  ok(remindActive(base), "S1 輪到自己要打牌、在打牌、在房間：計時");
   const cases: [string, Partial<typeof base>][] = [
     ["打出牌後／輪到別人（needsDiscard＝false）", { needsDiscard: false }],
     ["別人打牌、自己在決定吃碰胡（needsDiscard＝false）", { needsDiscard: false }],
     ["結算畫面（status＝finished）", { status: "finished" }],
     ["等待開局（status＝waiting）", { status: "waiting" }],
-    ["切到背景", { visible: false }],
     ["離開牌桌（不在房間）", { inRoom: false }],
   ];
   for (const [label, patch] of cases) ok(!remindActive({ ...base, ...patch }), `S2 ${label}：不計時`);
@@ -90,7 +90,7 @@ const advance = (ms: number) => {
     const at: number[] = [];
     const r = createTurnReminder(() => at.push(now), clock);
     now = 0; timers = [];
-    r.set(remindActive(base)); advance(8000);
+    r.set(remindActive(base)); advance(6000);
     r.set(remindActive({ ...base, ...patch })); advance(40000);
     ok(at.length === 1 && r.state().count === 0 && !r.state().pending, `S3 響過 1 次後「${label}」：停掉、不再響、次數歸零`);
   }
@@ -101,11 +101,24 @@ const advance = (ms: number) => {
     now = 0; timers = [];
     // 0 秒輪到自己（還沒有按鈕）；0.5 秒伺服器送來按鈕；之後按鈕一直在
     const table = (buttons: string[]) => ({ needsDiscard: true, status: "playing", availableActions: buttons });
-    const feed = (t: ReturnType<typeof table>) => r.set(remindActive({ needsDiscard: t.needsDiscard, status: t.status, visible: true, inRoom: true }));
+    const feed = (t: ReturnType<typeof table>) => r.set(remindActive({ needsDiscard: t.needsDiscard, status: t.status, inRoom: true }));
     feed(table([])); advance(500);
     feed(table([btn])); advance(29500);
-    ok(at.join() === "8000,16000,24000", `S4 輪到自己、有 ${btn} 按鈕：照樣在 8／16／24 秒響，第 4 次不響（${at.join("、")}ms）`);
+    ok(at.join() === "6000,12000,18000", `S4 輪到自己、有 ${btn} 按鈕：照樣在 6／12／18 秒響，第 4 次不響（${at.join("、")}ms）`);
   }
+}
+
+// ---------- S5 切到別的分頁 ----------
+{
+  // 畫面在不在前景不影響要不要計時（remindActive 根本不看）：模擬 4 秒切走、15 秒切回來，計時器一直沒被重設
+  const at: number[] = [];
+  const r = createTurnReminder(() => at.push(now), clock);
+  now = 0; timers = [];
+  const env = { needsDiscard: true, status: "playing", inRoom: true };
+  r.set(remindActive(env)); advance(4000);
+  r.set(remindActive(env)); advance(11000); // 切到別的分頁（4～15 秒）
+  r.set(remindActive(env)); advance(15000); // 切回來
+  ok(at.join() === "6000,12000,18000", `S5 第 4 秒切到別的分頁、第 15 秒切回來：照樣在 6／12／18 秒響（${at.join("、")}ms），切回來不補響、不從頭算`);
 }
 
 // ---------- D 出牌聲 ----------

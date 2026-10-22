@@ -2,17 +2,19 @@
 // 只管「什麼時候該響」，真正出聲交給 fx/engine.ts（走互動音效的音量、靜音）。不碰 React，node 測試可以用假時鐘跑（tests/_table-sound.ts）。
 //   ・出牌聲：牌桌中間那張「最近打出的牌」換成新的一張（座位＋牌的 id 不同）就響一次，四家都一樣。
 //     同一張牌的重複更新（自己打出時先畫、伺服器廣播再到、重新同步狀態）不會重響；剛進房、換房時看到的那張只記下不響。
-//   ・提醒聲：輪到自己、要打牌時開始計時，8 秒還沒打就響一次，之後每 8 秒再響，最多 3 次；
-//     不在「輪到自己要打牌」（打出去了、輪到別人、換局、結算、離開、切到背景）就停掉並歸零，下一次重新算。
+//   ・提醒聲：輪到自己、要打牌時開始計時，6 秒還沒打就響一次，之後每 6 秒再響，最多 3 次（老闆 2026-10-22 從 8 秒改 6 秒）；
+//     不在「輪到自己要打牌」（打出去了、輪到別人、換局、結算、離開）就停掉並歸零，下一次重新算。
+//     切到別的分頁、縮小視窗時照樣計時、照樣響（老闆 2026-10-22：切換分頁就沒有滴滴）；切回來不補響、也不從頭算。
 //     輪到自己時伺服器常會一起給自己回合的按鈕（自摸、暗槓、加槓、眼牌），這時照樣計時（老闆 2026-10-22 電腦版沒聽到滴滴聲的原因）；
 //     別人打牌、等自己決定吃碰胡時本來就不是「輪到自己要打牌」，不會響。
 
-export const REMIND_MS = 8000;
+export const REMIND_MS = 6000;
 export const REMIND_MAX = 3;
 
-/** 提醒聲要不要計時：輪到自己要打牌（needsDiscard，有沒有自摸、暗槓、加槓、眼牌按鈕都算）、還在打牌（不是結算）、畫面在前景、人在房間裡 */
-export function remindActive(s: { needsDiscard: boolean; status: string; visible: boolean; inRoom: boolean }): boolean {
-  return s.needsDiscard && s.status === "playing" && s.visible && s.inRoom;
+/** 提醒聲要不要計時：輪到自己要打牌（needsDiscard，有沒有自摸、暗槓、加槓、眼牌按鈕都算）、還在打牌（不是結算）、人在房間裡。
+ *  畫面在不在前景都算（切到別的分頁照樣響） */
+export function remindActive(s: { needsDiscard: boolean; status: string; inRoom: boolean }): boolean {
+  return s.needsDiscard && s.status === "playing" && s.inRoom;
 }
 
 type Timer = ReturnType<typeof setTimeout>;
