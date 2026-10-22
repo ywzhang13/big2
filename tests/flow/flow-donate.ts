@@ -7,7 +7,7 @@
 //   D6 歸零後再自摸從 1 開始；D7 每個人各自獨立
 //   D8 訪客：自摸不寫入資料庫（伺服器分不出時由資料庫以 auth.users 排除）、按斗內不寫入；沒登入按斗內 401
 //   D10 帳號刪除：自摸紀錄和歸零點跟著刪（外鍵 on delete cascade）
-//   D9 自摸的判斷和整場統計一致（八仙過海、七搶一算自摸）；上線前的舊局、沒綁帳號的座位不記
+//   D9 自摸的判斷和整場統計一致（八仙過海算自摸、七搶一不算）；上線前的舊局、沒綁帳號的座位不記
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { GET as donateGet } from "../../app/api/mahjong/donate/route";
@@ -166,8 +166,8 @@ eq([
   zimoUserIds(fin([{ seat: 1, score: plain, from: null }], { handsCompleted: undefined })),
   zimoUserIds(fin([{ seat: 1, score: plain, from: null }], { status: "playing" })),
   zimoUserIds(fin([{ seat: 1, score: plain, from: null }], { players: [{}, { userId: null }, {}, {}] }))?.userIds,
-], [[U[1]], [U[1]], [U[3]], [], null, null, []],
-  "D9 自摸、八仙過海、七搶一算自摸，放槍不算；上線前的舊局（沒有局數）、還沒結算、沒綁帳號的座位都不記");
+], [[U[1]], [U[1]], [], [], null, null, []],
+  "D9 自摸、八仙過海算自摸；七搶一（2026-10-22 起只有 1 張花的人付）和放槍不算；上線前的舊局（沒有局數）、還沒結算、沒綁帳號的座位都不記");
 clock.now += 1000;
 const legacy = await zimo(seats, 3, "lineD", null);
 eq([legacy.status, await count("lineD")], [200, 0], "D9' 上線前開局的舊房（沒有 handsCompleted）真的自摸：不記");

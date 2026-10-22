@@ -76,30 +76,13 @@ function flowerSetup() {
 {
   flowerSetup();
   const r = await call(draw, { playerId: "p1" });
-  const avail = sent.find((e) => e.event === "mj_available_actions")!;
-  eq([r.status, r.body.flowerRob, st().pendingFlowerRob?.robberSeat, count("mj_flower_rob_pending"), avail.payload],
-    [200, true, 3, 1, { playerId: "p3", actions: [{ type: "win", playerSeat: 3 }], robFlower: true }],
-    "④a 摸到第 8 張花：draw 回 flowerRob=true，廣播 mj_flower_rob_pending，並給 seat3 win＋robFlower");
-  const drawTileEv = sent.find((e) => e.event === "mj_draw_tile")!.payload;
-  eq([drawTileEv.canWin, drawTileEv.canKong], [false, false], "④b 等待七搶一時，摸牌的人不會拿到自摸／槓選項");
-  eq((await call(discard, { playerId: "p1", tileId: st().players[1].hand[0].id })).status, 409, "④c 等待中摸牌的人不能打牌");
-  eq((await call(action, { playerId: "p2", actionType: "win" })).status, 409, "④d 等待中其他人送 win：409");
-  sent.length = 0;
-  const w = await call(action, { playerId: "p3", actionType: "win" });
-  eq([w.status, st().status, rooms.R.status, st().settlement?.deltas, st().playerScores, count("mj_game_over"), (sent[0].payload as { winners: { score: { fans: unknown } }[] }).winners[0].score.fans],
-    [200, "finished", "finished", [-320, -260, -260, 840], [-320, -260, -260, 840], 1,
-      [{ name: "七搶一", value: 8 }, { name: "莊家(斷)", value: 1 }, { name: "連1", value: 1 }, { name: "拉1", value: 1 }]],
-    "④e seat3 搶：七搶一胡，閒家各付 260、莊家另加 1+連1+拉1 付 320");
-}
-{
-  flowerSetup();
-  await call(draw, { playerId: "p1" });
-  sent.length = 0;
-  const p = await call(action, { playerId: "p3", actionType: "pass" });
-  const dt = sent.find((e) => e.event === "mj_draw_tile")!.payload;
-  eq([p.status, st().pendingFlowerRob ?? null, sent.map((e) => e.event), dt.playerId], [200, null, ["mj_pass", "mj_draw", "mj_draw_tile"], "p1"],
-    "④f seat3 不搶：清掉等待，重送 seat1 的摸牌事件（含自摸／槓選項）");
-  eq((await call(discard, { playerId: "p1", tileId: st().players[1].hand.find((x) => x.display === "z6")!.id })).status, 200, "④g 之後 seat1 可以正常打牌");
+  const over = sent.find((e) => e.event === "mj_game_over");
+  eq([r.status, r.body.flowerRob, r.body.draw, st().pendingFlowerRob ?? null, count("mj_flower_rob_pending"), count("mj_available_actions"), st().status, rooms.R.status,
+    st().settlement?.deltas, st().playerScores, count("mj_game_over"), (over?.payload as { winners: { seat: number; from: number; score: { fans: unknown } }[] })?.winners.map((w) => [w.seat, w.from, w.score.fans])],
+    [200, undefined, false, null, 0, 0, "finished", "finished", [0, -260, 0, 260], [0, -260, 0, 260], 1, [[3, 1, [{ name: "七搶一", value: 8 }]]]],
+    "④a 七搶一（2026-10-22 改）：seat1 摸到第 8 張花，draw 直接結束這局（不等 seat3 決定、沒有 mj_flower_rob_pending）；只有 seat1 付 260，莊家 seat0 沒參與不加莊家台");
+  eq([(await call(action, { playerId: "p3", actionType: "win" })).status !== 200, (await call(action, { playerId: "p3", actionType: "pass" })).status !== 200],
+    [true, true], "④b 結束後 seat3 再送 win／pass：都被擋下，不會重複結算");
 }
 {
   setup((s) => { s.players[1].flowers = tiles("f1 f2 f3 f4 f5 f6 f7"); s.wall[0] = t("f8"); });

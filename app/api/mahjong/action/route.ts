@@ -303,7 +303,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
       await mjBroadcast(room.code, "mj_partial_win", {
         seat,
         winnerName: newState.players[seat].name,
-        score: newState.winners![newState.winners!.length - 1].score,
+        score: newState.winners!.find((w) => w.seat === seat)!.score, // winners 照順位排，不是按胡的先後
       });
       return Response.json({ success: true, partial: true });
     }

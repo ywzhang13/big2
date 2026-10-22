@@ -47,7 +47,7 @@ const gameStartEvents = ["mj_game_start", "mj_deal_hand", "mj_deal_hand", "mj_de
   eq([st().status, rooms.R.status, evs().filter((e) => e === "mj_game_start").length], ["playing", "playing", 1], "①c 開局八仙之後四家同意：正常開下一局");
 }
 
-// next-game：開局七搶一，不搶
+// next-game：開局七搶一（2026-10-22 改：立刻成立，不再詢問）
 function finishedRoom() {
   rooms.R.game_state.status = "finished"; rooms.R.status = "finished";
   rooms.R.game_state.winners = [{ seat: 0, score: { fans: [], totalFan: 1 } }]; rooms.R.game_state.winner = rooms.R.game_state.winners[0];
@@ -59,31 +59,16 @@ function finishedRoom() {
   finishedRoom();
   force.flowers = { 3: [1, 2, 3, 4, 5, 6, 7], 1: [8] };
   for (const k of [0, 1, 2, 3]) await call(nextGame, { playerId: "p" + k });
-  const s = st(); const dealer = s.dealerSeat;
-  const av = sent.find((e) => e.event === "mj_available_actions");
-  eq([s.status, s.pendingFlowerRob?.robberSeat, s.pendingFlowerRob?.fromSeat, evs().slice(-7), av?.payload.robFlower, av?.payload.playerId],
-    ["playing", 3, 1, ["mj_game_start", ...gameStartEvents.slice(1), "mj_flower_rob_pending", "mj_available_actions"], true, "p3"],
-    "①d 下一局開局 seat3 有 7 張、seat1 有第 8 張：照常開局，接著送 mj_flower_rob_pending＋給 seat3 的七搶一選項");
-  const dealerTile = s.players[dealer].hand[0].id;
-  eq((await call(discard, { playerId: "p" + dealer, tileId: dealerTile })).status, 409, "①e 等待中莊家不能先打牌");
-  sent.length = 0;
-  const p = await call(action, { playerId: "p3", actionType: "pass" });
-  const pass = sent.find((e) => e.event === "mj_pass")!.payload;
-  const dt = sent.find((e) => e.event === "mj_draw_tile")!.payload;
-  eq([p.status, st().pendingFlowerRob ?? null, pass.currentTurn, dt.playerId], [200, null, dealer, "p" + dealer],
-    "①f seat3 不搶：等待清掉，mj_pass 的 currentTurn 是莊家，重送莊家的 mj_draw_tile（天胡／暗槓選項）");
-  eq((await call(discard, { playerId: "p" + dealer, tileId: dealerTile })).status, 200, "①g 之後莊家正常打出第一張");
-}
-// next-game：開局七搶一，搶
-{
-  finishedRoom();
-  force.flowers = { 3: [1, 2, 3, 4, 5, 6, 7], 1: [8] };
-  for (const k of [0, 1, 2, 3]) await call(nextGame, { playerId: "p" + k });
-  sent.length = 0;
-  const w = await call(action, { playerId: "p3", actionType: "win" });
   const s = st();
-  eq([w.status, s.status, rooms.R.status, s.winners?.[0].seat, s.winners?.[0].score.fans[0].name, s.players[1].flowers.length, s.players[3].flowers.length, evs()],
-    [200, "finished", "finished", 3, "七搶一", 0, 8, ["mj_game_over"]], "①h 開局七搶一搶了：seat3 胡，這局結束");
+  eq([s.status, rooms.R.status, s.pendingFlowerRob ?? null, s.winners?.[0].seat, s.winners?.[0].from, s.winners?.[0].score.fans.map((f) => f.name), s.players[1].flowers.length, s.players[3].flowers.length,
+    evs().includes("mj_flower_rob_pending"), evs().at(-1), s.settlement?.deltas],
+    ["finished", "finished", null, 3, 1, ["七搶一"], 0, 8, false, "mj_game_over", [0, -260, 0, 260]],
+    "①d 下一局開局 seat3 有 7 張、seat1 有 1 張：立刻七搶一、這局結束（沒有等待、沒有 mj_flower_rob_pending）；只有 seat1 付 260");
+  const w = await call(action, { playerId: "p3", actionType: "win" });
+  eq(w.status !== 200, true, "①e 結束後 seat3 再送 win：不會重複胡");
+  force.flowers = null; sent.length = 0;
+  for (const k of [0, 1, 2, 3]) await call(nextGame, { playerId: "p" + k });
+  eq([st().status, rooms.R.status], ["playing", "playing"], "①f 開局七搶一之後四家同意：正常開下一局，不會卡住");
 }
 
 console.log(results.join("\n"));

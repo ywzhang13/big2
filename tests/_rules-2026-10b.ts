@@ -3,7 +3,7 @@
 // 共同設定：底 100、每台 20、dealer=seat 0、doorSeat=0（seat0 東、1 南、2 西、3 北）、圈風東。
 import {
   declareWin, calculateSettlement, drawTile, executeConcealedKong, executeAction,
-  getAvailableActions, startAddKong, ownTurnActions, robFlower, passFlowerRob, canKongNow,
+  getAvailableActions, startAddKong, ownTurnActions, canKongNow,
 } from "../lib/mahjong/gameLogic";
 import { calculateScore } from "../lib/mahjong/scoring";
 import type { MahjongGameState, Meld } from "../lib/mahjong/gameState";
@@ -106,20 +106,15 @@ function ronSeat1(hand: string, winKey: string) {
   const n = executeConcealedKong(s, s.players[1].hand.filter((x) => x.display === "p5"));
   eq([n.status, n.winners?.[0].score.fans[0].name], ["finished", "八仙過海"], "④b 暗槓補到第 8 張花：也是八仙過海");
 }
-// ④ 七搶一：seat3 有 7 張花，seat1 摸到第 8 張 → 等 seat3 決定
+// ④ 七搶一（2026-10-22 改）：seat3 有 7 張花，seat1 摸到第 8 張 → 立刻成立，不再等 seat3 決定；只有 seat1 付
 {
   const s = baseState();
   s.players[3].flowers = tiles(FLOWERS7);
   s.wall[0] = t("f8");
   const n = drawTile(s);
-  eq([n.status, n.pendingFlowerRob?.robberSeat, n.pendingFlowerRob?.fromSeat, n.players[1].flowers.length, ownTurnActions(n, 1)],
-    ["playing", 3, 1, 1, []], "④c 別家摸到第 8 張花：進入七搶一等待，摸牌的人這時不能自摸或槓");
-  const robbed = robFlower(n);
-  eq([robbed.status, robbed.winners?.[0].seat, robbed.winners?.[0].score.fans[0].name, robbed.players[3].flowers.length, robbed.players[1].flowers.length, calculateSettlement(robbed).deltas],
-    ["finished", 3, "七搶一", 8, 0, [-360, -260, -260, 880]], "④d 搶：seat3 拿走那張花直接胡，閒家各付 260、莊家付 360（連 2）");
-  const passed = passFlowerRob(n);
-  eq([passed.status, passed.pendingFlowerRob ?? null, passed.players[1].flowers.length, passed.currentTurn],
-    ["playing", null, 1, 1], "④e 不搶：花留在 seat1，照常繼續");
+  eq([n.status, n.pendingFlowerRob ?? null, n.winners?.[0].seat, n.winners?.[0].from, n.winners?.[0].score.fans.map((f) => f.name + f.value), n.players[3].flowers.length, n.players[1].flowers.length, calculateSettlement(n).deltas],
+    ["finished", null, 3, 1, ["七搶一8"], 8, 0, [0, -260, 0, 260]],
+    "④c 別家摸到第 8 張花：立刻七搶一（不詢問），seat3 拿走那張花；只有 seat1 付 底 100＋8 台×20＝260，莊家 seat0 沒參與不加莊家台、也不用付");
 }
 // ④ 只有 7 張花、但第 8 張還沒出現：不觸發
 {

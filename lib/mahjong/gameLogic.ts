@@ -294,18 +294,26 @@ export function dealTiles(state: MahjongGameState): MahjongGameState {
 /**
  * 開局補花完就湊成花牌立刻胡（和打牌中同規則）：
  *   - 一家 8 張花 → 八仙過海，立刻結束
- *   - 一家 7 張、另一家 1 張 → 設 pendingFlowerRob（fromSeat＝拿到那 1 張的人），
- *     等有 7 張的人決定要不要七搶一；莊家照樣先等這個決定才能打牌
+ *   - 一家 7 張、另一家 1 張 → 七搶一，立刻結束（老闆 2026-10-22：不再詢問）
  */
 export function checkDealFlowerWin(s: MahjongGameState): MahjongGameState {
   const eight = s.players.find((p) => p.flowers.length === 8);
   if (eight) return finishFlowerWin(s, eight.seat, "八仙過海", eight.flowers[eight.flowers.length - 1], null);
+  return checkQiangyi(s);
+}
+
+/**
+ * 七搶一（老闆 2026-10-22）：場上一家剛好 7 張花、另一家剛好 1 張（8 張花全出）就立刻成立，不管誰先誰後、不再詢問。
+ * 7 張那家拿走那 1 張花胡牌；只有那 1 張花的人付錢（見 finishFlowerWin、calculateSettlement）
+ */
+function checkQiangyi(s: MahjongGameState): MahjongGameState {
   const robber = s.players.find((p) => p.flowers.length === 7);
   const holder = s.players.find((p) => p.flowers.length === 1);
-  if (robber && holder) {
-    s.pendingFlowerRob = { robberSeat: robber.seat, fromSeat: holder.seat, tile: holder.flowers[0] };
-  }
-  return s;
+  if (!robber || !holder) return s;
+  const tile = holder.flowers[0];
+  holder.flowers = [];
+  robber.flowers.push(tile);
+  return finishFlowerWin(s, robber.seat, "七搶一", tile, holder.seat);
 }
 
 // ---------------------------------------------------------------------------
@@ -354,12 +362,6 @@ export function handleFlowers(
 // ---------------------------------------------------------------------------
 
 export const FLOWER_WIN_FAN = 8;
-const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
-
-/** 這組贏家是不是花牌立刻胡（八仙過海／七搶一） */
-export function isFlowerWin(w: { score: ScoreResult }): boolean {
-  return w.score.fans.some((f) => FLOWER_WIN_NAMES.includes(f.name));
-}
 
 /** 拿掉胡的那張後，手牌原本聽哪些牌（給攤牌畫面用） */
 function waitsOf(concealed: Tile[], winTileId: number, meldCount: number): WaitTile[] {
@@ -389,8 +391,9 @@ export function allHands(s: MahjongGameState) {
 }
 
 /**
- * 直接以八仙過海／七搶一結束這局：8 台，不加其他牌型台；
- * 莊家台照自摸的原則（莊家胡三家都加，閒家胡只有莊家那份加），結算走自摸的算法。
+ * 直接以八仙過海／七搶一結束這局：8 台，不加其他牌型台。
+ *   - 八仙過海：莊家台照自摸的原則（莊家胡三家都加，閒家胡只有莊家那份加），結算走自摸的算法
+ *   - 七搶一（2026-10-22）：只有那 1 張花的人（from）付；莊家台照放槍的原則——莊家胡、或付錢的是莊家才加，其他不加
  */
 function finishFlowerWin(
   s: MahjongGameState,
@@ -401,8 +404,9 @@ function finishFlowerWin(
 ): MahjongGameState {
   const fans: { name: string; value: number }[] = [{ name, value: FLOWER_WIN_FAN }];
   const consecutive = s.roundInfo?.dealerConsecutive ?? 0;
-  fans.push({ name: seat === s.dealerSeat ? "莊家" : "莊家(斷)", value: 1 });
-  if (consecutive > 0) {
+  const dealerInvolved = name === "八仙過海" || seat === s.dealerSeat || from === s.dealerSeat;
+  if (dealerInvolved) fans.push({ name: seat === s.dealerSeat ? "莊家" : "莊家(斷)", value: 1 });
+  if (dealerInvolved && consecutive > 0) {
     fans.push({ name: `連${consecutive}`, value: consecutive });
     fans.push({ name: `拉${consecutive}`, value: consecutive });
   }
@@ -420,7 +424,7 @@ function finishFlowerWin(
 /**
  * 摸牌／補牌後檢查花牌：
  *   - 摸的人湊滿 8 張花 → 八仙過海，立刻結束
- *   - 摸的人摸到第 8 張花、另一家已有 7 張 → 設 pendingFlowerRob，等那家決定要不要七搶一
+ *   - 場上變成一家 7 張、另一家 1 張 → 七搶一，立刻結束（摸到花的是 1 張那家或 7 張那家都算）
  * prev 是摸牌前的狀態（用來判斷這次有沒有摸到花）。
  */
 export function checkFlowerWin(
@@ -432,15 +436,10 @@ export function checkFlowerWin(
   const mine = s.players[seat].flowers;
   if (mine.length === before) return s;
   if (mine.length === 8) return finishFlowerWin(s, seat, "八仙過海", mine[mine.length - 1], null);
-  const total = s.players.reduce((n, p) => n + p.flowers.length, 0);
-  const robber = s.players.find((p) => p.seat !== seat && p.flowers.length === 7);
-  if (total === 8 && robber) {
-    s.pendingFlowerRob = { robberSeat: robber.seat, fromSeat: seat, tile: mine[mine.length - 1] };
-  }
-  return s;
+  return checkQiangyi(s);
 }
 
-/** 七搶一：有 7 張花的人搶走第 8 張花，直接胡 */
+/** 舊版七搶一（要選搶不搶）：2026-10-22 起不會再產生 pendingFlowerRob；留著給上線時還在等待中的牌局用 */
 export function robFlower(state: MahjongGameState): MahjongGameState {
   if (!state.pendingFlowerRob) throw new Error("沒有可以搶的花");
   const { robberSeat, fromSeat, tile } = state.pendingFlowerRob;
@@ -1241,8 +1240,9 @@ export function declareWin(
     from: isSelfDraw ? null : s.lastDiscard!.from, // 放槍、搶槓都記那張牌的來源
     waits: waitsOf(concealed, winTile.id, player.revealed.length),
   };
-  s.winners = [...(s.winners ?? []), entry];
-  if (!s.winner) s.winner = entry;
+  // 一砲多響：winners 和 winner 一律照順位（離放槍的人最近的下家優先）排，不照誰先按（老闆 2026-10-22）
+  s.winners = sortByWinnerPriority(s, [...(s.winners ?? []), entry]);
+  s.winner = s.winners[0];
 
   return s;
 }
@@ -1284,18 +1284,20 @@ export function isDraw(state: MahjongGameState): boolean {
 export function applyWinnerOrderRule(state: MahjongGameState): MahjongGameState {
   const s = cloneState(state);
   const winners = s.winners ?? [];
-  if (winners.length !== 2) {
-    if (winners.length > 0) s.winner = winners[0];
-    return s;
-  }
+  if (winners.length === 0) return s;
   // Self-draw scenarios never have length 2; only ron can have multi-winners.
-  const discarder = s.lastDiscard?.from ?? -1;
-  const priority = (seat: number) =>
-    discarder >= 0 ? ((seat - discarder - 1 + 4) % 4) : seat;
-  const sorted = [...winners].sort((a, b) => priority(a.seat) - priority(b.seat));
-  s.winners = [sorted[0]];
+  // 三響也照順位排（三家都胡，只影響顯示順序：結算標題是順位第一的那家）
+  const sorted = sortByWinnerPriority(s, winners);
+  s.winners = sorted.length === 2 ? [sorted[0]] : sorted;
   s.winner = sorted[0];
   return s;
+}
+
+/** 一砲多響的順位：離放槍（或加槓）的人最近的下家優先；不是放槍（自摸等單一贏家）時原樣 */
+function sortByWinnerPriority(state: MahjongGameState, winners: WinnerEntry[]): WinnerEntry[] {
+  const discarder = state.lastDiscard?.from ?? -1;
+  const priority = (seat: number) => (discarder >= 0 ? (seat - discarder - 1 + 4) % 4 : seat);
+  return [...winners].sort((a, b) => priority(a.seat) - priority(b.seat));
 }
 
 // ---------------------------------------------------------------------------
@@ -1321,19 +1323,13 @@ export function settledWinners(state: MahjongGameState): WinnerEntry[] {
     ? state.winners.slice()
     : state.winner ? [state.winner] : [];
   if (winners.length === 0 || winners[0].seat < 0) return [];
-  if (winners.length === 2) {
-    const discarder = state.lastDiscard?.from ?? -1;
-    const priority = (seat: number) =>
-      discarder >= 0 ? ((seat - discarder - 1 + 4) % 4) : seat;
-    winners.sort((a, b) => priority(a.seat) - priority(b.seat));
-    winners = winners.slice(0, 1);
-  }
+  if (winners.length === 2) winners = sortByWinnerPriority(state, winners).slice(0, 1);
   return winners;
 }
 
-/** 這個胡算不算自摸：自摸、八仙過海、七搶一（三家都付）算；放槍、搶槓不算。整場統計和斗內計數共用 */
+/** 這個胡算不算自摸：自摸、八仙過海（三家都付）算；放槍、搶槓、七搶一（只有 1 張花的人付）不算。整場統計和斗內計數共用 */
 export function isSelfDrawWin(w: WinnerEntry): boolean {
-  return w.from == null || isFlowerWin(w);
+  return w.from == null;
 }
 
 /** 把這局的胡牌、放槍、自摸加進整場統計（會直接改 s；每局結算時呼叫一次） */
@@ -1343,7 +1339,7 @@ export function tallyHandStats(s: MahjongGameState): void {
   let dealIn: number | null = null;
   for (const w of winners) {
     st.wins[w.seat]++;
-    // 自摸、八仙過海、七搶一：三家都付，算自摸；放槍、搶槓：記那張牌的來源
+    // 自摸、八仙過海：三家都付，算自摸；放槍、搶槓、七搶一：記那張牌的來源（七搶一＝那 1 張花的人）
     if (isSelfDrawWin(w)) st.selfDraws[w.seat]++;
     else dealIn = w.from ?? null;
   }
@@ -1373,10 +1369,10 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   const streakFan = 1 + consecutive * 2;
 
   // Self-draw can only be a single winner.
-  // 八仙過海／七搶一也是三家都付，照自摸算（莊家台已在 finishFlowerWin 加好）
+  // 八仙過海也是三家都付，照自摸算（莊家台已在 finishFlowerWin 加好）；七搶一照放槍算（2026-10-22）
   // 天胡一定是莊家自摸，但不另算自摸台（2026-10-21），所以看台名時要把天胡也算進來
   const isSelfDraw = winners.length === 1 &&
-    (winners[0].score.fans.some(f => f.name.includes("自摸") || f.name === "天胡") || isFlowerWin(winners[0]));
+    (winners[0].score.fans.some(f => f.name.includes("自摸") || f.name === "天胡" || f.name === "八仙過海"));
 
   if (isSelfDraw) {
     const winnerSeat = winners[0].seat;
@@ -1414,7 +1410,8 @@ export function calculateSettlement(state: MahjongGameState): Settlement {
   // 放槍 / 一炮多響: discarder pays each winner their individual (底+台×台).
   // 莊家台只在這筆的一方是莊家時才有，已由 declareWin 依此加進 totalFan
   // （莊家胡、或莊家放槍），所以這裡一律由放槍者照 totalFan 付，莊家不另付。
-  const loserSeat = state.lastDiscard?.from ?? -1;
+  // 付錢的人：贏家記的來源（放槍、搶槓＝那張牌的來源，七搶一＝那 1 張花的人）
+  const loserSeat = winners[0].from ?? state.lastDiscard?.from ?? -1;
   let totalFanSum = 0;
   let paymentSum = 0;
   if (loserSeat >= 0) {

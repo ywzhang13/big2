@@ -52,12 +52,12 @@ async function race(unsafe: boolean) {
       && JSON.stringify(b.playerScores) === JSON.stringify(b.settlement?.deltas) && b.playerScores!.reduce((x, y) => x + y, 0) === 0;
     if (!okBa) fail.baXian++;
 
-    // 開局七搶一：只送一次等待
+    // 開局七搶一（2026-10-22 起立刻成立）：和八仙一樣只結算一次
     lobby(); force.flowers = { 3: [1, 2, 3, 4, 5, 6, 7], 1: [8] };
     await Promise.all([call({ playerId: "p0" }), call({ playerId: "p0" })]);
     const q = rooms.R.game_state;
-    const okQ = rooms.R.status === "playing" && q.pendingFlowerRob?.robberSeat === 3
-      && count("mj_game_start") === 1 && count("mj_flower_rob_pending") === 1;
+    const okQ = rooms.R.status === "finished" && q.winners?.[0]?.seat === 3 && count("mj_game_start") === 1 && count("mj_game_over") === 1
+      && JSON.stringify(q.playerScores) === JSON.stringify(q.settlement?.deltas) && q.playerScores!.reduce((x, y) => x + y, 0) === 0;
     if (!okQ) fail.qiQiangYi++;
   }
   opts.unsafe = false; opts.delayMs = 5; force.flowers = null;
@@ -66,7 +66,7 @@ async function race(unsafe: boolean) {
 {
   const safe = await race(false);
   eq(safe.fail, { plain: 0, baXian: 0, qiQiangYi: 0 },
-    `S1 修好後：同時開局兩次（一般／開局八仙／開局七搶一）各 ${RUNS} 次，都只開一局、一個 200 一個 400、存檔和廣播的手牌一致、八仙只結算一次（樂觀鎖擋下並重做 ${safe.conflicts} 次）`);
+    `S1 修好後：同時開局兩次（一般／開局八仙／開局七搶一）各 ${RUNS} 次，都只開一局、一個 200 一個 400、存檔和廣播的手牌一致、八仙和七搶一只結算一次（樂觀鎖擋下並重做 ${safe.conflicts} 次）`);
   const unsafe = await race(true);
   eq(Object.values(unsafe.fail).every((n) => n > 0), true,
     `S2 對照組（關掉樂觀鎖＝修之前）：一般錯 ${unsafe.fail.plain}、八仙錯 ${unsafe.fail.baXian}、七搶一錯 ${unsafe.fail.qiQiangYi} 次`);

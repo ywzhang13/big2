@@ -37,7 +37,7 @@ export interface WinnerEntry {
   seat: number;
   score: ScoreResult;
   winTile?: Tile;          // 胡的那張牌；八仙過海＝第 8 張花、七搶一＝搶來的花
-  from?: number | null;    // 那張牌來自哪個座位；自摸、八仙過海＝null；放槍、搶槓、七搶一＝那家的座位
+  from?: number | null;    // 那張牌來自哪個座位；自摸、八仙過海＝null；放槍、搶槓、七搶一＝那家的座位（七搶一＝那 1 張花的人，也是付錢的人）
   waits?: WaitTile[];      // 拿掉胡的那張後，手牌原本聽哪些牌；花牌胡＝[]
 }
 
@@ -45,7 +45,7 @@ export interface WinnerEntry {
 export interface HandStats {
   wins: number[];      // 胡牌次數（自摸也算；一砲多響每個胡的人各算一次）
   dealIns: number[];   // 放槍次數（一砲多響只算一次；搶槓算被搶的人放槍）
-  selfDraws: number[]; // 自摸次數（八仙過海、七搶一照結算規則算自摸）
+  selfDraws: number[]; // 自摸次數（八仙過海算自摸；七搶一 2026-10-22 起不算）
 }
 
 export interface RoomSettings {
@@ -103,7 +103,7 @@ export interface MahjongGameState {
   // 輪到的人這回合摸進（或補進）的牌；吃、碰後和打牌後清掉。
   // 用來判斷「現在可以自摸／暗槓／加槓」（重新整理時恢復按鈕）。不公開給其他人。
   drawnTileId?: number;
-  // 七搶一：fromSeat 摸到第 8 張花，robberSeat 已有 7 張花，可以搶這張直接胡
+  // 舊版七搶一等待（2026-10-22 起七搶一立刻成立，不會再產生；留著給上線時還在等待中的牌局收尾）
   pendingFlowerRob?: { robberSeat: number; fromSeat: number; tile: Tile };
   // 已宣告地聽的座位（公開）。宣告後不能改聽：只能胡，或打出剛摸到的牌（不能胡時由伺服器自動打出）
   tingSeats?: number[];

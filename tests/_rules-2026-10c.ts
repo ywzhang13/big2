@@ -2,7 +2,7 @@
 // ③八仙過海／七搶一照一般胡牌連莊換莊、莊家台照「付款雙方有莊家才加」。
 // 共同設定：底 100、每台 20、dealer=seat 0、doorSeat=0（seat0 東、1 南、2 西、3 北）、圈風東。
 import {
-  declareWin, calculateSettlement, drawTile, robFlower, checkDealFlowerWin, startNextGame,
+  declareWin, calculateSettlement, drawTile, checkDealFlowerWin, startNextGame,
 } from "../lib/mahjong/gameLogic";
 import type { MahjongGameState, Meld } from "../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../lib/mahjong/tiles";
@@ -79,8 +79,8 @@ function baXian(seat: number, consecutive: number) {
   const s = baseState(0);
   s.players[0].flowers = tiles(FLOWERS7);
   s.wall[0] = t("f8");
-  const robbed = robFlower(drawTile(s)); // seat1 摸到第 8 張，莊家 seat0 七搶一
-  eq(calculateSettlement(robbed).deltas, [840, -280, -280, -280], "③c 莊家七搶一、連莊 0：三家各付 100+(8+1)×20=280（摸到花的人也付）", fanStr(robbed));
+  const robbed = drawTile(s); // seat1 摸到第 8 張，莊家 seat0 立刻七搶一（2026-10-22 改）
+  eq(calculateSettlement(robbed).deltas, [280, -280, 0, 0], "③c 莊家七搶一、連莊 0：只有摸到那 1 張花的 seat1 付 100+(8+1)×20=280（莊家胡照放槍加莊家台）", fanStr(robbed));
 }
 // ③ 連莊／換莊
 {
@@ -109,11 +109,8 @@ function baXian(seat: number, consecutive: number) {
   s.players[3].flowers = tiles(FLOWERS7);
   s.players[1].flowers = tiles("f8");
   const n = checkDealFlowerWin(s);
-  eq([n.status, n.pendingFlowerRob?.robberSeat, n.pendingFlowerRob?.fromSeat, n.pendingFlowerRob?.tile.display, n.currentTurn],
-    ["playing", 3, 1, "f8", 0], "①b 開局 seat3 有 7 張、seat1 有第 8 張：等 seat3 決定七搶一，輪到的還是莊家");
-  const robbed = robFlower(n);
-  eq([robbed.status, robbed.winners?.[0].seat, robbed.players[1].flowers.length, calculateSettlement(robbed).deltas],
-    ["finished", 3, 0, [-280, -260, -260, 800]], "①c 開局七搶一搶了：seat3 胡，莊家付 280、閒家各付 260");
+  eq([n.status, n.pendingFlowerRob ?? null, n.winners?.[0].seat, n.winners?.[0].from, n.players[1].flowers.length, calculateSettlement(n).deltas],
+    ["finished", null, 3, 1, 0, [0, -260, 0, 260]], "①b 開局 seat3 有 7 張、seat1 有第 8 張：立刻七搶一（2026-10-22 改），只有 seat1 付 260，莊家沒參與不付");
 }
 {
   const s = baseState(0);

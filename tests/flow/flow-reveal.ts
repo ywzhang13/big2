@@ -105,12 +105,11 @@ function eq(a: unknown, e: unknown, msg: string) {
   await call(action, { playerId: "p1", actionType: "win" });
   eq(overEvent().winners.map(brief), [{ seat: 1, winTile: "p5", from: 2, waits: ["5筒"] }], "R8 搶槓胡：winTile=5 筒、from=2（加槓的人）、waits=5 筒");
 }
-// R9 七搶一（seat3 有 7 張花，seat1 摸到第 8 張，seat3 搶）
+// R9 七搶一（seat3 有 7 張花，seat1 摸到第 8 張，立刻成立；2026-10-22 起不用 seat3 按）
 {
   setup((s) => { s.currentTurn = 1; s.hasDrawn = false; s.players[3].flowers = tiles("f1 f2 f3 f4 f5 f6 f7"); s.wall[0] = t("f8"); });
-  await call(draw, { playerId: "p1" });
   sent.length = 0;
-  await call(action, { playerId: "p3", actionType: "win" });
+  await call(draw, { playerId: "p1" });
   eq(overEvent().winners.map(brief), [{ seat: 3, winTile: "f8", from: 1, waits: [] }], "R9 七搶一：winTile=搶來的花、from=1（摸到花的人）、waits=[]");
 }
 // R10 八仙過海
@@ -153,8 +152,8 @@ function eq(a: unknown, e: unknown, msg: string) {
   const midJson = JSON.stringify(mid);
   eq([partial.body.partial, st().status, mid.winners?.map((w) => Object.keys(w).sort()), mid.winner ? Object.keys(mid.winner).sort() : null,
       midJson.includes("waits"), midJson.includes("winTile"), mid.allHands ?? null],
-    [true, "playing", [["score", "seat"]], ["score", "seat"], false, false, null],
-    "R13 一砲多響 seat1 先胡、還在等其他人：state 的 winners／winner 只有 seat、score，沒有 waits／winTile／from，也沒有 allHands");
+    [true, "playing", undefined, null, false, false, null],
+    "R13 一砲多響 seat1 先胡、還在等其他人：state 完全不給 winners／winner（2026-10-22：最後算誰胡要看順位，不先公開先按的人），也沒有 waits／winTile／allHands");
   await call(action, { playerId: "p0", actionType: "win" });
   await call(action, { playerId: "p2", actionType: "win" });
   const done = toPlayerGameState(st(), "p0");

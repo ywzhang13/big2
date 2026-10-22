@@ -329,10 +329,6 @@ export interface PublicGameState {
   allHands?: ReturnType<typeof allHands>;
 }
 
-function publicWinner(w: MahjongGameState["winner"]): MahjongGameState["winner"] {
-  return w ? { seat: w.seat, score: w.score } : undefined;
-}
-
 export function toPublicGameState(state: MahjongGameState): PublicGameState {
   const taken = takenFromDiscards(state);
   return {
@@ -346,10 +342,10 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
     prevalentWind: state.prevalentWind,
     turnCount: state.turnCount,
     hasDrawn: state.hasDrawn,
-    // 一砲多響還在等其他人決定時（牌局仍進行中），只公開誰胡了幾台；
-    // winTile／from／waits 會透露贏家的手牌，等這局結束才給
-    winner: state.status === "finished" ? state.winner : publicWinner(state.winner),
-    winners: state.status === "finished" ? state.winners : state.winners?.map((w) => publicWinner(w)!),
+    // 一砲多響還在等其他人決定時（牌局仍進行中）不公開誰胡了：最後算不算胡要看順位，
+    // 先公開會讓前端先跳出「胡＋先按的人」（老闆 2026-10-22 回報）；這局結束才給
+    winner: state.status === "finished" ? state.winner : undefined,
+    winners: state.status === "finished" ? state.winners : undefined,
     roomSettings: state.roomSettings,
     roundInfo: state.roundInfo,
     playerScores: state.playerScores,

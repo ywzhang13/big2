@@ -1,7 +1,7 @@
 // 老闆 2026-10-17：
 //   ⑥ 上家打出的牌不能明槓（只能碰或吃）；對家、上家以外的別家照樣可以明槓；暗槓不受影響
 //   ⑤ 整場統計：每家胡牌、放槍、自摸次數。一砲多響每個胡的人各算一次胡、放槍的人只算一次；
-//      雙響只有一家真的胡（和結算一致）；八仙過海、七搶一照結算算自摸；整場打完才公開
+//      雙響只有一家真的胡（和結算一致）；八仙過海照結算算自摸、七搶一記在付錢的人；整場打完才公開
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { rooms } from "../support/stub-db";
@@ -98,8 +98,8 @@ eq(tally([w(1, 0), w(2, 0), w(3, 0)], 0), { wins: [0, 1, 1, 1], dealIns: [1, 0, 
 eq(tally([w(3, 0), w(1, 0)], 0), { wins: [0, 1, 0, 0], dealIns: [1, 0, 0, 0], selfDraws: [0, 0, 0, 0] }, "S4 雙響：和結算一樣只有離放槍最近的下家胡（seat1），另一家不算");
 eq(tally([], undefined), { wins: [0, 0, 0, 0], dealIns: [0, 0, 0, 0], selfDraws: [0, 0, 0, 0] }, "S5 流局：都不加");
 eq([tally([w(2, null, "八仙過海")]), tally([w(3, 1, "七搶一")])],
-  [{ wins: [0, 0, 1, 0], dealIns: [0, 0, 0, 0], selfDraws: [0, 0, 1, 0] }, { wins: [0, 0, 0, 1], dealIns: [0, 0, 0, 0], selfDraws: [0, 0, 0, 1] }],
-  "S6 八仙過海、七搶一：照結算規則（三家都付）算自摸，被搶花的人不算放槍");
+  [{ wins: [0, 0, 1, 0], dealIns: [0, 0, 0, 0], selfDraws: [0, 0, 1, 0] }, { wins: [0, 0, 0, 1], dealIns: [0, 1, 0, 0], selfDraws: [0, 0, 0, 0] }],
+  "S6 八仙過海三家付算自摸；七搶一（2026-10-22 改）只有 1 張花的人付，不算自摸，照付款記在那 1 張花的人（放槍欄）");
 eq(tally([w(2, 0)], 0, { wins: [3, 1, 0, 2], dealIns: [1, 2, 0, 0], selfDraws: [1, 0, 0, 1] }),
   { wins: [3, 1, 1, 2], dealIns: [2, 2, 0, 0], selfDraws: [1, 0, 0, 1] }, "S7 跨局累加：在之前的次數上加");
 
