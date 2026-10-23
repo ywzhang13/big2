@@ -1250,6 +1250,8 @@ body {
 .mjfx-menu.m.col { padding: 3px; }
 /* 手機左右家：6 種排成 2 欄×3 列（單欄 6×44 會超過牌桌底，蓋到動作列和手牌；拍手加入後改，2026-10-22） */
 .mjfx-menu.m.col .kinds { grid-template-columns: repeat(2, 44px); gap: 2px; }
+/* 一欄排一組（老闆 2026-10-23）：直向排滿 3 個再換欄＝第一欄愛心、砸錢、拍手，第二欄丟雞蛋、潑水桶、拳擊 */
+.mjfx-menu.m.col .kinds { grid-template-rows: repeat(3, auto); grid-auto-flow: column; }
 .mjfx-menu.m.col .kinds button { height: 44px; gap: 0; }
 .mjfx-menu.m.col .kinds img { width: 22px; height: 22px; }
 /* 小箭頭指著名牌（轉 45° 的方塊，只畫朝外的兩條邊） */

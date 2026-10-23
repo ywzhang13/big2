@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { FX_KINDS, FX_LABEL, abortFx, enqueueFx, preloadFx, setFxLayer, setFxVolume, unlockAudio, type FxKind } from "@/lib/mahjong/fx/engine";
+import { FX_LABEL, abortFx, enqueueFx, preloadFx, setFxLayer, setFxVolume, unlockAudio, type FxKind } from "@/lib/mahjong/fx/engine";
 import { bindFxBlockRoom, setFxBlocked, shouldPlayFx, useFxBlocked } from "@/lib/mahjong/fx/block";
 import { fxGain, usePrefs } from "@/lib/mahjong/prefs";
 import { fxCooldownLeft, sendFx, setFxTable, subscribeFx, type FxMessage } from "@/lib/mahjong/fx/transport";
 import { canUseFx, createFxMenu, isColumn, placeFxMenu, relOf, type FxMenuPlace } from "@/lib/mahjong/fx/menu";
 import { isGuestTab } from "@/lib/mahjong/clientAuth";
+
+// 選單上的顯示順序（老闆 2026-10-23）：愛心、砸錢、拍手、丟雞蛋、潑水桶、拳擊。只排一行（對家橫排、桌機左右家直排）照這個順序；
+// 手機左右家 2 欄×3 列時一欄排一組：第一欄愛心、砸錢、拍手，第二欄丟雞蛋、潑水桶、拳擊（直向排滿再換欄，見 globals.css）
+const MENU_ORDER: FxKind[] = ["love", "cash", "clap", "egg", "water", "punch"];
 
 const ICON: Record<FxKind, string> = {
   love: "/mahjong-fx/heart-glossy.png", cash: "/mahjong-fx/bill-classic.png", egg: "/mahjong-fx/egg-lottie-whole.webp",
@@ -153,7 +157,7 @@ export default function MjFx({
         >
           {pos && <i className={`arr ${pos.side}`} style={pos.side === "t" ? { left: pos.arrow } : { top: pos.arrow }} aria-hidden="true" />}
           <div className="kinds">
-            {FX_KINDS.map((k) => {
+            {MENU_ORDER.map((k) => {
               const left = fxCooldownLeft(k, now);
               return (
                 <button type="button" key={k} data-fx-kind={k} disabled={!ready} onClick={() => fire(k)}>
