@@ -52,12 +52,12 @@ function ronSeat1(hand: string, winKey: string) {
   return declareWin(s, 1, false);
 }
 
-// ② 字一色 + 小四喜：不加風牌台
+// ② 字一色 + 小四喜：門風不加，圈風刻照算 1 台（老闆 2026-10-23）
 {
   const r = ronSeat1("z1 z1 z1 z2 z2 z2 z3 z3 z3 z5 z5 z5 z6 z6 z6 z4", "z4");
   const w = r.winners![0].score;
-  eq([w.fans.some((f) => f.name === "風牌"), w.totalFan], [false, 40],
-    "②a 字一色＋小四喜：門清1+獨聽1+碰碰胡4+字一色16+三元牌1×2+小四喜8+五暗刻8=40，不加風牌", fanStr(r));
+  eq([w.fans.filter((f) => f.name === "風牌").length, w.totalFan], [1, 41],
+    "②a 字一色＋小四喜（東風圈、南門）：門清1+獨聽1+碰碰胡4+字一色16+三元牌1×2+圈風(東)1+小四喜8+五暗刻8=41，門風(南)不加；中、發刻不是小三元（眼是北）所以三元牌照算", fanStr(r));
 }
 // ② 字一色 + 大四喜：不加風牌台
 {

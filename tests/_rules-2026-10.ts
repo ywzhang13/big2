@@ -181,8 +181,8 @@ const QQR_MELDS = () => [
   const r = ron(s, 3, "z7", [1]);
   const fans = r.state.winners![0].score.fans.map((f) => f.name + f.value);
   eq([fans.includes("字一色16"), fans.some((f) => f.startsWith("混一色")), r.state.winners![0].score.totalFan],
-    [true, false, 38],
-    "⑤d 字一色：門清1+獨聽1+碰碰胡4+字一色16+三元牌1×2+小三元4+風牌(東圈)1+風牌(南門)1+五暗刻8=38，不算混一色", fanStr(r.state));
+    [true, false, 36],
+    "⑤d 字一色：門清1+獨聽1+碰碰胡4+字一色16+小三元4+風牌(東圈)1+風牌(南門)1+五暗刻8=36，不算混一色；小三元的中、發刻不另加三元牌（老闆 2026-10-23）", fanStr(r.state));
 }
 // ⑦ 地胡：閒家第一次摸牌就胡（自摸或胡莊家的牌）；之前有人碰、明槓、暗槓就不算
 {

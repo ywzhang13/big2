@@ -71,11 +71,24 @@ const isHedi = (c: ScoringContext) => c.isLastTile && !c.isSelfDraw && !c.isRobb
 const noHedi = (g: string) => { const [n, f] = g.split("|"); const kept = f.split(",").filter((x) => x !== "河底撈魚1"); return kept.length === f.split(",").length ? g : `${Number(n) - 1}|${kept.join(",")}`; };
 const out = raw.map((r, i) => (isHedi(cases[i]) ? noHedi(r) : r));
 const isTianhu = (c: ScoringContext) => c.isFirstDraw && c.isDealer;
+// 2026-10-23 三元、四喜改台（老闆）：基準檔是改之前產的。有大三元、小三元的手拿掉「三元牌」；
+// 小四喜而且圈風是刻子（或槓）的手，在小四喜前面補 1 台風牌（圈風），再比對（T6 另外驗只有這些手不一樣）
+const keysOf = (c: ScoringContext) => [...c.concealed, ...c.revealed.flatMap((m) => m.tiles)].map((x) => x.suit + x.rank);
+const honorAdj = (g: string, c: ScoringContext) => {
+  let f = g.split("|")[1].split(",").filter(Boolean);
+  if (f.some((x) => /^(大三元|小三元)\d/.test(x))) f = f.filter((x) => x !== "三元牌1");
+  if (f.includes("小四喜8") && keysOf(c).filter((k) => k === `z${c.prevalentWind}`).length >= 3) f.splice(f.indexOf("小四喜8"), 0, "風牌1");
+  return `${f.reduce((n, x) => n + Number(x.match(/\d+$/)![0]), 0)}|${f.join(",")}`;
+};
 if (process.env.WRITE_GOLDEN) {
   writeFileSync(GOLDEN, JSON.stringify(out, null, 0).replace(/","/g, '",\n"') + "\n");
   console.log(`基準檔已寫入 ${cases.length} 手`);
 } else {
-  const golden: string[] = JSON.parse(readFileSync(GOLDEN, "utf8"));
+  const before: string[] = JSON.parse(readFileSync(GOLDEN, "utf8"));
+  const golden = before.map((g, i) => honorAdj(g, cases[i]));
+  const changedHands = cases.map((c, i) => i).filter((i) => golden[i] !== before[i]);
+  eq([changedHands.length, changedHands.every((i) => /大三元|小三元|小四喜/.test(before[i])), cases.filter((c, i) => /大三元|小三元|小四喜/.test(before[i])).length],
+    [10, true, 10], `T6 三元、四喜改台：2000 手裡只有 ${changedHands.length} 手台數變了，全都是大三元、小三元或小四喜的牌（每手少掉構成牌型的三元牌台）；其他 ${2000 - changedHands.length} 手和改前完全一樣（見 T1、T2）`);
   const non = cases.map((c, i) => i).filter((i) => !isTianhu(cases[i]));
   const diff = non.filter((i) => out[i] !== golden[i]);
   const names = new Set(non.flatMap((i) => out[i].split("|")[1].split(",").map((f) => f.replace(/\d+$/, "")).filter(Boolean)));
@@ -116,7 +129,7 @@ const hand = (keys: string) => { const c = tiles(keys); return { concealed: c, w
   const big = calculateScore({ ...base, ...hand("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 m1 m2 m3 p5 p5") });
   const small = calculateScore({ ...base, ...hand("z1 z1 z1 z2 z2 z2 z3 z3 z3 m1 m2 m3 m4 m5 m6 z4 z4") });
   eq([names(big).includes("大四喜"), names(small).includes("小四喜"), names(big).includes("風牌"), NO_ZIMO(big) && NO_ZIMO(small)], [true, true, false, true],
-    "T3e 天胡＋大四喜、天胡＋小四喜：四喜照一般規則算（有四喜不另加風牌），沒有門清、自摸", `${names(big).join("+")}｜${names(small).join("+")}`);
+    "T3e 天胡＋大四喜、天胡＋小四喜：四喜照一般規則算（大四喜不另加風牌），沒有門清、自摸", `${names(big).join("+")}｜${names(small).join("+")}`);
 }
 
 // ---- T4：真實結算流程 ----

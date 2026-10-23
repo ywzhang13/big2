@@ -319,13 +319,15 @@ function scoreDecomposition(
   let dragonPairCount = 0;
 
   for (const dk of dragonKeys) {
-    if (pongMelds.some((m) => m.tileKeys[0] === dk)) {
-      dragonPongCount++;
-      fans.push({ name: "三元牌", value: 1 });
-    }
+    if (pongMelds.some((m) => m.tileKeys[0] === dk)) dragonPongCount++;
   }
   if (dragonKeys.includes(hand.pair)) {
     dragonPairCount++;
+  }
+  // 大三元、小三元只算牌型本身的台，構成它的三元牌刻子不再各加 1 台（老闆 2026-10-23）
+  const hasSanYuan = dragonPongCount === 3 || (dragonPongCount === 2 && dragonPairCount === 1);
+  if (!hasSanYuan) {
+    for (let i = 0; i < dragonPongCount; i++) fans.push({ name: "三元牌", value: 1 });
   }
 
   if (dragonPongCount === 3) {
@@ -342,8 +344,12 @@ function scoreDecomposition(
   const windPairCount = windKeys.includes(hand.pair) ? 1 : 0;
   const hasSiXi =
     windPongCount === 4 || (windPongCount === 3 && windPairCount === 1);
-  // 有大四喜或小四喜時（任何牌型）不另外加風牌台
+  // 有大四喜或小四喜時（任何牌型）不照一般方式加風牌台；
+  // 小四喜另外照算圈風 1 台（圈風是刻子或槓才算，是眼不算；門風等於圈風也只加 1），門風台不算（老闆 2026-10-23）
   const skipWindFans = hasSiXi;
+  if (windPongCount === 3 && windPairCount === 1 && pongMelds.some((m) => m.tileKeys[0] === `z${ctx.prevalentWind}`)) {
+    fans.push({ name: "風牌", value: 1 });
+  }
 
   for (const wk of windKeys) {
     if (!skipWindFans && pongMelds.some((m) => m.tileKeys[0] === wk)) {

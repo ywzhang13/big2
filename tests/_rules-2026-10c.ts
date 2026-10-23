@@ -56,8 +56,8 @@ function baXian(seat: number, consecutive: number) {
 {
   const r = ronSeat1("z1 z1 z1 z2 z2 z2 z3 z3 z3 m1 m2 m3 p4 p5 p6 z4", "z4");
   const w = r.winners![0].score;
-  eq([w.fans.some((f) => f.name === "風牌"), w.totalFan], [false, 12],
-    "②a 一般牌型小四喜（東南西刻＋北對）：門清1+獨聽1+小四喜8+三暗刻2=12，不加風牌（原本會多 東圈風1+南門風1）", fanStr(r));
+  eq([w.fans.filter((f) => f.name === "風牌").length, w.totalFan], [1, 13],
+    "②a 一般牌型小四喜（東南西刻＋北對，東風圈、南門）：門清1+獨聽1+圈風(東)1+小四喜8+三暗刻2=13，門風(南)不加（老闆 2026-10-23）", fanStr(r));
 }
 {
   const r = ronSeat1("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 m1 m2 m3 m5", "m5");
