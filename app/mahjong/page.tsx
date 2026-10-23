@@ -16,6 +16,8 @@ import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
+import BigWinFx from "@/components/mahjong/BigWinFx";
+import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
 import { useTableSounds } from "@/hooks/useTableSounds";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
@@ -760,6 +762,8 @@ function RoomView({
     }
     if (lastWinnerSeatRef.current === w.seat) return;
     lastWinnerSeatRef.current = w.seat;
+    // 大牌（天胡、字一色、大四喜、大三元…，見 lib/mahjong/bigWin.ts）：先播大牌特效，收尾的自摸／胡浮層由大牌特效接（下面）
+    if (pickBigWin(w)) return;
     if (isZimoWin) {
       setCelebrationMode("zimo");
       const t = setTimeout(() => setCelebrationMode(null), 3500);
@@ -771,6 +775,45 @@ function RoomView({
       return () => clearTimeout(t);
     }
   }, [state.winner, isZimoWin, isRonWin]);
+
+  // 大牌胡牌特效（老闆 2026-10-23 定案）：這一局結束、順位第一的贏家有大牌就播（四家各自看到同一份結果）。
+  // 播過就記在這個分頁（重新整理、斷線重連不重播）。天胡、八仙過海、七搶一播完直接進結算；其他接現有的自摸／胡浮層（照實際自摸或放槍）。
+  // 播的時候先不出結算浮層，播完（或跳過）才出
+  const handKey = `${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`;
+  const [bigWin, setBigWin] = useState<{ key: string; pick: BigWinPick; seat: number; zimo: boolean; out: boolean } | null>(null);
+  const bigWinCand = state.status === "finished" && state.winner ? pickBigWin(state.winner) : null;
+  // 整場打完（completed）時伺服器結算後馬上關房：最後一局照樣播，播完才出最終結算；解散等其他原因關房不播（審伯 2026-10-23）
+  const bigWinRoomOk = !closed || (closed.endReason === "completed" && !!state.gameOver);
+  const bigWinCandKey = bigWinCand && bigWinRoomOk ? bigWinKey(roomId, handKey, state.winner) : null;
+  useEffect(() => {
+    if (!bigWinCand || !bigWinCandKey || bigWinPlayed(bigWinCandKey) || !state.winner) return;
+    const key = bigWinCandKey;
+    const show = { key, pick: bigWinCand, seat: state.winner.seat, zimo: isZimoWin, out: false };
+    // 下一個畫面才掛上；「記下播過」和「掛上特效」放在同一刻，中間不會有一次重繪讓結算浮層先閃出來
+    const t = setTimeout(() => {
+      if (bigWinPlayed(key)) return;
+      markBigWinPlayed(key);
+      setBigWin(show);
+    });
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只看這一手的識別：同一手只啟動一次
+  }, [bigWinCandKey]);
+  // 換局、離開房間：還沒播完的收掉
+  const bigWinLive = bigWin && bigWin.key === bigWinCandKey ? bigWin : null;
+  // 這一手的大牌特效還沒播（剛結束、下一個畫面才掛上）或正在播：先不出結算浮層
+  const bigWinHoldResult = !!bigWinCandKey && (!!bigWinLive || !bigWinPlayed(bigWinCandKey));
+  const onBigWinDone = (skipped: boolean) => {
+    if (!bigWin) return;
+    if (skipped || !bigWin.pick.cele) { setBigWin(null); return; }
+    // 接現有的自摸／胡浮層：大牌特效留在底下淡出，浮層播完才出結算
+    setBigWin({ ...bigWin, out: true });
+    setCelebrationMode(bigWin.zimo ? "zimo" : "ron");
+  };
+  useEffect(() => {
+    if (!bigWinLive?.out) return;
+    const t = setTimeout(() => { setCelebrationMode(null); setBigWin(null); }, bigWinLive.zimo ? 3500 : 2000);
+    return () => clearTimeout(t);
+  }, [bigWinLive?.out, bigWinLive?.zimo]);
 
   // Pass roomId (登入房另有玩家 id、座位頻道) from create/join to the hook
   useEffect(() => {
@@ -1315,8 +1358,13 @@ function RoomView({
         </div>
       )}
 
-      {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大 */}
-      {isFinished && state.winner && (
+      {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），點畫面任一處跳過 */}
+      {bigWinLive && (
+        <BigWinFx key={bigWinLive.key} pick={bigWinLive.pick} seat={bigWinLive.seat} mobile={isMobileLandscape} out={bigWinLive.out} onDone={onBigWinDone} />
+      )}
+
+      {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大；大牌特效播的時候先不出 */}
+      {isFinished && state.winner && !bigWinHoldResult && (
         <MjResultMobile
           desktop={!isMobileLandscape}
           tingSeats={state.tingSeats}

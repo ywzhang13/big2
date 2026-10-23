@@ -39,7 +39,7 @@ const COPIES: Partial<Record<ImgKey, number>> = { heart: 44, billA: 22, billB: 2
 const SOUNDS = ["heart-tick", "heart-pluck1", "heart-pluck2", "heart-chime", "bill-swish", "coin-1", "coin-2", "coin-3", "coin-stack",
   "egg-crack1", "thud", "splash1", "splash2", "punch1", "punch2", "shatter1", "glass-heavy",
   "clap-hit-1", "clap-hit-2", "clap-hit-3", "clap-hit-4", "clap-hit-5",
-  "tile", "turn-remind"] as const;
+  "tile", "turn-remind", "bigwin-t2", "bigwin-g3"] as const;
 type SoundKey = (typeof SOUNDS)[number];
 
 // ---------------- 預載 ----------------
@@ -168,6 +168,47 @@ export async function playTableSound(kind: "tile" | "remind"): Promise<TableSoun
     s.start();
     return { played: true, ac: AC.state };
   } catch { return { played: false, ac: AC.state }; }
+}
+
+// ---------------- 大牌胡牌特效的音效（老闆 2026-10-23 定案金鈴組；畫面在 components/mahjong/BigWinFx.tsx） ----------------
+// 頂級 T2（重擊點 1.05 秒）、大牌 G3（重擊點 0.48 秒）。和特效同一條路（互動音效的音量、靜音、壓縮器），播放音量 1。
+const BIG_WIN_SND = { top: { n: "bigwin-t2", hit: 1050 }, big: { n: "bigwin-g3", hit: 480 } } as const;
+/** 重擊點（從專屬段開始算幾 ms）：畫面最亮的那一下排在這裡 */
+export const bigWinHitMs = (tier: "top" | "big") => BIG_WIN_SND[tier].hit;
+/**
+ * 播大牌胡牌音效；回傳停止函式（40ms 淡出，不會喀一聲）。靜音、還沒載好、音訊沒解鎖就不響。
+ * zeroAt：畫面時間軸的零點（performance.now；專屬段最亮層動畫真正開始那一刻）。從檔案裡「已經過了多久＋輸出延遲」的位置開始放，
+ * 重擊點從喇叭出來的時間就剛好是 zeroAt＋重擊點；沒有零點（減少動態）就從頭放
+ */
+export function playBigWinSound(tier: "top" | "big", zeroAt: number | null): () => void {
+  const b = BUF[BIG_WIN_SND[tier].n];
+  if (!AC || !b || masterGain === 0) return () => {};
+  const ac = AC;
+  let stopped = false;
+  let stopNow = () => {};
+  const start = () => {
+    if (stopped || ac.state !== "running") return;
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = b;
+    g.gain.value = 1;
+    s.connect(g).connect(MIX ?? ac.destination);
+    const latency = (ac.outputLatency || 0) + (ac.baseLatency || 0);
+    const offset = zeroAt == null ? 0 : Math.max(0, (performance.now() - zeroAt) / 1000 + latency);
+    if (offset >= b.duration) return;
+    try { s.start(ac.currentTime, offset); } catch { return; }
+    stopNow = () => {
+      g.gain.setTargetAtTime(0, ac.currentTime, 0.012);
+      try { s.stop(ac.currentTime + 0.05); } catch { /* 已經播完 */ }
+    };
+  };
+  // 音訊被手機暫停時先叫醒再播（起播位置照當下的時間重算，重擊點照樣對齊畫面）
+  if (ac.state === "running") start();
+  else void ac.resume().then(start, () => {});
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    stopNow();
+  };
 }
 
 /** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋） */

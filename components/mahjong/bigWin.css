@@ -1,0 +1,350 @@
+/* 大牌胡牌特效（components/mahjong/BigWinFx.tsx；老闆 2026-10-23 定案，照預覽站試看版）。尺寸、色彩、時間照小宜規格：
+   桌機主標 72px、主物件 460×310；手機主標 38px、主物件 250×168。只動 transform、opacity。
+   data-bw-phase：0 剛掛上、1 入場、2 主動作、3 定格、4 收向勝者名牌 */
+/* 蓋在牌桌、結算浮層（.mjm-result z 50）上面，現有自摸／胡浮層（z 65）下面 */
+.bw { position: fixed; inset: 0; z-index: 62; pointer-events: none; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.bw.d { --ow: 460px; --oh: 310px; --tt: 72px; --tf: 22px; --safe: 72px; }
+.bw.m { --ow: 250px; --oh: 168px; --tt: 38px; --tf: 14px; --safe: 28px; }
+.bw.top { --b1: 250ms; --b4: 650ms; }
+.bw.big { --b1: 180ms; --b4: 600ms; }
+/* 專屬段播完、現有浮層出來時，專屬段在底下淡掉（不會先亮回牌桌再暗下去） */
+.bw.out { opacity: 0; transition: opacity 350ms ease-out; }
+
+/* 暗角：頂級＝黑 72%＋金色放射，中央最亮；大牌＝黑 52%＋18% 金霧；MIGI＝沿用現有翠綠暗桌。勝者名牌那一塊挖空，名牌一直看得到 */
+.bw-vig {
+  position: absolute; inset: 0; opacity: 0; transition: opacity var(--b1) ease-out;
+  -webkit-mask-image: radial-gradient(ellipse var(--arx) var(--ary) at var(--ax) var(--ay), transparent 0, transparent 68%, #000 100%);
+  mask-image: radial-gradient(ellipse var(--arx) var(--ary) at var(--ax) var(--ay), transparent 0, transparent 68%, #000 100%);
+}
+.bw.top .bw-vig {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,236,170,.34) 0%, rgba(201,169,110,.14) 26%, transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 50%, rgba(240,214,138,.09) 0deg 5deg, transparent 5deg 15deg),
+    rgba(0,0,0,.72);
+}
+.bw.big .bw-vig { background: radial-gradient(circle at 50% 50%, rgba(240,214,138,.18) 0%, transparent 52%), rgba(0,0,0,.52); }
+.bw.migi .bw-vig { background: radial-gradient(ellipse at center, rgba(5,150,105,.6) 0%, rgba(0,0,0,.66) 72%); }
+.bw:not([data-bw-phase="0"]) .bw-vig { opacity: 1; }
+
+/* z-index 1：主物件自成一層，主標暗底（z -1）墊在主物件最底下、暗角上面 */
+.bw-obj { position: relative; z-index: 1; width: var(--ow); height: var(--oh); }
+
+/* 畫面最亮的那一下：專屬段開始後 --hit 毫秒到頂（--hit＝所選音效的重擊點），只動 opacity */
+.bw-flash { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(255,250,225,.75) 0%, rgba(255,226,150,.35) 22%, transparent 50%); }
+.bw.migi .bw-flash { background: radial-gradient(circle at 50% 50%, rgba(209,250,229,.7) 0%, rgba(52,211,153,.32) 22%, transparent 50%); }
+.bw:not([data-bw-phase="0"]) .bw-flash { animation: bw-flash 450ms ease-out calc(var(--hit) - 90ms) both; }
+@keyframes bw-flash { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 主標後面的暗底（老闆 2026-10-23：大三元主標後面透出剩餘張數和「東風圈 第1局」）：定格時出現，名牌在畫面邊上不受影響 */
+.bw-back {
+  position: absolute; z-index: -1; left: -14%; right: -14%; top: -12%; bottom: -12%; opacity: 0; transition: opacity 200ms ease-out;
+  background: radial-gradient(ellipse closest-side, #07140c 0%, #07140c 60%, rgba(7,20,12,0) 100%);
+}
+.bw.tianhu .bw-back { top: calc(var(--oh) * -.08); bottom: auto; height: calc(var(--oh) * .78); }
+.bw.dasanyuan .bw-back { top: calc(var(--oh) * -.1); bottom: auto; height: calc(var(--oh) * .64); }
+.bw.migi .bw-back { left: -22%; right: -22%; top: calc(50% - var(--mw) * 2.5); bottom: auto; height: calc(var(--mw) * 4.6); }
+.bw[data-bw-phase="3"] .bw-back, .bw.migi[data-bw-phase="2"] .bw-back { opacity: 1; }
+
+/* 定格：牌型名＋台數（主物件調暗，字壓在中間） */
+.bw-title {
+  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  opacity: 0; transform: scale(.82); transition: opacity 220ms ease-out, transform 360ms cubic-bezier(.2,1.3,.4,1);
+}
+.bw-name {
+  font-family: "Noto Sans TC", sans-serif; font-weight: 900; font-size: var(--tt); line-height: 1; white-space: nowrap;
+  letter-spacing: .12em; text-indent: .12em; color: #fff6d2;
+  text-shadow: 0 0 18px rgba(240,214,138,.9), 0 0 42px rgba(201,169,110,.6), 0 3px 10px rgba(0,0,0,.85);
+}
+.bw-fan {
+  margin-top: .35em; font-family: "Chakra Petch", "Noto Sans TC", sans-serif; font-weight: 800; font-size: var(--tf);
+  letter-spacing: .08em; color: #f0d68a; text-shadow: 0 2px 6px rgba(0,0,0,.9); white-space: nowrap;
+}
+.bw[data-bw-phase="3"] .bw-title { opacity: 1; transform: none; }
+.bw[data-bw-phase="4"] .bw-title { opacity: 0; transform: scale(1.06); transition-duration: 200ms; }
+
+/* 勝者名牌：定格時亮金框，收尾時主物件飛進去 */
+.bw-anchor { position: fixed; z-index: 3; border-radius: 12px; opacity: 0; transition: opacity 300ms; box-shadow: 0 0 0 2px rgba(240,214,138,.95), 0 0 18px 4px rgba(240,214,138,.55); }
+.bw.migi .bw-anchor { box-shadow: 0 0 0 2px rgba(52,211,153,.95), 0 0 18px 4px rgba(16,185,129,.55); }
+.bw[data-bw-phase="3"] .bw-anchor { opacity: .55; }
+.bw[data-bw-phase="4"] .bw-anchor { opacity: 1; animation: bw-anchor-hit var(--b4) ease-out both; }
+@keyframes bw-anchor-hit { 0%, 70% { transform: scale(1); } 85% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+/* 跳過提示：一開始 400ms，右下角細金色雙箭頭 */
+.bw-skip { position: absolute; right: var(--safe); bottom: 20px; display: flex; gap: 1px; opacity: 0; animation: bw-hint 400ms ease-out both; }
+.bw.d .bw-skip { bottom: 40px; }
+.bw-skip i { width: 8px; height: 8px; border-top: 1.5px solid #f0d68a; border-right: 1.5px solid #f0d68a; transform: rotate(45deg); }
+@keyframes bw-hint { 0% { opacity: 0; } 25%, 75% { opacity: .85; } 100% { opacity: 0; } }
+
+/* ---------- 天胡（頂級 3 秒）：金色天幕揭開 → 17 張手牌由上落下、日輪亮起 → 「天胡」24 台 → 日輪縮成金點飛進勝者名牌 ---------- */
+.bw.tianhu.d { --tw: 46px; --th: 62px; }
+.bw.tianhu.m { --tw: 25px; --th: 34px; }
+.bw-curtain {
+  position: absolute; left: 0; right: 0; top: 0; height: 62%;
+  background: linear-gradient(180deg, rgba(255,226,150,.5), rgba(240,214,138,.16) 55%, transparent);
+  transform-origin: top; transform: scaleY(0); transition: transform var(--b1) ease-out, opacity 400ms;
+}
+.bw:not([data-bw-phase="0"]) .bw-curtain { transform: none; }
+.bw[data-bw-phase="3"] .bw-curtain { opacity: .5; }
+.bw[data-bw-phase="4"] .bw-curtain { opacity: 0; }
+.bw-sun, .bw-rays { position: absolute; left: 50%; border-radius: 50%; }
+.bw-sun {
+  top: calc(var(--oh) * .04); width: calc(var(--oh) * .56); height: calc(var(--oh) * .56); margin-left: calc(var(--oh) * -.28);
+  background: radial-gradient(circle, #fff6d2 0%, #f0d68a 45%, #c9a96e 72%, rgba(201,169,110,0) 74%);
+  box-shadow: 0 0 40px rgba(255,214,120,.55);
+  opacity: .25; transform: scale(.6); transition: opacity 200ms ease-out calc(var(--hit) - 450ms), transform 200ms cubic-bezier(.2,1.3,.4,1) calc(var(--hit) - 450ms);
+}
+.bw-rays {
+  top: calc(var(--oh) * -.33); width: calc(var(--oh) * 1.3); height: calc(var(--oh) * 1.3); margin-left: calc(var(--oh) * -.65);
+  background: repeating-conic-gradient(rgba(255,226,150,.4) 0deg 6deg, transparent 6deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 22%, transparent 70%); mask-image: radial-gradient(circle, #000 22%, transparent 70%);
+  opacity: 0; transition: opacity 300ms ease-out calc(var(--hit) - 450ms); animation: bw-spin 8s linear infinite;
+}
+@keyframes bw-spin { to { transform: rotate(360deg); } }
+.bw[data-bw-phase="2"] .bw-sun { opacity: 1; transform: none; }
+.bw[data-bw-phase="2"] .bw-rays { opacity: 1; }
+.bw[data-bw-phase="3"] .bw-sun { opacity: .3; transform: none; transition-delay: 0ms; transition-duration: 250ms; }
+.bw[data-bw-phase="3"] .bw-rays { opacity: .35; transition-delay: 0ms; }
+.bw[data-bw-phase="4"] .bw-rays { opacity: 0; transition: opacity 200ms; }
+.bw[data-bw-phase="4"] .bw-sun { opacity: 1; transition: none; animation: bw-sun-go 480ms cubic-bezier(.5,0,.7,.2) both; }
+@keyframes bw-sun-go {
+  0% { transform: scale(1); }
+  35% { transform: translate(0, 0) scale(.12); }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.1); }
+}
+.bw-hand {
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  width: calc(var(--tw) * 9 + 24px); display: flex; flex-wrap: wrap; justify-content: center; gap: 3px;
+  transition: opacity 250ms;
+}
+.bw-t {
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,.55));
+  opacity: 0; transform: translateY(calc(var(--oh) * -1.6));
+  transition: transform 340ms cubic-bezier(.3,1.35,.55,1) calc(var(--i) * 24ms + var(--hit) - 974ms), opacity 120ms linear calc(var(--i) * 24ms + var(--hit) - 974ms);
+}
+.bw[data-bw-phase="2"] .bw-t, .bw[data-bw-phase="3"] .bw-t, .bw[data-bw-phase="4"] .bw-t { opacity: 1; transform: none; }
+/* 定格時牌型名放在日輪裡（分鏡第 3 格），不壓到手牌 */
+.bw.tianhu .bw-title { bottom: auto; height: calc(var(--oh) * .64); }
+.bw[data-bw-phase="4"] .bw-hand { opacity: 0; }
+
+/* ---------- 大三元（大牌 2 秒）：一束金光 → 中、發、白從左、上、右進場合體，紅綠白光柱上衝 → 「大三元」8 台 → 光柱壓成一束金線飛進勝者名牌 ---------- */
+.bw.dasanyuan.d { --tw: 72px; --th: 97px; }
+.bw.dasanyuan.m { --tw: 40px; --th: 54px; }
+.bw-beam {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1.5px;
+  background: linear-gradient(180deg, transparent, rgba(255,226,150,.9) 50%, transparent);
+  opacity: 0; transform: scaleY(0); transition: opacity var(--b1), transform var(--b1) ease-out;
+}
+.bw[data-bw-phase="1"] .bw-beam, .bw[data-bw-phase="2"] .bw-beam { opacity: .9; transform: none; }
+.bw[data-bw-phase="2"] .bw-beam { opacity: 0; transition: opacity 300ms 300ms; }
+.bw-trio { position: absolute; left: 50%; top: 72%; transform: translate(-50%, -50%); display: flex; gap: calc(var(--tw) * .06); transition: opacity 250ms; }
+.bw-d { position: relative; opacity: 0; transition: transform calc(var(--hit) - 180ms) cubic-bezier(.5,0,.8,.45), opacity 120ms; filter: drop-shadow(0 5px 8px rgba(0,0,0,.6)); }
+.bw-d.d0 { transform: translate(calc(var(--ow) * -.9), calc(var(--oh) * .25)) rotate(-14deg); }
+.bw-d.d1 { transform: translateY(calc(var(--oh) * -1.1)); }
+.bw-d.d2 { transform: translate(calc(var(--ow) * .9), calc(var(--oh) * .25)) rotate(14deg); }
+.bw[data-bw-phase="2"] .bw-d, .bw[data-bw-phase="3"] .bw-d, .bw[data-bw-phase="4"] .bw-d { opacity: 1; transform: none; }
+.bw-pillar {
+  position: absolute; z-index: -1; left: 8%; right: 8%; bottom: 40%; height: 100vh; filter: blur(1.5px);
+  transform-origin: bottom; transform: scaleY(0); opacity: 0;
+  transition: transform 180ms cubic-bezier(.3,.8,.4,1) calc(var(--hit) - 180ms), opacity 60ms calc(var(--hit) - 180ms);
+}
+.d0 .bw-pillar { background: linear-gradient(0deg, rgba(239,68,68,.95), rgba(239,68,68,.4) 45%, transparent); }
+.d1 .bw-pillar { background: linear-gradient(0deg, rgba(16,185,129,.95), rgba(16,185,129,.4) 45%, transparent); }
+.d2 .bw-pillar { background: linear-gradient(0deg, rgba(255,255,255,.95), rgba(255,255,255,.4) 45%, transparent); }
+.bw[data-bw-phase="2"] .bw-pillar, .bw[data-bw-phase="3"] .bw-pillar { opacity: 1; transform: none; }
+/* 定格：牌型名在三張牌上方，三張牌不調暗；光柱調暗，白光柱才不會吃掉白字 */
+.bw.dasanyuan .bw-title { bottom: auto; height: calc(var(--oh) * .45); }
+.bw[data-bw-phase="3"] .bw-pillar { opacity: .3; transition: opacity 200ms; }
+.bw[data-bw-phase="4"] .bw-pillar { opacity: 0; transform: scaleX(.05); transition: transform 220ms ease-in, opacity 220ms ease-in; }
+.bw[data-bw-phase="4"] .bw-trio { opacity: 0; }
+.bw-line {
+  position: absolute; left: 50%; top: 6%; height: 84%; width: 4px; margin-left: -2px; border-radius: 2px; opacity: 0;
+  background: linear-gradient(180deg, transparent, #f0d68a 20%, #fff6d2 50%, #f0d68a 80%, transparent);
+  box-shadow: 0 0 12px rgba(240,214,138,.9);
+}
+.bw[data-bw-phase="4"] .bw-line { animation: bw-line-go 480ms cubic-bezier(.45,0,.6,.3) both; }
+@keyframes bw-line-go {
+  0% { opacity: 0; transform: scale(3, 1); }
+  20% { opacity: 1; transform: scale(1, 1); }
+  42% { transform: translate(0, 0) scale(1, .22); }
+  100% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1, .08); }
+}
+
+/* ---------- MIGI（大牌 2 秒）：現有翠綠暗桌 → MIGI 字標從翠綠牌面推出、後方細金色「胡」印 → MIGI 8 台 → 綠字縮進勝者名牌，金印多留 120ms 才消失 ---------- */
+.bw-jade, .bw-stamp, .bw-migi { position: absolute; left: 50%; top: 50%; }
+.bw-jade {
+  width: calc(var(--oh) * .5); height: calc(var(--oh) * .68); border-radius: 12%;
+  background: linear-gradient(160deg, #34d399, #059669 60%, #047857);
+  box-shadow: 0 0 30px rgba(52,211,153,.6), inset 0 0 0 2px rgba(209,250,229,.6);
+  opacity: 0; transform: translate(-50%, -50%) scale(.6); transition: opacity var(--b1), transform var(--b1) ease-out;
+}
+.bw[data-bw-phase="1"] .bw-jade { opacity: .9; transform: translate(-50%, -50%); }
+.bw[data-bw-phase="2"] .bw-jade { opacity: .45; transform: translate(-50%, -50%) scale(.92); transition-duration: 300ms; }
+.bw[data-bw-phase="3"] .bw-jade { opacity: .3; transform: translate(-50%, -50%) scale(.92); }
+.bw[data-bw-phase="4"] .bw-jade { opacity: 0; transform: translate(-50%, -50%) scale(.92); transition-duration: 200ms; }
+.bw-stamp {
+  width: calc(var(--oh) * .4); height: calc(var(--oh) * .4); display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid #f0d68a; border-radius: 8%; box-shadow: inset 0 0 0 4px transparent, inset 0 0 0 5px rgba(240,214,138,.55), 0 0 14px rgba(240,214,138,.35);
+  opacity: 0; transform: translate(var(--stx), -100%) rotate(-12deg) scale(1.4);
+  transition: opacity 100ms calc(var(--hit) - 340ms), transform 160ms cubic-bezier(.5,0,.8,.5) calc(var(--hit) - 340ms);
+}
+.bw-stamp span { font-family: serif; font-weight: 400; font-size: calc(var(--oh) * .28); line-height: 1; color: #f0d68a; text-shadow: 0 0 10px rgba(240,214,138,.7); }
+.bw[data-bw-phase="2"] .bw-stamp, .bw[data-bw-phase="3"] .bw-stamp { opacity: .9; transform: translate(var(--stx), -100%) rotate(-12deg); }
+.bw[data-bw-phase="4"] .bw-stamp { opacity: 0; transform: translate(var(--stx), -100%) rotate(-12deg); transition: opacity 180ms 120ms; }
+/* 字標和現有 MIGI 特效同一個樣式（app/globals.css 的 .mjm-fly .word、.mjm-fly.a） */
+.bw-migi {
+  font-family: "Chakra Petch", "Noto Sans TC", sans-serif; font-weight: 700; letter-spacing: .22em; text-indent: .22em; line-height: 1; white-space: nowrap;
+  background: linear-gradient(180deg, #ffffff 0%, #d1fae5 36%, #34d399 60%, #ecfdf5 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 16px rgba(16,185,129,.95)) drop-shadow(0 3px 10px rgba(0,0,0,.7));
+  font-size: var(--mw); z-index: 1;
+  opacity: 0; transform: translate(-50%, -50%) scale(.3); transition: opacity 200ms, transform 420ms cubic-bezier(.2,1.4,.4,1);
+}
+.bw[data-bw-phase="2"] .bw-migi, .bw[data-bw-phase="3"] .bw-migi { opacity: 1; transform: translate(-50%, -50%); }
+.bw[data-bw-phase="4"] .bw-migi { transition: none; animation: bw-migi-go 480ms ease-in-out both; }
+@keyframes bw-migi-go {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  92% { opacity: 1; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.14); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.14); }
+}
+/* 字標大小和現有 MIGI 特效一樣（手機 46px、桌機 92px）；金印在字標右上後方；台數緊貼字標下面 */
+.bw.migi.m { --mw: 46px; --stx: calc(var(--mw) * 1.35); }
+.bw.migi.d { --mw: 92px; --stx: calc(var(--mw) * 1.35); }
+.bw.migi .bw-title { justify-content: flex-start; padding-top: calc(var(--oh) / 2 + var(--mw) * .62); }
+.bw.migi .bw-fan { color: #d1fae5; text-shadow: 0 0 10px rgba(16,185,129,.9), 0 2px 6px rgba(0,0,0,.9); }
+
+/* 減少動態：直接停在定格那一拍，不飛、不轉、不閃；整層 250ms 淡入，主物件外圍一圈靜態金框 */
+.bw.rm *, .bw.rm *::before, .bw.rm *::after { transition: none !important; animation: none !important; }
+.bw.rm { animation: bw-rm-in 250ms ease-out both; }
+.bw.rm.out { animation: none; }
+@keyframes bw-rm-in { from { opacity: 0; } to { opacity: 1; } }
+.bw.rm .bw-obj { outline: 1.5px solid rgba(240,214,138,.85); outline-offset: 10px; border-radius: 14px; }
+.bw.rm.migi .bw-obj { outline-color: rgba(52,211,153,.85); }
+.bw.rm .bw-skip { display: none; }
+
+/* ===================== 第三版補做的 8 種（字一色、大四喜、小四喜、清一色、五暗刻、八仙過海、七搶一；地胡 2026-10-23 拿掉） =====================
+   共用擺牌：每張牌 .bw-g 從起點（--x0、--y0、--r0、--s0）在主動作那一拍移到終點（--x、--y），單位是一張牌的寬（--tw）、高（--th）；
+   --dl／--du／--ez 是從重擊點倒推的延遲、長度、曲線；.flip 的牌先蓋著，--fl 時翻面。
+   定格：主物件縮小往下移（--ms、--my），牌型名和台數在上半部，後面墊不透明深綠底 */
+.bw.gen { --ms: .62; --my: calc(var(--oh) * .22); --my0: 0px; }
+.bw.zi1se { --ms: .7; }
+.bw.qing1se, .bw.wuanke { --ms: 1; --my: calc(var(--oh) * .2); --my0: calc(var(--oh) * .2); }
+.bw.qiqiang1 { --ms: .6; }
+.bw.zi1se.m { --tw: 24px; --th: 32px; } .bw.zi1se.d { --tw: 44px; --th: 59px; }
+/* 大四喜、小四喜、七搶一的牌放大 1.5 倍（老闆 2026-10-23）；定格時縮小一點往下移，主標在上面 */
+.bw.dasixi.m, .bw.xiaosixi.m { --tw: 33px; --th: 45px; } .bw.dasixi.d, .bw.xiaosixi.d { --tw: 60px; --th: 81px; }
+.bw.dasixi, .bw.xiaosixi { --ms: .6; --my: calc(var(--oh) * .27); }
+.bw.qing1se.m { --tw: 25px; --th: 34px; } .bw.qing1se.d { --tw: 46px; --th: 62px; }
+.bw.wuanke.m { --tw: 23px; --th: 31px; } .bw.wuanke.d { --tw: 42px; --th: 57px; }
+.bw.qiqiang1.m { --tw: 36px; --th: 48px; } .bw.qiqiang1.d { --tw: 66px; --th: 88px; }
+
+.bw-main { position: absolute; inset: 0; transform: translateY(var(--my0)); transition: transform 360ms cubic-bezier(.2,.9,.3,1), opacity 260ms ease-in; }
+.bw[data-bw-phase="3"] .bw-main { transform: translateY(var(--my)) scale(var(--ms)); }
+.bw[data-bw-phase="4"] .bw-main { transform: translateY(var(--my)) scale(calc(var(--ms) * .4)); opacity: 0; }
+.bw.gen .bw-title { bottom: auto; height: calc(var(--oh) * .45); }
+.bw.gen .bw-back { top: calc(var(--oh) * -.1); bottom: auto; height: calc(var(--oh) * .8); }
+.bw-tiles, .bw-rotor { position: absolute; inset: 0; }
+
+.bw-g {
+  position: absolute; left: 50%; top: 50%; width: var(--tw); height: var(--th);
+  margin-left: calc(var(--tw) / -2); margin-top: calc(var(--th) / -2);
+  filter: drop-shadow(0 3px 5px rgba(0,0,0,.55));
+  opacity: 0; transform: translate(calc(var(--tw) * var(--x0)), calc(var(--th) * var(--y0))) rotate(var(--r0)) scale(var(--s0));
+  transition: opacity var(--b1) ease-out;
+}
+.bw[data-bw-phase="1"] .bw-g { opacity: var(--o1); }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g {
+  opacity: 1; transform: translate(calc(var(--tw) * var(--x)), calc(var(--th) * var(--y))) rotate(var(--r));
+  transition: opacity 120ms linear var(--dl), transform var(--du) var(--ez) var(--dl);
+}
+/* 翻面：牌背縮成一條（60ms）→ 牌面展開（60ms） */
+.bw-g .in { position: relative; width: 100%; height: 100%; }
+.bw-g .bk, .bw-g .fc { position: absolute; inset: 0; }
+.bw-g .fc { transform: scaleX(0); }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g .bk { transform: scaleX(0); transition: transform 60ms ease-in var(--fl); }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g .fc { transform: scaleX(1); transition: transform 60ms ease-out calc(var(--fl) + 60ms); }
+/* 金光（落定後一直亮著：七搶一被拉進來的那張） */
+.bw-g.glow::after, .bw-g.thud::after, .bw-g.hitglow::after { content: ""; position: absolute; inset: -2px; border-radius: 4px; pointer-events: none; opacity: 0; box-shadow: 0 0 0 1.5px rgba(255,236,170,.95), 0 0 14px 4px rgba(240,214,138,.85); }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"]) .bw-g.glow::after { opacity: 1; transition: opacity 120ms calc(var(--dl) + var(--du) - 40ms); }
+/* 五暗刻：翻面那一下沉穩一震＋金光一閃 */
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g.thud .in { animation: bw-thud 260ms ease-out calc(var(--fl) + 60ms) both; }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g.thud::after { animation: bw-pulse 420ms ease-out calc(var(--fl) + 60ms) both; }
+@keyframes bw-thud { 0% { transform: none; } 40% { transform: translateY(6%) scale(1.06); } 100% { transform: none; } }
+@keyframes bw-pulse { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+/* 清一色：翻面時往上一跳，連起來是一道牌浪 */
+.bw.qing1se:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g .in { animation: bw-lift 280ms ease-out var(--fl) both; }
+@keyframes bw-lift { 0% { transform: none; } 40% { transform: translateY(-30%); } 100% { transform: none; } }
+
+/* 金墨／金光掃過（字一色的方印、清一色的牌浪）：重擊點時正好掃到中間 */
+.bw-sweep { position: absolute; left: 50%; top: 50%; width: var(--sw); height: var(--sh); margin-left: calc(var(--sw) / -2); margin-top: calc(var(--sh) / -2); overflow: hidden; z-index: 1; opacity: 0; }
+.bw.zi1se { --sw: calc(var(--tw) * 6.9); --sh: calc(var(--th) * 3.5); }
+.bw.qing1se { --sw: calc(var(--tw) * 10); --sh: calc(var(--th) * 2.9); }
+.bw-sweep::before { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 38%, rgba(255,244,200,.85) 50%, transparent 62%); transform: translateX(-110%); }
+.bw:is([data-bw-phase="2"]) .bw-sweep { opacity: 1; }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-sweep::before { transform: translateX(110%); transition: transform 360ms linear calc(var(--hr) - 180ms); }
+.bw-sealframe {
+  position: absolute; left: 50%; top: 50%; width: calc(var(--tw) * 6.75); height: calc(var(--th) * 3.55); margin-left: calc(var(--tw) * -3.375); margin-top: calc(var(--th) * -1.775);
+  border: 2px solid #f0d68a; border-radius: 8px; box-shadow: 0 0 16px rgba(240,214,138,.7), inset 0 0 12px rgba(240,214,138,.35);
+  opacity: 0; transform: scale(1.12);
+}
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"]) .bw-sealframe { opacity: 1; transform: none; transition: opacity 100ms calc(var(--hr) - 60ms), transform 160ms cubic-bezier(.3,1.4,.5,1) calc(var(--hr) - 60ms); }
+
+/* 羅盤環（大四喜）、風環（小四喜，北邊缺口在重擊點補齊）、花環（七搶一，上半圈在重擊點閉合成整圈） */
+.bw-ring { position: absolute; left: 50%; top: calc(50% + var(--ry0, 0px)); width: var(--rw); height: var(--rh); margin-left: calc(var(--rw) / -2); margin-top: calc(var(--rh) / -2); border-radius: 50%; border: 2px solid rgba(240,214,138,.85); box-shadow: 0 0 12px rgba(240,214,138,.5); opacity: 0; transition: opacity var(--b1); }
+.bw.dasixi, .bw.xiaosixi { --rw: calc(var(--tw) * 6.5); --rh: calc(var(--th) * 3.1); }
+.bw.qiqiang1 { --rw: calc(var(--tw) * 6.6); --rh: calc(var(--th) * 3.2); --ry0: calc(var(--th) * .55); }
+.bw.dasixi:not([data-bw-phase="0"]) .bw-ring { opacity: .9; }
+.bw-ring.gap { -webkit-mask-image: conic-gradient(from 235deg, transparent 0 70deg, #000 70deg); mask-image: conic-gradient(from 235deg, transparent 0 70deg, #000 70deg); }
+.bw-ring.half { -webkit-mask-image: linear-gradient(180deg, #000 50%, transparent 50%); mask-image: linear-gradient(180deg, #000 50%, transparent 50%); }
+.bw:is([data-bw-phase="1"], [data-bw-phase="2"]) .bw-ring.gap, .bw:is([data-bw-phase="1"], [data-bw-phase="2"]) .bw-ring.half { opacity: .9; }
+.bw[data-bw-phase="2"] .bw-ring.gap, .bw[data-bw-phase="2"] .bw-ring.half { opacity: 0; transition: opacity 60ms calc(var(--hr) - 30ms); }
+.bw-ring.full { transform: scale(.92); }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"]) .bw-ring.full { opacity: 1; transform: none; transition: opacity 60ms calc(var(--hr) - 40ms), transform 160ms cubic-bezier(.3,1.5,.5,1) calc(var(--hr) - 40ms); }
+/* 大四喜：整個羅盤倒轉半圈轉正（牌各自反向轉，牌面一直是正的），轉正＝重擊點；入場是四方各一束風線 */
+.bw-rotor { transform: rotate(-180deg); }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-rotor { transform: none; transition: transform 800ms cubic-bezier(.25,.7,.25,1) calc(var(--hr) - 800ms); }
+.bw-winds i { position: absolute; left: 50%; top: 50%; width: 2px; height: calc(var(--oh) * .9); margin-left: -1px; background: linear-gradient(0deg, transparent, rgba(255,236,170,.9)); transform-origin: 50% 0; opacity: 0; transform: rotate(var(--wa)) translateY(calc(var(--oh) * .55)) scaleY(0); }
+.bw-winds i:nth-child(1) { --wa: 180deg; } .bw-winds i:nth-child(2) { --wa: 270deg; } .bw-winds i:nth-child(3) { --wa: 0deg; } .bw-winds i:nth-child(4) { --wa: 90deg; }
+.bw[data-bw-phase="1"] .bw-winds i { opacity: 1; transform: rotate(var(--wa)) translateY(calc(var(--oh) * .2)) scaleY(1); transition: transform var(--b1) ease-out, opacity 100ms; }
+.bw[data-bw-phase="2"] .bw-winds i { opacity: 0; transform: rotate(var(--wa)) translateY(calc(var(--oh) * .2)) scaleY(1); transition: opacity 300ms; }
+
+/* ---------- 八仙過海（小宜〈八仙過海-重新設計〉方向 A 金潮長卷）：八張花牌大大地完整亮出來，不圍圈、不拉入第八張 ----------
+   牌寬手機 48px、桌機 82px；主標「八仙過海 8 台」在不透明 #103522 底牌上（手機 176×58、桌機 320×92，1px 金框）。
+   定格時牌不縮小（規格：手機牌寬不得小於 43px），整組往上移一點，底牌放在下面、勝者名牌保護區上面 */
+.bw.baxian.m { --tw: 48px; --th: 65px; } .bw.baxian.d { --tw: 82px; --th: 112px; }
+.bw.baxian { --ms: 1; --my: calc(var(--oh) * -.19); --py: calc(var(--oh) * .45); }
+.bw.baxian .bw-back { display: none; }
+.bw.baxian .bw-title {
+  inset: auto; left: 50%; top: calc(50% + var(--py)); width: 176px; height: 58px; margin: -29px 0 0 -88px;
+  background: #103522; border: 1px solid #C9A96E; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.55); z-index: 3;
+}
+.bw.baxian.d .bw-title { width: 320px; height: 92px; margin: -46px 0 0 -160px; border-radius: 12px; }
+.bw.baxian .bw-name { font-size: 24px; }
+.bw.baxian .bw-fan { font-size: 12px; margin-top: .25em; }
+.bw.baxian.d .bw-name { font-size: 44px; }
+.bw.baxian.d .bw-fan { font-size: 18px; }
+/* 八張在重擊點同時金亮一下 */
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"], [data-bw-phase="4"]) .bw-g.hitglow::after { animation: bw-pulse 420ms ease-out calc(var(--hr) - 105ms) both; }
+/* 牌列下方兩道錯位海浪，入場時展開、重擊點最亮 */
+.bw-waves i { position: absolute; left: 50%; top: 50%; width: calc(var(--tw) * 6.4); height: calc(var(--th) * .7); margin-left: calc(var(--tw) * -3.2); border-top: 3px solid rgba(240,214,138,.9); border-radius: 50% 50% 0 0 / 100% 100% 0 0; filter: drop-shadow(0 0 6px rgba(240,214,138,.7)); opacity: 0; transform: scaleX(0); }
+.bw-waves i:nth-child(1) { margin-top: calc(var(--th) * .75); }
+.bw-waves i:nth-child(2) { margin-top: calc(var(--th) * 1); width: calc(var(--tw) * 5.4); margin-left: calc(var(--tw) * -2.4); }
+.bw:not([data-bw-phase="0"]) .bw-waves i { opacity: .55; transform: none; transition: opacity var(--b1), transform 300ms ease-out; }
+.bw:is([data-bw-phase="2"], [data-bw-phase="3"]) .bw-waves i { animation: bw-lit 450ms ease-out calc(var(--hr) - 90ms) both; }
+@keyframes bw-lit { 0% { opacity: .55; } 20% { opacity: 1; } 100% { opacity: .7; } }
+
+/* 收尾：主物件化成一個小東西飛進勝者名牌（方印、風盤、風環、弧光、石印、浪線、金緞） */
+.bw-fly2 { position: absolute; left: 50%; top: calc(50% + var(--my)); z-index: 2; opacity: 0; transform: translate(-50%, -50%); }
+.bw[data-bw-phase="4"] .bw-fly2 { animation: bw-fly2-go 460ms cubic-bezier(.5,0,.7,.2) both; }
+@keyframes bw-fly2-go {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 1; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.3); }
+}
+.bw-fly2.k-seal { width: calc(var(--th) * 1.1); height: calc(var(--th) * 1.1); border: 3px solid #f0d68a; border-radius: 6px; box-shadow: 0 0 14px rgba(240,214,138,.9), inset 0 0 10px rgba(240,214,138,.6); }
+.bw-fly2.k-disc { width: calc(var(--th) * 1.2); height: calc(var(--th) * 1.2); border-radius: 50%; background: radial-gradient(circle, #fff6d2 0%, #f0d68a 50%, #c9a96e 70%, rgba(201,169,110,0) 72%); box-shadow: 0 0 18px rgba(240,214,138,.8); }
+.bw-fly2.k-ring { width: calc(var(--th) * 1.3); height: calc(var(--th) * 1.3); border-radius: 50%; border: 3px solid #f0d68a; box-shadow: 0 0 14px rgba(240,214,138,.9); }
+.bw-fly2.k-arc { width: calc(var(--tw) * 4); height: calc(var(--th) * .9); border-top: 4px solid #f0d68a; border-radius: 50% 50% 0 0 / 100% 100% 0 0; filter: drop-shadow(0 0 8px rgba(240,214,138,.9)); }
+.bw-fly2.k-ribbon { width: calc(var(--tw) * 4); height: calc(var(--th) * .28); border-radius: 3px; background: linear-gradient(90deg, rgba(240,214,138,0), #f0d68a 20%, #fff6d2 50%, #f0d68a 80%, rgba(240,214,138,0)); box-shadow: 0 0 12px rgba(240,214,138,.8); transform: translate(-50%, -50%) skewX(-12deg); }
+/* 大牌（2 秒）的定格只有 0.45 秒：牌型名和暗底要更快到位 */
+.bw.big .bw-title { transition: opacity 150ms ease-out, transform 260ms cubic-bezier(.2,1.3,.4,1); }
+.bw.big .bw-back { transition: opacity 120ms ease-out; }

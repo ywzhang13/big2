@@ -1,4 +1,4 @@
-麻將互動特效素材（小宜〈互動特效-5種定案規格-2026-10-20〉；第 6 種拍手、出牌聲和提醒聲 2026-10-22 加入）
+麻將互動特效素材（小宜〈互動特效-5種定案規格-2026-10-20〉；第 6 種拍手、出牌聲和提醒聲 2026-10-22 加入；大牌胡牌特效音效 2026-10-23 加入）
 
 圖片
 - heart-glossy.png：Openclipart #21138 Glossy Heart，公眾領域
@@ -24,6 +24,11 @@
 - tile（出牌聲）：Freesound「Domino_sfx_moveTile」poenia #745028（https://freesound.org/people/poenia/sounds/745028/ ），CC0；
   老馬加工（2026-10-22）：取原檔開頭那一下（14～36ms，一聲乾淨的「喀」），放大並限幅，聽起來和金幣聲一樣大
 - turn-remind（輪到自己太久的提醒聲「滴滴」）：阿妍用程式合成（2000Hz 方波、兩聲各 60ms、間隔 0.1 秒，2026-10-22），自製，無授權限制
+- bigwin-t2（大牌胡牌特效・頂級「金光上升大鑼」，重擊點 1.05 秒）、bigwin-g3（大牌「金鈴上升小鑼」，重擊點 0.48 秒）：阿妍製作（2026-10-23，〈大牌胡牌音效-候選評估-2026-10-23〉的 T2、G3）。
+  金鈴、上升音是程式合成（自製，無授權限制）；疊進去的樂器單音都來自 Freesound，逐一確認為 CC0（公眾領域，可商用、不用標註）：
+  ・T2：155461 gong bash resonance（hiddenpersuader）、385011 hit of orchestral cymbals and bass drum（Selector）、369394 Timpani C2（Terry93D）
+  ・G3：537206 Magyar gong（Logicogonist）、687926 JH Big Tom（Johnnie_Holiday）
+  網址格式 https://freesound.org/people/<作者>/sounds/<編號>/ ；合成、疊加、裁切和音量對齊的腳本在阿妍工作資料夾（大牌胡牌音效候選-2026-10-23/生成腳本/），不放進專案
 
 程式
 - lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md
