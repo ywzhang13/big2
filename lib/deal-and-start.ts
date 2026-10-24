@@ -1,27 +1,29 @@
-import { getSupabaseServer } from "./supabase-server";
-import { broadcast } from "./broadcast";
+import { broadcast } from "@/lib/broadcast";
 import { deal } from "./deck";
 import type { Card } from "./constants";
+import { loadRoomForDeal, loadSeatedPlayers, saveHand, startRoomIfUnchanged } from "@/lib/big2/dealStore";
 
 /**
  * Deal cards to all players, find who has 3C, update DB, and broadcast game_start.
  * Used by both /api/game/ready (when all ready) and /api/game/continue.
+ * 回傳 true＝開局了；false＝發牌途中房間被動過（例如有人在等人階段退出），沒有開局、也沒有廣播（呼叫端回 409）。
+ * 最後改成 playing 時用「讀座位之前的 row_version」和狀態做條件（審伯 2026-10-24）：
+ * 讀完座位後有人退出（退出會改房間、row_version +1），就不會用舊的 4 人名單開局。
+ * statuses：允許從哪些狀態開局（第一場是 waiting／ready_check；/api/game/continue 的下一場是 finished）。
  */
 export async function dealAndStart(
   roomId: string,
   roomCode: string,
-  existingScores?: Record<string, number>
-): Promise<void> {
-  const supabase = getSupabaseServer();
+  existingScores?: Record<string, number>,
+  statuses: string[] = ["waiting", "ready_check"]
+): Promise<boolean> {
+  // 先記下房間版本，再讀座位
+  const before = await loadRoomForDeal(roomId);
+  if (!before || !statuses.includes(before.status)) return false;
 
   // Get players ordered by seat
-  const { data: players, error: playersError } = await supabase
-    .from("big2_players")
-    .select("id, player_id, name, seat")
-    .eq("room_id", roomId)
-    .order("seat", { ascending: true });
-
-  if (playersError || !players || players.length !== 4) {
+  const players = await loadSeatedPlayers(roomId);
+  if (players.length !== 4) {
     throw new Error("無法取得玩家資料");
   }
 
@@ -40,24 +42,10 @@ export async function dealAndStart(
   // Update each player's hand in DB
   for (let i = 0; i < 4; i++) {
     const player = players[i];
-    const hand: Card[] = hands[player.seat];
-
-    const { error } = await supabase
-      .from("big2_players")
-      .update({
-        hand,
-        card_count: 13,
-        is_finished: false,
-        finish_order: null,
-      })
-      .eq("id", player.id);
-
-    if (error) {
-      throw new Error("更新玩家手牌失敗");
-    }
+    await saveHand(player.id, hands[player.seat]);
   }
 
-  // Update room status
+  // Update room status（條件寫入：版本和狀態都沒變才開局）
   const roomUpdate: Record<string, unknown> = {
     status: "playing",
     current_turn: starterSeat,
@@ -70,13 +58,8 @@ export async function dealAndStart(
     roomUpdate.scores = existingScores;
   }
 
-  const { error: roomError } = await supabase
-    .from("big2_rooms")
-    .update(roomUpdate)
-    .eq("id", roomId);
-
-  if (roomError) {
-    throw new Error("更新房間狀態失敗");
+  if (!(await startRoomIfUnchanged(roomId, before.row_version, statuses, roomUpdate))) {
+    return false; // 中間有人退出或房間被改過：不開局、不廣播（寫進去的手牌下一次發牌會覆蓋）
   }
 
   // Public broadcast: player info without hands
@@ -104,4 +87,5 @@ export async function dealAndStart(
       hand,
     });
   }
+  return true;
 }

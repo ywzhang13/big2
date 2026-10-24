@@ -30,7 +30,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "只有房主可以發牌" }, { status: 403 });
     }
 
-    await dealAndStart(roomId, room.code);
+    // 發牌途中有人退出、或房間已經不在等人／準備確認（房間版本或狀態變了）→ 不開局，回 409（審伯 2026-10-24）
+    if (!(await dealAndStart(roomId, room.code))) {
+      return Response.json({ error: "room_changed" }, { status: 409 });
+    }
 
     return Response.json({ success: true });
   } catch {

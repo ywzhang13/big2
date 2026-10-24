@@ -91,3 +91,29 @@ export async function insertPlayer(row: { room_id: string; player_id: string; na
 }
 // 純函式（不連資料庫），沿用真的版本：state 路由、開局廣播用（公開資訊不能含手牌）
 export { toPlayerGameState, toPublicGameState } from "../../lib/mahjong/db";
+// 等人階段退出（/api/mahjong/leave）：座位依加入順序（陣列順序＝created_at 先後）
+export async function loadLobbySeats(roomId: string) {
+  await wait();
+  return (seats[roomId] ?? []).map((p, i) => ({ ...p, created_at: String(i).padStart(6, "0") }));
+}
+/** 故障注入（審伯 2026-10-24 的補測）：claimError＞0 時丟一般錯誤；conflicts＞0 時丟版本衝突（每次減 1） */
+export const leaveFaults = { claimError: 0, conflicts: 0 };
+export async function claimLobbyForLeave(roomId: string, base: number | undefined, lobby: Record<string, unknown>, newHostId?: string) {
+  await wait();
+  if (leaveFaults.claimError > 0) { leaveFaults.claimError--; throw new Error("模擬資料庫錯誤"); }
+  if (leaveFaults.conflicts > 0) { leaveFaults.conflicts--; stats.conflicts++; throw new StateConflictError(); }
+  const r = rooms[roomId];
+  const cur = (r?.game_state as unknown as { stateVersion?: number } | null)?.stateVersion;
+  if (!r || (r.status ?? "waiting") !== "waiting" || cur !== base) { stats.conflicts++; throw new StateConflictError(); }
+  lobby.stateVersion = (base ?? 0) + 1;
+  r.game_state = clone(lobby) as unknown as MahjongGameState; stats.writes++;
+  if (newHostId) r.host_id = newHostId;
+}
+export async function deletePlayer(roomId: string, playerId: string) {
+  await wait();
+  const list = seats[roomId] ?? [];
+  const i = list.findIndex((p) => p.player_id === playerId);
+  if (i < 0) return 0;
+  list.splice(i, 1);
+  return 1;
+}

@@ -93,7 +93,10 @@ export async function POST(request: Request) {
     }
 
     // Clear ready list as part of the deal (dealAndStart also sets ready_players: [])
-    await dealAndStart(roomId, room.code, existingScores);
+    // 下一場從 finished 開局；發牌途中房間被動過就不開局，回 409
+    if (!(await dealAndStart(roomId, room.code, existingScores, ["finished"]))) {
+      return Response.json({ error: "room_changed" }, { status: 409 });
+    }
 
     return Response.json({ success: true, ready: 4, total: 4, started: true });
   } catch {

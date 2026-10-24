@@ -238,6 +238,50 @@ export async function loadSeatsByUser(
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
+/** 等人階段退出用：房裡的座位，最早加入的在前（房主轉交給最早加入、還在房裡的人）。查詢失敗丟出 */
+export async function loadLobbySeats(roomId: string): Promise<(Pick<MjPlayer, "seat" | "player_id" | "user_id" | "name"> & { created_at: string })[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("mj_players")
+    .select("seat, player_id, user_id, name, created_at")
+    .eq("room_id", roomId)
+    .order("created_at", { ascending: true })
+    .order("seat", { ascending: true });
+  if (error) throw new Error(`查詢玩家失敗：${error.message}`);
+  return data ?? [];
+}
+
+/**
+ * 等人階段退出的「先佔住房間」：只有房間還在等人、而且大廳狀態版本仍是 baseVersion 時才寫入
+ * （版本 +1、需要時換房主）。同時有人按開局（開局也用版本做條件寫入）時只有一邊會成功，
+ * 不會開出少一人的局。條件不成立丟 StateConflictError（呼叫端重讀再做一次）。
+ */
+export async function claimLobbyForLeave(
+  roomId: string,
+  baseVersion: number | undefined,
+  lobbyState: Record<string, unknown>,
+  newHostId?: string
+): Promise<void> {
+  const update: Record<string, unknown> = { game_state: { ...lobbyState, stateVersion: (baseVersion ?? 0) + 1 } };
+  if (newHostId) update.host_id = newHostId;
+  let query = getSupabaseAdmin().from("mj_rooms").update(update).eq("id", roomId).eq("status", "waiting");
+  query =
+    baseVersion === undefined
+      ? query.is("game_state->stateVersion", null)
+      : query.eq("game_state->>stateVersion", String(baseVersion));
+  const { data, error } = await query.select("id");
+  if (error) throw new Error(`更新房間失敗：${error.message}`);
+  if (!data || data.length === 0) throw new StateConflictError();
+  lobbyState.stateVersion = (baseVersion ?? 0) + 1;
+  void cacheGameState(roomId, update.game_state as MahjongGameState).catch(() => {});
+}
+
+/** 離座：刪掉這個玩家的座位（等人階段退出用），回傳刪了幾筆 */
+export async function deletePlayer(roomId: string, playerId: string): Promise<number> {
+  const { data, error } = await getSupabaseAdmin().from("mj_players").delete().eq("room_id", roomId).eq("player_id", playerId).select("id");
+  if (error) throw new Error(`退出房間失敗：${error.message}`);
+  return data?.length ?? 0;
+}
+
 /** 坐下：座位或玩家 id 重複回 "duplicate"，其他錯誤丟出 */
 export async function insertPlayer(row: {
   room_id: string;

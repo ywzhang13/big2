@@ -68,7 +68,10 @@ export async function POST(request: Request) {
 
     // If all 4 ready, deal
     if (readyPlayers.length >= 4) {
-      await dealAndStart(roomId, room.code);
+      // 發牌途中有人退出（房間版本變了）→ 不開局，回 409（審伯 2026-10-24）
+      if (!(await dealAndStart(roomId, room.code))) {
+        return Response.json({ error: "room_changed" }, { status: 409 });
+      }
       return Response.json({ allReady: true });
     }
 
