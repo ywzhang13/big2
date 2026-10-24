@@ -96,15 +96,11 @@
 .mjm-plate-v .l2 { flex-wrap: nowrap; height: 12px; }
 .mjm-plate-v .l2 .mjm-tag { font-size: 8px; padding: 1px 3px; }
 .mjm-plate-v .l2 .mjm-tag.migi { font-size: 8px; padding: 1px 4px; letter-spacing: .02em; box-shadow: 0 0 6px rgba(52, 211, 153, .55); }
-/* 名字獨立一行（老闆 2026-10-24：左右家名字常被切掉）：用整個名牌的寬，最多兩行，中文一個字一個字換行、英文長名字也照字母換行，
-   超過兩行結尾才是「…」；風位圓縮小一點和分數放同一行，名牌加高到 64 */
-.mjm-plate-v { height: 64px; }
+/* 名字獨立一行、不斷行（老闆 2026-10-24：名牌留在左右兩側、海底左右縮窄）：名牌加寬到 88px（667 這類窄螢幕 80px，見下方），
+   中文 7 字、英文 10 個字母放得下，再長結尾才是「…」；三行＝風位＋分數／名字／莊連＋聽眼，名牌 54 高 */
 .mjm-plate-v .l1 { justify-content: space-between; height: 16px; }
 .mjm-plate-v .l1 .mjm-wind { width: 16px; height: 16px; font-size: 10px; }
-.mjm-plate-v .mjm-nm {
-  height: 24px; line-height: 12px; white-space: normal; word-break: break-all;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-}
+.mjm-plate-v .mjm-nm { display: block; height: 13px; line-height: 13px; }
 
 /* 對家的牌背：一張一張（摸進的那張隔開 4px） */
 .mjm-topbacks { display: flex; align-items: center; gap: 1px; flex: 0 0 auto; }
@@ -497,11 +493,22 @@
 .mjm-side.right.handside { flex-direction: row-reverse; }
 /* 吃碰區 v2（小宜 2026-10-16）：左右家由外往內＝名牌（下面接花膠囊）→ 手牌 → 吃碰槓（靠海底） */
 .mjm-side .sideplate {
-  width: 60px; flex: 0 0 auto; min-height: 0; gap: 4px;
+  width: 88px; flex: 0 0 auto; min-height: 0; gap: 4px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
-.mjm-side .mjm-plate-v { width: 60px; }
+.mjm-side .mjm-plate-v { width: 88px; }
 .mjm-side .mjm-plate-v .mjm-nm { max-width: none; }
+/* 667 這類窄螢幕：名牌 80px、名字 10px（中文 7 字 70px 放得下），海底左右只讓 20px；
+   中間的剩餘張數盤和打出的牌靠緊一點（間距 10→4、資訊盤左右內距 10→5），「XXX 打出」拆成兩行、名字最寬 48px、再長結尾「…」，
+   最後打出的人是長名字時，左右家海底棄到第 20 張也不會蓋到中間 */
+@media (max-width: 700px) {
+  .mjm-side .sideplate, .mjm-side .mjm-plate-v { width: 80px; }
+  .mjm-side .mjm-plate-v .mjm-nm { font-size: 10px; }
+  .mjm-center { gap: 4px; }
+  .mjm-info { padding: 4px 5px; }
+  .mjm-focus .cap { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .mjm-focus .cap .who { max-width: 48px; overflow: hidden; text-overflow: ellipsis; }
+}
 .mjm-sidehand {
   flex: 0 0 auto; align-self: center; display: flex; flex-direction: column; max-height: 100%; min-height: 0;
   padding: 2px; border-radius: 7px; background: rgba(0,0,0,.22);

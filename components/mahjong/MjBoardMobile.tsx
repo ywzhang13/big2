@@ -231,8 +231,8 @@ function SidePanel({
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
     <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`} data-fx-seat={player.seat}>
-      {/* 名牌固定大小（60×64）：風位＋分數一行／名字獨立一行、最多兩行（中文 6 字、英文 10 個字母都放得下，再長結尾才是「…」）／標示一行（不換行），
-          名字或標示變多也不會把名牌撐大（老闆 2026-10-24：左右家名字常被切掉） */}
+      {/* 名牌固定大小（88×54，窄螢幕 80×54）：風位＋分數一行／名字獨立一行、不斷行（中文 7 字、英文 10 個字母都放得下，再長結尾才是「…」）／標示一行（不換行），
+          名字或標示變多也不會把名牌撐大（老闆 2026-10-24：名牌留在左右兩側、海底左右縮窄） */}
       <div className="l1">
         <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
         <Score score={score} />
@@ -550,12 +550,12 @@ export default function MjBoardMobile({
               {pendingAddKong ? (
                 <div className="mjm-focus alert">
                   <div className="tile"><MjTile tile={pendingAddKong.tile} width={30} height={41} /></div>
-                  <span className="cap">{nameOf(pendingAddKong.seat)} 加槓中</span>
+                  <span className="cap"><span className="who">{nameOf(pendingAddKong.seat)}</span> 加槓中</span>
                 </div>
               ) : focusDiscard ? (
                 <div className="mjm-focus" data-focus-discard={focusDiscard.tile.id}>
                   <div className="tile"><MjTile tile={focusDiscard.tile} width={30} height={41} /></div>
-                  <span className="cap">{nameOf(focusDiscard.from)} 打出</span>
+                  <span className="cap"><span className="who">{nameOf(focusDiscard.from)}</span> 打出</span>
                 </div>
               ) : null}
             </div>

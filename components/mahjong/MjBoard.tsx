@@ -187,7 +187,7 @@ function PlayerPanel({
           ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
           {windChar}
         </div>
-        <div className={`flex flex-col ${isHorizontal ? "" : "max-w-[64px]"}`}>
+        <div className="flex flex-col">
           {(() => {
             // 標示順序：連N → 聽 → 眼。對家放在名字同一行；左右家換到名字下一行（名牌寬度固定，不被畫面邊緣切掉）
             const tags = (
@@ -210,9 +210,8 @@ function PlayerPanel({
               </>
             );
             const name = (
-              // 左右家名字最多兩行（寬度不變，名牌和牌桌位置都不動）：中文 6 字、英文 10 個字母放得下，再長結尾才是「…」（老闆 2026-10-24）
-              // 對家名字維持一行，最寬 76px（上方橫向有空間）：中文 7 字、英文 10 個字母放得下
-              <span className={`text-[10px] font-bold ${isHorizontal ? "max-w-[76px] truncate" : "max-w-[50px] line-clamp-2 break-all leading-[12px]"} ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
+              // 名字都是一行、不斷行（老闆 2026-10-24）：左右家最寬 80px、對家 76px，中文 7 字、英文 10 個字母放得下，再長結尾才是「…」
+              <span className={`text-[10px] font-bold truncate ${isHorizontal ? "max-w-[76px]" : "max-w-[80px]"} ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
                 {player.name}
               </span>
             );
