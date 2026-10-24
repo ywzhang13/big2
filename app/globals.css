@@ -1493,3 +1493,77 @@ body {
 .mjc-panel.m { width: 320px; }
 .mjc-panel.m .phrases button { padding: 0 6px; }
 .mjc-panel .mic small { font-size: 9px; line-height: 11px; color: rgba(255,255,255,.85); }
+
+/* ── 首頁（綠金華麗風，小宜 2026-10-24《阿瑋娛樂城首頁-綠金華麗風-設計規格》）──
+   手機直向：徽章、名稱、兩張卡上下排、說明在最下面；手機橫向（高 ≤ 500）：徽章和名稱橫排在左上、兩張卡並排；
+   桌機（寬 ≥ 1000）：徽章置中、兩張卡並排（各 508×178）。深色底用負 margin 蓋過 body 為 iPhone 安全區留的 padding */
+.home {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  min-height: 100dvh; width: auto;
+  margin: calc(-1 * env(safe-area-inset-top)) calc(-1 * env(safe-area-inset-right)) calc(-1 * env(safe-area-inset-bottom)) calc(-1 * env(safe-area-inset-left));
+  padding: calc(36px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(26px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+  background: radial-gradient(ellipse 85% 55% at 50% 28%, #0A5B38 0%, rgba(10, 91, 56, 0) 72%), #032D20;
+  border-top: 4px solid #E6B84D; border-bottom: 4px solid #8E531A;
+  color: #FFF4CF; font-family: "PingFang TC", "Noto Sans TC", sans-serif;
+}
+.home-brand { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 22px; }
+.home-badge { width: 204px; height: auto; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .45)); }
+.home-title { font-size: 15px; font-weight: 600; color: #F7D276; letter-spacing: .08em; }
+.home-sub { margin-top: 6px; font-size: 17px; color: #FFF4CF; letter-spacing: .06em; }
+.home-cards { display: grid; grid-template-columns: 1fr; gap: 18px; width: 100%; max-width: 420px; margin-top: 40px; }
+.home-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px;
+  height: 150px; padding: 0 16px; border-radius: 18px; text-align: left; cursor: pointer;
+  border: 2px solid #F7D276;
+  /* 內側一圈暗金細線＋外圈淡金光，做出設計稿的雙金框 */
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, .35), inset 0 0 0 5px rgba(157, 95, 22, .95),
+              0 0 14px rgba(247, 210, 118, .32), 0 10px 22px rgba(0, 0, 0, .45);
+  transition: filter .2s ease-out, transform .1s;
+}
+.home-card.big2 { background: linear-gradient(180deg, #4A080F 0%, #1E0407 100%); }
+.home-card.mj { background: linear-gradient(180deg, #12080B 0%, #070E0B 100%); }
+.home-card:hover { filter: brightness(1.08); }
+.home-card:active { transform: translateY(1px); }
+.home-card:active .home-go { opacity: .7; }
+.home-card:focus-visible { outline: 3px solid #FFE18A; outline-offset: 4px; }
+.home-art { width: 108px; height: auto; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .5)); }
+.home-card-text { display: flex; flex-direction: column; min-width: 0; }
+.home-name { font-size: 30px; font-weight: 700; line-height: 1.15; color: #FFF4CF; letter-spacing: .04em; white-space: nowrap; }
+.home-desc { margin-top: 6px; font-size: 12px; color: #DDBF8A; }
+.home-go {
+  width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #F7D276; color: #F7D276;
+  display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; padding-bottom: 2px;
+}
+.home-foot { margin-top: auto; padding-top: 28px; font-size: 12px; color: rgba(221, 191, 138, .8); text-align: center; }
+@media (prefers-reduced-motion: reduce) { .home-card { transition: none; } }
+
+/* 手機橫向：徽章＋名稱橫排在左上，兩張卡並排；字和圖跟著寬度縮（667 也放得下） */
+@media (orientation: landscape) and (max-height: 500px) {
+  .home { padding-top: calc(18px + env(safe-area-inset-top)); padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .home-brand { flex-direction: row; align-self: stretch; justify-content: flex-start; gap: 36px; padding: 0 clamp(0px, 4vw, 40px); }
+  .home-badge { width: auto; height: 76px; }
+  .home-title { font-size: 14px; }
+  .home-sub { font-size: 16px; }
+  .home-cards { grid-template-columns: 1fr 1fr; gap: 22px; max-width: 760px; margin-top: 18px; padding: 0 clamp(0px, 3.5vw, 30px); }
+  .home-card { height: 136px; padding: 0 14px; }
+  .home-art { width: clamp(84px, 12.6vw, 106px); }
+  .home-name { font-size: clamp(22px, 3.6vw, 30px); }
+  .home-desc { font-size: 12px; }
+  .home-go { width: 36px; height: 36px; font-size: 20px; }
+  .home-foot { margin-top: 0; padding-top: 18px; }
+}
+
+/* 桌機：徽章置中、兩張卡並排 */
+@media (min-width: 1000px) and (min-height: 501px) {
+  .home { padding-top: calc(68px + env(safe-area-inset-top)); padding-bottom: 45px; }
+  .home-brand { gap: 34px; }
+  .home-badge { width: 240px; }
+  .home-title { font-size: 16px; }
+  .home-sub { font-size: 19px; }
+  .home-cards { grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1040px; margin-top: 56px; }
+  .home-card { height: 178px; padding: 0 20px; column-gap: 18px; }
+  .home-art { width: 132px; }
+  .home-name { font-size: 36px; }
+  .home-desc { font-size: 14px; }
+  .home-go { width: 48px; height: 48px; font-size: 26px; }
+}
