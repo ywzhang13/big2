@@ -158,7 +158,22 @@ export function useGame(roomCode: string, playerName: string) {
         players.sort((a, b) => a.seat - b.seat);
         const hostPlayer = players.find((p) => p.seat === 0);
         const mySeat = playerId === myId ? seat : prev.mySeat;
-        return { ...prev, players, mySeat, hostId: hostPlayer?.id || prev.hostId };
+        // 已知房主就照舊：房主退出、房主轉交後，新進來坐到座位 1 的人不是房主（老闆 2026-10-24）
+        return { ...prev, players, mySeat, hostId: prev.hostId || hostPlayer?.id || "" };
+      });
+    });
+
+    // 有人在等人時退出房間（POST /api/game/leave）：座位空出來、房主照伺服器給的；準備確認中有人走就回到等人
+    channel.on("broadcast", { event: "player_left" }, ({ payload }) => {
+      const { playerId, hostId, readyCheckCancelled } = payload as { playerId: string; hostId?: string | null; readyCheckCancelled?: boolean };
+      setState((prev) => {
+        if (prev.status !== "waiting") return prev;
+        return {
+          ...prev,
+          players: prev.players.filter((p) => p.id !== playerId),
+          hostId: hostId ?? prev.hostId,
+          ...(readyCheckCancelled ? { readyCheck: false, readyPlayers: new Set<string>() } : {}),
+        };
       });
     });
 
@@ -471,6 +486,27 @@ export function useGame(roomCode: string, playerName: string) {
     }
   }, [myId]);
 
+  /**
+   * 等人階段退出房間（POST /api/game/leave）：回傳 null＝已經離開（成功，或伺服器說本來就不在房內 404），
+   * 字串＝失敗要顯示的提示；開局了（409）順便重抓狀態，畫面換成牌桌
+   */
+  const leaveWaiting = useCallback(async (): Promise<string | null> => {
+    const rid = roomIdRef.current;
+    if (!rid) return null;
+    try {
+      await api("POST", "/api/game/leave", { roomId: rid, playerId: myId });
+      return null;
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 404) return null;
+      if (status === 409) {
+        fetchState(rid);
+        return /game_in_progress/.test((err as Error).message) ? "牌局已經開始，不能直接退出" : "退出失敗，請再試一次";
+      }
+      return "退出失敗，請再試一次";
+    }
+  }, [myId, fetchState]);
+
   // Expose setRoomId for the page to call after create/join
   const setRoomIdExternal = useCallback((id: string) => {
     setRoomId(id);
@@ -491,5 +527,6 @@ export function useGame(roomCode: string, playerName: string) {
     setRoomId: setRoomIdExternal,
     closed,
     markClosed,
+    leaveWaiting,
   };
 }

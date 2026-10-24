@@ -856,8 +856,18 @@ export function useMahjong(
           ...prev,
           players,
           mySeat,
-          hostId: hostPlayer?.id || prev.hostId,
+          // 已知房主就照舊：房主退出、房主轉交後，新進來坐到座位 1 的人不是房主（老闆 2026-10-24）
+          hostId: prev.hostId || hostPlayer?.id || "",
         };
+      });
+    });
+
+    // --- mj_player_left：有人在等人時退出房間（POST /api/mahjong/leave）：座位空出來、房主照伺服器給的 ---
+    onHeld(channel, "mj_player_left", ({ payload }) => {
+      const { playerId, hostId } = payload as { playerId: string; hostId?: string | null };
+      setState((prev) => {
+        if (prev.status !== "waiting") return prev;
+        return { ...prev, players: prev.players.filter((p) => p.id !== playerId), hostId: hostId ?? prev.hostId };
       });
     });
 
@@ -1563,6 +1573,28 @@ export function useMahjong(
     [myId, fetchState, discardTile, call]
   );
 
+  /**
+   * 等人階段退出房間（POST /api/mahjong/leave）：回傳 null＝已經離開（成功，或伺服器說本來就不在房內 404），
+   * 字串＝失敗要顯示的提示；開局了（409）順便重抓狀態，畫面換成牌桌、走原本的投票離開
+   */
+  const leaveWaiting = useCallback(async (): Promise<string | null> => {
+    const rid = roomIdRef.current;
+    if (!rid) return null;
+    try {
+      await call("/api/mahjong/leave", { roomId: rid });
+      return null;
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 404) return null;
+      if (status === 409) {
+        fetchState(rid);
+        return /game_in_progress/.test((err as Error).message) ? "牌局已經開始，不能直接退出" : "退出失敗，請再試一次";
+      }
+      if (status === 401 || status === 403) return null; // 頁面已經由 onAuthError 處理（退回登入或回大廳）
+      return "退出失敗，請再試一次";
+    }
+  }, [call, fetchState]);
+
   const requestLeave = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
@@ -1695,6 +1727,7 @@ export function useMahjong(
     markClosed,
     createRoom,
     joinRoom,
+    leaveWaiting,
     /** 目前的房間 id（聊天綁定「這一場」用） */
     roomId,
   };

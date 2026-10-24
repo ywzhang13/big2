@@ -659,6 +659,12 @@ export default function MahjongPage() {
       }}
       onAuthError={handleAuthError}
       onGoHome={goHome}
+      onLeft={() => {
+        // 等人時退出房間成功：清掉網址的房號、忘記剛才的房間，回麻將大廳（重新整理也不會再進去）
+        setJoined(null);
+        setMyRoom(null);
+        window.location.hash = "";
+      }}
     />
   );
 }
@@ -697,6 +703,7 @@ function RoomView({
   onNameEdited,
   onAuthError,
   onGoHome,
+  onLeft,
   accountId,
   guest,
 }: {
@@ -712,6 +719,8 @@ function RoomView({
   onNameEdited: () => void;
   onAuthError: (status: 401 | 403, code?: string) => void;
   onGoHome: () => void;
+  /** 等人時退出房間成功（回麻將大廳） */
+  onLeft: () => void;
 }) {
   // 還沒改過字就顯示頁面的暱稱（登入後才帶入的 LINE 名稱也會跟上）
   const [editedName, setEditedName] = useState<string | null>(null);
@@ -733,8 +742,22 @@ function RoomView({
     applyJoin,
     closed,
     markClosed,
+    leaveWaiting,
     roomId,
   } = useMahjong(code, nameReady ? playerName : "", onAuthError);
+
+  // 等人時「退出房間」（老闆 2026-10-24）：伺服器真的把你移出房間、空出座位，才回大廳；失敗留在原畫面並提示
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
+  const leaveRoom = async () => {
+    if (leaving) return;
+    setLeaving(true);
+    setLeaveError("");
+    const err = await leaveWaiting();
+    setLeaving(false);
+    if (err) setLeaveError(err);
+    else onLeft();
+  };
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const isMobileLandscape = useMobileLandscape();
@@ -911,8 +934,8 @@ function RoomView({
 
     return (
       <div className="mjl mjl-wait-page flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] items-center justify-center px-6">
-        <PortraitHint label="返回首頁" onClick={onGoHome} />
-        {/* 手機橫向：左欄房間碼、底台、返回；右欄四個座位和開始鈕（.mjw 的 grid，桌機照舊一欄） */}
+        <PortraitHint label="退出房間" onClick={leaveRoom} />
+        {/* 手機橫向：左欄房間碼、底台、退出；右欄四個座位和開始鈕（.mjw 的 grid，桌機照舊一欄） */}
         <div className="mjw flex flex-col items-center gap-6 w-full max-w-sm">
           <h2 className="mjw-ttl text-xl font-bold text-[#f0d68a] font-heading">等待玩家加入</h2>
 
@@ -1003,12 +1026,18 @@ function RoomView({
             </div>
           )}
 
-          <button
-            onClick={onGoHome}
-            className="mjw-back text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
-          >
-            返回首頁
-          </button>
+          <div className="mjw-back w-full flex flex-col items-center gap-1">
+            <button
+              onClick={leaveRoom}
+              disabled={leaving}
+              data-mj-leave
+              className="w-full py-2.5 rounded-2xl border border-[#C9A96E]/40 text-[#f0d68a] text-sm font-bold
+                         cursor-pointer active:scale-95 hover:bg-white/5 transition-all duration-150 disabled:opacity-50"
+            >
+              {leaving ? "退出中…" : "退出房間"}
+            </button>
+            {leaveError && <p className="text-red-300 text-xs text-center" role="alert">{leaveError}</p>}
+          </div>
         </div>
       </div>
     );

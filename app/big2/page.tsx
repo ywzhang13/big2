@@ -197,21 +197,36 @@ export default function Home() {
   // ─── Room ───
   return <RoomView code={roomCode} playerName={name} nameReady={nameReady} initialRoomId={createdRoomId}
     onSetName={(n) => { setName(n); setNameReady(true); localStorage.setItem("big2_name", n); }}
-    onGoHome={goHome} />;
+    onGoHome={goHome}
+    // 等人時退出房間成功：清掉網址的 #room=、忘記剛建的房，回大老二大廳（重新整理也不會再進去）
+    onLeft={() => { setCreatedRoomId(""); window.location.hash = ""; }} />;
 }
 
 // ─── Room Component ───
-function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoHome }: {
+function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoHome, onLeft }: {
   code: string; playerName: string; nameReady: boolean; initialRoomId: string;
-  onSetName: (n: string) => void; onGoHome: () => void;
+  onSetName: (n: string) => void; onGoHome: () => void; onLeft: () => void;
 }) {
   const [localName, setLocalName] = useState(playerName);
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed } = useGame(
+  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed, leaveWaiting } = useGame(
     code, nameReady ? playerName : ""
   );
+
+  // 等人時「退出房間」（老闆 2026-10-24）：伺服器真的把你移出房間、空出座位，才回大廳；失敗留在原畫面並提示
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
+  const leaveRoom = async () => {
+    if (leaving) return;
+    setLeaving(true);
+    setLeaveError("");
+    const err = await leaveWaiting();
+    setLeaving(false);
+    if (err) setLeaveError(err);
+    else onLeft();
+  };
 
   // Pass roomId from create/join to the hook
   useEffect(() => {
@@ -341,6 +356,15 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
             }} className="mt-2 text-xs text-white/40 cursor-pointer active:text-gold hover:text-white/60 transition-colors">
               點擊複製連結
             </button>
+          </div>
+          {/* 退出房間放在房間碼下面：手機橫向（390 高）不用捲就看得到 */}
+          <div className="flex flex-col items-center gap-1 -mt-3">
+            <button onClick={leaveRoom} disabled={leaving} data-big2-leave
+              className="px-8 py-2 rounded-full border border-gold/40 text-gold-light font-bold text-sm
+                         cursor-pointer active:scale-95 hover:bg-white/5 transition-all duration-150 disabled:opacity-50">
+              {leaving ? "退出中…" : "退出房間"}
+            </button>
+            {leaveError && <p className="text-red-400 text-sm text-center" role="alert">{leaveError}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3 w-full">
             {[0, 1, 2, 3].map((seat) => {
@@ -498,6 +522,8 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
               等待 {state.players.find((p) => p.seat === state.currentTurn)?.name || "..."}
             </p>
           )}
+          {/* 開局後沒有離開按鈕（老闆 2026-10-24：先說明，之後再考慮做投票離開） */}
+          <p className="text-[10px] text-white/30" data-big2-noleave>開局中不能離開，打完這場才能離開</p>
         </div>
         <div className="w-16 flex-shrink-0">
           {right && <PlayerSlot name={right.name} cardCount={right.cardCount} isCurrentTurn={state.currentTurn === right.seat} isFinished={right.isFinished} position="right" score={state.scores[right.id]} />}
