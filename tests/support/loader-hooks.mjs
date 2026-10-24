@@ -8,7 +8,7 @@
 //     "mahjong/userPrefs/store"（帳號的偏好設定）換成記憶體 PostgreSQL 版本（跑真的 migration）；
 //     "mahjong/effects/store"（互動特效冷卻）換成記憶體 PostgreSQL 版本（跑真的 SQL 函式）；
 //     "mahjong/chat/store"（聊天冷卻、語音檔）換成記憶體版本（冷卻跑真的 SQL 函式，語音檔存在記憶體）；
-//     "big2/leaveStore"、"big2/dealStore"（大老二等人階段退出、發牌的資料存取）換成記憶體版本；
+//     "big2/leaveStore"、"big2/dealStore"、"big2/roomStore"（大老二等人階段退出、發牌、加入房間／讀牌桌狀態的資料存取）換成記憶體版本；
 //     "next/server" 的 after() 在測試裡不跑
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -31,6 +31,7 @@ const STUBS = {
   "@/lib/mahjong/chat/store": "tests/support/stub-chat-store.ts",
   "@/lib/big2/leaveStore": "tests/support/stub-big2-leave-store.ts",
   "@/lib/big2/dealStore": "tests/support/stub-big2-deal-store.ts",
+  "@/lib/big2/roomStore": "tests/support/stub-big2-room-store.ts",
   "next/server": "tests/support/stub-next-server.ts",
 };
 
