@@ -8,6 +8,10 @@ import type { GameState, Player } from "@/lib/gameState";
 import type { Combo } from "@/lib/combo";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
+import { StateRequestGate } from "@/lib/mahjong/stateSync";
+
+/** 大老二沒有慢慢摸牌的排隊：給 StateRequestGate 一個永遠沒在排隊的狀態 */
+const NO_HOLD = { on: false, gen: 0 };
 
 function getMyId(): string {
   if (typeof window === "undefined") return "";
@@ -65,10 +69,15 @@ export function useGame(roomCode: string, playerName: string) {
     setClosed((prev) => (prev && prev.players.length > 0 && info.players.length === 0 ? prev : info));
   }, []);
   roomIdRef.current = roomId;
+  // state 請求的先後與本機變更（和麻將同一套，老闆 2026-10-25「打出去畫面回朔」）：
+  // 出牌、過，或收到任何廣播之後，比這早送出的輪詢回應不能整份蓋掉手牌、出的牌、輪到誰，改成馬上重抓一次
+  const stateGateRef = useRef(new StateRequestGate());
+  const fetchStateRef = useRef<((rid: string) => Promise<void>) | null>(null);
 
   // Fetch full state from API (for reconnection)
   const fetchState = useCallback(async (rid: string) => {
     if (closedRef.current) return;
+    const reqId = stateGateRef.current.begin();
     try {
       const data = await api<{
         status: string;
@@ -86,6 +95,9 @@ export function useGame(roomCode: string, playerName: string) {
         readyCheck?: boolean;
         readyPlayers?: string[];
       }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`);
+      const verdict = stateGateRef.current.settle(reqId, NO_HOLD.gen, NO_HOLD);
+      if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
+      if (verdict !== "apply") return;
 
       const hand = [...(data.myHand || [])];
       hand.sort(compareCardsDisplay);
@@ -132,6 +144,7 @@ export function useGame(roomCode: string, playerName: string) {
       console.error("[big2] fetchState failed:", err);
     }
   }, [myId, markClosed]);
+  useEffect(() => { fetchStateRef.current = fetchState; }, [fetchState]);
 
   // 拿到 roomId（重新整理後自動加入回來）就馬上讀一次牌桌，不用等頻道連上或下一次輪詢（最慢 4 秒）
   useEffect(() => {
@@ -146,8 +159,14 @@ export function useGame(roomCode: string, playerName: string) {
     const channel = supabase.channel(`big2-${roomCode}`, {
       config: { broadcast: { self: true } },
     });
+    // 收到任何廣播＝牌局變了：先記下來，比這早送出的輪詢回應回來時就不會蓋回舊狀態
+    const onEvent = (event: string, fn: (msg: { payload: Record<string, unknown> }) => void) =>
+      channel.on("broadcast", { event }, (msg) => {
+        stateGateRef.current.noteLocalChange();
+        fn({ payload: (msg.payload ?? {}) as Record<string, unknown> });
+      });
 
-    channel.on("broadcast", { event: "player_joined" }, ({ payload }) => {
+    onEvent("player_joined", ({ payload }) => {
       const { playerId, name, seat } = payload as { playerId: string; name: string; seat: number };
       setState((prev) => {
         if (prev.status !== "waiting") return prev;
@@ -169,7 +188,7 @@ export function useGame(roomCode: string, playerName: string) {
     });
 
     // 有人在等人時退出房間（POST /api/game/leave）：座位空出來、房主照伺服器給的；準備確認中有人走就回到等人
-    channel.on("broadcast", { event: "player_left" }, ({ payload }) => {
+    onEvent("player_left", ({ payload }) => {
       const { playerId, hostId, readyCheckCancelled } = payload as { playerId: string; hostId?: string | null; readyCheckCancelled?: boolean };
       setState((prev) => {
         if (prev.status !== "waiting") return prev;
@@ -182,7 +201,7 @@ export function useGame(roomCode: string, playerName: string) {
       });
     });
 
-    channel.on("broadcast", { event: "ready_check" }, () => {
+    onEvent("ready_check", () => {
       try { navigator.vibrate?.(200); } catch {}
       setState((prev) => ({
         ...prev,
@@ -191,7 +210,7 @@ export function useGame(roomCode: string, playerName: string) {
       }));
     });
 
-    channel.on("broadcast", { event: "player_ready" }, ({ payload }) => {
+    onEvent("player_ready", ({ payload }) => {
       const { playerId } = payload as { playerId: string };
       setState((prev) => {
         const newReady = new Set(prev.readyPlayers);
@@ -201,12 +220,12 @@ export function useGame(roomCode: string, playerName: string) {
     });
 
     // Next-game 四家同意制（繼續下一局）
-    channel.on("broadcast", { event: "next_game_ready" }, ({ payload }) => {
+    onEvent("next_game_ready", ({ payload }) => {
       const { readyIds } = payload as { readyIds: string[] };
       setState((prev) => ({ ...prev, readyPlayers: new Set(readyIds) }));
     });
 
-    channel.on("broadcast", { event: "game_start" }, ({ payload }) => {
+    onEvent("game_start", ({ payload }) => {
       const msg = payload as {
         currentTurn: number;
         roundStarter: number;
@@ -237,7 +256,7 @@ export function useGame(roomCode: string, playerName: string) {
       }));
     });
 
-    channel.on("broadcast", { event: "deal_hand" }, ({ payload }) => {
+    onEvent("deal_hand", ({ payload }) => {
       const { playerId, hand } = payload as { playerId: string; hand: Card[] };
       if (playerId !== myId) return;
       const sorted = [...hand];
@@ -245,7 +264,7 @@ export function useGame(roomCode: string, playerName: string) {
       setState((prev) => ({ ...prev, myHand: sorted }));
     });
 
-    channel.on("broadcast", { event: "play_cards" }, ({ payload }) => {
+    onEvent("play_cards", ({ payload }) => {
       const msg = payload as {
         seat: number;
         cards: Card[];
@@ -303,7 +322,7 @@ export function useGame(roomCode: string, playerName: string) {
       }));
     });
 
-    channel.on("broadcast", { event: "pass" }, ({ payload }) => {
+    onEvent("pass", ({ payload }) => {
       const msg = payload as { seat: number; passCount: number; nextTurn: number; clearRound: boolean };
       setState((prev) => ({
         ...prev,
@@ -314,7 +333,7 @@ export function useGame(roomCode: string, playerName: string) {
       }));
     });
 
-    channel.on("broadcast", { event: "game_over" }, ({ payload }) => {
+    onEvent("game_over", ({ payload }) => {
       const msg = payload as { winner: string; hands: Record<string, Card[]>; lastPlay?: { cards: Card[]; comboType: string; playerName: string } };
       const myCurrentHand = stateRef.current.myHand;
       if (myCurrentHand.length > 0) {
@@ -335,7 +354,7 @@ export function useGame(roomCode: string, playerName: string) {
       }));
     });
 
-    channel.on("broadcast", { event: "reveal_hand" }, ({ payload }) => {
+    onEvent("reveal_hand", ({ payload }) => {
       const { playerId, hand } = payload as { playerId: string; hand: Card[] };
       setState((prev) => ({
         ...prev,
@@ -344,7 +363,7 @@ export function useGame(roomCode: string, playerName: string) {
     });
 
     // --- room_closed：這場已寫紀錄並刪房 ---
-    channel.on("broadcast", { event: "room_closed" }, ({ payload }) => {
+    onEvent("room_closed", ({ payload }) => {
       markClosed(closedFromEvent(payload));
     });
 
@@ -443,7 +462,10 @@ export function useGame(roomCode: string, playerName: string) {
     const s = stateRef.current;
     if (s.currentTurn !== s.mySeat) return { success: false, error: "不是你的回合" };
 
-    // Optimistically remove cards from hand
+    // Optimistically remove cards from hand（出牌前、伺服器處理完之前送出的輪詢回應不能把牌放回手上）
+    stateGateRef.current.beginLocal();
+    const rid = roomIdRef.current;
+    const settled = () => { if (stateGateRef.current.endLocal() && rid) fetchStateRef.current?.(rid); };
     const newHand = s.myHand.filter((c) => !selectedCards.includes(c));
     setState((prev) => ({ ...prev, myHand: newHand }));
 
@@ -462,7 +484,9 @@ export function useGame(roomCode: string, playerName: string) {
         console.error("[big2] play rejected:", data.error);
       }
       // If success, the broadcast will update state automatically
+      settled();
     }).catch((err) => {
+      settled();
       // Revert optimistic update
       setState((prev) => ({
         ...prev,
@@ -478,6 +502,7 @@ export function useGame(roomCode: string, playerName: string) {
   const pass = useCallback(async () => {
     const s = stateRef.current;
     if (s.currentTurn !== s.mySeat || !s.lastPlay) return;
+    stateGateRef.current.beginLocal();
     try {
       const data = await api<{ success: boolean; error?: string }>("POST", "/api/game/pass", {
         roomId: roomIdRef.current,
@@ -488,6 +513,9 @@ export function useGame(roomCode: string, playerName: string) {
       }
     } catch (err) {
       console.error("[big2] pass API error:", err);
+    } finally {
+      const rid = roomIdRef.current;
+      if (stateGateRef.current.endLocal() && rid) fetchStateRef.current?.(rid); // 過在路上時丟掉過輪詢：補抓一次
     }
   }, [myId]);
 

@@ -404,6 +404,7 @@ export function useMahjong(
   const onHeld = useCallback((ch: RealtimeChannel, event: string, fn: (msg: { payload: Record<string, unknown> }) => void) => {
     ch.on("broadcast", { event }, (msg) => {
       progressRef.current++;
+      stateGateRef.current.noteLocalChange(); // 牌局變了：在這之前送出的 state 請求回來時不能整份蓋掉（老闆 2026-10-25 打出去畫面回朔）
       const m = { payload: (msg.payload ?? {}) as Record<string, unknown> };
       const h = holdRef.current;
       if (h.on && !SLOW_DRAW_PASS.has(event)) h.queue.push(() => fn(m));
@@ -1484,6 +1485,7 @@ export function useMahjong(
       if (discardingRef.current) return;
       discardingRef.current = true;
       freshPrivateActionsRef.current = false;
+      stateGateRef.current.beginLocal(); // 打出前（和伺服器處理完之前）送出的 state 回應不能把這張牌放回手上
       // Optimistically remove tile from hand + mark hasDrawn=false so UI
       // doesn't keep showing "輪到你打牌" during the pending-action window
       setState((prev) => {
@@ -1515,6 +1517,7 @@ export function useMahjong(
         if (rid2) fetchState(rid2);
       } finally {
         discardingRef.current = false;
+        if (stateGateRef.current.endLocal()) fetchState(rid); // 打牌請求在路上時丟掉過輪詢：現在補抓
       }
     },
     [myId, fetchState, call]
@@ -1547,6 +1550,7 @@ export function useMahjong(
       }
       // Optimistically clear action buttons immediately
       freshPrivateActionsRef.current = false;
+      stateGateRef.current.beginLocal();
       progressRef.current++;
       actionsInFlightRef.current++;
       setState((prev) => ({ ...prev, availableActions: [] }));
@@ -1567,8 +1571,9 @@ export function useMahjong(
         actionsInFlightRef.current--;
         progressRef.current++;
       }
+      const refetch = stateGateRef.current.endLocal(); // 動作在路上時丟掉過輪詢：補抓一次
       // Resync state from server to recover（要在上面放行之後，這份回應的按鈕才會採用）
-      if (failed) fetchState(rid);
+      if (failed || refetch) fetchState(rid);
     },
     [myId, fetchState, discardTile, call]
   );
