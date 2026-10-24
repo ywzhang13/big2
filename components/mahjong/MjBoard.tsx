@@ -210,7 +210,8 @@ function PlayerPanel({
               </>
             );
             const name = (
-              <span className={`text-[10px] font-bold truncate max-w-[50px] ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
+              // 左右家名字最多兩行（寬度不變，名牌和牌桌位置都不動）：中文 6 字、英文 10 個字母放得下，再長結尾才是「…」（老闆 2026-10-24）
+              <span className={`text-[10px] font-bold max-w-[50px] ${isHorizontal ? "truncate" : "line-clamp-2 break-all leading-[12px]"} ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
                 {player.name}
               </span>
             );

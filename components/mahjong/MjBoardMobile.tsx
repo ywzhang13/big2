@@ -231,17 +231,16 @@ function SidePanel({
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
     <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`} data-fx-seat={player.seat}>
+      {/* 名牌固定大小（60×64）：風位＋分數一行／名字獨立一行、最多兩行（中文 6 字、英文 10 個字母都放得下，再長結尾才是「…」）／標示一行（不換行），
+          名字或標示變多也不會把名牌撐大（老闆 2026-10-24：左右家名字常被切掉） */}
       <div className="l1">
         <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
-        <span className="mjm-nm">{player.name}</span>
+        <Score score={score} />
       </div>
-      {/* 名牌固定大小：標示一行（不換行）、分數獨立一行，標示變多也不會把名牌撐大 */}
+      <span className="mjm-nm">{player.name}</span>
       <div className="l2">
         <DealerTag player={player} consecutive={dealerConsecutive} short />
         <DeclareTags ting={isTing} eye={isEye} fx={fx} />
-      </div>
-      <div className="l3">
-        <Score score={score} />
       </div>
     </div>
   );
