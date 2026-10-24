@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { loadRoomPlayers, loadRoomState } from "@/lib/big2/roomStore";
 import { endedResponse } from "@/lib/records/close";
 import type { Card } from "@/lib/constants";
 
@@ -13,33 +13,19 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServer();
-
     // Get room
-    const { data: room, error: roomError } = await supabase
-      .from("big2_rooms")
-      .select(
-        "id, code, status, host_id, current_turn, last_play, pass_count, round_starter, scores, ready_players"
-      )
-      .eq("id", roomId)
-      .single();
+    const room = await loadRoomState(roomId);
 
-    if (roomError || !room) {
+    if (!room) {
       const ended = await endedResponse("big2", { roomId });
       if (ended) return ended;
       return Response.json({ error: "找不到房間" }, { status: 404 });
     }
 
     // Get all players
-    const { data: allPlayers, error: playersError } = await supabase
-      .from("big2_players")
-      .select(
-        "player_id, name, seat, card_count, is_finished, finish_order, hand"
-      )
-      .eq("room_id", roomId)
-      .order("seat", { ascending: true });
+    const allPlayers = await loadRoomPlayers(roomId);
 
-    if (playersError || !allPlayers) {
+    if (!allPlayers) {
       return Response.json({ error: "查詢玩家失敗" }, { status: 500 });
     }
 
