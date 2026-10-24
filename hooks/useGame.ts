@@ -133,6 +133,11 @@ export function useGame(roomCode: string, playerName: string) {
     }
   }, [myId, markClosed]);
 
+  // 拿到 roomId（重新整理後自動加入回來）就馬上讀一次牌桌，不用等頻道連上或下一次輪詢（最慢 4 秒）
+  useEffect(() => {
+    if (roomId) fetchState(roomId);
+  }, [roomId, fetchState]);
+
   // Subscribe to Supabase Realtime
   useEffect(() => {
     if (!playerName || !roomCode || !myId) return;

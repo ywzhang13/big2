@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useGame } from "@/hooks/useGame";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
@@ -102,7 +102,7 @@ export default function Home() {
       });
       const data = await res.json();
       // 410＝這場已結束：照樣進房間畫面，由房間顯示總結算
-      if (!res.ok && res.status !== 410) { setError(data.error || "加入房間失敗"); return; }
+      if (!res.ok && res.status !== 410) { setError(data.message || data.error || "加入房間失敗"); return; }
       setRoomCode(joinCode);
       setCreatedRoomId(data.roomId ?? "");
       setScreen("room");
@@ -111,6 +111,14 @@ export default function Home() {
       setError("網路錯誤，請重試");
     }
   }
+
+  // 開局後才用房號／連結進來、但不在這桌（陌生人、已退出的人）：回大老二大廳並顯示提示。
+  // 用 useCallback 固定住，RoomView 的自動加入才不會每次重繪都重送
+  const onJoinBlocked = useCallback((msg: string) => {
+    setCreatedRoomId("");
+    setError(msg);
+    window.location.hash = "";
+  }, []);
 
   function goHome() {
     window.location.href = "/";
@@ -199,13 +207,14 @@ export default function Home() {
     onSetName={(n) => { setName(n); setNameReady(true); localStorage.setItem("big2_name", n); }}
     onGoHome={goHome}
     // 等人時退出房間成功：清掉網址的 #room=、忘記剛建的房，回大老二大廳（重新整理也不會再進去）
-    onLeft={() => { setCreatedRoomId(""); window.location.hash = ""; }} />;
+    onLeft={() => { setCreatedRoomId(""); window.location.hash = ""; }}
+    onJoinBlocked={onJoinBlocked} />;
 }
 
 // ─── Room Component ───
-function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoHome, onLeft }: {
+function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoHome, onLeft, onJoinBlocked }: {
   code: string; playerName: string; nameReady: boolean; initialRoomId: string;
-  onSetName: (n: string) => void; onGoHome: () => void; onLeft: () => void;
+  onSetName: (n: string) => void; onGoHome: () => void; onLeft: () => void; onJoinBlocked: (message: string) => void;
 }) {
   const [localName, setLocalName] = useState(playerName);
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
@@ -247,11 +256,12 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
         .then(async (res) => {
           const data = await res.json();
           if (res.status === 410) markClosed(closedFromResponse(data));
+          else if (res.status === 409 && data.error === "game_in_progress") onJoinBlocked(data.message || "房間已開始遊戲，無法加入");
           else if (data.roomId) setRoomId(data.roomId);
         })
         .catch((err) => console.error("[big2] auto-join failed:", err));
     }
-  }, [nameReady, playerName, code, initialRoomId, setRoomId, markClosed]);
+  }, [nameReady, playerName, code, initialRoomId, setRoomId, markClosed, onJoinBlocked]);
 
   // Auto-deal when all 4 players are ready is now handled by the backend
   // (the last confirmReady triggers deal automatically)
