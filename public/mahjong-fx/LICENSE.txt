@@ -41,5 +41,16 @@
   網址格式 https://freesound.org/people/<作者>/sounds/<編號>/
 - 「自摸」字型：public/fonts/noto-sans-tc/zimo-black.woff2，Noto Sans TC Black 只取「自摸」兩個字，SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
 
+八台大牌新版特效（2026-10-25 加入；畫面 components/mahjong/BigWin8Fx.tsx，大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）
+- bigwin8/*.webp：老闆自行以 AI 生成（2026-10-25，大牌素材 7 種 × 2 張：三龍金焰盤旋圖、赤綠金白魔法能量爆發、四元素金色漩渦之眼、金白祥雲風效八格素材集、
+  翡翠金光螺旋巨浪、翡翠金光液態爆裂、五顆紫晶能量球的星際漩渦、紫金陰陽魔法陣、鎏金風暴海境、雲海金玉天門、花瓣與花朵的金色魔法漩渦、奇幻花卉魔法贴纸集、
+  金色能量碎地爆裂特效、金色魔法升天光柱），不需標註；老馬加工：透明圖去掉細紅邊、黑底圖近黑壓到純黑、兩張貼紙集切成整齊的格子、轉 WebP
+- bigwin8/sfx/<牌型>-pc.mp3（一般版）、-mobile.mp3（手機加強版）：阿妍製作（2026-10-25，〈大牌7種音效-候選評估-2026-10-25〉的推薦款：
+  大三元乙「雙龍管弦」、小四喜乙「旋風銅鑼」、清一色甲「翠浪拍岸」、五暗刻甲「五聲晶鳴」、八仙過海甲「海潮古寺鐘」、七搶一甲「七聲木琴金鈴」、MIGI 甲「地裂封印」），
+  重擊點對在畫面最重那一下。疊進去的真實錄音都來自 Freesound，逐一確認為 CC0（公眾領域，可商用、不用標註）：
+  ・442964 Dragon Roar（qubodup）、85568 DRAGON_ROAR（JoelAudio）、537206 Magyar gong（Logicogonist）、385011 hit of orchestral cymbals and bass drum（Selector）、375599 Bell Tree (bell_tree_woodscrape1)（sgossner）、381853 wind_gust_short_sqeeeek（sqeeeek）、683096 Woosh（florianreichelt）、738085 WindGust（phuonglamb）、688085 Shock wave - wind（DanietzYT）、402818 White Noise Short Reverse Whoosh（HowardV）、82523 BULGARIAN GONG（zgump）、633208 Old Church Bell (no noise)（igroglaz）、441852 W_1 Wave（Yarmonics）、442944 Ocean Wave（qubodup）、845003 Big Splash（tdogproductionz）、442773 Big Water Splash（qubodup）、469608 Watersplash（Sheyvan）、549900 medium wine glass（Tairblenn）、549899 small wine glass（Tairblenn）、549898 bell1（Tairblenn）、271370 singing bowl strike sound（inoshirodesign）、542561 OWI_Crystal class ping（matthewHoldenSound）、131348 Bell at Daitokuji temple, kyoto（nahmandub）、833925 DOORSton_Stone Door Opening（harrisonlace）、240745 Choir One-Shot（majoranman）、538152 Game Rustle Leaves（Fupicat）、489941 LeavesRustlingFast07（falcospizaetus）、374706 Xylophone - F#6（sgossner）、524312 Rock destroy（Bertsz）、109360 stone falls and breaks low pitch（SoundCollectah）、431859 quake and break（cheetahzbrain）、685256 Riser sound effect short（syntheffects）、614832 crystal-bell-08（arseniiv）、539968 Deep Boom（Za-Games）、856174 Subterranean Deep Sub-Bass Rumble Drop（brktkrgll）
+  網址格式 https://freesound.org/people/<作者>/sounds/<編號>/ ；疊加、對齊、手機加強和音量對齊的腳本在阿妍工作資料夾（大牌7種音效候選-2026-10-25/生成腳本/），不放進專案
+- 牌型名字型：public/fonts/noto-sans-tc/bigwin8-black.woff2，Noto Sans TC Black 只取 7 種牌型名（大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）、「台」和數字，SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
+
 程式
 - lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md
