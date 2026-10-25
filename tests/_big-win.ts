@@ -1,14 +1,17 @@
 // 大牌胡牌特效的觸發判斷（老闆 2026-10-23 定案；lib/mahjong/bigWin.ts）：
 //   B1 各牌型：用真的計分（calculateScore）算出台數明細，天胡、字一色、大四喜、大三元、小四喜、清一色、五暗刻、MIGI（地聽）都會播對的那一種；
 //      八仙過海、七搶一（花牌胡，台數明細只有那一項）也會播。頂級／大牌、收尾接不接浮層都對
-//   B2 多牌型：只播台數最高的；同台數照固定順序（天胡、字一色、大四喜、大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）
+//   B2 多牌型：只播台數最高的；同台數照固定順序（天胡、字一色、大四喜、五暗刻、大三元、小四喜、清一色、八仙過海、七搶一、MIGI）
 //   B3 地胡不播、一般胡牌不播、流局（seat -1）和沒有贏家不播
 //   B4 一炮多響：照順位整理後 state.winner 是順位第一那家，只看它（順位第一是一般胡就不播，即使後面那家是大牌）
 //   B5 重新整理／斷線重連不重播：同一手的識別相同、記下後判斷播過；不同局、不同贏家不算播過；只留最近 20 手
+//   B6 老闆 2026-10-25 選 A（同台數優先順序）：字一色 > 大四喜；五暗刻排在清一色、大三元前面；同時成立只播最高台那一種；
+//      隕石帳號天胡不接隕石（只播大牌段就結算）。台數明細都用真的計分算
 import type { MahjongGameState, Meld } from "../lib/mahjong/gameState";
 import { calculateScore, type ScoringContext } from "../lib/mahjong/scoring";
 import { applyWinnerOrderRule } from "../lib/mahjong/gameLogic";
 import { BIG_WIN_ORDER, bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin } from "../lib/mahjong/bigWin";
+import { planWinShow } from "../lib/mahjong/winShow";
 import type { Tile, TileSuit } from "../lib/mahjong/tiles";
 
 const results: string[] = [];
@@ -53,12 +56,12 @@ eq(pick([{ name: "七搶一", value: 8 }]), ["qiqiang1", "七搶一", "big", 8, 
 {
   const f = fansOf("m1 m1 m1 m3 m3 m3 m5 m5 m5 m7 m7 m7 m9 m9 m9 m2 m2", "m2", { isSelfDraw: true });
   eq([f.some((x) => x.name === "清一色"), f.some((x) => x.name === "五暗刻")], [true, true], "B2 前提：這手同時有清一色、五暗刻（都是 8 台）", f.map((x) => x.name + x.value).join("+"));
-  eq(pick(f)?.[0], "qing1se", "B2 同台數照順序：清一色＋五暗刻 → 播清一色");
+  eq(pick(f)?.[0], "wuanke", "B2 同台數照順序：清一色＋五暗刻 → 播五暗刻（老闆 2026-10-25 選 A）");
 }
 eq(pick([{ name: "大三元", value: 8 }, { name: "門清", value: 1 }, { name: "字一色", value: 16 }])?.[0], "zi1se", "B2 台數高的優先，和台數明細的先後無關：大三元 8＋字一色 16 → 播字一色");
 eq(pick([{ name: "地聽", value: 8 }, { name: "清一色", value: 8 }])?.[0], "qing1se", "B2 同台數：清一色排在 MIGI 前面");
 eq(pick([{ name: "七搶一", value: 8 }, { name: "八仙過海", value: 8 }])?.[0], "baxian", "B2 同台數：八仙過海排在七搶一前面");
-eq(BIG_WIN_ORDER.map((d) => d.fan).join("、"), "天胡、字一色、大四喜、大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、地聽", "B2 固定順序和定案一致");
+eq(BIG_WIN_ORDER.map((d) => d.fan).join("、"), "天胡、字一色、大四喜、五暗刻、大三元、小四喜、清一色、八仙過海、七搶一、地聽", "B2 固定順序和定案一致（老闆 2026-10-25 選 A）");
 
 // ---- B3 不播 ----
 {
@@ -109,6 +112,30 @@ eq(pickBigWin(undefined), null, "B3 沒有贏家不播");
   const broken = { getItem: () => "{壞掉", setItem: () => {} };
   markBigWinPlayed("broken-1", broken);
   eq(bigWinPlayed("broken-1", broken), true, "B5 讀出來不是合法 JSON：mark 之後 bigWinPlayed 是 true");
+}
+
+// ---- B6 老闆 2026-10-25 選 A ----
+{
+  const has = (f: { name: string }[], names: string[]) => names.map((n) => f.some((x) => x.name === n));
+  const fan = (f: { name: string; value: number }[]) => f.map((x) => x.name + x.value).join("+");
+  // 字一色＋大四喜（都是 16 台）：東南西北四刻＋中刻＋白對
+  const a = fansOf("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 z5 z5 z5 z7 z7", "z7");
+  eq([has(a, ["字一色", "大四喜"]), pick(a)?.[0]], [[true, true], "zi1se"], "B6 字一色＋大四喜 → 只播字一色", fan(a));
+  // 五暗刻＋清一色（都是 8 台）：自摸、全是萬子暗刻
+  const b = fansOf("m1 m1 m1 m3 m3 m3 m5 m5 m5 m7 m7 m7 m9 m9 m9 m2 m2", "m2", { isSelfDraw: true });
+  eq([has(b, ["五暗刻", "清一色"]), pick(b)?.[0]], [[true, true], "wuanke"], "B6 五暗刻＋清一色 → 只播五暗刻", fan(b));
+  // 五暗刻＋大三元（都是 8 台）：自摸、中發白三刻＋兩組暗刻＋對
+  const c = fansOf("z5 z5 z5 z6 z6 z6 z7 z7 z7 m2 m2 m2 p5 p5 p5 s9 s9", "s9", { isSelfDraw: true });
+  eq([has(c, ["五暗刻", "大三元"]), pick(c)?.[0]], [[true, true], "wuanke"], "B6 五暗刻＋大三元 → 只播五暗刻", fan(c));
+  // 天胡＋字一色＋大四喜＋五暗刻：莊家起手 17 張就胡（東南西北中五刻＋白對）
+  const d = fansOf("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 z5 z5 z5 z7 z7", "z7", { isSelfDraw: true, isDealer: true, isFirstDraw: true });
+  eq([has(d, ["天胡", "字一色", "大四喜", "五暗刻"]), pick(d)?.slice(0, 2)], [[true, true, true, true], ["tianhu", "天胡"]], "B6 天胡＋字一色＋大四喜＋五暗刻 → 只播天胡", fan(d));
+  // 隕石帳號天胡：只播大牌段就結算，不接隕石（一般人天胡也一樣）
+  eq([planWinShow({ pick: pickBigWin(winner(d)), zimo: true, winFx: "meteor" }), planWinShow({ pick: pickBigWin(winner(d)), zimo: true })], [["big"], ["big"]], "B6 隕石帳號天胡 → 只播天胡大牌段，不接隕石");
+  // 對照：隕石帳號字一色、大四喜自摸照舊「大牌段 → 隕石」
+  const e = fansOf("z1 z1 z1 z2 z2 z2 z3 z3 z3 z4 z4 z4 m1 m2 m3 p5 p5", "p5", { isSelfDraw: true });
+  eq([planWinShow({ pick: pickBigWin(winner(a)), zimo: true, winFx: "meteor" }), pick(e)?.[0], planWinShow({ pick: pickBigWin(winner(e)), zimo: true, winFx: "meteor" })],
+    [["big", "meteor"], "dasixi", ["big", "meteor"]], "B6 隕石帳號字一色、大四喜自摸 → 大牌段 → 隕石", fan(e));
 }
 
 console.log(results.join("\n"));
