@@ -3,6 +3,8 @@
 // 大牌胡牌特效（老闆 2026-10-23 定案；哪一手要播、播哪一種見 lib/mahjong/bigWin.ts）。
 // 設計：小宜〈大牌胡牌特效-設計規格-2026-10-22〉＋〈八仙過海-重新設計〉方向 A；試看版在預覽站試按台確認過（畫面、時間軸、金鈴音效對齊都照試看版）。
 // 四拍：入場 → 主動作 → 定格（牌型名＋台數，後面墊不透明深綠底）→ 收向勝者名牌。頂級約 3 秒（T2）、大牌約 2 秒（G3）。
+// 2026-10-25 老闆：順序對調成「自摸／胡浮層（或帳號專屬的隕石自摸）→ 這一段 → 結算」（lib/mahjong/winShow.ts）；
+// 接在前一段後面時（chained）暗角一開始就是暗的，前一段淡掉時底下已經是暗的，牌桌不會先亮一下。
 // 畫面最亮的那一下（.bw-flash 的頂點和各牌型的重擊動作）排在音效的重擊點上；音效走互動音效的音量和靜音。
 // 點畫面任一處、Enter、Space＝跳過，聲音一起停，跳過那一下不會按到後面結算浮層的按鈕；開啟「減少動態」時直接停在定格畫面（不飛、不轉、不閃）。
 // 特效層 pointer-events: none；勝者名牌那一塊挖空，名牌一直看得到。
@@ -36,9 +38,9 @@ function useReducedMotion() {
 
 /**
  * 專屬段：p 0（剛掛上）→ 1 入場 → 2 主動作 → 3 定格 → 4 收向勝者名牌 → onDone(false)；跳過 → onDone(true)。
- * out：專屬段播完、接現有自摸／胡浮層時留在底下淡出（不會先亮回牌桌再暗下去）
+ * chained：接在自摸／胡浮層或隕石自摸後面，暗角一開始就是暗的
  */
-export default function BigWinFx({ pick, seat, mobile, out, onDone }: { pick: BigWinPick; seat: number; mobile: boolean; out: boolean; onDone: (skipped: boolean) => void }) {
+export default function BigWinFx({ pick, seat, mobile, chained = false, onDone }: { pick: BigWinPick; seat: number; mobile: boolean; chained?: boolean; onDone: (skipped: boolean) => void }) {
   const { theme, tier, title, fan } = pick;
   // 畫面最亮那一下排在哪（從專屬段開始算，ms）：金鈴組的重擊點（頂級 T2 1.05 秒、大牌 G3 0.48 秒）
   const hit = bigWinHitMs(tier);
@@ -74,11 +76,10 @@ export default function BigWinFx({ pick, seat, mobile, out, onDone }: { pick: Bi
     });
   }, [seat]);
 
-  // 點畫面任一處、Enter、Space：跳過（播完的收尾浮層也不接，直接進結算）。
+  // 點畫面任一處、Enter、Space：跳過，直接進結算。
   // 手機點一下之後瀏覽器還會補一個 click，這時結算浮層已經出來：跳過後 0.5 秒內的 click 吃掉，不會按到結算浮層的按鈕
   const ended = useRef(false);
   useEffect(() => {
-    if (out) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
       if (ended.current) return;
@@ -93,7 +94,7 @@ export default function BigWinFx({ pick, seat, mobile, out, onDone }: { pick: Bi
     document.addEventListener("pointerdown", skip, true);
     document.addEventListener("keydown", skip, true);
     return () => { document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
-  }, [out]);
+  }, []);
   const finish = () => { if (!ended.current) { ended.current = true; doneRef.current(false); } };
 
   useEffect(() => {
@@ -131,7 +132,7 @@ export default function BigWinFx({ pick, seat, mobile, out, onDone }: { pick: Bi
   }, [p, tier]);
 
   return (
-    <div ref={ref} className={`bw ${tier} ${theme} ${GENERIC.has(theme) ? "gen" : ""} ${mobile ? "m" : "d"} ${rm ? "rm" : ""} ${out ? "out" : ""}`} data-bw-phase={p} data-bw-theme={theme} style={{ ["--hit" as string]: `${hit}ms` }} aria-hidden>
+    <div ref={ref} className={`bw ${tier} ${theme} ${GENERIC.has(theme) ? "gen" : ""} ${mobile ? "m" : "d"} ${rm ? "rm" : ""} ${chained ? "chain" : ""}`} data-bw-phase={p} data-bw-theme={theme} style={{ ["--hit" as string]: `${hit}ms` }} aria-hidden>
       <div className="bw-vig" />
       <div className="bw-flash" />
       {theme === "tianhu" && <div className="bw-curtain" />}

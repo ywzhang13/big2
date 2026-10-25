@@ -1,0 +1,182 @@
+/* 帳號專屬「隕石自摸」（components/mahjong/MeteorFx.tsx；老闆 2026-10-25 定案，照預覽站試看版 v5）。素材是老闆生成的圖（/mahjong-fx/meteor/*.webp）。
+   隕石段每個動畫都是 1.8 秒同一條時間軸，百分比＝毫秒 ÷ 18：
+   150＝8.33%  650＝36.11%  750（撞擊）＝41.67%  830＝46.11%  900＝50%  1200＝66.67%  1300＝72.22%  1350＝75%
+   整個牌桌的震動在 MeteorFx.tsx（Web Animations，作用在 [data-mt-stage]）。
+   疊在牌桌和大牌專屬段（.bw z 62）上面、結算浮層（z 50）上面；收尾（坑中央的牌＋「自摸／名字」）播完由頁面接大牌專屬段或結算。只動 transform、opacity。 */
+.mtw { display: contents; --T: 1800ms; }
+.mt { position: fixed; inset: 0; z-index: 63; pointer-events: none; overflow: hidden; }
+/* 爆炸那一層用 screen 和底下整個畫面（牌桌＋暗幕）疊：黑底變透明、只留火光 */
+.mt-blend { mix-blend-mode: screen; }
+.mtw * { animation-duration: var(--T); animation-fill-mode: both; animation-timing-function: linear; }
+
+/* ---------- 暗幕（勝者名牌那一塊挖空） ---------- */
+.mt-dim {
+  position: absolute; inset: -60px; opacity: 0; animation-name: mt-dim;
+  background: radial-gradient(ellipse at 50% 0%, rgba(90,14,0,.5), transparent 70%), rgba(10,3,0,.62);
+  -webkit-mask-image: radial-gradient(ellipse var(--arx, 0px) var(--ary, 0px) at calc(var(--ax, 50%) + 60px) calc(var(--ay, 50%) + 60px), transparent 0, transparent 68%, #000 100%);
+  mask-image: radial-gradient(ellipse var(--arx, 0px) var(--ary, 0px) at calc(var(--ax, 50%) + 60px) calc(var(--ay, 50%) + 60px), transparent 0, transparent 68%, #000 100%);
+}
+@keyframes mt-dim { 0% { opacity: 0; } 8.33%, 100% { opacity: 1; } }
+
+/* 天光：入場那一角越來越紅，撞擊後留一點餘光 */
+.mt-sky {
+  position: absolute; inset: -60px; opacity: 0; animation-name: mt-sky;
+  background: radial-gradient(ellipse 60% 75% at var(--skx, 90%) 0%, rgba(255,90,20,.55), rgba(160,30,0,.2) 45%, transparent 75%);
+}
+@keyframes mt-sky { 0%, 4% { opacity: 0; } 36.11% { opacity: 1; } 41.67% { opacity: 1; } 60% { opacity: .35; } 100% { opacity: .25; } }
+
+/* 勝者名牌外框：一開始跳一下，之後一直亮著 */
+.mt-plate { display: none; position: absolute; border-radius: 12px; opacity: 0; animation-name: mt-plate; box-shadow: 0 0 0 2px rgba(255,160,70,.95), 0 0 20px 5px rgba(255,90,20,.55); }
+@keyframes mt-plate { 0% { opacity: 0; transform: scale(1); } 4% { opacity: 1; transform: scale(1.06); } 8.33% { transform: scale(1); } 100% { opacity: 1; } }
+
+/* ---------- 以下都掛在爆點上 ---------- */
+.mt-at { position: absolute; left: var(--lx); top: var(--ly); width: 0; height: 0; }
+
+/* 隕石：.mt-path 從畫面外斜衝進來（前 0.5 秒走 75%，最後 0.1 秒走完剩下 25%＝加速），撞擊那一格消失 */
+.mt-path { position: absolute; left: 0; top: 0; opacity: 0; animation-name: mt-fly; will-change: transform; }
+@keyframes mt-fly {
+  0%, 8.32% { opacity: 0; transform: translate(var(--sx), var(--sy)); }
+  8.33% { opacity: 1; transform: translate(var(--sx), var(--sy)); }
+  36.11% { opacity: 1; transform: translate(calc(var(--sx) * .25), calc(var(--sy) * .25)); }
+  41.6% { opacity: 1; transform: translate(0, 0); }
+  41.67%, 100% { opacity: 0; transform: translate(0, 0); }
+}
+.mt-mover { position: absolute; left: 0; top: 0; animation-name: mt-grow; }
+@keyframes mt-grow { 0%, 8.33% { transform: rotate(var(--rot)) scaleX(var(--mir)) scale(.8); } 41.67%, 100% { transform: rotate(var(--rot)) scaleX(var(--mir)) scale(1); } }
+.mt-mover img { position: absolute; left: var(--mox); top: var(--moy); width: var(--ms); height: var(--ms); max-width: none; user-select: none; }
+/* 殘影：同一條路晚 40／80ms，淡一點；撞擊那一刻一起消失 */
+.mt-ghost { position: absolute; left: 0; top: 0; animation-name: mt-ghost; }
+@keyframes mt-ghost { 0%, 41.6% { opacity: 1; } 41.67%, 100% { opacity: 0; } }
+.mt-ghost.g1 .mt-path, .mt-ghost.g1 .mt-mover { animation-delay: 40ms; }
+.mt-ghost.g2 .mt-path, .mt-ghost.g2 .mt-mover { animation-delay: 80ms; }
+.mt-ghost.g1 img { opacity: .42; }
+.mt-ghost.g2 img { opacity: .2; }
+
+/* 隕石坑：撞擊時跟著爆開，之後一直留著（到結算） */
+.mt-crater {
+  position: absolute; left: calc(var(--cs) / -2); top: calc(var(--cs) / -2); width: var(--cs); height: var(--cs);
+  background: url("/mahjong-fx/meteor/crater.webp") center / contain no-repeat; opacity: 0; animation-name: mt-crater;
+}
+@keyframes mt-crater {
+  0%, 41.67% { opacity: 0; transform: scale(.55); } 43.5% { opacity: 1; transform: scale(1.08); animation-timing-function: ease-out; }
+  48% { transform: scale(1); } 100% { opacity: 1; transform: scale(1); }
+}
+/* 落點周圍的熔岩餘光 */
+.mt-glow {
+  position: absolute; left: calc(var(--cs) * -.9); top: calc(var(--cs) * -.9); width: calc(var(--cs) * 1.8); height: calc(var(--cs) * 1.8);
+  border-radius: 50%; background: radial-gradient(circle, rgba(255,120,30,.55) 0%, rgba(255,70,10,.22) 40%, transparent 70%); opacity: 0; animation-name: mt-glow;
+}
+@keyframes mt-glow { 0%, 41.67% { opacity: 0; } 43% { opacity: 1; } 80% { opacity: .45; } 100% { opacity: .4; } }
+
+/* 爆炸：黑底圖用 screen 疊加，黑色自動消失、只留火光；放到 1.6 倍（寬度超過畫面 70%）再淡掉 */
+.mt-boom {
+  position: absolute; left: calc(var(--es) / -2); top: calc(var(--es) / -2); width: var(--es); height: var(--es);
+  background: url("/mahjong-fx/meteor/explosion.webp") center / contain no-repeat;
+  opacity: 0; animation-name: mt-boom; will-change: transform, opacity;
+}
+@keyframes mt-boom {
+  0%, 41.67% { opacity: 0; transform: scale(.2) rotate(0deg); } 41.7% { opacity: 1; transform: scale(.25); animation-timing-function: cubic-bezier(.15, .8, .3, 1); }
+  52% { opacity: 1; transform: scale(1.15) rotate(6deg); } 72.22% { opacity: 0; transform: scale(1.6) rotate(10deg); } 100% { opacity: 0; transform: scale(1.6); }
+}
+
+/* 衝擊波：圓環從爆點擴散到超過整個畫面寬 */
+.mt-wave {
+  position: absolute; left: calc(var(--sw) / -2); top: calc(var(--sw) / -2); width: var(--sw); height: var(--sw); border-radius: 50%;
+  background: radial-gradient(circle, transparent 0 62%, rgba(255,220,160,.0) 63%, rgba(255,230,170,.9) 67.5%, rgba(255,130,40,.5) 69.5%, transparent 72%);
+  opacity: 0; animation-name: mt-wave; will-change: transform, opacity;
+}
+@keyframes mt-wave {
+  0%, 41.67% { opacity: 0; transform: scale(.03); } 41.8% { opacity: 1; transform: scale(.04); animation-timing-function: cubic-bezier(.1, .6, .3, 1); }
+  66.67% { opacity: 0; transform: scale(1); } 100% { opacity: 0; transform: scale(1); }
+}
+
+/* 碎石（老闆的 4×2 小隕石）：從落點往外噴，火尾朝飛行方向的反方向，邊飛邊小幅轉動、縮小（動畫在 MeteorFx.tsx，用 Web Animations） */
+.mt-rock {
+  position: absolute; left: calc(var(--ds) / -2); top: calc(var(--ds) / -2); width: var(--ds); height: var(--ds);
+  background-image: url("/mahjong-fx/meteor/debris.webp"); background-size: 400% 200%; background-repeat: no-repeat;
+  opacity: 0; will-change: transform, opacity;
+}
+
+/* 煙塵：爆炸散掉後往外擴散 */
+.mt-smoke {
+  position: absolute; left: calc(var(--cs) * -.8); top: calc(var(--cs) * -.8); width: calc(var(--cs) * 1.6); height: calc(var(--cs) * 1.6);
+  border-radius: 50%; background: radial-gradient(circle, rgba(70,55,48,.7) 0, rgba(55,42,36,.4) 40%, transparent 70%); opacity: 0; animation-name: mt-smoke;
+}
+.mt-smoke.s2 { animation-delay: 90ms; margin: calc(var(--cs) * -.12) 0 0 calc(var(--cs) * .2); }
+@keyframes mt-smoke { 0%, 46% { opacity: 0; transform: scale(.5); } 54% { opacity: .85; transform: scale(.9); } 94% { opacity: 0; transform: scale(1.8); } 100% { opacity: 0; transform: scale(1.8); } }
+
+/* 白閃：全畫面約 80ms */
+.mt-flash { position: absolute; inset: -60px; background: #fff8ec; opacity: 0; animation-name: mt-flash; }
+@keyframes mt-flash { 0%, 41.67% { opacity: 0; } 42.2% { opacity: .92; } 46.11%, 100% { opacity: 0; } }
+
+/* ---------- 收尾：坑正中央浮出自摸牌（1.05 秒）→ 畫面正中央「自摸」砸出（1.25 秒，縮放＋光爆）、名字（1.45 秒），停到 2.85 秒 ---------- */
+.mt-tile {
+  position: absolute; left: calc(var(--tw) / -2); top: calc(var(--th) / -2); width: var(--tw); height: var(--th);
+  opacity: 0; animation: mt-tile-up 420ms cubic-bezier(.2, .9, .3, 1.25) 1050ms both;
+  border-radius: 5px; box-shadow: 0 0 0 2px #ffb347, 0 0 14px 4px rgba(255,120,20,.9), 0 0 34px 10px rgba(255,60,0,.55);
+}
+@keyframes mt-tile-up { 0% { opacity: 0; transform: translateY(30%) scale(.3); } 45% { opacity: 1; } 75% { transform: translateY(-6%) scale(1.15); } 100% { opacity: 1; transform: none; } }
+/* 牌後面一團熔岩光，慢慢呼吸 */
+.mt-tile-aura {
+  position: absolute; left: -90%; top: -60%; width: 280%; height: 220%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(ellipse, rgba(255,190,80,.85) 0%, rgba(255,110,20,.55) 30%, rgba(200,40,0,.25) 55%, transparent 72%);
+  animation: mt-aura 900ms ease-in-out 1050ms infinite alternate both;
+}
+@keyframes mt-aura { from { opacity: .7; transform: scale(.92); } to { opacity: 1; transform: scale(1.08); } }
+
+/* 「自摸／名字」：畫面正中央（--zy 是上緣，會擋到牌時 MeteorFx.tsx 已經往上或往下讓開）。
+   「自摸」字型 MjMeteorZimo＝Noto Sans TC Black 子集（只有「自摸」兩個字，/fonts/noto-sans-tc/zimo-black.woff2，SIL OFL 1.1），
+   preloadMeteorFx() 先載好；字級和一般自摸浮層一樣（14vw、字距 .3em），只換字型。名字是實際的自摸者名字（任何字），用系統字型 */
+.mt-zimo {
+  position: absolute; left: var(--zx); top: var(--zy); height: var(--zh); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; white-space: nowrap; pointer-events: none;
+}
+/* 字後面墊一圈暗，熔岩、爆炸背景上也清楚 */
+.mt-zimo::before {
+  content: ""; position: absolute; inset: -6% -30%; z-index: -2; border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(18,4,0,.7) 0%, rgba(18,4,0,.42) 48%, transparent 72%); opacity: 0; animation: mt-in 260ms ease-out 1250ms both;
+}
+/* 砸到定位那一下的光爆：橘白光團＋放射光，一閃就散 */
+.mt-burst {
+  position: absolute; left: 50%; top: 38%; width: 150%; aspect-ratio: 1; margin-left: -75%; margin-top: -75%; z-index: -1; border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255,250,225,.95) 0%, rgba(255,196,90,.75) 16%, rgba(255,110,20,.35) 34%, transparent 58%),
+    repeating-conic-gradient(rgba(255,200,110,.55) 0deg 3deg, transparent 3deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0 30%, transparent 62%); mask-image: radial-gradient(circle, #000 0 30%, transparent 62%);
+  opacity: 0; animation: mt-burst 480ms ease-out 1420ms both;
+}
+@keyframes mt-burst { 0% { opacity: 0; transform: scale(.3) rotate(0deg); } 18% { opacity: 1; } 100% { opacity: 0; transform: scale(1.7) rotate(25deg); } }
+/* 「自摸」：厚重黑體、熔岩金橘漸層＋細裂紋、深色焦邊描邊、灼熱外發光 */
+.mt-zimo b {
+  position: relative; font-family: "MjMeteorZimo", "Noto Sans TC", "PingFang TC", sans-serif; font-weight: 900; line-height: 1;
+  font-size: 14vw; letter-spacing: .3em; padding-left: .3em;
+  background:
+    repeating-linear-gradient(117deg, transparent 0 13px, rgba(110,24,0,.55) 13px 14px, transparent 14px 31px),
+    repeating-linear-gradient(-34deg, transparent 0 19px, rgba(110,24,0,.4) 19px 20px, transparent 20px 41px),
+    linear-gradient(180deg, #fff8d2 0%, #ffe07a 24%, #ffae2e 50%, #ff6a10 76%, #b52b04 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 2px rgba(80,16,0,.9);
+  filter: drop-shadow(0 3px 0 #3a0c00) drop-shadow(0 0 5px rgba(255,180,70,.95)) drop-shadow(0 0 16px rgba(255,90,0,.85)) drop-shadow(0 0 34px rgba(255,40,0,.5));
+  opacity: 0; animation: mt-slam 380ms cubic-bezier(.25, 0, .35, 1) 1250ms both;
+}
+/* 名字：和一般自摸浮層一樣 24px 粗體，同色系 */
+.mt-zimo span {
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 700; font-size: 24px; line-height: 1.3; letter-spacing: .12em; padding-left: .12em; margin-top: 16px;
+  background: linear-gradient(180deg, #fff3cf 0%, #ffd47a 55%, #ff9a2e 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: .6px rgba(80,16,0,.8);
+  filter: drop-shadow(0 2px 0 #3a0c00) drop-shadow(0 0 7px rgba(255,120,20,.85));
+  opacity: 0; animation: mt-name-in 300ms ease-out 1450ms both;
+}
+@keyframes mt-slam { 0% { opacity: 0; transform: scale(2.6); } 45% { opacity: 1; transform: scale(.9); } 70% { transform: scale(1.06); } 100% { opacity: 1; transform: none; } }
+@keyframes mt-name-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes mt-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- 減少動態：不飛、不震、不閃、沒有碎石；暗幕 → 隕石坑＋自摸牌＋「自摸／名字」直接出現，1.6 秒後進結算 ---------- */
+.mtw.rm { --T: 1600ms; }
+.mtw.rm .mt-tile, .mtw.rm .mt-zimo b, .mtw.rm .mt-zimo span, .mtw.rm .mt-zimo::before { animation: mt-in 240ms ease-out both; }
+.mtw.rm .mt-tile-aura { animation: none; }
+.mtw.rm .mt-burst { display: none; }
+.mtw.rm .mt-sky, .mtw.rm .mt-ghost, .mtw.rm .mt-main, .mtw.rm .mt-boom, .mtw.rm .mt-wave, .mtw.rm .mt-rock, .mtw.rm .mt-smoke, .mtw.rm .mt-flash { display: none; }
+.mtw.rm .mt-dim { animation-name: mt-rm-in; }
+.mtw.rm .mt-plate, .mtw.rm .mt-crater, .mtw.rm .mt-glow { animation-name: mt-rm-in; }
+@keyframes mt-rm-in { 0% { opacity: 0; transform: none; } 15%, 100% { opacity: 1; transform: none; } }

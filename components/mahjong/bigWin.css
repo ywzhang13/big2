@@ -7,8 +7,8 @@
 .bw.m { --ow: 250px; --oh: 168px; --tt: 38px; --tf: 14px; --safe: 28px; }
 .bw.top { --b1: 250ms; --b4: 650ms; }
 .bw.big { --b1: 180ms; --b4: 600ms; }
-/* 專屬段播完、現有浮層出來時，專屬段在底下淡掉（不會先亮回牌桌再暗下去） */
-.bw.out { opacity: 0; transition: opacity 350ms ease-out; }
+/* 接在自摸／胡浮層或隕石自摸後面（2026-10-25 順序對調）：暗角一開始就是暗的，前一段淡掉時牌桌不會先亮一下 */
+.bw.chain .bw-vig { opacity: 1; transition: none; }
 
 /* 暗角：頂級＝黑 72%＋金色放射，中央最亮；大牌＝黑 52%＋18% 金霧；MIGI＝沿用現有翠綠暗桌。勝者名牌那一塊挖空，名牌一直看得到 */
 .bw-vig {
@@ -215,7 +215,7 @@
 /* 減少動態：直接停在定格那一拍，不飛、不轉、不閃；整層 250ms 淡入，主物件外圍一圈靜態金框 */
 .bw.rm *, .bw.rm *::before, .bw.rm *::after { transition: none !important; animation: none !important; }
 .bw.rm { animation: bw-rm-in 250ms ease-out both; }
-.bw.rm.out { animation: none; }
+.bw.rm.chain { animation: none; }
 @keyframes bw-rm-in { from { opacity: 0; } to { opacity: 1; } }
 .bw.rm .bw-obj { outline: 1.5px solid rgba(240,214,138,.85); outline-offset: 10px; border-radius: 14px; }
 .bw.rm.migi .bw-obj { outline-color: rgba(52,211,153,.85); }

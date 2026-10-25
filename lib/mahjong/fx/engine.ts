@@ -211,6 +211,61 @@ export function playBigWinSound(tier: "top" | "big", zeroAt: number | null): () 
   };
 }
 
+// ---------------- 帳號專屬「隕石自摸」的音效（老闆 2026-10-25；畫面在 components/mahjong/MeteorFx.tsx） ----------------
+// 阿妍的 A 組①呼嘯＋C 組②撞擊爆炸、③碎石地鳴（老闆指定的混搭，s/meteor-*.mp3；授權見 LICENSE.txt）。
+// 撞擊點在檔案的 1.000 秒；畫面撞擊在隕石段的 0.75 秒，所以從檔案的 0.25 秒對到畫面零點。
+// 觸控裝置（手機）放手機加強版、其他放一般版。只有房間裡有這個帳號時才載（約 36KB），不是每個人都下載
+const METEOR_HIT_S = 1.0;
+const meteorBufs = new Map<string, Promise<AudioBuffer | null>>();
+const meteorDefaultUrl = () => `${BASE}s/meteor-${typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? "mobile" : "pc"}.mp3`;
+/** 先載好、解碼好（要等特效引擎的音訊建好；載不到就回 null，特效照播、不出聲）。url 不給就照裝置選手機／電腦版 */
+export function preloadMeteorSound(url = meteorDefaultUrl()): Promise<AudioBuffer | null> {
+  if (!meteorBufs.has(url)) {
+    meteorBufs.set(url, preloadFx().then(async () => {
+      if (!AC) return null;
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return AC.decodeAudioData(await r.arrayBuffer());
+    }).catch(() => null));
+  }
+  return meteorBufs.get(url)!;
+}
+/**
+ * 播隕石自摸音效；回傳停止函式。靜音、還沒載好、音訊沒解鎖就不響（和大牌音效一樣）。
+ * zeroAt：隕石段動畫真正開始那一刻（performance.now）；impactMs：畫面撞擊點。
+ * 從檔案「撞擊點－畫面撞擊點＋已經過了多久＋輸出延遲」的位置開始放，撞擊聲出喇叭的時間就是 zeroAt＋impactMs。
+ * zeroAt＝null（減少動態）：從撞擊點前 0.05 秒開始放，只聽到撞擊和碎石
+ */
+export function playMeteorSound(zeroAt: number | null, impactMs: number, url = meteorDefaultUrl()): () => void {
+  const ac = AC;
+  let stopped = false;
+  let stopNow = () => {};
+  if (!ac || masterGain === 0) return () => {};
+  const start = (b: AudioBuffer | null) => {
+    if (!b || stopped || ac.state !== "running") return;
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = b;
+    s.connect(g).connect(MIX ?? ac.destination);
+    const latency = (ac.outputLatency || 0) + (ac.baseLatency || 0);
+    const offset = zeroAt == null ? METEOR_HIT_S - 0.05
+      : Math.max(0, METEOR_HIT_S - impactMs / 1000 + (performance.now() - zeroAt) / 1000 + latency);
+    if (offset >= b.duration) return;
+    try { s.start(ac.currentTime, offset); } catch { return; }
+    stopNow = () => {
+      g.gain.setTargetAtTime(0, ac.currentTime, 0.012);
+      try { s.stop(ac.currentTime + 0.05); } catch { /* 已經播完 */ }
+    };
+  };
+  const go = () => void preloadMeteorSound(url).then(start);
+  if (ac.state === "running") go();
+  else void ac.resume().then(go, () => {});
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    stopNow();
+  };
+}
+
 /** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋） */
 export function preloadFx(): Promise<boolean> {
   readyPromise ??= (async () => {

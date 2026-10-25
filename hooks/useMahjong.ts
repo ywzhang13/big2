@@ -22,7 +22,7 @@ function safeHand(tiles: Tile[]): Tile[] {
   }
   return sortTiles(filtered);
 }
-import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile } from "@/lib/mahjong/gameState";
+import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile, WinFx } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
@@ -103,6 +103,8 @@ export interface MjPlayer {
   discards: Tile[];
   revealed: Meld[];
   isDealer: boolean;
+  /** 這位玩家帳號的專屬胡牌特效代號（伺服器依帳號給，公開代號、不含帳號資料）；有的話先預載素材 */
+  winFx?: WinFx;
 }
 
 /** 結算攤牌用的一家牌（贏家的 hand 不含胡的那張） */
@@ -114,7 +116,7 @@ export interface MjHandReveal {
   flowers: Tile[];
 }
 
-/** 贏家：winTile／from／waits 是新版後端才有，舊牌局沒有 */
+/** 贏家：winTile／from／waits 是新版後端才有，舊牌局沒有；winFx＝贏家帳號的專屬胡牌特效代號（自摸時才有） */
 export interface MjWinner {
   seat: number;
   name: string;
@@ -122,6 +124,7 @@ export interface MjWinner {
   winTile?: Tile;
   from?: number | null; // 自摸、八仙過海＝null
   waits?: WaitTile[];
+  winFx?: WinFx;
 }
 
 /** 眼牌的人看到的一家手牌（mj_opponent_hands／state 的 opponentHands） */
@@ -454,6 +457,7 @@ export function useMahjong(
             flowers: Tile[];
             discards: Tile[];
             isDealer: boolean;
+            winFx?: WinFx;
           }[];
           wallCount: number;
           currentTurn: number;
@@ -559,6 +563,7 @@ export function useMahjong(
           discards: p.discards,
           revealed: p.revealed,
           isDealer: p.isDealer,
+          ...(p.winFx ? { winFx: p.winFx } : {}),
         })),
         myHand: hand,
         mySeat,
@@ -896,6 +901,7 @@ export function useMahjong(
           flowers: Tile[];
           discards: Tile[];
           isDealer: boolean;
+          winFx?: WinFx;
         }[];
         roundInfo?: RoundInfo;
         playerScores?: number[];
@@ -939,6 +945,7 @@ export function useMahjong(
           discards: p.discards || [],
           revealed: p.revealed || [],
           isDealer: p.isDealer,
+          ...(p.winFx ? { winFx: p.winFx } : {}), // 開局廣播也帶座位代號（老柯第二版），一開局就能預載
         })),
         winner: undefined,
         winners: undefined,
@@ -1312,6 +1319,7 @@ export function useMahjong(
         gameOver?: boolean;
         handStats?: HandStats;
         remainingWall?: Tile[];
+        winFx?: WinFx; // 贏家帳號的專屬胡牌特效代號（自摸時才有）
       };
       // 放槍被胡走的那張（不是自摸）從海底拿掉，和伺服器輸出的 state 一致
       const wonFromDiscard = new Set((msg.winners ?? []).filter((w) => w.from != null && w.winTile).map((w) => w.winTile!.id));
@@ -1338,6 +1346,7 @@ export function useMahjong(
                 name: msg.winnerName || "",
                 score: msg.score || { fans: [], totalFan: 0 },
                 allHands: msg.allHands,
+                ...(msg.winFx ? { winFx: msg.winFx } : {}),
               }
             : {
                 seat: -1,

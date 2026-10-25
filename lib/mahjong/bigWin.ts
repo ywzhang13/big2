@@ -4,7 +4,8 @@
 //   ・頂級（約 3 秒，金鈴 T2）：天胡、字一色、大四喜；大牌（約 2 秒，金鈴 G3）：大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI（計分名稱「地聽」）。
 //   ・「地胡」不播（老闆：地胡就是 MIGI，特效只分天胡和 MIGI），維持一般胡牌畫面。
 //   ・一炮多響：state.winner 就是順位第一那家（gameLogic 照順位排 winners），只看它。
-//   ・收尾：天胡、八仙過海、七搶一播完直接進結算；其他接現有的自摸／胡慶祝浮層。
+//   ・順序（2026-10-25 對調，見 lib/mahjong/winShow.ts）：天胡、八仙過海、七搶一（cele=false）只播這一段就進結算；
+//     其他（cele=true）先播現有的自摸／胡慶祝浮層（或帳號專屬的隕石自摸），再播這一段。
 export type BigWinTheme = "tianhu" | "zi1se" | "dasixi" | "dasanyuan" | "xiaosixi" | "qing1se" | "wuanke" | "baxian" | "qiqiang1" | "migi";
 export type BigWinTier = "top" | "big";
 
