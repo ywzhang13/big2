@@ -1,13 +1,14 @@
-// 大牌胡牌特效：哪一手要播、播哪一種（老闆 2026-10-23 定案；畫面在 components/mahjong/BigWinFx.tsx）。
+// 大牌胡牌特效：哪一手要播、播哪一種（老闆 2026-10-23 定案；畫面在 components/mahjong/BigWin8Fx.tsx）。
 // 只管判斷，不碰 React，node 測試直接跑（tests/_big-win.ts）。
-//   ・胡牌的台數明細（score.fans）裡有下面任一牌型就播；同一手有好幾個時播台數最高的，同台數照 BIG_WIN_ORDER 的順序。
+//   ・胡牌的台數明細（score.fans）裡有下面任一牌型就播；同一手有好幾個時播台數最高的，同台數照 BIG_WIN_ORDER 的順序
+//     （2026-10-25 老闆選 A：字一色 > 大四喜；五暗刻排在大三元、小四喜、清一色前面，其他照舊）。
 //   ・頂級（約 3 秒，金鈴 T2）：天胡、字一色、大四喜；大牌（約 2 秒，金鈴 G3）：大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI（計分名稱「地聽」）。
 //   ・「地胡」不播（老闆：地胡就是 MIGI，特效只分天胡和 MIGI），維持一般胡牌畫面。
 //   ・一炮多響：state.winner 就是順位第一那家（gameLogic 照順位排 winners），只看它。
 //   ・順序（2026-10-25 老闆定案「大牌先播」，見 lib/mahjong/winShow.ts）：先播這一段，cele=true 的接著播現有的自摸／胡慶祝浮層
 //     （或帳號專屬的隕石自摸）再出結算；天胡、八仙過海、七搶一（cele=false）播完這一段就進結算。
 //   ・2026-10-25 八台大牌新版：大牌（tier big）7 種改用老闆生成素材的新特效（components/mahjong/BigWin8Fx.tsx，下面的 BIG_WIN8）；
-//     頂級 3 種（天胡、字一色、大四喜）照舊用 components/mahjong/BigWinFx.tsx。
+//     同一天 16 台以上（頂級 3 種：天胡、字一色、大四喜）也換成新特效（同一個元件），舊的 BigWinFx 拿掉。
 export type BigWinTheme = "tianhu" | "zi1se" | "dasixi" | "dasanyuan" | "xiaosixi" | "qing1se" | "wuanke" | "baxian" | "qiqiang1" | "migi";
 export type BigWinTier = "top" | "big";
 
@@ -16,10 +17,10 @@ export const BIG_WIN_ORDER: { fan: string; theme: BigWinTheme; title: string; ti
   { fan: "天胡", theme: "tianhu", title: "天胡", tier: "top", cele: false }, // 天胡一定是自摸，不再接自摸浮層
   { fan: "字一色", theme: "zi1se", title: "字一色", tier: "top", cele: true },
   { fan: "大四喜", theme: "dasixi", title: "大四喜", tier: "top", cele: true },
+  { fan: "五暗刻", theme: "wuanke", title: "五暗刻", tier: "big", cele: true }, // 老闆選 A：同台數時排在大三元、小四喜、清一色前面
   { fan: "大三元", theme: "dasanyuan", title: "大三元", tier: "big", cele: true },
   { fan: "小四喜", theme: "xiaosixi", title: "小四喜", tier: "big", cele: true },
   { fan: "清一色", theme: "qing1se", title: "清一色", tier: "big", cele: true },
-  { fan: "五暗刻", theme: "wuanke", title: "五暗刻", tier: "big", cele: true },
   { fan: "八仙過海", theme: "baxian", title: "八仙過海", tier: "big", cele: false }, // 花牌胡沒有自摸放槍
   { fan: "七搶一", theme: "qiqiang1", title: "七搶一", tier: "big", cele: false },
   { fan: "地聽", theme: "migi", title: "MIGI", tier: "big", cele: true },
@@ -77,15 +78,22 @@ export function markBigWinPlayed(key: string, kv: KV | null = store()): void {
   } catch { PLAYED_MEM.add(key); }
 }
 
-// ---------------- 八台大牌新版（2026-10-25 老闆定案；畫面 components/mahjong/BigWin8Fx.tsx，預覽站試按台 v1～v4 確認過） ----------------
-// 大牌（tier big）7 種：素材在 public/mahjong-fx/bigwin8/（老闆用 AI 生成、老馬轉 WebP），專屬音效是阿妍的推薦款
-//（sfx/<牌型>-pc.mp3 一般版、-mobile.mp3 手機加強版），牌型名字型 public/fonts/noto-sans-tc/bigwin8-black.woff2。
-// 只有這一手真的是這 7 種之一時才下載那一種的素材（約 0.3～0.6MB），一般牌局不下載。
-export type BigWin8Theme = "dasanyuan" | "xiaosixi" | "qing1se" | "wuanke" | "baxian" | "qiqiang1" | "migi";
+// ---------------- 大牌新版（2026-10-25 老闆定案；畫面 components/mahjong/BigWin8Fx.tsx，預覽站試按台確認過） ----------------
+// 八台 7 種（大牌，tier big；試按台 v1～v4）＋ 16 台以上 3 種（頂級，tier top：天胡、字一色、大四喜；16 台試按台，含大四喜四象天境背景）。
+// 素材在 public/mahjong-fx/bigwin8/（老闆用 AI 生成、老馬轉 WebP），專屬音效是阿妍的推薦款（sfx/<牌型>-pc.mp3 一般版、-mobile.mp3 手機加強版），
+// 牌型名字型 public/fonts/noto-sans-tc/bigwin8-black.woff2（八台那一份不動）；16 台多用到的「天胡字」另外放 bigwin16-black.woff2。
+// 只有這一手真的是這一種時才下載那一種的素材（八台約 0.3～0.6MB、16 台約 0.7～1.3MB），一般牌局不下載。
+export type BigWin8Theme = BigWinTheme;
 export const BIG_WIN8_DIR = "/mahjong-fx/bigwin8";
 export const BIG_WIN8_FONT = "/fonts/noto-sans-tc/bigwin8-black.woff2";
-/** ms＝大牌段總長；hit＝畫面最重那一下（閃光、衝擊波、粒子、牌桌震動，音效的重擊點也對在這裡）；art＝這一種用到的兩張圖 */
-export const BIG_WIN8: Record<BigWin8Theme, { ms: number; hit: number; art: [string, string] }> = {
+/** 16 台多用到的三個字（天、胡、字），同一個字型家族，只負責這三個字（BigWin8Fx 用 unicode-range 掛上去） */
+export const BIG_WIN16_FONT = "/fonts/noto-sans-tc/bigwin16-black.woff2";
+export const BIG_WIN16_FONT_RANGE = "U+5929, U+80E1, U+5B57";
+/** ms＝大牌段總長；hit＝畫面最重那一下（閃光、衝擊波、粒子、牌桌震動，音效的重擊點也對在這裡）；art＝這一種用到的圖 */
+export const BIG_WIN8: Record<BigWin8Theme, { ms: number; hit: number; art: string[] }> = {
+  tianhu: { ms: 3250, hit: 1820, art: ["th-palace.webp", "th-gate.webp", "th-dragon.webp", "th-phoenix.webp", "th-starburst.webp"] },
+  zi1se: { ms: 2480, hit: 1080, art: ["zi-ink.webp", "zi-flow.webp"] },
+  dasixi: { ms: 2560, hit: 1050, art: ["dsx-sky.webp", "dsx-nebula.webp", "dsx-beasts.webp"] },
   dasanyuan: { ms: 2200, hit: 820, art: ["dsy-dragons.webp", "dsy-burst.webp"] },
   xiaosixi: { ms: 2180, hit: 740, art: ["xsx-eye.webp", "xsx-clouds.webp"] },
   qing1se: { ms: 2160, hit: 780, art: ["qys-wave.webp", "qys-splash.webp"] },
@@ -94,8 +102,8 @@ export const BIG_WIN8: Record<BigWin8Theme, { ms: number; hit: number; art: [str
   qiqiang1: { ms: 2180, hit: 720, art: ["qq1-swirl.webp", "qq1-flowers.webp"] },
   migi: { ms: 2120, hit: 220, art: ["migi-ground.webp", "migi-pillar.webp"] },
 };
-export const isBigWin8 = (theme: BigWinTheme): theme is BigWin8Theme => Object.prototype.hasOwnProperty.call(BIG_WIN8, theme);
-/** 這一種要下載的檔：兩張圖、牌型名字型、專屬音效（觸控裝置手機加強版、其他一般版，和隕石一樣） */
+/** 這一種要下載的檔：圖、牌型名字型（16 台多一個「天胡字」）、專屬音效（觸控裝置手機加強版、其他一般版，和隕石一樣） */
 export function bigWin8Files(theme: BigWin8Theme, device: "pc" | "mobile") {
-  return { art: BIG_WIN8[theme].art.map((f) => `${BIG_WIN8_DIR}/${f}`), font: BIG_WIN8_FONT, sfx: `${BIG_WIN8_DIR}/sfx/${theme}-${device}.mp3` };
+  const top = BIG_WIN_ORDER.find((d) => d.theme === theme)?.tier === "top";
+  return { art: BIG_WIN8[theme].art.map((f) => `${BIG_WIN8_DIR}/${f}`), font: BIG_WIN8_FONT, font16: top ? BIG_WIN16_FONT : null, sfx: `${BIG_WIN8_DIR}/sfx/${theme}-${device}.mp3` };
 }

@@ -138,3 +138,65 @@
 .b8.qiqiang1 .b8-title { border-color: rgba(255,150,180,.9); }
 .b8.qiqiang1 .b8-name { text-shadow: 0 0 12px rgba(255,245,248,.92), 0 0 28px rgba(255,110,160,.8), 0 0 52px rgba(255,200,100,.55), 0 3px 10px rgba(0,0,0,.9); }
 .b8.qiqiang1 .b8-wave { border-color: rgba(255,180,200,.9); box-shadow: 0 0 24px 6px rgba(255,110,160,.45), inset 0 0 24px 4px rgba(255,214,120,.4); }
+
+/* 16 台以上：天胡（全畫面接管）、字一色、大四喜（小宜 16 台規格；照 16 台試按台定案版） */
+@property --b8a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.b8.zi1se.m, .b8.dasixi.m { --S: 300px; }
+.b8.zi1se.d, .b8.dasixi.d { --S: 660px; }
+.b8.dasixi.m { --tw: 30px; --th: 41px; }
+.b8.dasixi.d { --tw: 52px; --th: 70px; }
+.b8.tianhu.m { --tt: 48px; --tf: 15px; --gh: 82vh; --tw: 30px; --th: 41px; }
+.b8.tianhu.d { --tt: 84px; --tf: 24px; --gh: 76vh; }
+.b8.tianhu .b8-vig { background: rgba(0,0,0,.86); }
+.b8.zi1se .b8-vig { background: radial-gradient(circle at 50% 50%, rgba(200,160,80,.18) 0%, transparent 55%), rgba(6,4,0,.74); }
+.b8.dasixi .b8-vig { background: radial-gradient(circle at 50% 50%, rgba(60,90,200,.22) 0%, transparent 55%), rgba(2,2,12,.74); }
+/* 天胡：仙宮、星門鋪滿全畫面；天門從上方降下；龍、鳳各佔一側 */
+.b8-art.full { left: 0; top: 0; width: 100vw; height: 100vh; object-fit: cover; }
+.b8-art.thgate { top: 50%; width: var(--gh); height: var(--gh); margin: calc(var(--gh) * -.5) 0 0 calc(var(--gh) * -.5); }
+.b8-art.thdragon, .b8-art.thphoenix { top: 50%; height: 92vh; width: calc(92vh * .81); margin: -46vh 0 0 calc(92vh * -.405); }
+.b8-art.thdragon { left: 22%; }
+.b8-art.thphoenix { left: 78%; }
+.b8-thline { position: absolute; left: 50%; top: 0; width: 3px; height: 100vh; margin-left: -1.5px; opacity: 0;
+  background: linear-gradient(to bottom, transparent, #fff3c8 30%, #fff 50%, #fff3c8 70%, transparent); box-shadow: 0 0 18px 6px rgba(255,214,120,.6); }
+.b8-thdoor { position: absolute; left: 50%; top: 50%; width: calc(var(--gh) * .3); height: calc(var(--gh) * .42); margin: calc(var(--gh) * -.24) 0 0 calc(var(--gh) * -.15); opacity: 0;
+  border-radius: 50% 50% 8px 8px; background: radial-gradient(ellipse at 50% 55%, #fff 0%, #fff3c8 30%, rgba(255,214,120,.5) 55%, transparent 75%); filter: blur(4px); }
+.b8-mote { position: absolute; width: 6px; height: 6px; border-radius: 50%; opacity: 0; background: radial-gradient(circle, #fff 0%, #ffd36a 50%, rgba(255,200,90,0) 75%); box-shadow: 0 0 8px 2px rgba(255,214,120,.6); }
+.b8.d .b8-mote { width: 10px; height: 10px; }
+.b8.tianhu .b8-col { justify-content: flex-start; padding-top: 60vh; }
+.b8.tianhu.d .b8-col { padding-top: 60vh; }
+.b8.tianhu .b8-title { background: rgba(20,10,0,.7); border-color: rgba(255,226,150,.95); }
+.b8.tianhu .b8-name { text-shadow: 0 0 14px rgba(255,250,230,.95), 0 0 34px rgba(255,200,90,.9), 0 0 70px rgba(255,170,60,.6), 0 3px 10px rgba(0,0,0,.9); }
+.b8-sub { display: inline-block; opacity: 0; font-family: "Noto Sans TC", sans-serif; font-weight: 700; color: #fff1c8; letter-spacing: .08em; }
+.b8.tianhu .b8-tiles { margin-top: 6px; }
+.b8.tianhu .b8-wave { border-color: rgba(255,244,210,.95); box-shadow: 0 0 40px 12px rgba(255,214,120,.6), inset 0 0 30px 6px rgba(255,214,120,.45); }
+/* 字一色：墨環沿圓周寫出（conic 遮罩轉一圈）；流光黑底 screen */
+.b8-art.ink { width: calc(var(--S) * 1.1); height: calc(var(--S) * 1.1); margin: calc(var(--S) * -.55) 0 0 calc(var(--S) * -.55);
+  -webkit-mask-image: conic-gradient(from -90deg, #000 0deg, #000 var(--b8a), transparent calc(var(--b8a) + 14deg)); mask-image: conic-gradient(from -90deg, #000 0deg, #000 var(--b8a), transparent calc(var(--b8a) + 14deg)); }
+@property --b8x { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+.b8-art.flow { left: 0; top: 50%; width: 100vw; height: 50vw; max-height: 100vh; margin-top: min(-25vw, -50vh); object-fit: cover;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--b8x) - 18%), transparent var(--b8x)); mask-image: linear-gradient(90deg, #000 calc(var(--b8x) - 18%), transparent var(--b8x)); }
+.b8-inkdrop { position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, #0c0804 0%, #2a1a08 55%, rgba(232,184,74,.6) 70%, transparent 76%); }
+.b8.zi1se .b8-title { border-color: rgba(232,184,74,.9); background: rgba(10,6,0,.78); }
+.b8.zi1se .b8-name { text-shadow: 0 0 12px rgba(255,248,230,.9), 0 0 28px rgba(232,184,74,.85), 0 0 52px rgba(40,24,8,.8), 0 3px 10px rgba(0,0,0,.9); }
+.b8.zi1se .b8-wave { border-color: rgba(255,226,160,.9); box-shadow: 0 0 24px 6px rgba(232,184,74,.5), inset 0 0 24px 4px rgba(40,24,8,.5); }
+/* 大四喜：星雲沿圓周揭開；四象同一張圖切四個象限各自進場；靈珠 */
+.b8-art.nebula { width: calc(var(--S) * 1.6); height: calc(var(--S) * 1.6); margin: calc(var(--S) * -.8) 0 0 calc(var(--S) * -.8);
+  -webkit-mask-image: conic-gradient(from 0deg, #000 0deg, #000 var(--b8a), transparent calc(var(--b8a) + 20deg)); mask-image: conic-gradient(from 0deg, #000 0deg, #000 var(--b8a), transparent calc(var(--b8a) + 20deg)); }
+/* 四象放大到和字一色墨環同一個等級（加了橫幅背景之後） */
+.b8-art.beasts { width: calc(var(--S) * 1.4); height: calc(var(--S) * 1.4); margin: calc(var(--S) * -.7) 0 0 calc(var(--S) * -.7); }
+.b8-art.beasts.q0 { clip-path: inset(0 50% 50% 0); }
+.b8-art.beasts.q1 { clip-path: inset(0 0 50% 50%); }
+.b8-art.beasts.q2 { clip-path: inset(50% 50% 0 0); }
+.b8-art.beasts.q3 { clip-path: inset(50% 0 0 50%); }
+.b8-dsxorb { position: absolute; left: 50%; top: 50%; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, #fff 0%, #fff3c8 28%, rgba(255,214,120,.6) 50%, transparent 72%); box-shadow: 0 0 30px 10px rgba(255,214,120,.5), 0 0 0 3px rgba(255,226,150,.6); }
+.b8.d .b8-dsxorb { width: 140px; height: 140px; margin: -70px 0 0 -70px; }
+/* 標題壓在背景中間的金色亮區上：底色加深、字加黑邊，亮背景上也清楚 */
+.b8.dasixi .b8-title { border-color: rgba(150,180,255,.9); background: rgba(4,6,22,.86); box-shadow: 0 0 24px 8px rgba(0,0,0,.55); }
+.b8.dasixi .b8-name { text-shadow: 0 0 2px #000, 0 0 12px rgba(245,248,255,.92), 0 0 28px rgba(90,140,255,.8), 0 0 52px rgba(255,90,60,.45), 0 3px 10px rgba(0,0,0,.9); }
+.b8.dasixi .b8-wave { border-color: rgba(200,220,255,.9); box-shadow: 0 0 24px 6px rgba(90,140,255,.5), inset 0 0 24px 4px rgba(255,214,120,.35); }
+
+/* 開局背景預熱（components/mahjong/fxWarmUp.tsx）：預熱副本的背景圖換成同尺寸的內嵌占位圖，不下載素材 */
+[data-fx-warm] .b8-cloud { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1280' height='200'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }
+[data-fx-warm] .b8-flower { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1024' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }

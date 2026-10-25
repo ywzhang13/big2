@@ -16,10 +16,11 @@ import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
-import BigWinFx from "@/components/mahjong/BigWinFx";
 import BigWin8Fx, { preloadBigWin8 } from "@/components/mahjong/BigWin8Fx";
-import { bigWinKey, bigWinPlayed, isBigWin8, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
+import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
 import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
+import { setBgWarmPaused } from "@/components/mahjong/FxBgWarm";
+import WinCelebration from "@/components/mahjong/WinCelebration";
 import { CELE_MS, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
 import { useTableSounds } from "@/hooks/useTableSounds";
@@ -809,12 +810,13 @@ function RoomView({
   //   一般人大牌：大牌專屬段 → 自摸／胡浮層 → 結算；帳號專屬隕石（伺服器給 winner.winFx="meteor"）自摸：（大牌專屬段 →）隕石自摸 → 結算；
   //   天胡、八仙過海、七搶一：只播大牌專屬段。一般胡牌（沒有大牌、沒有專屬特效）照舊由上面的浮層播，不擋結算。
   //   大牌段排第一：播完不卸下，只留暗幕墊在後面那一段底下，整串結束才收（交接時牌桌不會先亮一下）。
-  //   大牌 7 種（大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）用新版 BigWin8Fx，頂級 3 種（天胡、字一色、大四喜）用 BigWinFx。
+  //   10 種大牌都用新版 BigWin8Fx（八台 7 種、16 台以上的天胡、字一色、大四喜；天胡播完直接結算，隕石帳號也一樣）。
   // 這一局結束、順位第一的贏家才看（四家各自看到同一份結果）。播過就記在這個分頁（重新整理、斷線重連不重播）。播的時候先不出結算浮層，播完（或跳過）才出
   const handKey = `${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`;
   type WinShow = { key: string; plan: WinShowStage[]; i: number; pick: BigWinPick | null; seat: number; zimo: boolean; tile: Tile | undefined; name: string };
   const [winShow, setWinShow] = useState<WinShow | null>(null);
   const showWinner = state.status === "finished" && state.winner && state.winner.seat >= 0 ? state.winner : null;
+
   const showPick = showWinner ? pickBigWin(showWinner) : null;
   const showPlan = showWinner ? planWinShow({ pick: showPick, zimo: isZimoWin, winFx: showWinner.winFx }) : null;
   // 整場打完（completed）時伺服器結算後馬上關房：最後一局照樣播，播完才出最終結算；解散等其他原因關房不播（審伯 2026-10-23）
@@ -827,12 +829,13 @@ function RoomView({
     // 下一個畫面才掛上；「記下播過」和「掛上特效」放在同一刻，中間不會有一次重繪讓結算浮層先閃出來。
     // 素材還沒載好就先等它載好再播，最多等 1.5 秒，第一次播也不會閃空白：
     //   ・隕石（例如伺服器沒先告訴我們房間裡有這個帳號）
-    //   ・大牌新版 7 種：只有這一手真的是那一種時才下載那一種的兩張圖、牌型名字型、專屬音效（約 0.3～0.6MB），一般牌局不下載
+    //   ・大牌新版 10 種：只有這一手真的是那一種時才下載那一種的圖、牌型名字型、專屬音效（八台約 0.3～0.6MB、16 台約 0.7～1.3MB），一般牌局不下載
     let cancelled = false;
     const loads: Promise<unknown>[] = [];
     if (showPlan.includes("meteor")) loads.push(preloadMeteorFx());
-    if (showPick && isBigWin8(showPick.theme)) loads.push(preloadBigWin8(showPick.theme));
+    if (showPick) loads.push(preloadBigWin8(showPick.theme));
     const ready = loads.length ? Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
+    // 不在這裡預熱（老闆 2026-10-25：來不及預熱就直接播，不能讓玩家多等）
     void ready.then(() => setTimeout(() => {
       if (cancelled || bigWinPlayed(key)) return;
       markBigWinPlayed(key);
@@ -874,8 +877,13 @@ function RoomView({
   // 換局、離開房間：浮層的收尾計時器也收掉
   useEffect(() => () => { if (celeOffRef.current) clearTimeout(celeOffRef.current); }, [winShowKey]);
   // 帳號專屬隕石：房間裡有這個帳號（伺服器給 players[].winFx 時），開局就先把圖、字型、音效載好；贏的那一刻才知道的話上面會等它載好再播
+  // 背景預熱（components/mahjong/FxBgWarm.tsx）只在不是打牌中的時候做：牌局進行中、胡牌特效在播時暫停；等人、結算、等下一局、離開牌桌時繼續
+  const bgWarmPause = state.status === "playing" || !!winShowLive || (!!winShowKey && !bigWinPlayed(winShowKey));
+  useEffect(() => { setBgWarmPaused(bgWarmPause); }, [bgWarmPause]);
+  useEffect(() => () => setBgWarmPaused(false), []);
   const meteorInRoom = state.players.some((p) => p.winFx === "meteor") || showWinner?.winFx === "meteor";
   useEffect(() => { if (meteorInRoom) void preloadMeteorFx(); }, [meteorInRoom]);
+
 
   // Pass roomId (登入房另有玩家 id、座位頻道) from create/join to the hook
   useEffect(() => {
@@ -1292,138 +1300,7 @@ function RoomView({
 
       {/* Celebration overlay — shown briefly on all 4 screens before settlement */}
       {celebrationMode && state.winner && state.winner.seat >= 0 && (
-        <div
-          className="absolute inset-0 z-[65] flex items-center justify-center overflow-hidden pointer-events-none"
-          style={{
-            background:
-              celebrationMode === "zimo"
-                ? "rgba(0,0,0,0.88)"
-                : "rgba(0,0,0,0.82)",
-            animation: `mj-win-flash ${celebrationMode === "zimo" ? 3500 : 2000}ms ease-out both`,
-          }}
-        >
-          {/* Soft circular glow, sized larger than viewport so no rectangular
-              edge artifact appears even at extreme aspect ratios. */}
-          <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              width: "220vmax",
-              height: "220vmax",
-              background:
-                celebrationMode === "zimo"
-                  ? "radial-gradient(circle, rgba(255,215,0,0.55) 0%, rgba(255,165,0,0.25) 18%, rgba(255,100,0,0.08) 30%, transparent 45%)"
-                  : "radial-gradient(circle, rgba(201,169,110,0.4) 0%, rgba(201,169,110,0.12) 20%, transparent 40%)",
-            }}
-          />
-          {/* Radiating rays (zimo only) — on a circular element with feathered
-              mask so the rays fade to nothing before hitting any edge. */}
-          {celebrationMode === "zimo" && (
-            <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-              style={{
-                width: "200vmax",
-                height: "200vmax",
-                background:
-                  "conic-gradient(from 0deg, transparent 0deg, rgba(255,215,0,0.35) 15deg, transparent 30deg, transparent 45deg, rgba(255,215,0,0.35) 60deg, transparent 75deg, transparent 90deg, rgba(255,215,0,0.35) 105deg, transparent 120deg, transparent 135deg, rgba(255,215,0,0.35) 150deg, transparent 165deg, transparent 180deg, rgba(255,215,0,0.35) 195deg, transparent 210deg, transparent 225deg, rgba(255,215,0,0.35) 240deg, transparent 255deg, transparent 270deg, rgba(255,215,0,0.35) 285deg, transparent 300deg, transparent 315deg, rgba(255,215,0,0.35) 330deg, transparent 345deg)",
-                WebkitMaskImage:
-                  "radial-gradient(circle, black 0%, black 14%, transparent 28%)",
-                maskImage:
-                  "radial-gradient(circle, black 0%, black 14%, transparent 28%)",
-                animation: "mj-win-rotate 3500ms linear",
-              }}
-            />
-          )}
-          {/* Sparkles (zimo only) */}
-          {celebrationMode === "zimo" &&
-            Array.from({ length: 24 }).map((_, i) => {
-              const angle = (i * 15 * Math.PI) / 180;
-              const dist = 40 + (i % 5) * 10;
-              const tx = Math.cos(angle) * dist;
-              const ty = Math.sin(angle) * dist;
-              return (
-                <div
-                  key={i}
-                  className="absolute"
-                  style={{
-                    width: 9,
-                    height: 9,
-                    borderRadius: "50%",
-                    background:
-                      i % 3 === 0 ? "#fbbf24" : i % 3 === 1 ? "#fde68a" : "#FFD700",
-                    boxShadow: "0 0 20px rgba(255,215,0,1)",
-                    animation: `mj-sparkle 1800ms ease-out ${i * 50}ms infinite`,
-                    transform: `translate(${tx}vw, ${ty}vh)`,
-                  }}
-                />
-              );
-            })}
-          {/* Main text */}
-          <div
-            className="relative text-center"
-            style={{ animation: "mj-win-zoom 1200ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both" }}
-          >
-            <p
-              className={`font-black tracking-[0.3em] leading-none ${
-                celebrationMode === "zimo" ? "text-[14vw]" : "text-[9vw]"
-              }`}
-              style={{
-                color: celebrationMode === "zimo" ? "#fff8dc" : "#fde68a",
-                textShadow:
-                  celebrationMode === "zimo"
-                    ? "0 0 50px #FFD700, 0 0 100px #FFA500, 0 0 150px #FF6347, 0 4px 12px rgba(0,0,0,0.6)"
-                    : "0 0 30px rgba(201,169,110,0.9), 0 0 60px rgba(201,169,110,0.5), 0 3px 8px rgba(0,0,0,0.5)",
-                fontFamily: "serif",
-              }}
-            >
-              {flowerWinName ?? (celebrationMode === "zimo" ? "自摸" : "胡")}
-            </p>
-            <p
-              className="mt-4 text-2xl font-bold"
-              style={{
-                color: celebrationMode === "zimo" ? "#f0d68a" : "#e8c97a",
-                textShadow: "0 0 20px rgba(240,214,138,0.7)",
-                animation: "mj-win-fade-in 800ms ease-out 400ms both",
-              }}
-            >
-              {state.winner.name}
-            </p>
-            <p
-              className="mt-1 text-sm font-bold tracking-wider"
-              style={{
-                color: "#fde68a",
-                animation: "mj-win-fade-in 800ms ease-out 700ms both",
-              }}
-            >
-              共 {state.winner.score.totalFan} 台
-            </p>
-          </div>
-          <style jsx>{`
-            @keyframes mj-win-flash {
-              0% { opacity: 0; }
-              10% { opacity: 1; }
-              85% { opacity: 1; }
-              100% { opacity: 0; }
-            }
-            @keyframes mj-win-rotate {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-            }
-            @keyframes mj-win-zoom {
-              0% { transform: scale(0) rotate(-15deg); opacity: 0; }
-              60% { transform: scale(1.15) rotate(3deg); opacity: 1; }
-              100% { transform: scale(1) rotate(0deg); opacity: 1; }
-            }
-            @keyframes mj-sparkle {
-              0% { transform: translate(0, 0) scale(0); opacity: 0; }
-              30% { opacity: 1; }
-              100% { transform: translate(var(--tx, 20vw), var(--ty, -20vh)) scale(1.5); opacity: 0; }
-            }
-            @keyframes mj-win-fade-in {
-              from { opacity: 0; transform: translateY(10px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-          `}</style>
-        </div>
+        <WinCelebration mode={celebrationMode} flowerWinName={flowerWinName} name={state.winner.name} totalFan={state.winner.score.totalFan} />
       )}
 
       {/* 帳號專屬「隕石自摸」：取代自摸浮層；接在大牌專屬段後面（或單獨播），播完出結算，點畫面任一處跳過 */}
@@ -1433,12 +1310,10 @@ function RoomView({
       )}
       {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），排第一段；播完不卸下（只留暗幕），等後面的浮層／隕石播完一起收。點畫面任一處跳過整串。
           和隕石同時掛著，key 要和隕石分開（同一層兄弟用同一個 key，React 會多掛一個收不掉的隕石） */}
-      {winShowLive && winShowLive.pick && (isBigWin8(winShowLive.pick.theme) ? (
+      {winShowLive && winShowLive.pick && (
         <BigWin8Fx key={`big|${winShowLive.key}`} theme={winShowLive.pick.theme} title={winShowLive.pick.title} fan={winShowLive.pick.fan} seat={winShowLive.seat}
-          mobile={isMobileLandscape} winTile={winShowLive.tile} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
-      ) : (
-        <BigWinFx key={`big|${winShowLive.key}`} pick={winShowLive.pick} seat={winShowLive.seat} mobile={isMobileLandscape} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
-      ))}
+          mobile={isMobileLandscape} winTile={winShowLive.tile} name={winShowLive.name} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
+      )}
 
       {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大；大牌特效播的時候先不出 */}
       {isFinished && state.winner && !winShowHoldResult && (

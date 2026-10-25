@@ -14,6 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { playMeteorSound, preloadMeteorSound } from "@/lib/mahjong/fx/engine";
+import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import "./meteorFx.css";
 
 const ART = "/mahjong-fx/meteor";
@@ -28,6 +29,8 @@ const SEG = 1800;
 /** 主震長度、撞擊後的餘震（從特效開始算，ms） */
 const SHAKE_MS = 450;
 const AFTERSHOCKS = [1350];
+/** 震動時牌桌外露那一圈的補色（牌桌根節點的陰影） */
+const METEOR_STAGE_SHADOW = "0 0 0 200px #120d09";
 const RM_Q = "(prefers-reduced-motion: reduce)";
 function useReducedMotion() {
   return useSyncExternalStore(
@@ -64,7 +67,8 @@ const DEBRIS = Array.from({ length: 14 }, (_, i) => {
 /**
  * 整個牌桌震動（主震 0.45 秒由強到弱，手機最大 22px、電腦 30px；之後 1 下 0.15 秒的小餘震）。
  * 撞擊那一下鏡頭往後一震（牌桌縮到 0.96 倍），邊震邊把牌桌縮小一點點（縮多少依當下位移算），名牌、手牌都還在畫面內；
- * 牌桌外露出的那一圈用深色補（stage 的 box-shadow），不會看到底色破圖
+ * 牌桌外露出的那一圈用深色補（stage 的 box-shadow），不會看到底色破圖。陰影和「牌桌升成獨立合成層」在隕石一掛上就做（holdStage），
+ * 撞擊那一刻不用整張牌桌重畫；隕石收掉時才還原（陰影在畫面外，提早加、晚點拿掉都看不到）
  */
 function shakeStage(stage: HTMLElement, mobile: boolean) {
   const W = innerWidth, H = innerHeight;
@@ -85,7 +89,6 @@ function shakeStage(stage: HTMLElement, mobile: boolean) {
   }
   frames.push({ offset: 1, transform: "none" });
   stage.style.transformOrigin = "50% 50%";
-  stage.style.boxShadow = "0 0 0 200px #120d09";
   const anims = [stage.animate(frames, { duration: SHAKE_MS, delay: IMPACT, easing: "linear" })];
   const a = mobile ? 6 : 8;
   AFTERSHOCKS.forEach((at, i) => {
@@ -97,20 +100,21 @@ function shakeStage(stage: HTMLElement, mobile: boolean) {
       { offset: 1, transform: "none" },
     ], { duration: 150, delay: at, easing: "linear" }));
   });
-  const clear = () => { stage.style.boxShadow = ""; };
-  anims[anims.length - 1].finished.then(clear, clear);
   return anims;
 }
 
 /**
  * seat：自摸的人（絕對座位）；mySeat：我的座位（決定隕石從哪邊來）；tile：自摸的那張牌；name：自摸者名字。
  * font、sfxUrl：預覽站試按台切換候選用，正式牌局不用給（厚重黑體、A 呼嘯＋C 撞擊）
+ * warm：預熱（components/mahjong/fxWarmUp.tsx）：不出聲音、不震動牌桌、不攔點擊，在看不見的狀態把整條時間軸一格一格走一遍，走完 onDone(false)
  */
-export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, font, sfxUrl }: {
+export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, font, sfxUrl, warm }: {
   seat: number; mySeat: number; mobile: boolean; tile: Tile | null | undefined; name: string; onDone: (skipped: boolean) => void;
-  font?: string; sfxUrl?: string;
+  font?: string; sfxUrl?: string; warm?: WarmMode;
 }) {
   const rm = useReducedMotion();
+  // 預熱（warm）時圖換成同尺寸的內嵌占位圖：開局背景預熱不下載任何素材
+  const art = (f: string) => (warm ? warmImg(f) : `${ART}/${f}`);
   const ref = useRef<HTMLDivElement>(null);
   const doneRef = useRef(onDone);
   useLayoutEffect(() => { doneRef.current = onDone; });
@@ -179,7 +183,8 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     root.style.setProperty("--mir", mirror ? "-1" : "1");
     root.style.setProperty("--skx", mirror ? "10%" : "90%");
     if (rm) return;
-    const stage = document.querySelector<HTMLElement>("[data-mt-stage]");
+    const stage = warm ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
+    const release = stage ? holdStage(stage, METEOR_STAGE_SHADOW) : null;
     const anims = stage ? shakeStage(stage, mobile) : [];
     // 碎石用 Web Animations 直接給算好的數字（CSS 關鍵影格裡用 calc(var()) 時，Chrome 合成層偶爾有一顆停在原地不動）
     const dr = H * (mobile ? 1.0 : 0.85);
@@ -195,11 +200,12 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
         { offset: 1, opacity: 0, transform: at(1, d.pa + d.spin, 0) },
       ], { duration: SEG, delay: d.d, fill: "both" }));
     });
-    return () => { anims.forEach((a) => a.cancel()); if (stage) stage.style.boxShadow = ""; };
-  }, [seat, rel, mobile, rm]);
+    return () => { anims.forEach((a) => a.cancel()); release?.(); };
+  }, [seat, rel, mobile, rm, warm]);
 
   // 跳過：點畫面任一處、Enter、Space。手機點一下之後瀏覽器還會補一個 click，0.5 秒內的 click 吃掉，不會按到結算浮層的按鈕
   useEffect(() => {
+    if (warm) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
       if (ended.current) return;
@@ -211,17 +217,22 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
       stopRef.current();
       const stage = document.querySelector<HTMLElement>("[data-mt-stage]");
       stage?.getAnimations().forEach((a) => a.cancel());
-      if (stage) stage.style.boxShadow = "";
       doneRef.current(true);
     };
     document.addEventListener("pointerdown", skip, true);
     document.addEventListener("keydown", skip, true);
     return () => { document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
-  }, []);
+  }, [warm]);
 
   // 播放：聲音對齊動畫真正開始的那一刻（白閃的 CSS 動畫和整條時間軸同一刻開始）；手機震動在撞擊那一刻；時間到 onDone(false)
   useEffect(() => {
     let alive = true;
+    if (warm) {
+      // 預熱：整段（飛行、撞擊、爆炸、碎石、坑、牌、「自摸」字）一格一格走一遍
+      const root = ref.current;
+      if (root) void stepPlay(root, METEOR_MS, { alive: () => alive, stageShadow: METEOR_STAGE_SHADOW }).then(() => { if (alive) doneRef.current(false); });
+      return () => { alive = false; };
+    }
     const anim = ref.current?.querySelector(".mt-flash")?.getAnimations()[0];
     const go = (z: number | null) => { if (alive && !ended.current) stopRef.current = playMeteorSound(rm ? null : z, IMPACT, sfxUrl); };
     if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
@@ -230,13 +241,13 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     // 手機真的震動：重、停、輕（Android Chrome 等支援的瀏覽器；iPhone Safari 不支援，會直接略過）
     if (!rm) ts.push(setTimeout(() => { if (typeof navigator.vibrate === "function") navigator.vibrate([150, 60, 50]); }, IMPACT));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
-  }, [rm, sfxUrl]);
+  }, [rm, sfxUrl, warm]);
 
   const n = mobile ? 10 : 14;
   const mover = (
     <div className="mt-mover">
       {/* eslint-disable-next-line @next/next/no-img-element -- 固定檔名素材，預載好再播 */}
-      <img src={`${ART}/meteor.webp`} alt="" draggable={false} />
+      <img src={art("meteor.webp")} alt="" draggable={false} />
     </div>
   );
   // 三層（同一個 z，照順序疊）：①暗幕、隕石坑、隕石 ②爆炸（自己一層用 screen 和底下整個牌桌疊，黑底自動消失）

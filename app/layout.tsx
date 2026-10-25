@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { FxBgWarmRoot } from "@/components/mahjong/FxBgWarmRoot";
 
 export const metadata: Metadata = {
   title: "阿瑋娛樂城",
@@ -30,7 +31,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-dvh flex flex-col">{children}</body>
+      <body className="min-h-dvh flex flex-col">{children}<FxBgWarmRoot /></body>
     </html>
   );
 }

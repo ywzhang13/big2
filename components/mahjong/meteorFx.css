@@ -180,3 +180,8 @@
 .mtw.rm .mt-dim { animation-name: mt-rm-in; }
 .mtw.rm .mt-plate, .mtw.rm .mt-crater, .mtw.rm .mt-glow { animation-name: mt-rm-in; }
 @keyframes mt-rm-in { 0% { opacity: 0; transform: none; } 15%, 100% { opacity: 1; transform: none; } }
+
+/* 開局背景預熱（components/mahjong/fxWarmUp.tsx）：預熱副本的背景圖換成同尺寸的內嵌占位圖，不下載素材 */
+[data-fx-warm] .mt-crater { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='768' height='768'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }
+[data-fx-warm] .mt-boom { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1024' height='1024'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }
+[data-fx-warm] .mt-rock { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1024' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }
