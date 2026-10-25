@@ -1,11 +1,12 @@
 // 胡牌後播放順序（老闆 2026-10-25；lib/mahjong/winShow.ts）：
 //   W1 一般胡牌（沒有大牌、沒有專屬特效）：只播原本的浮層
-//   W2 大牌順序對調：一般人大牌自摸／放槍胡＝浮層 → 大牌專屬段
-//   W3 帳號專屬「隕石」：自摸＝隕石取代浮層；大牌自摸＝隕石 → 大牌專屬段；放槍胡不播隕石
+//   W2 大牌先播（2026-10-25 八台大牌新版一起改）：一般人大牌自摸／放槍胡＝大牌專屬段 → 浮層；頂級（字一色、大四喜）也一樣
+//   W3 帳號專屬「隕石」：自摸＝隕石取代浮層；大牌自摸＝大牌專屬段 → 隕石；放槍胡不播隕石
 //   W4 天胡、八仙過海、七搶一照舊：只播大牌專屬段（有隕石代號也一樣）
-//   W5 不認得的代號當作沒有；浮層接大牌段的時間點＝淡出開始（自摸 2975ms、胡 1700ms）
-import { planWinShow, celeHandoffMs } from "../lib/mahjong/winShow";
-import { pickBigWin } from "../lib/mahjong/bigWin";
+//   W5 不認得的代號當作沒有
+//   W6 10 種大牌逐一：用 pickBigWin 挑出來的結果排順序（自摸、放槍、隕石帳號自摸），大牌段永遠排第一
+import { planWinShow } from "../lib/mahjong/winShow";
+import { BIG_WIN_ORDER, pickBigWin } from "../lib/mahjong/bigWin";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -17,19 +18,28 @@ const DSY = pk("大三元", 8), TIAN = pk("天胡", 24), BAXIAN = pk("八仙過�
 
 eq(planWinShow({ pick: null, zimo: true }), ["cele"], "W1 一般自摸：只播浮層");
 eq(planWinShow({ pick: null, zimo: false }), ["cele"], "W1 一般放槍胡：只播浮層");
-eq(planWinShow({ pick: DSY, zimo: true }), ["cele", "big"], "W2 一般人大三元自摸：浮層 → 大牌段");
-eq(planWinShow({ pick: DSY, zimo: false }), ["cele", "big"], "W2 一般人大三元胡：浮層 → 大牌段");
-eq(planWinShow({ pick: ZI1, zimo: true }), ["cele", "big"], "W2 頂級（字一色）也一樣先浮層");
+eq(planWinShow({ pick: DSY, zimo: true }), ["big", "cele"], "W2 一般人大三元自摸：大牌段 → 浮層");
+eq(planWinShow({ pick: DSY, zimo: false }), ["big", "cele"], "W2 一般人大三元胡：大牌段 → 浮層");
+eq(planWinShow({ pick: ZI1, zimo: true }), ["big", "cele"], "W2 頂級（字一色）也一樣大牌段先播");
 eq(planWinShow({ pick: null, zimo: true, winFx: "meteor" }), ["meteor"], "W3 隕石帳號一般自摸：隕石取代浮層");
-eq(planWinShow({ pick: DSY, zimo: true, winFx: "meteor" }), ["meteor", "big"], "W3 隕石帳號大三元自摸：隕石 → 大牌段");
+eq(planWinShow({ pick: DSY, zimo: true, winFx: "meteor" }), ["big", "meteor"], "W3 隕石帳號大三元自摸：大牌段 → 隕石");
 eq(planWinShow({ pick: null, zimo: false, winFx: "meteor" }), ["cele"], "W3 隕石帳號放槍胡：不播隕石，照一般浮層");
-eq(planWinShow({ pick: DSY, zimo: false, winFx: "meteor" }), ["cele", "big"], "W3 隕石帳號大三元放槍胡：浮層 → 大牌段");
+eq(planWinShow({ pick: DSY, zimo: false, winFx: "meteor" }), ["big", "cele"], "W3 隕石帳號大三元放槍胡：大牌段 → 浮層");
 eq(planWinShow({ pick: TIAN, zimo: true, winFx: "meteor" }), ["big"], "W4 天胡（隕石帳號）：只播大牌段");
 eq(planWinShow({ pick: TIAN, zimo: true }), ["big"], "W4 天胡：只播大牌段");
 eq(planWinShow({ pick: BAXIAN, zimo: false }), ["big"], "W4 八仙過海：只播大牌段");
 eq(planWinShow({ pick: QQ1, zimo: false }), ["big"], "W4 七搶一：只播大牌段");
 eq(planWinShow({ pick: null, zimo: true, winFx: "rainbow" }), ["cele"], "W5 不認得的代號：當作沒有");
-eq([celeHandoffMs("zimo"), celeHandoffMs("ron")], [2975, 1700], "W5 浮層淡出開始就接大牌段（自摸 2975ms、胡 1700ms）");
+
+// W6：10 種逐一（八仙過海、七搶一是花胡：沒有自摸／放槍，也不接隕石）
+const FLOWER = new Set(["八仙過海", "七搶一"]);
+for (const def of BIG_WIN_ORDER) {
+  const p = pk(def.fan, def.tier === "top" ? 16 : 8);
+  const noCele = def.fan === "天胡" || FLOWER.has(def.fan);
+  eq([planWinShow({ pick: p, zimo: true }), planWinShow({ pick: p, zimo: false }), planWinShow({ pick: p, zimo: true, winFx: "meteor" })],
+    noCele ? [["big"], ["big"], ["big"]] : [["big", "cele"], ["big", "cele"], ["big", "meteor"]],
+    `W6 ${def.title}：自摸／放槍／隕石帳號自摸＝${noCele ? "只播大牌段" : "大牌段 → 浮層／浮層／隕石"}`);
+}
 
 for (const r of results) console.log(r);
 const fail = results.filter((r) => r.startsWith("❌")).length;
