@@ -52,5 +52,17 @@
   網址格式 https://freesound.org/people/<作者>/sounds/<編號>/ ；疊加、對齊、手機加強和音量對齊的腳本在阿妍工作資料夾（大牌7種音效候選-2026-10-25/生成腳本/），不放進專案
 - 牌型名字型：public/fonts/noto-sans-tc/bigwin8-black.woff2，Noto Sans TC Black 只取 7 種牌型名（大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）、「台」和數字，SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
 
+16 台以上大牌新版特效（2026-10-25 加入；畫面 components/mahjong/BigWin8Fx.tsx，天胡、字一色、大四喜）
+- bigwin8/th-*.webp、zi-*.webp、dsx-*.webp：老闆自行以 AI 生成（2026-10-25，大牌素材 16 台以上：雲上海天金色仙宮、翡翠金殿天門迎光、金龍鳳凰爭耀幻日、
+  金色星門爆發的宇宙幻境、黑金墨韻漩渦環人體藝術、黑金流光魔法漩渦、五彩元素星雲能量漩渦、四象神獸環繞金色靈珠，以及大四喜背景「四象天境_風火雲海歸一」），
+  不需標註；老馬加工：透明圖去掉細紅邊（鳳凰、朱雀只處理半透明的邊）、黑底圖近黑壓到純黑、龍鳳圖切成左右兩張、轉 WebP
+- bigwin8/sfx/tianhu-*.mp3、zi1se-*.mp3、dasixi-*.mp3（-pc 一般版、-mobile 手機加強版）：阿妍製作（2026-10-25，〈16台大牌音效-評估-2026-10-25〉：
+  天胡「天界開啟」、字一色「墨韻成環」、大四喜「四象聚珠」），重擊點對在畫面最重那一下（天胡 1.82 秒、第二重 0.92 秒；字一色 1.08 秒；大四喜 1.05 秒）。
+  疊進去的真實錄音都來自 Freesound，逐一確認為 CC0（公眾領域，可商用、不用標註）：
+  ・274121 Choir of Voices - Single Chord（bone666138）、444491 Short Choir（Breviceps）、131348 Bell at Daitokuji temple, kyoto（nahmandub）、62963 Deep Bell A Sharp（LadyCailin）、73678 TollBell（daytripper）、385011 hit of orchestral cymbals and bass drum（Selector）、369394 Timpani C2（Terry93D）、687924／687925／687926 JH Big Tom 1～3（Johnnie_Holiday）、155461 gong bash resonance（hiddenpersuader）、209868 Sabian_AAX_Chinese_3（Logicogonist）、82523 BULGARIAN GONG（zgump）、833925 DOORSton_Stone Door Opening（harrisonlace）、738085 WindGust（phuonglamb）、375599 Bell Tree (bell_tree_woodscrape1)（sgossner）、419594 Mystical Wind Chimes Transition FX（djlprojects）、549898 bell1（Tairblenn）、442964 Dragon Roar（qubodup）、583615 Eagle（Johnnie_Holiday）、446792 Tigre（IanLyanx）、345635 Frame drum_oneshot_RAW_15（cabled_mess）、350750 stonehit1（aerror）、337525 Water Drop Dark（Ev-Dawg）、428338 Underlining Stroke on Paper（zembacraftworks）、471901 27-Pinceladas（wintuh）、319227 Single Rock hitting wood 4（worthahep88）、272496 Slapping_Paper_Down_On_table_with_reverb（Ferguido）、131358 Rolled paper, slapping 9（nahmandub）、402818 White Noise Short Reverse Whoosh（HowardV）、539968 Deep Boom（Za-Games）、754420 DSGNImpt_Deep Cinematic Impact 1（zazz.sound.design）、816376 DSGNStngr_basic trailer boom impact（harrisonlace）
+  網址格式 https://freesound.org/people/<作者>/sounds/<編號>/ ；疊加、對齊、手機加強和音量對齊的腳本在阿妍工作資料夾（16台大牌音效-2026-10-25/生成腳本/），不放進專案
+- 牌型名字型：public/fonts/noto-sans-tc/bigwin16-black.woff2，Noto Sans TC Black 只取 16 台多用到的「天、胡、字」三個字（其他字照用 bigwin8-black.woff2，那一份不動），
+  SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
+
 程式
 - lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md
