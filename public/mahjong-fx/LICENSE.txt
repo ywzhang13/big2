@@ -30,5 +30,16 @@
   ・G3：537206 Magyar gong（Logicogonist）、687926 JH Big Tom（Johnnie_Holiday）
   網址格式 https://freesound.org/people/<作者>/sounds/<編號>/ ；合成、疊加、裁切和音量對齊的腳本在阿妍工作資料夾（大牌胡牌音效候選-2026-10-23/生成腳本/），不放進專案
 
+帳號專屬「隕石自摸」（2026-10-25 加入；畫面 components/mahjong/MeteorFx.tsx）
+- meteor/meteor.webp、explosion.webp、crater.webp、debris.webp：老闆自行以 AI 生成（2026-10-25，熔岩裂隙流星火雨、黑幕中的震撼火焰爆炸、
+  熾焰熔岩爆裂隕石坑、透明背景熔岩隕石特效素材組），不需標註；老馬加工：去掉去背留下的細紅邊、轉 WebP，碎石重新排成整齊的 4×2 格
+- s/meteor-pc.mp3（一般版）、s/meteor-mobile.mp3（手機加強版）：阿妍製作（2026-10-25，〈隕石音效-候選評估-2026-10-25〉），
+  老闆指定 A 組①呼嘯接 C 組②撞擊爆炸、③碎石地鳴（老馬接起來、對齊音量）；撞擊點在檔案的 1.000 秒。用到的 Freesound 素材逐一確認為 CC0：
+  ・①（A）：496908 SCI-FI Falling metior（Quezthepoet）、242721 burning air（sergeeo）、178886 red whoosh gladiator 04（martian）
+  ・②③（C）：132929 Explosion and Rubble/Debris（作者帳號已刪除，CC0 不能撤回）、539968 Deep Boom（Za-Games）、
+    567251 Stones Falling（iwanPlays）、475094 thunder3（Josh74000MC）
+  網址格式 https://freesound.org/people/<作者>/sounds/<編號>/
+- 「自摸」字型：public/fonts/noto-sans-tc/zimo-black.woff2，Noto Sans TC Black 只取「自摸」兩個字，SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
+
 程式
 - lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md
