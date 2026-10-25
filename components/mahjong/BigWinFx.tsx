@@ -3,8 +3,9 @@
 // 大牌胡牌特效（老闆 2026-10-23 定案；哪一手要播、播哪一種見 lib/mahjong/bigWin.ts）。
 // 設計：小宜〈大牌胡牌特效-設計規格-2026-10-22〉＋〈八仙過海-重新設計〉方向 A；試看版在預覽站試按台確認過（畫面、時間軸、金鈴音效對齊都照試看版）。
 // 四拍：入場 → 主動作 → 定格（牌型名＋台數，後面墊不透明深綠底）→ 收向勝者名牌。頂級約 3 秒（T2）、大牌約 2 秒（G3）。
-// 2026-10-25 老闆：順序對調成「自摸／胡浮層（或帳號專屬的隕石自摸）→ 這一段 → 結算」（lib/mahjong/winShow.ts）；
-// 接在前一段後面時（chained）暗角一開始就是暗的，前一段淡掉時底下已經是暗的，牌桌不會先亮一下。
+// 2026-10-25 老闆：八台大牌新版定案，大牌（tier big）7 種改由 BigWin8Fx 播；這裡只剩頂級 3 種（天胡、字一色、大四喜）。
+// 順序改成「這一段 → 自摸／胡浮層（或帳號專屬的隕石自摸）→ 結算」（lib/mahjong/winShow.ts）：播完頁面會繼續掛著到整串結束，
+// 只留暗角（.bw.done），後面那一段從暗角上淡入，牌桌不會先亮一下。
 // 畫面最亮的那一下（.bw-flash 的頂點和各牌型的重擊動作）排在音效的重擊點上；音效走互動音效的音量和靜音。
 // 點畫面任一處、Enter、Space＝跳過，聲音一起停，跳過那一下不會按到後面結算浮層的按鈕；開啟「減少動態」時直接停在定格畫面（不飛、不轉、不閃）。
 // 特效層 pointer-events: none；勝者名牌那一塊挖空，名牌一直看得到。
@@ -25,7 +26,6 @@ const TIANHU_HAND: Tile[] = [
   ...[1, 2, 3, 4, 5, 6].map((r) => tile("m", r)), ...[7, 8, 9].map((r) => tile("p", r)),
   ...[2, 3, 4].map((r) => tile("s", r)), tile("z", 1), tile("z", 1), tile("z", 1), tile("z", 7), tile("z", 7),
 ];
-const DRAGONS: Tile[] = [tile("z", 5), tile("z", 6), tile("z", 7)];
 
 const RM_Q = "(prefers-reduced-motion: reduce)";
 function useReducedMotion() {
@@ -38,9 +38,9 @@ function useReducedMotion() {
 
 /**
  * 專屬段：p 0（剛掛上）→ 1 入場 → 2 主動作 → 3 定格 → 4 收向勝者名牌 → onDone(false)；跳過 → onDone(true)。
- * chained：接在自摸／胡浮層或隕石自摸後面，暗角一開始就是暗的
+ * 播完後還掛著（後面接浮層或隕石）時只留暗角（.bw.done）
  */
-export default function BigWinFx({ pick, seat, mobile, chained = false, onDone }: { pick: BigWinPick; seat: number; mobile: boolean; chained?: boolean; onDone: (skipped: boolean) => void }) {
+export default function BigWinFx({ pick, seat, mobile, onDone }: { pick: BigWinPick; seat: number; mobile: boolean; onDone: (skipped: boolean) => void }) {
   const { theme, tier, title, fan } = pick;
   // 畫面最亮那一下排在哪（從專屬段開始算，ms）：金鈴組的重擊點（頂級 T2 1.05 秒、大牌 G3 0.48 秒）
   const hit = bigWinHitMs(tier);
@@ -95,7 +95,7 @@ export default function BigWinFx({ pick, seat, mobile, chained = false, onDone }
     document.addEventListener("keydown", skip, true);
     return () => { document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
   }, []);
-  const finish = () => { if (!ended.current) { ended.current = true; doneRef.current(false); } };
+  const finish = () => { if (!ended.current) { ended.current = true; ref.current?.classList.add("done"); doneRef.current(false); } };
 
   useEffect(() => {
     const beats = BEATS[tier];
@@ -132,11 +132,10 @@ export default function BigWinFx({ pick, seat, mobile, chained = false, onDone }
   }, [p, tier]);
 
   return (
-    <div ref={ref} className={`bw ${tier} ${theme} ${GENERIC.has(theme) ? "gen" : ""} ${mobile ? "m" : "d"} ${rm ? "rm" : ""} ${chained ? "chain" : ""}`} data-bw-phase={p} data-bw-theme={theme} style={{ ["--hit" as string]: `${hit}ms` }} aria-hidden>
+    <div ref={ref} className={`bw ${tier} ${theme} ${GENERIC.has(theme) ? "gen" : ""} ${mobile ? "m" : "d"} ${rm ? "rm" : ""}`} data-bw-phase={p} data-bw-theme={theme} style={{ ["--hit" as string]: `${hit}ms` }} aria-hidden>
       <div className="bw-vig" />
       <div className="bw-flash" />
       {theme === "tianhu" && <div className="bw-curtain" />}
-      {theme === "dasanyuan" && <div className="bw-beam" />}
       <div className="bw-obj">
         {theme === "tianhu" && (
           <>
@@ -148,31 +147,11 @@ export default function BigWinFx({ pick, seat, mobile, chained = false, onDone }
             </div>
           </>
         )}
-        {theme === "dasanyuan" && (
-          <>
-            <div className="bw-trio">
-              {DRAGONS.map((t, i) => (
-                <div key={t.id} className={`bw-d d${i}`}>
-                  <div className="bw-pillar" />
-                  <MjTile tile={t} width="var(--tw)" height="var(--th)" />
-                </div>
-              ))}
-            </div>
-            <div className="bw-line" data-bw-fly />
-          </>
-        )}
         {GENERIC.has(theme) && <GenericMain theme={theme} hitRel={hit - BEATS[tier][0]} />}
-        {theme === "migi" && (
-          <>
-            <div className="bw-jade" />
-            <div className="bw-stamp"><span>胡</span></div>
-            <div className="bw-migi" data-bw-fly>MIGI</div>
-          </>
-        )}
         {/* 主標後面的暗底：牌桌中央的剩餘張數、「東風圈 第1局」不會透出來跟大字疊在一起 */}
         <div className="bw-back" />
         <div className="bw-title">
-          {theme !== "migi" && <div className="bw-name">{title}</div>}
+          <div className="bw-name">{title}</div>
           <div className="bw-fan">{fan} 台</div>
         </div>
       </div>
@@ -182,45 +161,28 @@ export default function BigWinFx({ pick, seat, mobile, chained = false, onDone }
   );
 }
 
-// ---------------- 第三版補做的 8 種：共用「擺牌」做法 ----------------
+// ---------------- 字一色、大四喜：共用「擺牌」做法（大牌 7 種 2026-10-25 改由 BigWin8Fx 播） ----------------
 // 每張牌記：終點（x、y，單位＝一張牌的寬、高）、起點（x0、y0、轉角、縮放）、入場那一拍的亮度 o1、
-// 主動作那一拍何時開始動（dl，從主動作開始算 ms）、動多久（du）、要不要先蓋著再翻面（fl＝開始翻的時間）。
+// 主動作那一拍何時開始動（dl，從主動作開始算 ms）、動多久（du）。
 // 時間都從重擊點倒推（hitRel＝重擊點離主動作開始幾 ms：頂級 800、大牌 300），畫面最亮那一下就會對在鑼聲上。
-const GENERIC = new Set<BigWinTheme>(["zi1se", "dasixi", "xiaosixi", "qing1se", "wuanke", "baxian", "qiqiang1"]);
-type G = { t: Tile; x: number; y: number; r?: number; x0?: number; y0?: number; r0?: number; s0?: number; o1?: number; dl?: number; du?: number; ez?: string; fl?: number; cls?: string };
-const FLIP_MS = 120; // 翻面：牌背縮成一條 60ms＋牌面展開 60ms
+const GENERIC = new Set<BigWinTheme>(["zi1se", "dasixi"]);
+type G = { t: Tile; x: number; y: number; r?: number; x0?: number; y0?: number; r0?: number; s0?: number; o1?: number; dl?: number; du?: number; ez?: string; cls?: string };
 const z = (rank: number) => tile("z", rank);
-const ts3 = (suit: TileSuit, ranks: number[]) => ranks.map((r) => tile(suit, r));
-const EASE_LAND = "cubic-bezier(.3,1.25,.5,1)", EASE_OUT = "cubic-bezier(.2,.8,.3,1)", EASE_PULL = "cubic-bezier(.6,0,.9,.6)";
-/** 一排一排擺：rows＝每排的牌；同一排相鄰間距 1.06 張；gap＝哪幾張後面多空半張（分組） */
-function rowsLayout(rows: Tile[][], opts: { gapAfter?: number[][]; rowStep?: number; arc?: number } = {}) {
+const EASE_LAND = "cubic-bezier(.3,1.25,.5,1)", EASE_OUT = "cubic-bezier(.2,.8,.3,1)";
+/** 一排一排擺：rows＝每排的牌；同一排相鄰間距 1.06 張、排距 1.08 張，整組置中 */
+function rowsLayout(rows: Tile[][]) {
   const out: { t: Tile; x: number; y: number; row: number; col: number }[] = [];
-  const step = opts.rowStep ?? 1.08;
   rows.forEach((row, ri) => {
-    const gaps = opts.gapAfter?.[ri] ?? [];
-    const xs: number[] = []; let x = 0;
-    row.forEach((_, ci) => { xs.push(x); x += 1.06 + (gaps.includes(ci) ? 0.5 : 0); });
-    const w = xs[xs.length - 1];
-    row.forEach((t, ci) => {
-      const cx = xs[ci] - w / 2;
-      // arc：中間高、兩邊低的弧（清一色的牌浪）
-      const lift = opts.arc ? opts.arc * (1 - (cx / (w / 2 || 1)) ** 2) : 0;
-      out.push({ t, x: cx, y: (ri - (rows.length - 1) / 2) * step - lift, row: ri, col: ci });
-    });
+    const w = (row.length - 1) * 1.06;
+    row.forEach((t, ci) => out.push({ t, x: ci * 1.06 - w / 2, y: (ri - (rows.length - 1) / 2) * 1.08, row: ri, col: ci }));
   });
   return out;
 }
 // 牌型（都是能胡的 17 張真實牌型，或規格要的那一組）
 // 字一色：東東東 南南南 西西西 中中中 發發發 白白（另含小三元 4 台，不到 8 台不另列）
 const ZI1SE = [[z(1), z(1), z(1), z(2), z(2), z(2)], [z(3), z(3), z(3), z(5), z(5), z(5)], [z(6), z(6), z(6), z(7), z(7)]];
-// 大四喜：東南西北各一刻（手牌另有 123 萬、55 筒，畫面只擺四喜）；小四喜：東南西三刻＋北一對
+// 大四喜：東南西北各一刻（手牌另有 123 萬、55 筒，畫面只擺四喜）
 const WINDS4 = [1, 2, 3, 4];
-// 清一色：同一門（萬子）17 張：111 234 456 678 789 99
-const QING = ts3("m", [1, 1, 1, 2, 3, 4, 4, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9]);
-// 五暗刻：222萬 555萬 777筒 ／ 333條 東東東 ＋ 88條 一對
-const WUANKE = [[...ts3("m", [2, 2, 2]), ...ts3("m", [5, 5, 5]), ...ts3("p", [7, 7, 7])], [...ts3("s", [3, 3, 3]), z(1), z(1), z(1), ...ts3("s", [8, 8])]];
-// 花牌：照牌上印的數字排 春1 夏2 秋3 冬4、梅1 蘭2 菊3 竹4（遊戲裡 Flower7＝竹、Flower8＝菊，見 lib/mahjong/tiles.ts）
-const FLOWERS = [1, 2, 3, 4, 5, 6, 8, 7].map((r) => tile("f", r));
 
 function layoutOf(theme: BigWinTheme, hitRel: number): G[] {
   switch (theme) {
@@ -232,66 +194,18 @@ function layoutOf(theme: BigWinTheme, hitRel: number): G[] {
         ? { ...g, x0: g.x * 1.7, y0: g.y * 1.9, o1: 0.35, dl: i * 20 + hitRel - 120 - 16 * 20 - 360, du: 360, ez: EASE_LAND }
         : { ...g, x0: g.x * 0.4, y0: g.y - 4, r0: (i % 2 ? 1 : -1) * 12, dl: i * 20 + hitRel - 120 - 16 * 20 - 360, du: 360, ez: EASE_LAND });
     }
-    case "dasixi":
-    case "xiaosixi": {
-      // 羅盤：東（上）南（右）西（下）北（左），每一方擺那一刻（小四喜的北是一對）
-      const big = theme === "dasixi";
+    case "dasixi": {
+      // 羅盤：東（上）南（右）西（下）北（左），每一方擺那一刻；整個羅盤從倒轉半圈轉正（外層轉 -180→0，每張牌反向轉，牌面一直是正的），轉正那一刻＝重擊點
       // 牌放大 1.5 倍後上下距離收一點（1.75→1.55 張高），手機上不碰到牌桌下緣
       const pos = [[0, -1.55], [3.25, 0], [0, 1.55], [-3.25, 0]];
       const out: G[] = [];
       WINDS4.forEach((w, k) => {
-        const n = !big && w === 4 ? 2 : 3;
-        for (let j = 0; j < n; j++) {
-          const x = pos[k][0] + (j - (n - 1) / 2) * 1.06, y = pos[k][1];
-          if (big) {
-            // 大四喜：整個羅盤從倒轉半圈轉正（外層轉 -180→0，每張牌反向轉，牌面一直是正的），轉正那一刻＝重擊點
-            out.push({ t: z(w), x, y, r0: 180, dl: hitRel - 800, du: 800, ez: "cubic-bezier(.25,.7,.25,1)", cls: "rot" });
-          } else {
-            // 小四喜：東南西從三個角掠入先亮，北晚半拍補位，落定＝重擊點
-            const corner = [[-6, -4], [6, -4], [6, 4], [-6, 4]][k];
-            const late = w === 4;
-            out.push({ t: z(w), x, y, x0: corner[0], y0: corner[1], r0: corner[0] > 0 ? 25 : -25, dl: late ? hitRel - 180 : 0, du: late ? 180 : 200, ez: late ? EASE_PULL : EASE_OUT });
-          }
+        for (let j = 0; j < 3; j++) {
+          const x = pos[k][0] + (j - 1) * 1.06, y = pos[k][1];
+          out.push({ t: z(w), x, y, r0: 180, dl: hitRel - 800, du: 800, ez: "cubic-bezier(.25,.7,.25,1)", cls: "rot" });
         }
       });
       return out;
-    }
-    case "qing1se": {
-      // 17 張同一門的牌背排成弧 → 從左到右逐張翻亮成一道牌浪，最後一欄翻好＝重擊點
-      const L = rowsLayout([QING.slice(0, 9), QING.slice(9)], { arc: 0.35 });
-      const last = hitRel - FLIP_MS, stepMs = last / 8;
-      return L.map((g) => ({ ...g, y0: g.y + 0.35, o1: 0.55, dl: 0, du: 200, ez: EASE_OUT, fl: Math.round(g.col * stepMs) }));
-    }
-    case "wuanke": {
-      // 五組暗刻蓋著浮出 → 從中間往外一組一組翻面（555萬、222萬、777筒、333條、東），第五組翻好＝重擊點；一對 88 條本來就亮著
-      const L = rowsLayout(WUANKE, { gapAfter: [[2, 5], [2, 5]], rowStep: 1.14 });
-      const order = [1, 0, 2, 3, 4]; // 第幾組第幾個翻
-      const last = hitRel - FLIP_MS, stepMs = last / 4;
-      return L.map((g) => {
-        const grp = g.row * 3 + Math.floor(g.col / 3);
-        const pair = g.row === 1 && g.col >= 6;
-        return pair
-          ? { ...g, y0: g.y + 0.3, o1: 0.4, dl: 0, du: 220, ez: EASE_OUT }
-          : { ...g, y0: g.y + 0.3, o1: 0.4, dl: 0, du: 220, ez: EASE_OUT, fl: Math.round(order.indexOf(grp) * stepMs), cls: "thud" };
-      });
-    }
-    case "baxian": {
-      // 八仙過海（小宜〈八仙過海-重新設計〉方向 A 金潮長卷）：左右各四張從畫面外同時滑入，排成 4＋4 錯位雙列
-      //（上排春夏秋冬、下排梅蘭菊竹，照牌上印的 1～4），落定＝重擊點，八張同時金亮
-      return FLOWERS.map((t, i) => {
-        const row = i < 4 ? 0 : 1, col = i % 4;
-        const x = (col - 1.5) * 1.12 + (row ? 0.3 : -0.3), y = row ? 0.57 : -0.57;
-        return { t, x, y, x0: x + (x < 0 ? -9 : 9), dl: 0, du: hitRel, ez: EASE_OUT, cls: "hitglow" };
-      });
-    }
-    case "qiqiang1": {
-      // 七張花排成上半圈的弧（照印的數字排）→ 第八張（秋）從對面被拉進圈中心，到位＝重擊點，弧圈瞬間閉合
-      const seven = FLOWERS.filter((f) => f.rank !== 3);
-      const arc: G[] = seven.map((t, i) => {
-        const a = (180 + i * 30) * Math.PI / 180;
-        return { t, x: Math.cos(a) * 3.3, y: Math.sin(a) * 1.6 + 0.55, s0: 0.85, o1: 0.75, dl: 0, du: 200, ez: EASE_OUT };
-      });
-      return [...arc, { t: FLOWERS[2], x: 0, y: 0.35, x0: 5.5, y0: 3, r0: 30, dl: hitRel - 220, du: 220, ez: EASE_PULL, cls: "glow" }];
     }
     default:
       return [];
@@ -303,16 +217,12 @@ function Extras({ theme }: { theme: BigWinTheme }) {
   switch (theme) {
     case "zi1se": return <><div className="bw-sealframe" /><div className="bw-sweep" /></>;
     case "dasixi": return <><div className="bw-ring" /><div className="bw-winds"><i /><i /><i /><i /></div></>;
-    case "xiaosixi": return <><div className="bw-ring gap" /><div className="bw-ring full" /></>;
-    case "qing1se": return <div className="bw-sweep" />;
-    case "baxian": return <div className="bw-waves"><i /><i /></div>;
-    case "qiqiang1": return <><div className="bw-ring half" /><div className="bw-ring full" /></>;
     default: return null;
   }
 }
 // 收向勝者名牌的那個東西（規格第 5 節最後一欄）
 const FLYER: Partial<Record<BigWinTheme, string>> = {
-  zi1se: "seal", dasixi: "disc", xiaosixi: "ring", qing1se: "arc", wuanke: "seal", baxian: "arc", qiqiang1: "ribbon",
+  zi1se: "seal", dasixi: "disc",
 };
 
 function GenericMain({ theme, hitRel }: { theme: BigWinTheme; hitRel: number }) {
@@ -323,15 +233,12 @@ function GenericMain({ theme, hitRel }: { theme: BigWinTheme; hitRel: number }) 
         <Extras theme={theme} />
         <div className={theme === "dasixi" ? "bw-rotor" : "bw-tiles"}>
           {gs.map((g) => (
-            <div key={g.t.id} className={`bw-g ${g.fl != null ? "flip" : ""} ${g.cls ?? ""}`} style={{
+            <div key={g.t.id} className={`bw-g ${g.cls ?? ""}`} style={{
               ["--x" as string]: g.x, ["--y" as string]: g.y, ["--r" as string]: `${g.r ?? 0}deg`,
               ["--x0" as string]: g.x0 ?? g.x, ["--y0" as string]: g.y0 ?? g.y, ["--r0" as string]: `${g.r0 ?? 0}deg`, ["--s0" as string]: g.s0 ?? 1,
               ["--o1" as string]: g.o1 ?? 0, ["--dl" as string]: `${g.dl ?? 0}ms`, ["--du" as string]: `${g.du ?? 300}ms`, ["--ez" as string]: g.ez ?? EASE_OUT,
-              ["--fl" as string]: `${g.fl ?? 0}ms`,
             }}>
-              {g.fl != null
-                  ? <div className="in"><div className="bk"><MjTile tile={g.t} faceDown width="var(--tw)" height="var(--th)" /></div><div className="fc"><MjTile tile={g.t} width="var(--tw)" height="var(--th)" /></div></div>
-                  : <MjTile tile={g.t} width="var(--tw)" height="var(--th)" />}
+              <MjTile tile={g.t} width="var(--tw)" height="var(--th)" />
             </div>
           ))}
         </div>

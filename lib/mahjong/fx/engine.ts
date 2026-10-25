@@ -266,6 +266,57 @@ export function playMeteorSound(zeroAt: number | null, impactMs: number, url = m
   };
 }
 
+// ---------------- 八台大牌新版的專屬音效（老闆 2026-10-25 定案阿妍的推薦款；畫面在 components/mahjong/BigWin8Fx.tsx） ----------------
+// 每種牌型一個檔（一般版／手機加強版，網址由 BigWin8Fx 依裝置給），長度＝大牌段總長，重擊點已對在檔案裡（lib/mahjong/bigWin.ts 的 BIG_WIN8.hit）。
+// 和大牌、隕石音效同一條路（互動音效的音量、靜音、壓縮器），播放音量 1。只有這一手真的是那一種大牌時才載
+const bigWin8Bufs = new Map<string, Promise<AudioBuffer | null>>();
+/** 先載好、解碼好（要等特效引擎的音訊建好；載不到就回 null，特效照播、不出聲） */
+export function preloadBigWin8Sound(url: string): Promise<AudioBuffer | null> {
+  if (!bigWin8Bufs.has(url)) {
+    bigWin8Bufs.set(url, preloadFx().then(async () => {
+      if (!AC) return null;
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return AC.decodeAudioData(await r.arrayBuffer());
+    }).catch(() => null));
+  }
+  return bigWin8Bufs.get(url)!;
+}
+/**
+ * 播八台大牌專屬音效；回傳停止函式（40ms 淡出）。靜音、還沒載好、音訊沒解鎖就不響。
+ * zeroAt：大牌段動畫真正開始那一刻（performance.now）：從檔案「已經過了多久＋輸出延遲」的位置開始放，檔案第 t 秒在大牌段第 t 秒被聽到，
+ * 不另外位移；zeroAt＝null（減少動態）從頭放
+ */
+export function playBigWin8Sound(url: string, zeroAt: number | null): () => void {
+  const ac = AC;
+  let stopped = false;
+  let stopNow = () => {};
+  if (!ac || masterGain === 0) return () => {};
+  const start = (b: AudioBuffer | null) => {
+    if (!b || stopped || ac.state !== "running") return;
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = b;
+    g.gain.value = 1;
+    s.connect(g).connect(MIX ?? ac.destination);
+    const latency = (ac.outputLatency || 0) + (ac.baseLatency || 0);
+    const offset = zeroAt == null ? 0 : Math.max(0, (performance.now() - zeroAt) / 1000 + latency);
+    if (offset >= b.duration) return;
+    try { s.start(ac.currentTime, offset); } catch { return; }
+    stopNow = () => {
+      g.gain.setTargetAtTime(0, ac.currentTime, 0.012);
+      try { s.stop(ac.currentTime + 0.05); } catch { /* 已經播完 */ }
+    };
+  };
+  const go = () => void preloadBigWin8Sound(url).then(start);
+  if (ac.state === "running") go();
+  else void ac.resume().then(go, () => {});
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    stopNow();
+  };
+}
+
 /** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋） */
 export function preloadFx(): Promise<boolean> {
   readyPromise ??= (async () => {

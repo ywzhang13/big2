@@ -17,9 +17,10 @@ import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
 import BigWinFx from "@/components/mahjong/BigWinFx";
-import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
+import BigWin8Fx, { preloadBigWin8 } from "@/components/mahjong/BigWin8Fx";
+import { bigWinKey, bigWinPlayed, isBigWin8, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
 import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
-import { CELE_MS, celeHandoffMs, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
+import { CELE_MS, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
 import { useTableSounds } from "@/hooks/useTableSounds";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
@@ -804,9 +805,11 @@ function RoomView({
     }
   }, [state.winner, isZimoWin, isRonWin]);
 
-  // 胡牌演出（大牌胡牌特效 2026-10-23、順序對調＋帳號專屬隕石自摸 2026-10-25，順序見 lib/mahjong/winShow.ts）：
-  //   一般人大牌：自摸／胡浮層 → 大牌專屬段 → 結算；帳號專屬隕石（伺服器給 winner.winFx="meteor"）自摸：隕石自摸 →（大牌專屬段）→ 結算；
+  // 胡牌演出（大牌胡牌特效 2026-10-23、帳號專屬隕石自摸 2026-10-25、八台大牌新版＋大牌先播 2026-10-25，順序見 lib/mahjong/winShow.ts）：
+  //   一般人大牌：大牌專屬段 → 自摸／胡浮層 → 結算；帳號專屬隕石（伺服器給 winner.winFx="meteor"）自摸：（大牌專屬段 →）隕石自摸 → 結算；
   //   天胡、八仙過海、七搶一：只播大牌專屬段。一般胡牌（沒有大牌、沒有專屬特效）照舊由上面的浮層播，不擋結算。
+  //   大牌段排第一：播完不卸下，只留暗幕墊在後面那一段底下，整串結束才收（交接時牌桌不會先亮一下）。
+  //   大牌 7 種（大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）用新版 BigWin8Fx，頂級 3 種（天胡、字一色、大四喜）用 BigWinFx。
   // 這一局結束、順位第一的贏家才看（四家各自看到同一份結果）。播過就記在這個分頁（重新整理、斷線重連不重播）。播的時候先不出結算浮層，播完（或跳過）才出
   const handKey = `${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`;
   type WinShow = { key: string; plan: WinShowStage[]; i: number; pick: BigWinPick | null; seat: number; zimo: boolean; tile: Tile | undefined; name: string };
@@ -822,9 +825,14 @@ function RoomView({
     const key = winShowKey;
     const show: WinShow = { key, plan: showPlan, i: 0, pick: showPick, seat: showWinner.seat, zimo: isZimoWin, tile: showWinner.winTile, name: showWinner.name };
     // 下一個畫面才掛上；「記下播過」和「掛上特效」放在同一刻，中間不會有一次重繪讓結算浮層先閃出來。
-    // 隕石：素材還沒載好（例如伺服器沒先告訴我們房間裡有這個帳號）就先等它載好再播，最多等 1.5 秒，第一次播也不會閃空白
+    // 素材還沒載好就先等它載好再播，最多等 1.5 秒，第一次播也不會閃空白：
+    //   ・隕石（例如伺服器沒先告訴我們房間裡有這個帳號）
+    //   ・大牌新版 7 種：只有這一手真的是那一種時才下載那一種的兩張圖、牌型名字型、專屬音效（約 0.3～0.6MB），一般牌局不下載
     let cancelled = false;
-    const ready = showPlan[0] === "meteor" ? Promise.race([preloadMeteorFx(), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
+    const loads: Promise<unknown>[] = [];
+    if (showPlan.includes("meteor")) loads.push(preloadMeteorFx());
+    if (showPick && isBigWin8(showPick.theme)) loads.push(preloadBigWin8(showPick.theme));
+    const ready = loads.length ? Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
     void ready.then(() => setTimeout(() => {
       if (cancelled || bigWinPlayed(key)) return;
       markBigWinPlayed(key);
@@ -840,15 +848,14 @@ function RoomView({
   const winShowHoldResult = !!winShowKey && (!!winShowLive || !bigWinPlayed(winShowKey));
   const nextWinStage = () => setWinShow((w) => (w && w.i + 1 < w.plan.length ? { ...w, i: w.i + 1 } : null));
   const endWinShow = () => { setCelebrationMode(null); setWinShow(null); };
-  // 浮層那一段：照原本長度播；後面還有大牌段時，浮層開始淡出（最後 15%）那一刻就接上大牌段（暗幕一開始就是暗的），
-  // 浮層淡掉時底下已經是暗的，牌桌不會先亮一下。點畫面、Enter、Space 直接進結算（跳過那一下不會按到結算的按鈕）
+  // 浮層那一段（排在大牌段後面，是最後一段）：照原本長度播完才出結算；底下墊著大牌段留下的暗幕，浮層淡入時牌桌不會先亮一下。
+  // 點畫面、Enter、Space 直接進結算（跳過那一下不會按到結算的按鈕）
   const celeOffRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (winStage !== "cele" || !winShowLive) return;
     const mode = winShowLive.zimo ? "zimo" : "ron";
-    const last = winShowLive.i + 1 >= winShowLive.plan.length;
     setCelebrationMode(mode);
-    const t = setTimeout(nextWinStage, last ? CELE_MS[mode] : celeHandoffMs(mode));
+    const t = setTimeout(nextWinStage, CELE_MS[mode]);
     celeOffRef.current = setTimeout(() => setCelebrationMode((m) => (m === mode ? null : m)), CELE_MS[mode]);
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
@@ -1419,15 +1426,19 @@ function RoomView({
         </div>
       )}
 
-      {/* 帳號專屬「隕石自摸」：取代自摸浮層；播完接大牌專屬段或結算，點畫面任一處跳過 */}
+      {/* 帳號專屬「隕石自摸」：取代自摸浮層；接在大牌專屬段後面（或單獨播），播完出結算，點畫面任一處跳過 */}
       {winShowLive && winStage === "meteor" && (
-        <MeteorFx key={winShowLive.key} seat={winShowLive.seat} mySeat={state.mySeat} mobile={isMobileLandscape} tile={winShowLive.tile} name={winShowLive.name}
+        <MeteorFx key={`mt|${winShowLive.key}`} seat={winShowLive.seat} mySeat={state.mySeat} mobile={isMobileLandscape} tile={winShowLive.tile} name={winShowLive.name}
           onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
       )}
-      {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），接在浮層或隕石後面（chained），點畫面任一處跳過 */}
-      {winShowLive && winStage === "big" && winShowLive.pick && (
-        <BigWinFx key={winShowLive.key} pick={winShowLive.pick} seat={winShowLive.seat} mobile={isMobileLandscape} chained={winShowLive.i > 0} onDone={endWinShow} />
-      )}
+      {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），排第一段；播完不卸下（只留暗幕），等後面的浮層／隕石播完一起收。點畫面任一處跳過整串。
+          和隕石同時掛著，key 要和隕石分開（同一層兄弟用同一個 key，React 會多掛一個收不掉的隕石） */}
+      {winShowLive && winShowLive.pick && (isBigWin8(winShowLive.pick.theme) ? (
+        <BigWin8Fx key={`big|${winShowLive.key}`} theme={winShowLive.pick.theme} title={winShowLive.pick.title} fan={winShowLive.pick.fan} seat={winShowLive.seat}
+          mobile={isMobileLandscape} winTile={winShowLive.tile} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
+      ) : (
+        <BigWinFx key={`big|${winShowLive.key}`} pick={winShowLive.pick} seat={winShowLive.seat} mobile={isMobileLandscape} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
+      ))}
 
       {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大；大牌特效播的時候先不出 */}
       {isFinished && state.winner && !winShowHoldResult && (
