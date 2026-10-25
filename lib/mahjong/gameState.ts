@@ -39,7 +39,11 @@ export interface WinnerEntry {
   winTile?: Tile;          // 胡的那張牌；八仙過海＝第 8 張花、七搶一＝搶來的花
   from?: number | null;    // 那張牌來自哪個座位；自摸、八仙過海＝null；放槍、搶槓、七搶一＝那家的座位（七搶一＝那 1 張花的人，也是付錢的人）
   waits?: WaitTile[];      // 拿掉胡的那張後，手牌原本聽哪些牌；花牌胡＝[]
+  winFx?: WinFx;           // 帳號專屬的自摸特效代號（公開，全桌照這個播）；只有設定表裡的帳號自摸才有（lib/mahjong/winFx.ts）
 }
+
+/** 帳號專屬的自摸特效代號；新增特效時在這裡加一種，前端照代號播放 */
+export type WinFx = "meteor";
 
 /** 整場統計：每家這場胡牌、放槍、自摸各幾次（座位 0～3） */
 export interface HandStats {

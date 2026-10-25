@@ -1,10 +1,11 @@
 import { getSupabaseAdmin } from "../supabase-admin";
-import { MahjongGameState, PlayerState } from "./gameState";
+import { MahjongGameState, PlayerState, WinFx } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
 import { allHands, chiForbiddenKeys, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
 import { opponentHands } from "./events";
 import { recordZimoWins } from "./donate/record";
+import { selfDrawWinFx } from "./winFx";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows
@@ -311,6 +312,7 @@ export interface PublicPlayerState {
   flowers: Tile[];
   discards: Tile[];
   isDealer: boolean;
+  winFx?: WinFx; // 這個座位的帳號有專屬自摸特效（設定表 lib/mahjong/winFx.ts）：開局就知道，前端可以先預載素材；只有代號，不帶帳號
 }
 
 /**
@@ -325,6 +327,7 @@ function takenFromDiscards(state: MahjongGameState): Set<number> {
 }
 
 export function toPublicPlayerState(player: PlayerState, taken: Set<number> = new Set()): PublicPlayerState {
+  const winFx = selfDrawWinFx(player.userId);
   return {
     id: player.id,
     name: player.name,
@@ -334,6 +337,7 @@ export function toPublicPlayerState(player: PlayerState, taken: Set<number> = ne
     flowers: player.flowers,
     discards: player.discards.filter((t) => !taken.has(t.id)),
     isDealer: player.isDealer,
+    ...(winFx ? { winFx } : {}),
   };
 }
 
