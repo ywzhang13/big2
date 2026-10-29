@@ -3,6 +3,7 @@ import {
   saveGameStateIfUnchanged,
   findSeatByPlayerId,
   toPublicGameState,
+  hideConcealedKongs,
   retryOnConflict,
 } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
@@ -534,7 +535,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     await save(newState, "finished");
     const m = newState.players[seat].revealed[newState.players[seat].revealed.length - 1];
     await mjBroadcastBatch(room.code, [
-      { event: "mj_action", payload: { type: m.type, seat, tiles: m.tiles, tileCount: newState.players[seat].hand.length } },
+      { event: "mj_action", payload: { type: m.type, seat, tiles: hideConcealedKongs(newState.players[seat].revealed, seat).at(-1)!.tiles, tileCount: newState.players[seat].hand.length } },
       gameOverEvent(newState),
     ]);
     await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
@@ -563,7 +564,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
       payload: {
         type: lastMeld.type,
         seat,
-        tiles: lastMeld.tiles,
+        // 暗槓：公開頻道只送蓋著的 4 張；本人的牌面在下面座位頻道的 mj_hand_update.myRevealed
+        tiles: hideConcealedKongs(updatedPlayer.revealed, seat).at(-1)!.tiles,
         tileCount: updatedPlayer.hand.length,
       },
     },
@@ -578,6 +580,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
         eyeWithTing: canDeclareTingNow(newState, seat),
         // 食替：吃完這次不能打的牌種（碰、槓是空陣列）
         chiForbidden: chiForbiddenKeys(newState, seat),
+        // 暗槓：自己的吃碰槓（有牌面）。公開的 mj_action 是蓋著的，前端拿這份換掉自己那一副
+        ...(lastMeld.type === "concealed_kong" ? { myRevealed: updatedPlayer.revealed } : {}),
       },
     },
     // 槓：補牌後能不能自摸（槓上開花）／再槓，以及補到第 8 張花時的七搶一

@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "../supabase-admin";
-import { MahjongGameState, PlayerState, WinFx } from "./gameState";
+import { MahjongGameState, Meld, PlayerState, WinFx } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
 import { allHands, chiForbiddenKeys, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
@@ -312,6 +312,7 @@ export interface PublicPlayerState {
   flowers: Tile[];
   discards: Tile[];
   isDealer: boolean;
+  avatarUrl: string | null; // LINE 大頭貼網址（只有登入玩家；遊客、上線前開局的牌局是 null）。只有網址，不帶帳號
   winFx?: WinFx; // 這個座位的帳號有專屬自摸特效（設定表 lib/mahjong/winFx.ts）：開局就知道，前端可以先預載素材；只有代號，不帶帳號
 }
 
@@ -326,6 +327,19 @@ function takenFromDiscards(state: MahjongGameState): Set<number> {
   return ids;
 }
 
+/**
+ * 暗槓的牌面只給本人和眼牌的人（2026-10-29）：給所有人的資料裡，暗槓換成 4 張蓋著的牌（suit "z"、rank 0、負數 id），
+ * 仍然看得到那裡有一副暗槓、共幾張。牌的 id 照建牌順序對應牌面（tiles.ts buildTiles），所以 id 也不能給。
+ * 本人在 toPlayerGameState 換回自己的；眼牌的人走 opponentHands（events.ts）；這局結束後的攤牌走 allHands，都不受影響。
+ */
+export function hideConcealedKongs(revealed: Meld[], seat: number): Meld[] {
+  return revealed.map((m, mi) =>
+    m.type === "concealed_kong"
+      ? { ...m, tiles: m.tiles.map((_, k) => ({ id: -(10000 + seat * 100 + mi * 4 + k), suit: "z" as const, rank: 0, display: "" })) }
+      : m
+  );
+}
+
 export function toPublicPlayerState(player: PlayerState, taken: Set<number> = new Set()): PublicPlayerState {
   const winFx = selfDrawWinFx(player.userId);
   return {
@@ -333,10 +347,11 @@ export function toPublicPlayerState(player: PlayerState, taken: Set<number> = ne
     name: player.name,
     seat: player.seat,
     tileCount: player.hand.length,
-    revealed: player.revealed,
+    revealed: hideConcealedKongs(player.revealed, player.seat),
     flowers: player.flowers,
     discards: player.discards.filter((t) => !taken.has(t.id)),
     isDealer: player.isDealer,
+    avatarUrl: player.avatarUrl ?? null,
     ...(winFx ? { winFx } : {}),
   };
 }
@@ -484,6 +499,8 @@ export function toPlayerGameState(
 
   return {
     ...pub,
+    // 自己的暗槓看得到牌面（公開那份是蓋著的）
+    players: player ? pub.players.map((p) => (p.seat === player.seat ? { ...p, revealed: player.revealed } : p)) : pub.players,
     hand,
     myAvailableActions,
     myDrawnTileId,

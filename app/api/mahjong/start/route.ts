@@ -6,6 +6,7 @@ import {
   retryOnConflict,
 } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
+import { getPictureUrls } from "@/lib/auth";
 import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
 import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow, shuffleSeats } from "@/lib/mahjong/gameLogic";
@@ -79,6 +80,9 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   state.roomCode = room.code;
   // 記下每個座位綁定的使用者，之後每個動作都用它確認本人、整場結束寫進對局紀錄
   state.players.forEach((p, i) => (p.userId = seated[i].user_id ?? null));
+  // 同桌顯示 LINE 大頭貼（老闆 2026-10-29）：開局時取一次，之後每局沿用
+  const pics = await getPictureUrls(state.players.map((p) => p.userId));
+  state.players.forEach((p, i) => (p.avatarUrl = pics[i]));
 
   // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
   // 起莊者 = 開門者（第一局同一顆骰子）

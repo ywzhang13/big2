@@ -2,7 +2,7 @@
 
 import { Tile, tileKey, TileSuit, isFlower, isDragon, isWind } from "./tiles";
 import { Meld, ScoreResult } from "./gameState";
-import { isWinningHand, findWaitingTiles } from "./winCheck";
+import { isWinningHand, findWaitingTiles, isLiguHand } from "./winCheck";
 
 export interface ScoringContext {
   concealed: Tile[]; // 暗牌 (including winTile if self-draw)
@@ -27,6 +27,7 @@ export interface ScoringContext {
 interface ParsedHand {
   pair: string; // tileKey of the pair
   melds: ParsedMeld[];
+  ligu?: string[]; // 嚦咕嚦咕：7 個對子的牌種（4 張一樣的那種出現兩次）；這時 pair 是 ""、melds 只有那一個刻子
 }
 
 interface ParsedMeld {
@@ -207,7 +208,8 @@ function scoreDecomposition(
   // --- 門清自摸 / 門清 / 自摸 ---
   // MIGI（地聽）一定是門清：不另算門清、門清自摸（含不求人），自摸只算 1 台
   const isMigi = fans.some((f) => f.name === "地聽");
-  if (isMigi) {
+  // 嚦咕嚦咕本身就要門清：比照 MIGI，不另算門清、門清自摸，自摸只算 1 台（對照表待老闆確認）
+  if (isMigi || hand.ligu) {
     if (ctx.isSelfDraw) fans.push({ name: "自摸", value: 1 });
   } else if (isConcealed && ctx.isSelfDraw) {
     fans.push({ name: "門清自摸", value: 3 });
@@ -257,11 +259,9 @@ function scoreDecomposition(
   // --- 平胡 ---
   // 沒字沒花、五副都是順子、胡別人的牌（搶槓也算）、不是獨聽，
   // 而且這種拆法裡胡的那張落在手上的順子、是兩面聽（不是眼、邊張、中洞）。
-  const allTileKeys = [
-    ...allMelds.flatMap((m) => m.tileKeys),
-    hand.pair,
-    hand.pair,
-  ];
+  const allTileKeys = hand.ligu
+    ? [...allMelds.flatMap((m) => m.tileKeys), ...hand.ligu, ...hand.ligu]
+    : [...allMelds.flatMap((m) => m.tileKeys), hand.pair, hand.pair];
   const hasHonor = allTileKeys.some((k) => k[0] === "z");
   const winRank = ctx.winTile.rank;
   const isTwoSidedWin = chiMelds.some((m) => {
@@ -389,6 +389,11 @@ function scoreDecomposition(
     fans.push({ name: "五暗刻", value: 8 });
   }
 
+  // --- 嚦咕嚦咕（7 對＋1 刻，門清）---
+  if (hand.ligu) {
+    fans.push({ name: "嚦咕嚦咕", value: 8 });
+  }
+
   // --- 正花 ---
   // Each seat has a matching flower based on seatWind (relative to door/opener):
   //   seatWind=1 (東/門) → flower number 1 (春 Flower1, 梅 Flower5)
@@ -448,6 +453,15 @@ function scoreDecomposition(
   return { fans: counted, totalFan };
 }
 
+/** 嚦咕嚦咕的拆法：刻子當成手上的暗刻（風牌、三元牌照算），其餘 7 個對子放 ligu */
+function liguHand(concealed: Tile[], revealed: Meld[]): ParsedHand | null {
+  if (!isLiguHand(concealed, revealed.length)) return null;
+  const counts = toCountMap(concealed);
+  const triple = [...counts.entries()].find(([, n]) => n === 3)![0];
+  const pairs = [...counts.entries()].filter(([, n]) => n !== 3).flatMap(([k, n]) => (n === 4 ? [k, k] : [k]));
+  return { pair: "", ligu: pairs, melds: [{ type: "pong", tileKeys: [triple, triple, triple], isConcealed: true }] };
+}
+
 /** 天胡不另算的台 */
 const TIANHU_DROPS = new Set(["門清", "自摸", "門清自摸"]);
 
@@ -457,6 +471,9 @@ const TIANHU_DROPS = new Set(["門清", "自摸", "門清自摸"]);
  */
 export function calculateScore(ctx: ScoringContext): ScoreResult {
   const decompositions = decomposeHand(ctx.concealed, ctx.revealed);
+  // 嚦咕嚦咕和一般拆法並列，取台數高的（同一手兩種都成立時，例如 112233 這種對子也拆得成順子）
+  const ligu = liguHand(ctx.concealed, ctx.revealed);
+  if (ligu) decompositions.push(ligu);
 
   if (decompositions.length === 0) {
     // No valid decomposition — should not happen if hand is verified winning

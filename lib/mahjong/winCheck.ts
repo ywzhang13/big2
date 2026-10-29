@@ -83,6 +83,7 @@ function canFormMelds(counts: Map<string, number>, meldsNeeded: number): boolean
  * @returns true if winning
  */
 export function isWinningHand(concealed: Tile[], revealedMelds: number = 0): boolean {
+  if (isLiguHand(concealed, revealedMelds)) return true;
   const meldsNeeded = 5 - revealedMelds;
   const expectedTiles = meldsNeeded * 3 + 2; // + pair
 
@@ -105,6 +106,23 @@ export function isWinningHand(concealed: Tile[], revealedMelds: number = 0): boo
   }
 
   return false;
+}
+
+/**
+ * 嚦咕嚦咕（老闆 2026-10-29 定案，8 台）：17 張＝7 個對子＋1 個刻子，沒有順子。
+ * 一定要門清：有吃、碰、明槓、暗槓（revealedMelds > 0）都不算；手上 4 張一樣（沒槓出）可以當 2 個對子。
+ * 每種牌只能是 2、3、4 張，而且剛好一種是 3 張（張數合計 17 時就是 7 對＋1 刻）。
+ */
+export function isLiguHand(concealed: Tile[], revealedMelds: number = 0): boolean {
+  if (revealedMelds !== 0) return false;
+  const nonFlower = concealed.filter((t) => t.suit !== "f");
+  if (nonFlower.length !== 17) return false;
+  let triples = 0;
+  for (const n of toCountMap(nonFlower).values()) {
+    if (n === 3) triples++;
+    else if (n !== 2 && n !== 4) return false;
+  }
+  return triples === 1;
 }
 
 /**

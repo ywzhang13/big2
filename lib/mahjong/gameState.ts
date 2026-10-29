@@ -18,6 +18,7 @@ export interface PlayerState {
   discards: Tile[]; // tiles this player discarded
   isDealer: boolean;
   userId?: string | null; // 這個座位的 LINE 登入使用者（Supabase auth user id）；只在伺服器用，不公開
+  avatarUrl?: string | null; // LINE 大頭貼網址（開局時從登入資料取；遊客、查不到是 null）；公開給同桌
 }
 
 export interface ScoreResult {

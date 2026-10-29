@@ -2,6 +2,7 @@
 // 放在 Authorization: Bearer <token> 送來。這裡向 Supabase Auth 驗證後回傳使用者。
 // 測試時整個檔案會被換成 tests/support/stub-auth.ts。
 import { getSupabaseServer } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export interface AuthUser {
   id: string; // Supabase auth user id（uuid）；寫進 mj_players.user_id、match_record_players.user_id
@@ -51,4 +52,21 @@ export async function getAuthUser(request: Request): Promise<AuthUser | null> {
   if (cache.size >= MAX_CACHE) cache.clear();
   cache.set(token, { user, until: Math.min(now + CACHE_MS, tokenExpiryMs(token) || now + CACHE_MS, isGuest ? guestExpiry : Infinity) });
   return user;
+}
+
+/** 這些帳號的大頭貼網址（照順序；LINE 登入的 picture / avatar_url）。沒帳號、遊客、查不到、不是 https 的都是 null。
+ *  開局時用一次，查失敗不擋開局 */
+export async function getPictureUrls(userIds: (string | null | undefined)[]): Promise<(string | null)[]> {
+  return Promise.all(userIds.map(async (id) => {
+    if (!id) return null;
+    try {
+      const { data, error } = await getSupabaseAdmin().auth.admin.getUserById(id);
+      if (error || !data.user || (data.user.app_metadata as Record<string, unknown>)?.guest === true) return null;
+      const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+      const url = [meta.picture, meta.avatar_url].find((v): v is string => typeof v === "string" && v.startsWith("https://"));
+      return url ?? null;
+    } catch {
+      return null;
+    }
+  }));
 }
