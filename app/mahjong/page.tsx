@@ -16,16 +16,15 @@ import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
-import BigWin8Fx, { preloadBigWin8 } from "@/components/mahjong/BigWin8Fx";
-import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
-import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
+import { bigWinPlayed } from "@/lib/mahjong/bigWin";
+import { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
 import { setBgWarmPaused } from "@/components/mahjong/FxBgWarm";
-import WinCelebration from "@/components/mahjong/WinCelebration";
-import { CELE_MS, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
+import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
 import { useTableSounds } from "@/hooks/useTableSounds";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
+import { SpectateManage, SpectateRequestCard, useSpectateManage } from "@/components/mahjong/spectate/SpectateHost";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
@@ -42,7 +41,6 @@ function useMobileLandscape(): boolean {
   );
 }
 
-const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -440,6 +438,10 @@ export default function MahjongPage() {
               >
                 歷史紀錄
               </button>
+              {/* 觀戰（老馬 2026-10-30，小宜觀戰規格 5.1）：獨立頁面 /mahjong/watch，一般打牌頁不載入觀戰程式 */}
+              <a href="/mahjong/watch" className="mjl-btn ghost text-center" data-lobby-spectate>
+                觀戰
+              </a>
               <button onClick={goHome} className="mjl-foot">
                 返回首頁
               </button>
@@ -764,118 +766,17 @@ function RoomView({
   };
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showSpectateManage, setShowSpectateManage] = useState(false);
+  // 觀戰（老馬 2026-10-30）：牌局進行中、我有座位、房間還開著才收申請、管觀戰；遊客房也照樣收（觀戰者一定是 LINE 登入，伺服器檢查）
+  const spectateActive = !!roomId && state.status === "playing" && state.mySeat >= 0 && !closed;
+  const spectateManage = useSpectateManage(roomId, state.myId, state.spectateTick, spectateActive);
   const isMobileLandscape = useMobileLandscape();
 
-  // Detect win type for celebration overlay
-  const isZimoWin =
-    state.winner != null &&
-    state.winner.seat >= 0 &&
-    state.winner.score.fans.some((f) => f.name.includes("自摸") || f.name === "天胡"); // 天胡沒有自摸台，但一定是自摸
-  const isRonWin =
-    state.winner != null &&
-    state.winner.seat >= 0 &&
-    !isZimoWin;
-  // 八仙過海／七搶一：花牌立刻胡，沒有自摸或放槍
-  const flowerWinName = state.winner?.score.fans.find((f) => FLOWER_WIN_NAMES.includes(f.name))?.name;
-
-  // Celebration overlay (shown briefly on all players' screens)
-  const [celebrationMode, setCelebrationMode] = useState<"zimo" | "ron" | null>(null);
-  const lastWinnerSeatRef = useRef<number | null>(null);
-  useEffect(() => {
-    const w = state.winner;
-    if (!w || w.seat < 0) {
-      lastWinnerSeatRef.current = null;
-      // 新的一局（贏家清掉）：浮層 3.5 秒還沒播完就按下一局時，收掉的計時器跟著被清掉，浮層模式會一直留著，
-      // 下一手胡牌那一刻先閃出上一手的「自摸」。這裡一起收掉
-      setCelebrationMode(null);
-      return;
-    }
-    if (lastWinnerSeatRef.current === w.seat) return;
-    lastWinnerSeatRef.current = w.seat;
-    // 大牌（天胡、字一色、大四喜、大三元…，見 lib/mahjong/bigWin.ts）、帳號專屬的隕石自摸：整串由下面的 winShow 依序播，這裡不播
-    if (planWinShow({ pick: pickBigWin(w), zimo: isZimoWin, winFx: w.winFx }).join() !== "cele") return;
-    if (isZimoWin) {
-      setCelebrationMode("zimo");
-      const t = setTimeout(() => setCelebrationMode(null), CELE_MS.zimo);
-      return () => clearTimeout(t);
-    }
-    if (isRonWin) {
-      setCelebrationMode("ron");
-      const t = setTimeout(() => setCelebrationMode(null), CELE_MS.ron);
-      return () => clearTimeout(t);
-    }
-  }, [state.winner, isZimoWin, isRonWin]);
-
-  // 胡牌演出（大牌胡牌特效 2026-10-23、帳號專屬隕石自摸 2026-10-25、八台大牌新版＋大牌先播 2026-10-25，順序見 lib/mahjong/winShow.ts）：
-  //   一般人大牌：大牌專屬段 → 自摸／胡浮層 → 結算；帳號專屬隕石（伺服器給 winner.winFx="meteor"）自摸：（大牌專屬段 →）隕石自摸 → 結算；
-  //   天胡、八仙過海、七搶一：只播大牌專屬段。一般胡牌（沒有大牌、沒有專屬特效）照舊由上面的浮層播，不擋結算。
-  //   大牌段排第一：播完不卸下，只留暗幕墊在後面那一段底下，整串結束才收（交接時牌桌不會先亮一下）。
-  //   10 種大牌都用新版 BigWin8Fx（八台 7 種、16 台以上的天胡、字一色、大四喜；天胡播完直接結算，隕石帳號也一樣）。
-  // 這一局結束、順位第一的贏家才看（四家各自看到同一份結果）。播過就記在這個分頁（重新整理、斷線重連不重播）。播的時候先不出結算浮層，播完（或跳過）才出
-  const handKey = `${state.roundInfo?.currentRound}-${state.roundInfo?.currentGame}-${state.roundInfo?.dealerConsecutive}`;
-  type WinShow = { key: string; plan: WinShowStage[]; i: number; pick: BigWinPick | null; seat: number; zimo: boolean; tile: Tile | undefined; name: string };
-  const [winShow, setWinShow] = useState<WinShow | null>(null);
-  const showWinner = state.status === "finished" && state.winner && state.winner.seat >= 0 ? state.winner : null;
-
-  const showPick = showWinner ? pickBigWin(showWinner) : null;
-  const showPlan = showWinner ? planWinShow({ pick: showPick, zimo: isZimoWin, winFx: showWinner.winFx }) : null;
+  // 胡牌演出（浮層、大牌段、隕石、結算先等）：和觀戰頁共用 hooks/useWinShow.tsx（老馬 2026-10-30 原封搬出，邏輯沒改）
   // 整場打完（completed）時伺服器結算後馬上關房：最後一局照樣播，播完才出最終結算；解散等其他原因關房不播（審伯 2026-10-23）
   const winShowRoomOk = !closed || (closed.endReason === "completed" && !!state.gameOver);
-  const winShowKey = showPlan && showPlan.join() !== "cele" && winShowRoomOk ? bigWinKey(roomId, handKey, showWinner) : null;
-  useEffect(() => {
-    if (!showPlan || !winShowKey || bigWinPlayed(winShowKey) || !showWinner) return;
-    const key = winShowKey;
-    const show: WinShow = { key, plan: showPlan, i: 0, pick: showPick, seat: showWinner.seat, zimo: isZimoWin, tile: showWinner.winTile, name: showWinner.name };
-    // 下一個畫面才掛上；「記下播過」和「掛上特效」放在同一刻，中間不會有一次重繪讓結算浮層先閃出來。
-    // 素材還沒載好就先等它載好再播，最多等 1.5 秒，第一次播也不會閃空白：
-    //   ・隕石（例如伺服器沒先告訴我們房間裡有這個帳號）
-    //   ・大牌新版 10 種：只有這一手真的是那一種時才下載那一種的圖、牌型名字型、專屬音效（八台約 0.3～0.6MB、16 台約 0.7～1.3MB），一般牌局不下載
-    let cancelled = false;
-    const loads: Promise<unknown>[] = [];
-    if (showPlan.includes("meteor")) loads.push(preloadMeteorFx());
-    if (showPick) loads.push(preloadBigWin8(showPick.theme));
-    const ready = loads.length ? Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
-    // 不在這裡預熱（老闆 2026-10-25：來不及預熱就直接播，不能讓玩家多等）
-    void ready.then(() => setTimeout(() => {
-      if (cancelled || bigWinPlayed(key)) return;
-      markBigWinPlayed(key);
-      setWinShow(show);
-    }));
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只看這一手的識別：同一手只啟動一次
-  }, [winShowKey]);
-  // 換局、離開房間：還沒播完的收掉
-  const winShowLive = winShow && winShow.key === winShowKey ? winShow : null;
-  const winStage = winShowLive ? winShowLive.plan[winShowLive.i] : null;
-  // 這一手的演出還沒播（剛結束、下一個畫面才掛上）或正在播：先不出結算浮層
-  const winShowHoldResult = !!winShowKey && (!!winShowLive || !bigWinPlayed(winShowKey));
-  const nextWinStage = () => setWinShow((w) => (w && w.i + 1 < w.plan.length ? { ...w, i: w.i + 1 } : null));
-  const endWinShow = () => { setCelebrationMode(null); setWinShow(null); };
-  // 浮層那一段（排在大牌段後面，是最後一段）：照原本長度播完才出結算；底下墊著大牌段留下的暗幕，浮層淡入時牌桌不會先亮一下。
-  // 點畫面、Enter、Space 直接進結算（跳過那一下不會按到結算的按鈕）
-  const celeOffRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (winStage !== "cele" || !winShowLive) return;
-    const mode = winShowLive.zimo ? "zimo" : "ron";
-    setCelebrationMode(mode);
-    const t = setTimeout(nextWinStage, CELE_MS[mode]);
-    celeOffRef.current = setTimeout(() => setCelebrationMode((m) => (m === mode ? null : m)), CELE_MS[mode]);
-    const skip = (e: Event) => {
-      if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
-      e.preventDefault();
-      const swallow = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
-      document.addEventListener("click", swallow, true);
-      setTimeout(() => document.removeEventListener("click", swallow, true), 500);
-      if (celeOffRef.current) clearTimeout(celeOffRef.current);
-      endWinShow();
-    };
-    document.addEventListener("pointerdown", skip, true);
-    document.addEventListener("keydown", skip, true);
-    return () => { clearTimeout(t); document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 每一段只排一次
-  }, [winStage, winShowLive?.key]);
-  // 換局、離開房間：浮層的收尾計時器也收掉
-  useEffect(() => () => { if (celeOffRef.current) clearTimeout(celeOffRef.current); }, [winShowKey]);
+  const ws = useWinShow({ winner: state.winner, status: state.status, roundInfo: state.roundInfo, roomId, roomOk: winShowRoomOk });
+  const { isZimoWin, showWinner, winShowKey, winShowLive, winShowHoldResult } = ws;
   // 帳號專屬隕石：房間裡有這個帳號（伺服器給 players[].winFx 時），開局就先把圖、字型、音效載好；贏的那一刻才知道的話上面會等它載好再播
   // 背景預熱（components/mahjong/FxBgWarm.tsx）只在不是打牌中的時候做：牌局進行中、胡牌特效在播時暫停；等人、結算、等下一局、離開牌桌時繼續
   const bgWarmPause = state.status === "playing" || !!winShowLive || (!!winShowKey && !bigWinPlayed(winShowKey));
@@ -1114,9 +1015,13 @@ function RoomView({
   // 打字聊天與語音訊息：LINE 登入、已入座才能發；輪到自己、可以吃碰槓胡時底板收起
   const chatCanSend = !guest && state.mySeat >= 0;
   const chatButton = <MjChatButton canSend={chatCanSend} desk={!isMobileLandscape} />;
+  // 觀戰：四家被觀戰人數（公開，state／mj_spectators 帶的 spectatorCounts）補進名牌；申請卡、觀戰管理只有座位本人看得到
+  const spectatorCounts = state.spectatorCounts;
+  const playersWithViewers = spectatorCounts ? state.players.map((p) => ({ ...p, viewerCount: spectatorCounts[p.id] ?? 0 })) : state.players;
+  const spectateMenu = spectateActive ? { count: spectateManage.info?.approved.length ?? 0, onOpen: () => setShowSpectateManage(true) } : undefined;
   const boardProps = {
     chatButton,
-    players: state.players,
+    players: playersWithViewers,
     mySeat: state.mySeat,
     myHand: state.myHand,
     currentTurn: state.currentTurn,
@@ -1171,6 +1076,11 @@ function RoomView({
         claiming={state.availableActions.length > 0}
         desk={!isMobileLandscape}
       />
+      {/* 觀戰申請卡（非阻斷，不擋手牌、出牌和聊天）、觀戰管理（牌桌選單打開，收回同意） */}
+      {spectateActive && <SpectateRequestCard info={spectateManage.info} roomId={roomId} playerId={state.myId} desk={!isMobileLandscape} onChanged={spectateManage.reload} />}
+      {spectateActive && showSpectateManage && (
+        <SpectateManage info={spectateManage.info} roomId={roomId} playerId={state.myId} onClose={() => setShowSpectateManage(false)} onChanged={spectateManage.reload} />
+      )}
       {/* 手機直向：蓋轉向提示（牌桌照常掛著，連線不中斷） */}
       <PortraitHint label="離開房間" onClick={handleLeave} />
 
@@ -1182,6 +1092,7 @@ function RoomView({
           basePoints={state.roomSettings?.basePoints}
           fanPoints={state.roomSettings?.fanPoints}
           onLeave={handleLeave}
+          spectateMenu={spectateMenu}
         />
       ) : (
       <>
@@ -1189,7 +1100,7 @@ function RoomView({
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
         {/* 左上 ☰：設定、房號、圈局、底台、離開房間（和手機版同一個選單；唯一的設定入口） */}
         <div className="relative w-10 h-10">
-          <MjTableMenu desk roomCode={code} roundLabel={roundLabel} basePoints={state.roomSettings?.basePoints} fanPoints={state.roomSettings?.fanPoints} onLeave={handleLeave} />
+          <MjTableMenu desk roomCode={code} roundLabel={roundLabel} basePoints={state.roomSettings?.basePoints} fanPoints={state.roomSettings?.fanPoints} onLeave={handleLeave} spectate={spectateMenu} />
         </div>
         <div className="text-center">
           <h1 className="text-sm font-bold text-[#f0d68a] font-heading">
@@ -1298,23 +1209,8 @@ function RoomView({
         </div>
       )}
 
-      {/* Celebration overlay — shown briefly on all 4 screens before settlement */}
-      {celebrationMode && state.winner && state.winner.seat >= 0 && (
-        <WinCelebration mode={celebrationMode} flowerWinName={flowerWinName} name={state.winner.name} totalFan={state.winner.score.totalFan} />
-      )}
-
-      {/* 帳號專屬「隕石自摸」：取代自摸浮層；接在大牌專屬段後面（或單獨播），播完出結算，點畫面任一處跳過 */}
-      {winShowLive && winStage === "meteor" && (
-        <MeteorFx key={`mt|${winShowLive.key}`} seat={winShowLive.seat} mySeat={state.mySeat} mobile={isMobileLandscape} tile={winShowLive.tile} name={winShowLive.name}
-          onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
-      )}
-      {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），排第一段；播完不卸下（只留暗幕），等後面的浮層／隕石播完一起收。點畫面任一處跳過整串。
-          和隕石同時掛著，key 要和隕石分開（同一層兄弟用同一個 key，React 會多掛一個收不掉的隕石） */}
-      {winShowLive && winShowLive.pick && (
-        <BigWin8Fx key={`big|${winShowLive.key}`} theme={winShowLive.pick.theme} title={winShowLive.pick.title} fan={winShowLive.pick.fan} seat={winShowLive.seat}
-          mobile={isMobileLandscape} winTile={winShowLive.tile} hand={state.winner?.allHands?.find((h) => h.seat === winShowLive.seat)?.hand} name={winShowLive.name}
-          onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
-      )}
+      {/* 胡牌演出：一般胡牌的浮層、大牌段、隕石（hooks/useWinShow.tsx，和觀戰頁共用） */}
+      <WinShowLayer ws={ws} winner={state.winner} mySeat={state.mySeat} mobile={isMobileLandscape} />
 
       {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大；大牌特效播的時候先不出 */}
       {isFinished && state.winner && !winShowHoldResult && (

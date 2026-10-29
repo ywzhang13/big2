@@ -16,6 +16,7 @@ import { seatWindChar } from "./seatWind";
 import { tileKey } from "@/lib/mahjong/tiles";
 import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
 import { MjAvatar, MjTingStrip } from "./MjTingStrip";
+import SpectateBadge from "./spectate/SpectateBadge";
 import { CHI_FORBID_HINT, useChiHint } from "@/lib/mahjong/chiForbid";
 
 export interface MjBoardProps {
@@ -242,6 +243,7 @@ function PlayerPanel({
           )}
         </div>
       </div>
+      <SpectateBadge desk count={player.viewerCount} />
       <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
       </div>
 
@@ -847,6 +849,7 @@ export default function MjBoard({
           )}
           <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
           </span>
+          <SpectateBadge desk count={me?.viewerCount} />
           {playerScores && mySeat >= 0 && (
             <span className={`text-[11px] font-bold ${
               playerScores[mySeat] > 0 ? "text-green-400" :

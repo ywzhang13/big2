@@ -34,6 +34,8 @@ interface MjResultMobileProps {
   /** 回傳被拒絕時要顯示的訊息（成功或已由登入流程處理時是 null） */
   onNextGame: () => Promise<string | null>;
   onLeave: () => void;
+  /** 觀戰者（老馬 2026-10-30）：不能按下一局（伺服器開下一局後畫面自己接續），離開按鈕寫「離開觀戰」 */
+  spectator?: boolean;
   desktop?: boolean;
   tingSeats?: number[];
   eyeSeats?: number[];
@@ -72,6 +74,7 @@ export default function MjResultMobile({
   nextGameReady,
   onNextGame,
   onLeave,
+  spectator = false,
   desktop = false,
   tingSeats = [],
   eyeSeats = [],
@@ -176,7 +179,7 @@ export default function MjResultMobile({
                 <span className="who2">
                   {windOf(p.seat) && <i className={`wind${p.seat === dealerSeat ? " dealer" : ""}`} title={p.seat === dealerSeat ? "莊家" : undefined}>{windOf(p.seat)}</i>}
                   {p.name}
-                  {p.seat === mySeat && "（你）"}
+                  {p.seat === mySeat && !spectator && "（你）"}
                 </span>
                 {gameOver && handStats && (
                   <span className="hstat" data-hand-stat={p.seat}>
@@ -248,7 +251,7 @@ export default function MjResultMobile({
               ))}
             </div>
           )}
-          {hasRounds && !gameOver && (
+          {hasRounds && !gameOver && !spectator && (
             <button type="button" className="mjm-btn" disabled={iAmReady || sending} onClick={pressNext}>
               {iAmReady ? "已同意" : sending ? "送出中…" : "下一局"}
             </button>
@@ -259,7 +262,7 @@ export default function MjResultMobile({
             style={!gameOver && !hasRounds ? { marginLeft: "auto" } : undefined}
             onClick={onLeave}
           >
-            {gameOver ? "回大廳" : "離開"}
+            {spectator ? "離開觀戰" : gameOver ? "回大廳" : "離開"}
           </button>
         </div>
       </div>

@@ -22,6 +22,7 @@ import { seatWindChar } from "./seatWind";
 import { tileKey } from "@/lib/mahjong/tiles";
 import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
 import { MjAvatar, MjTingStrip } from "./MjTingStrip";
+import SpectateBadge from "./spectate/SpectateBadge";
 
 interface MjBoardMobileProps extends MjBoardProps {
   roomCode: string;
@@ -29,6 +30,9 @@ interface MjBoardMobileProps extends MjBoardProps {
   basePoints?: number;
   fanPoints?: number;
   onLeave: () => void;
+  /** 觀戰（老馬 2026-10-30）：觀戰者的選單寫「離開觀戰」；被觀戰的玩家選單多一列「觀戰管理」 */
+  leaveLabel?: string;
+  spectateMenu?: { count: number; onOpen: () => void };
 }
 
 function scoreClass(score: number) {
@@ -253,6 +257,7 @@ function SidePanel({
     <div className={`mjm-side ${side} handside`}>
       <div className="sideplate">
         {plate}
+        <SpectateBadge count={player.viewerCount} />
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
       <SideHand count={player.tileCount} h={opponent} />
@@ -371,6 +376,8 @@ export default function MjBoardMobile({
   fanPoints,
   onLeave,
   chatButton,
+  leaveLabel,
+  spectateMenu,
 }: MjBoardMobileProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // 眼牌：記住是對哪一組選項按下的，換回合自動失效
@@ -487,7 +494,7 @@ export default function MjBoardMobile({
     <div className="mjm-app">
       <MjClaimFx notice={actionNotice} name={actionNotice ? nameOf(actionNotice.seat) : ""} mySeat={mySeat} />
       {/* 左上選單：設定、房號、圈局、底台、離開（唯一的設定入口） */}
-      <MjTableMenu roomCode={roomCode} roundLabel={roundLabel} basePoints={basePoints} fanPoints={fanPoints} onLeave={onLeave} />
+      <MjTableMenu roomCode={roomCode} roundLabel={roundLabel} basePoints={basePoints} fanPoints={fanPoints} onLeave={onLeave} leaveLabel={leaveLabel} spectate={spectateMenu} />
 
       {/* 對家 */}
       <div className="mjm-top">
@@ -499,6 +506,7 @@ export default function MjBoardMobile({
               <DealerTag player={top} consecutive={dealerConsecutive} />
               <DeclareTags ting={tingSeats.includes(top.seat)} eye={eyeSeats.includes(top.seat)} fx={fxOf(top.seat)} />
               <Score score={scoreOf(top)} />
+              <SpectateBadge count={top.viewerCount} />
             </div>
             <MjFlowerTag flowers={top.flowers} name={top.name} w={12} h={16} popW={20} popH={27} busy={flowerBusy} />
             {oppOf(top.seat) ? (
@@ -663,6 +671,7 @@ export default function MjBoardMobile({
               <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
             </span>
             <Score score={scoreOf(me)} />
+            <SpectateBadge count={me?.viewerCount} />
             {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
           </div>
           {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} mySeat={mySeat} />}

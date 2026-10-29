@@ -107,6 +107,8 @@ export interface MjPlayer {
   winFx?: WinFx;
   /** LINE 頭像網址（老柯 2026-10-29：開局時伺服器給，只收 https；訪客、沒頭像是 null） */
   avatarUrl?: string | null;
+  /** 正在觀戰這位玩家的人數（老闆 2026-10-30 定案同桌公開；頁面由 state.spectate.counts 補上，名牌旁顯示） */
+  viewerCount?: number;
 }
 
 /** 結算攤牌用的一家牌（贏家的 hand 不含胡的那張） */
@@ -212,6 +214,10 @@ export interface MjClientState {
     deniedCount?: number;
   };
   leaveResult?: "granted" | "denied" | null;
+  /** 觀戰（老柯〈觀戰模式-前後端對接格式〉5.2、5.3）：每位玩家（playerId）被幾個人觀戰，同桌公開；舊伺服器沒有 */
+  spectatorCounts?: Record<string, number>;
+  /** 觀戰申請／同意／收回有變化就加 1（mj_spectate_request、mj_spectators）：申請卡和觀戰管理看到變化就重抓清單 */
+  spectateTick?: number;
 }
 
 export { getMjId };
@@ -632,6 +638,7 @@ export function useMahjong(
         dice: (gs as Record<string, unknown>).dice as [number, number, number] | undefined ?? prev.dice,
         doorSeat: (gs as Record<string, unknown>).doorSeat as number | undefined ?? prev.doorSeat,
         nextGameReady: (gs as Record<string, unknown>).nextGameReady as string[] | undefined ?? prev.nextGameReady,
+        spectatorCounts: (gs as Record<string, unknown>).spectatorCounts as Record<string, number> | undefined ?? prev.spectatorCounts,
       }));
     } catch (err) {
       // 房間已刪：410 附總結算；404 表示房間不在了但沒有紀錄（例如一局都沒打完就解散）
@@ -802,6 +809,12 @@ export function useMahjong(
         if (playerId === myId) receiveChat(message, playerId, chRoom);
       });
 
+      // --- mj_spectate_request (private)：有人申請觀戰我（老柯對接格式 5.1）。不跟牌局節奏排隊；申請卡收到變化自己去抓 manage 清單 ---
+      ch.on("broadcast", { event: "mj_spectate_request" }, ({ payload }) => {
+        if ((payload as { playerId?: string }).playerId !== myId) return;
+        setState((prev) => ({ ...prev, spectateTick: (prev.spectateTick ?? 0) + 1 }));
+      });
+
       // --- mj_opponent_hands (private)：我眼牌時，三家手牌的完整快照（直接整份取代） ---
       onHeld(ch, "mj_opponent_hands", ({ payload }) => {
         const { playerId, opponentHands } = payload as { playerId: string; opponentHands: MjOpponentHand[] };
@@ -833,6 +846,12 @@ export function useMahjong(
     const supabase = getSupabase();
     const channel = supabase.channel(`mj-${roomCode}`, {
       config: { broadcast: { self: true } },
+    });
+
+    // --- mj_spectators (public)：有人同意、拒絕或收回觀戰（老柯對接格式 5.2）：名牌旁的人數、觀戰管理清單都要更新 ---
+    channel.on("broadcast", { event: "mj_spectators" }, ({ payload }) => {
+      const counts = (payload as { counts?: Record<string, number> }).counts;
+      setState((prev) => ({ ...prev, ...(counts ? { spectatorCounts: counts } : {}), spectateTick: (prev.spectateTick ?? 0) + 1 }));
     });
 
     // --- mj_player_joined ---

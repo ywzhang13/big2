@@ -1,0 +1,143 @@
+/* 麻將觀戰模式（小宜〈麻將觀戰模式-UIUX完整規格-2026-10-30〉）：沿用牌桌深綠＋金色，色票照規格 3.1。
+   手機＝橫向 max-height:500px（844×390）；其他當桌機（1440×900）。所有主要按鈕至少 44×44 */
+.spx {
+  --sp-bg: #071a12; --sp-panel: #0e2b1e; --sp-felt: #103e28; --sp-gold: #c9a96e; --sp-gold-l: #f0d68a;
+  --sp-ok: #6ee7b7; --sp-bad: #ff8e8e; --sp-muted: rgba(255,255,255,.62);
+}
+
+/* ---------- 名牌旁的被觀戰人數 ---------- */
+.spx-badge { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; margin-left: 4px; border-radius: 9px; flex: none;
+  font-size: 11px; font-weight: 700; line-height: 1; color: #c9a96e; background: rgba(201,169,110,.12); border: 1px solid rgba(201,169,110,.35); }
+.spx-badge.d { height: 22px; padding: 0 8px; margin-left: 6px; border-radius: 11px; font-size: 13px; gap: 4px; }
+
+/* ---------- 共用按鈕 ---------- */
+.spx-btn { min-height: 44px; min-width: 44px; padding: 0 18px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer;
+  border: 1px solid rgba(201,169,110,.45); background: rgba(255,255,255,.06); color: #fff; transition: border-color .15s, transform .08s; }
+.spx-btn:hover { border-color: #f0d68a; }
+.spx-btn:active { transform: scale(.98); }
+.spx-btn:focus-visible { outline: 2px solid #f0d68a; outline-offset: 2px; }
+.spx-btn.primary { background: linear-gradient(180deg, #e8cf94, #c9a96e); color: #1d1405; border-color: #f0d68a; }
+.spx-btn.danger { color: #ff8e8e; border-color: rgba(255,142,142,.5); }
+.spx-btn:disabled { opacity: .45; cursor: default; transform: none; }
+
+/* ---------- 牌桌上的申請卡（非阻斷：不加遮罩，只有卡片本身吃點擊） ---------- */
+.spx-req { position: fixed; z-index: 58; left: 18px; top: 52px; width: min(390px, calc(100vw - 36px)); max-height: 150px; box-sizing: border-box;
+  padding: 10px 12px; border-radius: 16px; background: rgba(14,43,30,.96); border: 1px solid rgba(201,169,110,.6); color: #fff;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: spx-in .18s ease-out; }
+.spx-req.d { left: auto; right: 24px; top: 72px; width: 520px; max-height: none; padding: 16px 18px; }
+.spx-req .hd { display: flex; align-items: center; gap: 10px; }
+.spx-req .who { min-width: 0; flex: 1; }
+.spx-req .t { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spx-req.d .t { font-size: 18px; }
+.spx-req .s { font-size: 11px; color: #f0d68a; margin-top: 2px; }
+.spx-req.d .s { font-size: 13px; }
+.spx-req .more { font-size: 11px; color: var(--sp-muted, rgba(255,255,255,.62)); margin-left: 6px; font-weight: 400; }
+.spx-req .warn { font-size: 12px; color: #f0d68a; font-weight: 700; margin-top: 6px; }
+.spx-req .sub { font-size: 11px; color: rgba(255,255,255,.62); margin-top: 1px; }
+.spx-req.d .warn { font-size: 14px; margin-top: 10px; }
+.spx-req.d .sub { font-size: 13px; }
+.spx-req .acts { display: flex; gap: 8px; margin-top: 6px; }
+.spx-req.d .acts { gap: 12px; margin-top: 12px; }
+.spx-req .acts .spx-btn { flex: 1; min-height: 34px; font-size: 14px; }
+.spx-req.d .acts .spx-btn { min-height: 44px; font-size: 16px; }
+@media (pointer: coarse) { .spx-req .acts .spx-btn { min-height: 44px; } .spx-req { max-height: none; } }
+
+/* 頭像（沒有頭像就顯示名字第一個字） */
+.spx-av { flex: none; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; display: inline-grid; place-items: center;
+  background: #4a3a6a; color: #fff; font-weight: 700; font-size: 15px; border: 1px solid rgba(201,169,110,.5); }
+.spx-av.l { width: 44px; height: 44px; font-size: 18px; }
+.spx-av img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ---------- 觀戰管理（被觀戰的玩家收回） ---------- */
+/* 疊在吃碰槓橫幅（.mjm-claimbar z-index 70）上面：玩家自己打開的，確認鈕不能被橫幅蓋住 */
+.spx-manage-mask { position: fixed; inset: 0; z-index: 71; background: rgba(0,0,0,.35); }
+.spx-manage { position: fixed; z-index: 72; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 36px)); max-height: calc(100dvh - 40px);
+  overflow: auto; box-sizing: border-box; padding: 14px 16px; border-radius: 16px; background: #0e2b1e; border: 1px solid rgba(201,169,110,.6); color: #fff; }
+.spx-manage h3 { margin: 0 0 4px; font-size: 16px; color: #f0d68a; }
+.spx-manage .note { font-size: 12px; color: rgba(255,255,255,.62); margin-bottom: 8px; }
+.spx-manage .row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid rgba(201,169,110,.18); }
+.spx-manage .row .nm { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spx-manage .foot { display: flex; gap: 8px; margin-top: 10px; }
+.spx-manage .foot .spx-btn { flex: 1; }
+@media (max-height: 500px) {
+  .spx-manage { max-height: calc(100dvh - 24px); padding: 10px 14px; }
+  .spx-manage .row { padding: 4px 0; }
+}
+.spx-manage .confirm { margin-top: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255,142,142,.45); background: rgba(255,142,142,.08); font-size: 13px; }
+
+/* ---------- 提示（Toast） ---------- */
+.spx-toast { position: fixed; z-index: 73; left: 50%; top: 14px; transform: translateX(-50%); max-width: calc(100vw - 36px); padding: 8px 14px; border-radius: 12px;
+  background: rgba(14,43,30,.96); border: 1px solid rgba(201,169,110,.6); color: #fff; font-size: 13px; font-weight: 700; pointer-events: none; animation: spx-fade .18s ease-out; }
+
+/* ---------- 觀戰頁（入口、選玩家） ---------- */
+.spx-page { min-height: 100dvh; box-sizing: border-box; padding: 24px; background: radial-gradient(ellipse at 50% 0%, #103e28 0%, #071a12 70%); color: #fff;
+  display: flex; flex-direction: column; align-items: center; }
+.spx-entry { width: 560px; max-width: 100%; box-sizing: border-box; margin-top: 8vh; padding: 28px; border-radius: 22px; background: #0e2b1e; border: 1px solid rgba(201,169,110,.55); }
+.spx-entry h1, .spx-list h1 { margin: 0; font-size: 28px; color: #f0d68a; }
+.spx-entry .lede { margin: 8px 0 18px; font-size: 14px; color: rgba(255,255,255,.75); }
+.spx-entry label { display: block; font-size: 13px; color: rgba(255,255,255,.75); margin-bottom: 6px; }
+.spx-entry .row { display: flex; gap: 10px; }
+.spx-entry input { flex: 1; min-width: 0; height: 52px; box-sizing: border-box; padding: 0 16px; border-radius: 12px; border: 1px solid rgba(201,169,110,.55);
+  background: rgba(0,0,0,.25); color: #fff; font-size: 24px; letter-spacing: .3em; font-weight: 700; }
+.spx-entry input:focus-visible { outline: 2px solid #f0d68a; outline-offset: 1px; }
+.spx-entry .row .spx-btn { height: 52px; }
+.spx-entry .foot { margin-top: 16px; font-size: 12px; color: rgba(255,255,255,.55); }
+.spx-err { margin-top: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,142,142,.5); background: rgba(255,142,142,.08); }
+.spx-err b { display: block; color: #ff8e8e; font-size: 15px; }
+.spx-err p { margin: 4px 0 10px; font-size: 13px; color: rgba(255,255,255,.8); }
+.spx-back { align-self: flex-start; }
+
+.spx-list { width: 1140px; max-width: 100%; }
+.spx-list .meta { font-size: 13px; color: #f0d68a; }
+.spx-cards { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.spx-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: #0e2b1e; border: 1px solid rgba(201,169,110,.3); }
+.spx-card.approved { border-color: rgba(110,231,183,.6); }
+.spx-card .nm { font-size: 15px; font-weight: 700; }
+.spx-card .st { font-size: 12px; margin-top: 2px; color: #f0d68a; }
+.spx-card .st.ok { color: #6ee7b7; }
+.spx-card .st.bad { color: #ff8e8e; }
+.spx-card .st.muted { color: rgba(255,255,255,.62); }
+.spx-card .grow { flex: 1; min-width: 0; }
+.spx-list .hint { text-align: center; font-size: 12px; color: rgba(255,255,255,.55); margin-top: 14px; }
+
+/* ---------- 觀戰中：頂部標籤、視角抽屜 ---------- */
+.spx-bar { position: fixed; z-index: 57; left: 50%; top: 8px; transform: translateX(-50%); height: 34px; padding: 0 22px; border-radius: 17px; display: flex; align-items: center;
+  background: rgba(7,26,18,.92); border: 1px solid rgba(201,169,110,.7); color: #f0d68a; font-size: 14px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.spx-bar.d { top: 10px; height: 40px; border-radius: 20px; font-size: 16px; }
+.spx-viewbtn { position: fixed; z-index: 57; right: 12px; top: 8px; }
+.spx-drawer { position: fixed; z-index: 59; right: 12px; top: 50px; width: min(242px, 42vw); box-sizing: border-box; padding: 10px; border-radius: 16px;
+  background: rgba(14,43,30,.97); border: 1px solid rgba(201,169,110,.6); color: #fff; animation: spx-slide .18s ease-out; }
+.spx-drawer.d { width: 310px; right: 24px; top: 64px; padding: 14px; }
+.spx-drawer h2 { margin: 0 0 8px; font-size: 13px; color: #f0d68a; }
+.spx-drawer.d h2 { font-size: 15px; }
+.spx-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; margin-bottom: 6px; box-sizing: border-box;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: #fff; font-size: 13px; font-weight: 700; text-align: left; }
+.spx-drawer.d .spx-opt { min-height: 44px; font-size: 15px; }
+.spx-opt .s { font-size: 11px; font-weight: 400; color: rgba(255,255,255,.62); flex: none; }
+.spx-opt.cur { border-color: #f0d68a; background: rgba(201,169,110,.15); }
+.spx-opt.cur .s { color: #f0d68a; font-weight: 700; }
+.spx-opt.can { cursor: pointer; }
+.spx-opt.can .s { color: #6ee7b7; }
+.spx-opt:disabled { cursor: default; }
+@media (pointer: coarse) { .spx-opt.can { min-height: 44px; } }
+.spx-drawer .spx-btn { width: 100%; margin-top: 4px; }
+.spx-skel { position: fixed; z-index: 56; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 10px 18px; border-radius: 12px; background: rgba(14,43,30,.9);
+  border: 1px solid rgba(201,169,110,.4); color: rgba(255,255,255,.75); font-size: 13px; }
+
+/* 收回後提示（觀戰者） */
+.spx-revoked { position: fixed; z-index: 62; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 36px)); box-sizing: border-box;
+  padding: 18px; border-radius: 16px; background: #0e2b1e; border: 1px solid rgba(255,142,142,.6); color: #fff; text-align: center; }
+.spx-revoked b { display: block; font-size: 17px; color: #ff8e8e; }
+.spx-revoked p { margin: 6px 0 14px; font-size: 13px; color: rgba(255,255,255,.8); }
+.spx-revoked .spx-btn { width: 100%; }
+
+/* 觀戰中：牌桌上不渲染任何操作（保險：就算元件畫了也點不到） */
+.spx-watch [data-claim-banner], .spx-watch [data-chat-button], .spx-watch [data-mj-myhand] button { pointer-events: none; }
+
+@keyframes spx-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }
+@keyframes spx-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spx-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes spx-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spx-slide { from { opacity: 0; } to { opacity: 1; } }
+}
