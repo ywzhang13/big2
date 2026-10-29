@@ -1567,3 +1567,20 @@ body {
   .home-desc { font-size: 14px; }
   .home-go { width: 48px; height: 48px; font-size: 26px; }
 }
+
+/* 聽牌剩張（老闆 2026-10-29）：小牌面＋數字，點牌預覽和眼牌後常駐都在左下角（手牌上方、名字那列上面），不攔點擊 */
+.mjm-me { position: relative; }
+.mjm-ting { --ting-tile-w: 20px; --ting-tile-h: 27px; display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-radius: 10px;
+  background: rgba(10, 30, 20, .9); border: 1px solid rgba(201, 169, 110, .55); pointer-events: none; z-index: 30; }
+.mjm-ting .it { display: flex; align-items: center; gap: 3px; }
+.mjm-ting .it b { color: #fff; font-size: 15px; font-weight: 800; line-height: 1; min-width: 9px; }
+.mjm-ting.dock { position: absolute; bottom: calc(100% + 6px); left: 8px; }
+@media (min-width: 1024px) and (min-height: 600px) { .mjm-ting { --ting-tile-w: 26px; --ting-tile-h: 35px; } .mjm-ting .it b { font-size: 18px; } }
+.mjm-ting .it.zero b { color: #ff5b5b; }
+.mjm-ting .it.zero > :first-child { opacity: .45; } /* 剩 0 張：數字紅、小牌面調暗 */
+/* 名牌頭像（A 款風位側章，老闆 2026-10-29）：風位小方章在頭像左邊，間距 4px、不重疊；方章約頭像的 0.75 倍（規格 26:38、33:52） */
+.mjm-av { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.mjm-wseal > * { width: calc(var(--av) * .78) !important; height: calc(var(--av) * .78) !important; border-radius: 4px !important;
+  font-size: max(9px, calc(var(--av) * .5)) !important; line-height: 1; border: 1px solid rgba(226, 199, 111, .8); }
+.mjm-avatar { display: inline-block; flex: 0 0 auto; width: var(--av); height: var(--av); border-radius: 50%; }
+.mjm-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 1px solid rgba(201, 169, 110, .75); }

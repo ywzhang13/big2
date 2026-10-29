@@ -5,7 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import { sortTiles, isFlower, tileKey } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
-import { EyeDrawGate, StateRequestGate, readyAfterNextGame } from "@/lib/mahjong/stateSync";
+import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 
 /** Filter out any flower tiles that shouldn't be in hand (defensive) */
 function safeHand(tiles: Tile[]): Tile[] {
@@ -105,6 +105,8 @@ export interface MjPlayer {
   isDealer: boolean;
   /** 這位玩家帳號的專屬胡牌特效代號（伺服器依帳號給，公開代號、不含帳號資料）；有的話先預載素材 */
   winFx?: WinFx;
+  /** LINE 頭像網址（老柯 2026-10-29：開局時伺服器給，只收 https；訪客、沒頭像是 null） */
+  avatarUrl?: string | null;
 }
 
 /** 結算攤牌用的一家牌（贏家的 hand 不含胡的那張） */
@@ -364,6 +366,8 @@ export function useMahjong(
   const holdRef = useRef<{ on: boolean; gen: number; queue: (() => void)[]; timer?: ReturnType<typeof setTimeout>; refetch?: () => void; slowTile?: number }>({ on: false, gen: 0, queue: [] });
   // 眼牌者的同一次摸牌：API 回應和 mj_draw_tile 只處理先到的那個（後到的在動畫播完、打出套用後才來也不能把牌加回去）
   const eyeDrawRef = useRef(new EyeDrawGate());
+  // 自己的吃碰槓（有牌面）：老柯 2026-10-29 起公開的 mj_action 不帶別家暗槓牌面，自己暗槓時改用座位頻道 mj_hand_update.myRevealed
+  const myRevealedRef = useRef<Meld[] | null>(null);
   const releaseHold = useCallback(() => {
     const h = holdRef.current;
     clearTimeout(h.timer);
@@ -458,6 +462,7 @@ export function useMahjong(
             discards: Tile[];
             isDealer: boolean;
             winFx?: WinFx;
+            avatarUrl?: string | null;
           }[];
           wallCount: number;
           currentTurn: number;
@@ -564,6 +569,7 @@ export function useMahjong(
           revealed: p.revealed,
           isDealer: p.isDealer,
           ...(p.winFx ? { winFx: p.winFx } : {}),
+          ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}),
         })),
         myHand: hand,
         mySeat,
@@ -761,17 +767,21 @@ export function useMahjong(
 
       // --- mj_hand_update (private, after action) ---
       onHeld(ch, "mj_hand_update", ({ payload }) => {
-        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing, chiForbidden } = payload as {
+        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing, chiForbidden, myRevealed } = payload as {
           playerId: string;
           hand: Tile[];
+          myRevealed?: Meld[]; // 自己暗槓時才有：自己的吃碰槓（有牌面）
           drawnTileId?: number;
           eyeOptions?: number[]; // 吃、碰後要打牌：可以一起宣告眼牌的牌
           eyeWithTing?: boolean;
           chiForbidden?: unknown; // 吃完後這一輪不能打的牌型
         };
         if (playerId !== myId) return;
+        if (myRevealed) myRevealedRef.current = myRevealed;
         setState((prev) => ({
           ...prev,
+          // 自己暗槓：自己座位的吃碰槓整份換成有牌面的版本（公開的 mj_action 只有蓋著的牌）
+          ...(myRevealed ? { players: prev.players.map((p) => (p.seat === prev.mySeat ? { ...p, revealed: myRevealed } : p)) } : {}),
           myHand: safeHand(hand),
           // Authoritative: kong → replacement tile id; chi/pong → null
           drawnTileId: drawnTileId ?? null,
@@ -880,6 +890,7 @@ export function useMahjong(
     // --- mj_game_start ---
     onHeld(channel, "mj_game_start", ({ payload }) => {
       eyeDrawRef.current.reset(); // 上一局沒處理完的摸牌作廢（牌 id 每局重複使用）
+      myRevealedRef.current = null; // 上一局自己暗槓留下的吃碰槓不能帶到這一局
       dismissedOwnActionsRef.current = null;
       playedFxRef.current.clear();
       // 上一局還在播的宣告特效：取消移除計時器，畫面立即清空（見下方 declareFx: []）
@@ -902,6 +913,7 @@ export function useMahjong(
           discards: Tile[];
           isDealer: boolean;
           winFx?: WinFx;
+          avatarUrl?: string | null;
         }[];
         roundInfo?: RoundInfo;
         playerScores?: number[];
@@ -946,6 +958,7 @@ export function useMahjong(
           revealed: p.revealed || [],
           isDealer: p.isDealer,
           ...(p.winFx ? { winFx: p.winFx } : {}), // 開局廣播也帶座位代號（老柯第二版），一開局就能預載
+          ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}), // 開局廣播也帶 LINE 頭像（老柯 2026-10-29），和 winFx 一樣要保留
         })),
         winner: undefined,
         winners: undefined,
@@ -1058,6 +1071,10 @@ export function useMahjong(
       };
       const keepEarlyActions = freshPrivateActionsRef.current;
       freshPrivateActionsRef.current = false;
+      // 自己暗槓用的 myRevealed：在 setState 外面取出並清掉（用完就丟，不留給下一次槓）
+      const pendingMyRevealed = myRevealedRef.current;
+      const ownHiddenKongNow = msg.type === "concealed_kong" && msg.seat === stateRef.current.mySeat;
+      if (ownHiddenKongNow) myRevealedRef.current = null;
       setState((prev) => {
         const meld: Meld = {
           type: msg.type as Meld["type"],
@@ -1067,7 +1084,12 @@ export function useMahjong(
         // If I'm the one who did chi/pong/kong, immediately remove the used
         // tiles from my hand to avoid a brief window where stale tiles are
         // clickable before mj_hand_update arrives (causes "卡住" feel).
-        const meldTileIds = new Set(msg.tiles.map((t) => t.id));
+        // 自己暗槓：公開廣播只有蓋著的 4 張（沒有牌面也沒有真的 id），改用座位頻道的 myRevealed；
+        // 還沒到就先不加這一副（不畫空白牌），等 mj_hand_update 整份更正
+        const ownHiddenKong = msg.type === "concealed_kong" && msg.seat === prev.mySeat;
+        // 剛好多一副才採用（舊的、或 mj_hand_update 已經先套用過都不採用）
+        const mine = ownHiddenKong ? ownConcealedKongMelds(prev.players.find((p) => p.seat === prev.mySeat)?.revealed ?? [], pendingMyRevealed) : null;
+        const meldTileIds = new Set((ownHiddenKong ? (mine ?? []).flatMap((m) => m.tiles) : msg.tiles).map((t) => t.id));
         const updatedHand =
           msg.seat === prev.mySeat
             ? prev.myHand.filter((t) => !meldTileIds.has(t.id))
@@ -1086,6 +1108,7 @@ export function useMahjong(
           // 被吃碰槓拿走的那張從打出那家的海底拿掉（和伺服器輸出的 state 一致，不用等輪詢）
           players: prev.players.map((p) => {
             const discards = p.discards.filter((t) => !meldTileIds.has(t.id));
+            if (ownHiddenKong && p.seat === msg.seat) return { ...p, discards, revealed: mine ?? p.revealed, tileCount: msg.tileCount ?? p.tileCount };
             return p.seat === msg.seat
               ? {
                   ...p,

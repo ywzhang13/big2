@@ -9,7 +9,7 @@
 //     （或帳號專屬的隕石自摸）再出結算；天胡、八仙過海、七搶一（cele=false）播完這一段就進結算。
 //   ・2026-10-25 八台大牌新版：大牌（tier big）7 種改用老闆生成素材的新特效（components/mahjong/BigWin8Fx.tsx，下面的 BIG_WIN8）；
 //     同一天 16 台以上（頂級 3 種：天胡、字一色、大四喜）也換成新特效（同一個元件），舊的 BigWinFx 拿掉。
-export type BigWinTheme = "tianhu" | "zi1se" | "dasixi" | "dasanyuan" | "xiaosixi" | "qing1se" | "wuanke" | "baxian" | "qiqiang1" | "migi";
+export type BigWinTheme = "tianhu" | "zi1se" | "dasixi" | "dasanyuan" | "xiaosixi" | "qing1se" | "wuanke" | "ligu" | "baxian" | "qiqiang1" | "migi";
 export type BigWinTier = "top" | "big";
 
 /** 計分名稱 → 特效；陣列順序＝同台數時的優先順序 */
@@ -18,6 +18,7 @@ export const BIG_WIN_ORDER: { fan: string; theme: BigWinTheme; title: string; ti
   { fan: "字一色", theme: "zi1se", title: "字一色", tier: "top", cele: true },
   { fan: "大四喜", theme: "dasixi", title: "大四喜", tier: "top", cele: true },
   { fan: "五暗刻", theme: "wuanke", title: "五暗刻", tier: "big", cele: true }, // 老闆選 A：同台數時排在大三元、小四喜、清一色前面
+  { fan: "嚦咕嚦咕", theme: "ligu", title: "嚦咕嚦咕", tier: "big", cele: true }, // 老闆 2026-10-29：同台數排在五暗刻之後、大三元之前
   { fan: "大三元", theme: "dasanyuan", title: "大三元", tier: "big", cele: true },
   { fan: "小四喜", theme: "xiaosixi", title: "小四喜", tier: "big", cele: true },
   { fan: "清一色", theme: "qing1se", title: "清一色", tier: "big", cele: true },
@@ -89,6 +90,9 @@ export const BIG_WIN8_FONT = "/fonts/noto-sans-tc/bigwin8-black.woff2";
 /** 16 台多用到的三個字（天、胡、字），同一個字型家族，只負責這三個字（BigWin8Fx 用 unicode-range 掛上去） */
 export const BIG_WIN16_FONT = "/fonts/noto-sans-tc/bigwin16-black.woff2";
 export const BIG_WIN16_FONT_RANGE = "U+5929, U+80E1, U+5B57";
+/** 嚦咕嚦咕多用到的「嚦、咕」兩個字（Noto Sans CJK TC Black 取子集），同一個字型家族，八台那一份不動 */
+export const BIG_WIN_LIGU_FONT = "/fonts/noto-sans-tc/bigwin-ligu-black.woff2";
+export const BIG_WIN_LIGU_FONT_RANGE = "U+56A6, U+5495";
 /** ms＝大牌段總長；hit＝畫面最重那一下（閃光、衝擊波、粒子、牌桌震動，音效的重擊點也對在這裡）；art＝這一種用到的圖 */
 export const BIG_WIN8: Record<BigWin8Theme, { ms: number; hit: number; art: string[] }> = {
   tianhu: { ms: 3250, hit: 1820, art: ["th-palace.webp", "th-gate.webp", "th-dragon.webp", "th-phoenix.webp", "th-starburst.webp"] },
@@ -98,6 +102,7 @@ export const BIG_WIN8: Record<BigWin8Theme, { ms: number; hit: number; art: stri
   xiaosixi: { ms: 2180, hit: 740, art: ["xsx-eye.webp", "xsx-clouds.webp"] },
   qing1se: { ms: 2160, hit: 780, art: ["qys-wave.webp", "qys-splash.webp"] },
   wuanke: { ms: 2220, hit: 760, art: ["wak-orbs.webp", "wak-circle.webp"] },
+  ligu: { ms: 2250, hit: 1120, art: ["lg-ring.webp", "lg-pairs.webp", "lg-core.webp", "lg-jade-l.webp", "lg-jade-r.webp"] }, // 中央雙玉璧：老闆給的專屬圖切成左右兩片（2026-10-29 換掉借自清一色的爆心）
   baxian: { ms: 2360, hit: 720, art: ["bx-sea.webp", "bx-gate.webp"] },
   qiqiang1: { ms: 2180, hit: 720, art: ["qq1-swirl.webp", "qq1-flowers.webp"] },
   migi: { ms: 2120, hit: 220, art: ["migi-ground.webp", "migi-pillar.webp"] },
@@ -105,5 +110,5 @@ export const BIG_WIN8: Record<BigWin8Theme, { ms: number; hit: number; art: stri
 /** 這一種要下載的檔：圖、牌型名字型（16 台多一個「天胡字」）、專屬音效（觸控裝置手機加強版、其他一般版，和隕石一樣） */
 export function bigWin8Files(theme: BigWin8Theme, device: "pc" | "mobile") {
   const top = BIG_WIN_ORDER.find((d) => d.theme === theme)?.tier === "top";
-  return { art: BIG_WIN8[theme].art.map((f) => `${BIG_WIN8_DIR}/${f}`), font: BIG_WIN8_FONT, font16: top ? BIG_WIN16_FONT : null, sfx: `${BIG_WIN8_DIR}/sfx/${theme}-${device}.mp3` };
+  return { art: BIG_WIN8[theme].art.map((f) => `${BIG_WIN8_DIR}/${f}`), font: BIG_WIN8_FONT, font16: top ? BIG_WIN16_FONT : null, fontLigu: theme === "ligu" ? BIG_WIN_LIGU_FONT : null, sfx: `${BIG_WIN8_DIR}/sfx/${theme}-${device}.mp3` };
 }

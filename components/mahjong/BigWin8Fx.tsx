@@ -11,6 +11,8 @@
 //   五暗刻｜五星點亮・暗刻翻面 2.22 秒：0.30／0.42／0.54／0.66 四顆紫晶依序點亮、各一下微震 → 0.76 第五顆＋魔法陣到位＋五組暗刻翻好＋中震 → 1.34 牌型名
 //   八仙過海｜金潮開海・八花過門 2.36 秒：金潮由左鋪滿 → 天門落下 → 八花沿浪進場 → 0.72 天門開光＋重震 → 1.34 牌型名 → 海浪退場（花胡：不接浮層）
 //   七搶一｜七花合環・第八花入陣 2.18 秒：七朵花旋入成環、七張花牌依序亮 → 0.72 第八張被吸進缺口＋金框一閃＋中震 → 1.26 牌型名（花胡：不接浮層）
+//   嚦咕嚦咕｜七對成環・一刻鎮心 2.25 秒（小宜〈麻將-嚦咕嚦咕與眼牌UI-設計規格-2026-10-29〉，老闆 2026-10-29 素材）：牌桌暗下、金環浮現 → 0.35～0.80 胡牌者
+//     真正的 7 對沿環順時針逐組合拍 → 1.12 刻子（3 張）帶著三核心落印、金環收束＋中震 → 1.35 牌型名、七對共振 → 1.85 收束
 //   MIGI｜碎地升柱・一牌封印 2.12 秒：0.22 地裂＋重震 → 金柱由下往上 → 0.66 胡的那張牌封印＋中震 → 1.18「MIGI」→ 金柱向上收光
 // 16 台以上（小宜〈麻將16台以上大牌特效-3種動態分鏡與實作規格-2026-10-25〉；音效阿妍〈16台大牌音效-評估-2026-10-25〉天界開啟／墨韻成環／四象聚珠）：
 //   天胡｜天門降世・龍鳳天啟 3.25 秒（全畫面接管，播完直接結算，隕石帳號也一樣）：牌桌熄光 → 0.18 仙宮全景鋪滿 → 0.42 天門降下 → 0.92 落定＋中震
@@ -24,7 +26,7 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import MjTile from "@/components/mahjong/MjTile";
 import { playBigWin8Sound, preloadBigWin8Sound } from "@/lib/mahjong/fx/engine";
-import { BIG_WIN16_FONT_RANGE, BIG_WIN8, BIG_WIN8_DIR, bigWin8Files, type BigWin8Theme } from "@/lib/mahjong/bigWin";
+import { BIG_WIN16_FONT_RANGE, BIG_WIN_LIGU_FONT_RANGE, BIG_WIN8, BIG_WIN8_DIR, bigWin8Files, type BigWin8Theme } from "@/lib/mahjong/bigWin";
 import type { Tile, TileSuit } from "@/lib/mahjong/tiles";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import "./bigWin8.css";
@@ -38,6 +40,7 @@ const keep: HTMLImageElement[] = []; // 留著參考，瀏覽器不會把解碼�
 const ready = new Map<BigWin8Theme, Promise<boolean>>();
 let fontReady: Promise<boolean> | null = null;
 let font16Ready: Promise<boolean> | null = null; // 16 台多用到的「天胡字」：同一個字型家族，unicode-range 只管這三個字
+let fontLiguReady: Promise<boolean> | null = null; // 嚦咕嚦咕多用到的「嚦咕」兩個字，做法同上
 export function preloadBigWin8(theme: BigWin8Theme): Promise<boolean> {
   if (!ready.has(theme)) {
     const f = bigWin8Files(theme, device());
@@ -45,6 +48,7 @@ export function preloadBigWin8(theme: BigWin8Theme): Promise<boolean> {
     ready.set(theme, Promise.all([
       ...f.art.map((src) => { const i = new Image(); i.src = src; keep.push(i); return i.decode().then(() => true, () => false); }),
       fontReady,
+      ...(f.fontLigu ? [fontLiguReady ??= new FontFace("MjBigWin8", `url(${f.fontLigu})`, { weight: "900", unicodeRange: BIG_WIN_LIGU_FONT_RANGE }).load().then((ff) => { document.fonts.add(ff); return true; }, () => false)] : []),
       ...(f.font16 ? [font16Ready ??= new FontFace("MjBigWin8", `url(${f.font16})`, { weight: "900", unicodeRange: BIG_WIN16_FONT_RANGE }).load().then((ff) => { document.fonts.add(ff); return true; }, () => false)] : []),
       preloadBigWin8Sound(f.sfx).then((b) => !!b),
     ]).then((ok) => ok.every(Boolean)));
@@ -67,6 +71,27 @@ const ZI7 = [1, 2, 3, 4, 5, 6, 7].map((r) => tile("z", r));
 const DASIXI = [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4].map((r) => tile("z", r));
 const QING1SE = [1, 3, 5, 7, 9].map((r) => tile("m", r));
 const WUANKE = [...[2, 2, 2, 5, 5, 5].map((r) => tile("m", r)), ...[7, 7, 7].map((r) => tile("p", r)), ...[3, 3, 3].map((r) => tile("s", r)), ...[1, 1, 1].map((r) => tile("z", r))];
+// 嚦咕嚦咕：胡牌者手上（含胡的那張）每種牌 2 張＝1 對、4 張＝2 對、3 張＝刻子；湊不成 7 對＋1 刻（預熱、試看）就用這一手示範
+const LIGU_DEMO = (["m1", "m1", "m4", "m4", "m9", "m9", "p2", "p2", "p6", "p6", "s3", "s3", "z1", "z1", "z5", "z5", "z5"]).map((k) => tile(k[0] as TileSuit, Number(k[1])));
+function groupLigu(all: Tile[]): { pairs: Tile[][]; pung: Tile[] } | null {
+  const by = new Map<string, Tile[]>();
+  for (const t of all) by.set(`${t.suit}${t.rank}`, [...(by.get(`${t.suit}${t.rank}`) ?? []), t]);
+  const pairs: Tile[][] = [], pungs: Tile[][] = [];
+  for (const g of by.values()) {
+    if (g.length === 3) pungs.push(g);
+    else if (g.length === 2 || g.length === 4) for (let i = 0; i < g.length; i += 2) pairs.push(g.slice(i, i + 2));
+    else return null;
+  }
+  return pairs.length === 7 && pungs.length === 1 ? { pairs, pung: pungs[0] } : null;
+}
+export function liguGroups(hand: Tile[] | null | undefined, winTile?: Tile | null): { pairs: Tile[][]; pung: Tile[] } {
+  const all = [...(hand ?? []), ...(winTile && !hand?.some((t) => t.id === winTile.id) ? [winTile] : [])].filter((t) => t.suit !== "f");
+  return groupLigu(all) ?? groupLigu(LIGU_DEMO)!;
+}
+/** 七對在環上的位置（離環心 px）：由正上方順時針，橢圓（金環素材是橫的） */
+const liguSpot = (i: number, R: number) => { const a = (-90 + i * 360 / 7) * Math.PI / 180; return { x: Math.cos(a) * R * 1.9, y: Math.sin(a) * R * 0.85 }; };
+const LIGU_R = { m: 111, d: 216 }; // 環陣外徑一半：手機 222px、桌機 432px（小宜規格）
+
 /** 牌和牌之間多空一點（分組）：小四喜每一刻、五暗刻每一組 */
 const GROUP_GAP: Partial<Record<BigWin8Theme, number[]>> = { xiaosixi: [3, 6, 9], wuanke: [3, 6, 9, 12], dasixi: [3, 6, 9] };
 /** 五暗刻五顆紫晶在素材裡的位置（比例；依亮度找出來的），由上順時針依序點亮 */
@@ -94,6 +119,8 @@ type Spec = {
   freeze: number;
   /** 閃光的時間軸（不給就用共用的：重擊點前 50ms 起、後 30ms 最亮、380ms 退完） */
   flash?: Frame[];
+  /** 暗幕的時間軸（不給就用共用的：160ms 變暗） */
+  vig?: Frame[];
 };
 const E_OUT = "cubic-bezier(.2,.8,.3,1)", E_LAND = "cubic-bezier(.3,1.35,.5,1)", E_IN = "cubic-bezier(.6,0,.9,.5)";
 const op = (o: number, t: string, extra: Keyframe = {}): Keyframe => ({ opacity: o, transform: t, ...extra });
@@ -144,6 +171,71 @@ function specOf(theme: BigWin8Theme, T: number, orbR = 150, slots: { x: number; 
         ],
         shakes: [{ at: 680, px: 2, ms: 100 }, { at: 760, px: 2, ms: 100 }, { at: hit, px: 6, ms: 220, after: true }],
         sparks: [{ at: hit, colors: ["#ff5a3c", "#36d68a", "#fff3d0", "#ffd36a"], n: 30, dist: [0.32, 0.62] }],
+      };
+    }
+    case "ligu": {
+      const hit = H, R = orbR;
+      return {
+        hit, title: 1350, freeze: 1750, // 定格：牌型名全亮（1.65）、衝擊波散完（1.72）之後、收尾（1.83）之前
+        tracks: [
+          ...exits, title(1350),
+          // 2026-10-29 份量加強（小宜〈嚦咕嚦咕特效-份量對齊其他八台-加強規格〉）：中央翡翠金光爆心、金環三層、暗幕壓到 84～88%、三核心放大露出
+          // 中央雙玉璧（老闆 2026-10-29 給的專屬圖「翡翠金耀雙月魔法徽印」，切成左右兩片）：0.35 起從左右兩側浮現、慢慢靠近，
+          // 0.88～1.08 加速合攏，1.12 合上時微微壓進中線＋提亮（光縫爆亮由 lgseam 負責），刻子落進中間的光縫；1.35 後穩住，1.98 前收掉
+          ...([["lgjl", -1], ["lgjr", 1]] as const).map(([k, d]): Track => ({ k, f: [
+            [0, op(0, `translateX(${d * 30}%) scale(.92)`)], [350, op(.35, `translateX(${d * 26}%) scale(.94)`)],
+            [880, op(.8, `translateX(${d * 14}%) scale(.97)`, { easing: E_IN })], [1080, op(1, `translateX(${d}%) scale(1)`)],
+            [hit, op(1, `translateX(${-d * 1.5}%) scale(1.02)`, { filter: "brightness(1.35)" })], [1180, op(1, "translateX(0%) scale(1)", { filter: "brightness(1.12)" })],
+            [1350, op(.88, "translateX(0%) scale(1)", { filter: "brightness(1)" })], [1750, op(.75, "translateX(0%) scale(1.01)", { filter: "brightness(1)" })],
+            [1830, op(.75, "translateX(0%) scale(1.01)", { filter: "brightness(1)", easing: E_IN })], [1980, op(0, `translateX(${d * 4}%) scale(1.02)`, { filter: "brightness(1)" })], [T, op(0, "none", { filter: "brightness(1)" })],
+          ] })),
+          // 光縫：合上那一刻（1.12）爆亮、上下拉長，之後留一道淡光，1.95 前收掉
+          { k: "lgseam", f: [
+            [0, op(0, "scale(.4, .2)")], [1040, op(0, "scale(.6, .3)", { easing: E_OUT })], [hit, op(1, "scale(1.6, 1.15)")],
+            [1250, op(.6, "scale(1, 1)")], [1750, op(.45, "scale(1, 1)")], [1830, op(.45, "scale(1, 1)", { easing: E_IN })], [1950, op(0, "scale(.6, .9)")], [T, op(0, "none")],
+          ] },
+          // 外環（翡翠綠）：0～0.35 浮現，0.35～0.72 橫向 1→1.35 倍撐開；共振 62%；2.05 前收掉
+          { k: "lgring0", f: [
+            [0, op(0, "scale(.55, .7)")], [350, op(.7, "scale(.74, .9)", { easing: E_OUT })], [720, op(.85, "scale(1, 1)")],
+            [hit, op(.88, "scale(1.02, 1.02)")], [1350, op(.66, "scale(1, 1)")], [1850, op(.62, "scale(1.01, 1.01)", { easing: E_IN })], [2040, op(0, "scale(1.05, 1.05)")], [T, op(0, "none")],
+          ] },
+          // 中環（鎏金）：0.72～0.90 浮到 45%，主擊 85%，共振 64%
+          { k: "lgring1", f: [
+            [0, op(0, "scale(.92)")], [720, op(0, "scale(.92)", { easing: E_OUT })], [900, op(.45, "scale(1)")],
+            [hit, op(.85, "scale(.97)")], [hit + 160, op(.8, "scale(1)")], [1350, op(.64, "scale(1)")], [1850, op(.64, "scale(1.01)", { easing: E_IN })], [2020, op(0, "scale(1.04)")], [T, op(0, "none")],
+          ] },
+          // 內環（冷白）：0.90 收束進來，主擊 0.86→1.08→1.0
+          { k: "lgring2", f: [
+            [0, op(0, "scale(.86)")], [900, op(0, "scale(.86)", { easing: E_IN })], [1080, op(.7, "scale(.86)", { easing: E_LAND })],
+            [hit + 20, op(.88, "scale(1.08)")], [1180, op(.8, "scale(1)")], [1350, op(.6, "scale(1)")], [1850, op(.58, "scale(1)", { easing: E_IN })], [2000, op(0, "scale(1.03)")], [T, op(0, "none")],
+          ] },
+          // 三核心（現版 1.35 倍，上下兩顆露在刻子外）：0.90 從上方 40px 落下，1.08 輪廓完全露出，1.12 鎮住中央
+          { k: "lgcore", f: [
+            [0, op(0, "translateY(-40px) scale(.5)")], [900, op(0, "translateY(-40px) scale(.5)", { easing: E_IN })],
+            [1080, op(1, "translateY(0) scale(1)")], [hit, op(1, "translateY(0) scale(1.04)", { filter: "brightness(1.3)" })], [1350, op(.92, "translateY(0) scale(1)", { filter: "brightness(1)" })],
+            [1850, op(.9, "translateY(0) scale(1)", { filter: "brightness(1)", easing: E_IN })], [2050, op(0, "translateY(0) scale(.96)", { filter: "brightness(1)" })], [T, op(0, "none", { filter: "brightness(1)" })],
+          ] },
+          // 七對：0.35 起每 75ms 一組，從環外 40px 合拍落位（120%→100%）；1.35～1.60 和中心一起共振
+          ...[0, 1, 2, 3, 4, 5, 6].map((i): Track => {
+            const p = liguSpot(i, R), k = 40 / Math.hypot(p.x, p.y), at = 350 + i * 75;
+            const away = `translate(${(p.x * k).toFixed(0)}px, ${(p.y * k).toFixed(0)}px) scale(.5)`;
+            return { k: `p${i}`, f: [
+              [0, op(0, away)], [at, op(0, away, { easing: E_OUT })], [at + 100, op(1, "scale(1.2)", { easing: E_LAND })], [at + 180, op(1, "none")],
+              [1350, op(1, "none")], [1460, op(1, "scale(1.08)")], [1600, op(1, "none")], [T, op(1, "none")],
+            ] };
+          }),
+          // 刻子：0.90 從上方落下，1.12 落印（108% 彈回）
+          { k: "pung", f: [
+            [0, op(0, "translateY(-90px) scale(1.25)")], [900, op(0, "translateY(-90px) scale(1.25)", { easing: E_IN })],
+            [hit, op(1, "translateY(0) scale(1)", { easing: E_LAND })], [hit + 90, op(1, "scale(1.08)")], [hit + 220, op(1, "none")],
+            [1460, op(1, "scale(1.06)")], [1600, op(1, "none")], [T, op(1, "none")],
+          ] },
+        ],
+        shakes: [{ at: hit, px: 6, ms: 200, after: true }],
+        sparks: [{ at: hit, colors: ["#3fe39a", "#ffd36a", "#fff6d8", "#1fb877"], n: 36, dist: [0.26, 0.5] }],
+        // 冷白閃光最多 70ms（規格）；暗幕 0.35 到 72%、0.72～0.90 加深到 88%（.b8.ligu .b8-vig 底色 .88）
+        flash: [[0, { opacity: 0 }], [hit - 20, { opacity: 0 }], [hit + 15, { opacity: .8 }], [hit + 70, { opacity: 0 }], [T, { opacity: 0 }]],
+        vig: [[0, { opacity: 0 }], [350, { opacity: .82 }], [720, { opacity: .95 }], [900, { opacity: 1 }], [T, { opacity: 1 }]],
       };
     }
     case "baxian": {
@@ -501,8 +593,10 @@ function WarmTile() {
   return <span style={{ display: "block", width: "var(--tw)", height: "var(--th)", borderRadius: 6, background: "#f4efe2" }} />;
 }
 
-export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, name, onDone, warm, realArt }: {
+export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, hand, name, onDone, warm, realArt }: {
   theme: BigWin8Theme; title: string; fan: number; seat: number; mobile: boolean; winTile?: Tile | null; name?: string; onDone: (skipped: boolean) => void; warm?: WarmMode;
+  /** 勝者攤開的手牌（不含胡的那張；嚦咕嚦咕拿來排真正的 7 對＋1 刻） */
+  hand?: Tile[] | null;
   /** 預熱時也用真圖（天胡：素材已經在背景下載好，真圖第一次上傳 GPU 的成本也要先做掉） */
   realArt?: boolean;
 }) {
@@ -555,14 +649,14 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, na
     // 每張牌最後落定的位置（離畫面中心）：動畫開始前量（字一色的牌從墨環外圈飛到這裡）
     const vb = root.querySelector(".b8-vig")!.getBoundingClientRect();
     const slots = [...root.querySelectorAll<HTMLElement>('.b8-t[data-k^="t"]')].map((el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2 - (vb.left + vb.width / 2), y: r.top + r.height / 2 - (vb.top + vb.height / 2) }; });
-    const spec = specOf(theme, T, mobile ? 150 : 320, slots);
+    const spec = specOf(theme, T, theme === "ligu" ? LIGU_R[mobile ? "m" : "d"] : mobile ? 150 : 320, slots);
     const anims: Animation[] = [];
     const run = (el: Element | null, frames: Frame[]) => {
       if (!el) return;
       anims.push(el.animate(frames.map(([ms, s]) => ({ ...s, offset: Math.min(1, Math.max(0, ms / T)) })), { duration: T, fill: "both" }));
     };
     // 時鐘：整段的零點（聲音對齊用）＋暗幕（大牌段排第一，160ms 變暗）
-    run(root.querySelector(".b8-vig"), [[0, { opacity: 0 }], [160, { opacity: 1 }], [T, { opacity: 1 }]]);
+    run(root.querySelector(".b8-vig"), spec.vig ?? [[0, { opacity: 0 }], [160, { opacity: 1 }], [T, { opacity: 1 }]]);
     spec.tracks.forEach((tr) => run(root.querySelector(`[data-k="${tr.k}"]`), tr.f));
     const h = spec.hit;
     run(root.querySelector(".b8-flash"), spec.flash ?? [[0, { opacity: 0 }], [h - 50, { opacity: 0 }], [h + 30, { opacity: 1 }], [h + 380, { opacity: 0 }], [T, { opacity: 0 }]]);
@@ -613,12 +707,14 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, na
   }, [theme, seat, T, rm, mobile, warm]);
 
   const spec = specOf(theme, T);
+  const lg = theme === "ligu" ? liguGroups(hand, winTile) : null;
+  const lgR = LIGU_R[mobile ? "m" : "d"];
   const sparks = spec.sparks.flatMap((g, gi) => Array.from({ length: mobile ? Math.round(g.n * 2 / 3) : g.n }, (_, i) => ({
     key: `${gi}-${i}`, at: g.at, color: g.colors[i % g.colors.length],
     a: Math.round((i / (mobile ? Math.round(g.n * 2 / 3) : g.n)) * 360 + ((i * 37) % 13) - 6),
     d: g.dist[0] + (((i * 53) % 10) / 10) * (g.dist[1] - g.dist[0]), du: 520 + ((i * 29) % 5) * 70,
   })));
-  const tiles: Tile[] = { tianhu: TIANHU7, zi1se: ZI7, dasixi: DASIXI, dasanyuan: DRAGONS, baxian: FLOWERS, qiqiang1: FLOWERS, xiaosixi: XIAOSIXI, qing1se: QING1SE, wuanke: WUANKE, migi: winTile ? [winTile] : [] }[theme];
+  const tiles: Tile[] = { tianhu: TIANHU7, zi1se: ZI7, dasixi: DASIXI, dasanyuan: DRAGONS, baxian: FLOWERS, qiqiang1: FLOWERS, xiaosixi: XIAOSIXI, qing1se: QING1SE, wuanke: WUANKE, ligu: [], migi: winTile ? [winTile] : [] }[theme];
   const gaps = GROUP_GAP[theme] ?? [];
 
   return (
@@ -685,6 +781,16 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, na
             {Array.from({ length: 18 }, (_, i) => <i key={i} className="b8-mote" data-k={`mo${i}`} style={{ left: `${4 + ((i * 53) % 92)}%`, top: `${6 + ((i * 29) % 30)}%` }} />)}
           </>
         )}
+        {theme === "ligu" && (
+          // 由後到前：雙玉璧＋光縫 → 外環（綠）→ 中環（金）→ 內環（冷白）→ 三核心（透明圖，在牌後）
+          <>
+            <img className="b8-art lgjade l" data-k="lgjl" src={art("lg-jade-l.webp")} alt="" draggable={false} />
+            <img className="b8-art lgjade r" data-k="lgjr" src={art("lg-jade-r.webp")} alt="" draggable={false} />
+            <div className="b8-lgseam" data-k="lgseam" />
+            {[0, 1, 2].map((i) => <img key={i} className={`b8-art lgring r${i}`} data-k={`lgring${i}`} src={art("lg-ring.webp")} alt="" draggable={false} />)}
+            <img className="b8-art lgcore" data-k="lgcore" src={art("lg-core.webp")} alt="" draggable={false} />
+          </>
+        )}
         {theme === "zi1se" && <img className="b8-art flow" data-k="flow" src={art("zi-flow.webp")} alt="" draggable={false} />}
         {theme === "dasixi" && (
           <>
@@ -703,6 +809,20 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, na
         {/* 小四喜四片風紋、七搶一七朵花（透明貼紙，切好的格子）：從中心往外排，在牌型名和牌底下 */}
         {theme === "xiaosixi" && <div className="b8-center">{[0, 1, 2, 3].map((i) => <i key={i} className="b8-cloud" data-k={`c${i}`} style={{ backgroundPosition: `${i * 33.333}% 0` }} />)}</div>}
         {theme === "qiqiang1" && <div className="b8-center">{[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} className="b8-flower" data-k={`f${i}`} style={{ backgroundPosition: `${(i % 4) * 33.333}% ${Math.floor(i / 4) * 100}%` }} />)}</div>}
+        {lg && (
+          <div className="b8-lg">
+            {lg.pairs.map((pr, i) => {
+              const p = liguSpot(i, lgR);
+              return (
+                <div key={i} className="b8-lgp" data-k={`p${i}`} style={{ left: p.x, top: p.y }}>
+                  <i style={{ backgroundImage: `url(${art("lg-pairs.webp")})`, backgroundPosition: `${(i * 100) / 6}% 0` }} />
+                  {pr.map((t) => <MjTile key={t.id} tile={t} width="var(--tw)" height="var(--th)" />)}
+                </div>
+              );
+            })}
+            <div className="b8-lgk" data-k="pung">{lg.pung.map((t) => <MjTile key={t.id} tile={t} width="var(--kw)" height="var(--kh)" />)}</div>
+          </div>
+        )}
         <div className="b8-col">
           <div className="b8-title" data-k="title">
             <div className="b8-name">{title}</div>

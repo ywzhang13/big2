@@ -200,3 +200,38 @@
 /* 開局背景預熱（components/mahjong/fxWarmUp.tsx）：預熱副本的背景圖換成同尺寸的內嵌占位圖，不下載素材 */
 [data-fx-warm] .b8-cloud { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1280' height='200'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }
 [data-fx-warm] .b8-flower { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1024' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23888' fill-opacity='.5'/%3E%3C/svg%3E") !important; }
+
+/* 嚦咕嚦咕｜七對成環・一刻鎮心（小宜〈麻將-嚦咕嚦咕與眼牌UI-設計規格-2026-10-29〉）：環心在畫面 50%／45%；手機環陣外徑 222px、成對牌 25×36、刻子 28×40、牌型名 29px；
+   桌機外徑 432px、成對牌 38×54、刻子 43×61、牌型名 64px。金環黑底 screen 去黑，三核心、七組徽印是透明圖 */
+/* 2026-10-29 份量加強（小宜〈嚦咕嚦咕特效-份量對齊其他八台-加強規格〉）：七對牌縮到 88%／90%、刻子 90%／92%、三核心 1.35 倍；
+   中央雙玉璧（2026-10-29 換成老闆的專屬圖，原本借清一色的爆心）；金環三層（外綠、中金、內冷白，看得到的環外徑 330×220／620×390，每層差 10%）；
+   暗幕 rgba(0,12,8,.88)，牌桌只剩 12～15% 看得到。環心手機 45%、桌機 47% */
+.b8.ligu.m { --R: 111px; --cy: 45%; --tw: 22px; --th: 31.7px; --kw: 25.2px; --kh: 36px; --tt: 29px; --bw: 610px; --bh: 407px; --rw: 400px; --rh: 260px; --core: 195px; }
+.b8.ligu.d { --R: 216px; --cy: 47%; --tw: 34.2px; --th: 48.6px; --kw: 39.6px; --kh: 56.1px; --tt: 64px; --bw: 1300px; --bh: 867px; --rw: 840px; --rh: 530px; --core: 379px; }
+.b8.ligu .b8-vig { background: radial-gradient(ellipse at 50% var(--cy), rgba(10,60,38,.22) 0%, transparent 55%), rgba(0,12,8,.88); }
+/* 中央雙玉璧（--bw × --bh 是整張合起來的大小，左右各半）；光縫是一道直的冷白金光，主擊時爆亮 */
+.b8-art.lgjade { top: var(--cy); width: calc(var(--bw) * .5); height: var(--bh); margin-top: calc(var(--bh) * -.5); }
+.b8-art.lgjade.l { margin-left: calc(var(--bw) * -.5); }
+.b8-art.lgjade.r { margin-left: 0; }
+.b8-lgseam { position: absolute; left: 50%; top: var(--cy); width: calc(var(--bw) * .09); height: calc(var(--bh) * .82); margin: calc(var(--bh) * -.41) 0 0 calc(var(--bw) * -.045);
+  opacity: 0; border-radius: 50%; background: radial-gradient(ellipse 50% 50% at 50% 50%, #fff 0%, rgba(255,246,214,.95) 28%, rgba(255,214,120,.55) 55%, transparent 75%); }
+/* 金環素材的環約佔整張的 80%：外框放大 1.25 倍，看得到的環才是 --rw × --rh。
+   金環是黑底圖：在亮光層裡自己也要 screen，黑底才不會把後面的爆心蓋掉 */
+.b8-art.lgring { mix-blend-mode: screen; top: var(--cy); width: calc(var(--rw) * 1.25); height: calc(var(--rh) * 1.25); margin: calc(var(--rh) * -.625) 0 0 calc(var(--rw) * -.625); }
+.b8-art.lgring.r0 { filter: hue-rotate(28deg) saturate(1.5); }
+.b8-art.lgring.r1 { width: calc(var(--rw) * 1.125); height: calc(var(--rh) * 1.125); margin: calc(var(--rh) * -.5625) 0 0 calc(var(--rw) * -.5625); }
+.b8-art.lgring.r2 { width: calc(var(--rw) * 1.0); height: calc(var(--rh) * 1.0); margin: calc(var(--rh) * -.5) 0 0 calc(var(--rw) * -.5); filter: saturate(.25) brightness(1.35); }
+.b8-art.lgcore { top: var(--cy); width: var(--core); height: var(--core); margin: calc(var(--core) * -.5) 0 0 calc(var(--core) * -.5); }
+.b8-lg { position: absolute; left: 50%; top: var(--cy); width: 0; height: 0; }
+.b8-lgp, .b8-lgk { position: absolute; display: flex; gap: 2px; opacity: 0; will-change: transform, opacity;
+  filter: drop-shadow(0 0 6px rgba(80,230,160,.7)) drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+.b8-lgp { margin: calc(var(--th) * -.5) 0 0 calc(var(--tw) * -1 - 1px); }
+.b8-lgp > i { position: absolute; z-index: -1; left: 50%; top: 50%; width: calc(var(--tw) * 3.6); height: calc(var(--tw) * 2.88); margin: calc(var(--tw) * -1.44) 0 0 calc(var(--tw) * -1.8);
+  background: 0 0 / 700% 100% no-repeat; }
+/* 刻子背後一圈冷白 rim light（6～10px），核心壓在後面、牌鎮在前 */
+.b8-lgk { margin: calc(var(--kh) * -.5) 0 0 calc(var(--kw) * -1.5 - 2px); filter: drop-shadow(0 0 3px rgba(240,255,250,.95)) drop-shadow(0 0 8px rgba(210,255,235,.75)) drop-shadow(0 3px 4px rgba(0,0,0,.6)); }
+.b8.ligu .b8-col { justify-content: flex-start; padding-top: 72vh; }
+.b8.ligu.d .b8-col { padding-top: 69vh; }
+.b8.ligu .b8-tiles { display: none; }
+.b8.ligu .b8-title { border-color: rgba(90,230,160,.85); background: rgba(0,20,12,.8); }
+.b8.ligu .b8-name { letter-spacing: .18em; text-indent: .18em; text-shadow: 0 0 12px rgba(240,255,245,.9), 0 0 28px rgba(60,220,140,.8), 0 0 52px rgba(240,200,110,.5), 0 3px 10px rgba(0,0,0,.9); }

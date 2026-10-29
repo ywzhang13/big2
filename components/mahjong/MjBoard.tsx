@@ -13,6 +13,9 @@ import MjClaimBanner from "./MjClaimBanner";
 import { MjMeldArrow } from "./MjMeldArrow";
 import { paceText } from "./paceText";
 import { seatWindChar } from "./seatWind";
+import { tileKey } from "@/lib/mahjong/tiles";
+import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
+import { MjAvatar, MjTingStrip } from "./MjTingStrip";
 import { CHI_FORBID_HINT, useChiHint } from "@/lib/mahjong/chiForbid";
 
 export interface MjBoardProps {
@@ -183,10 +186,11 @@ function PlayerPanel({
           ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
           : "bg-black/30 border border-white/10"
         }`}>
+        <MjAvatar url={player.avatarUrl} size={28} fallback={
         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
           ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
           {windChar}
-        </div>
+        </div>} />
         <div className="flex flex-col">
           {(() => {
             // 標示順序：連N → 聽 → 眼。對家放在名字同一行；左右家換到名字下一行（名牌寬度固定，不被畫面邊緣切掉）
@@ -481,6 +485,13 @@ export default function MjBoard({
   const eyeKey = eyeOptions.join(",");
   const [eyeArmedKey, setEyeArmedKey] = useState<string | null>(null);
   const eyeArmed = canEye && eyeArmedKey === eyeKey;
+  // 剩幾張一律用老柯的 tingInfo（只吃本人拿得到的資料；眼牌後才有別家手牌 opponentHands）
+  const tingView = { hand: myHand, players: players.map((p) => ({ seat: p.seat, revealed: p.revealed, discards: p.discards })), opponentHands: opponentHands ?? undefined };
+  // 眼牌後常駐（左下）：現在聽的牌各剩幾張，跟著牌局即時重算
+  const eyeWaits = isEye ? waitsLeft(tingView, mySeat) : [];
+  // 眼牌預覽中的那張（MjHand 回報）：左下改顯示打這張後聽什麼
+  const [eyePreviewTile, setEyePreviewTile] = useState<Tile | null>(null);
+  const previewWaits = eyeArmed && eyePreviewTile ? discardTingOptions(tingView, mySeat).find((d) => d.discard === tileKey(eyePreviewTile))?.waits ?? [] : [];
   const eyeButton = (
     <button
       type="button"
@@ -490,7 +501,7 @@ export default function MjBoard({
         ${eyeArmed ? "text-[#2b0f55] shadow-lg" : "bg-white/10 text-[#c4b5fd] border border-[#a78bfa]/45"}`}
       style={eyeArmed ? { background: "linear-gradient(135deg, #7c3aed, #c4b5fd)", boxShadow: "0 2px 10px rgba(167,139,250,.4)" } : undefined}
     >
-      眼牌
+      {eyeArmed ? "取消" : "眼牌"}
     </button>
   );
   const fxOf = (seat?: number) => declareFx.find((f) => f.seat === seat);
@@ -803,15 +814,18 @@ export default function MjBoard({
         borderTop: "1px solid rgba(201,169,110,0.15)",
       }}>
         {/* My info bar（data-my-info：吃碰槓胡橫幅的底邊對齊這一列的上緣） */}
-        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5" data-my-info>
+        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-white/5 relative" data-my-info>
+          {/* 聽牌剩張一律在左下（名牌這一列的上方、牌桌左下的空白處）：眼牌時點一張可打的牌＝預覽；眼牌後＝常駐 */}
+          {previewWaits.length > 0 ? <MjTingStrip waits={previewWaits} className="dock" testId="preview" /> : eyeWaits.length > 0 && <MjTingStrip waits={eyeWaits} className="dock" testId="dock" />}
           {/* 左右兩邊等寬，吃碰區夾在中間就會置中；左邊放不下時不縮，吃碰區往右讓 */}
           <div className="flex flex-[1_0_0] items-center gap-3">
           {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變） */}
           <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }} data-fx-seat={mySeat}>
           {/* Wind avatar */}
+          <MjAvatar url={me?.avatarUrl} size={28} fallback={
           <div className="w-7 h-7 rounded-full bg-[#C9A96E] text-[#0f2a1a] flex items-center justify-center text-xs font-bold">
             {getWindChar(mySeat)}
-          </div>
+          </div>} />
           <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
           {me?.isDealer && (
             <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">
@@ -883,6 +897,7 @@ export default function MjBoard({
               slowDraw={slowDraw}
               eyeArmed={eyeArmed}
               eyeOptionIds={eyeOptions}
+              onEyePreview={setEyePreviewTile}
               chiForbidden={chiForbidden}
               onForbidden={showChiHint}
               onPickKind={setPickKind}

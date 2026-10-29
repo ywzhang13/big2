@@ -1312,7 +1312,8 @@ function RoomView({
           和隕石同時掛著，key 要和隕石分開（同一層兄弟用同一個 key，React 會多掛一個收不掉的隕石） */}
       {winShowLive && winShowLive.pick && (
         <BigWin8Fx key={`big|${winShowLive.key}`} theme={winShowLive.pick.theme} title={winShowLive.pick.title} fan={winShowLive.pick.fan} seat={winShowLive.seat}
-          mobile={isMobileLandscape} winTile={winShowLive.tile} name={winShowLive.name} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
+          mobile={isMobileLandscape} winTile={winShowLive.tile} hand={state.winner?.allHands?.find((h) => h.seat === winShowLive.seat)?.hand} name={winShowLive.name}
+          onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
       )}
 
       {/* 結算浮層：桌機和手機橫向同一個樣式（老闆選定手機版），桌機只是放大；大牌特效播的時候先不出 */}

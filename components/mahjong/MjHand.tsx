@@ -13,6 +13,8 @@ interface MjHandProps {
   // 眼牌：按下「眼牌」後，打出後仍聽牌的牌往上浮，點一張就直接打出並宣告；其餘變暗不能點
   eyeArmed?: boolean;
   eyeOptionIds?: number[];
+  /** 眼牌預覽中的那張牌（沒有＝null）：牌桌在左下顯示打這張後聽什麼、各剩幾張 */
+  onEyePreview?: (tile: Tile | null) => void;
   // 眼牌後慢慢摸牌：摸進的那張先蓋著再翻開（只有眼牌的人自己看得到）
   slowDraw?: { tileId: number; win: boolean } | null;
   // 選中（還沒打出）的是哪一種牌，給牌桌比對海底和吃碰區；沒選＝null
@@ -36,10 +38,21 @@ export function SlowDrawTile({ tile, win, width, height }: { tile: Tile; win: bo
   );
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, slowDraw, onPickKind, turnStage = 0, chiForbidden = [], onForbidden }: MjHandProps) {
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, onEyePreview, slowDraw, onPickKind, turnStage = 0, chiForbidden = [], onForbidden }: MjHandProps) {
   const [rawSelectedId, setSelectedId] = useState<number | null>(null);
   const eyePick = (id: number) => !!eyeArmed && (eyeOptionIds ?? []).includes(id);
   const eyeBlocked = (id: number) => !!eyeArmed && !eyePick(id);
+  // 眼牌兩段式（老闆 2026-10-29）：點一張先預覽（抬起＋上方顯示「牌＋數字」），再點同一張才打出並宣告
+  const [rawEyePreview, setEyePreview] = useState<number | null>(null);
+  // 眼牌關掉（按取消、這一手不能眼牌）就清掉預覽：不然再按眼牌時，上次預覽的那張點一下就直接打出（審伯退件 2026-10-29）
+  const [prevArmed, setPrevArmed] = useState(eyeArmed);
+  if (prevArmed !== eyeArmed) {
+    setPrevArmed(eyeArmed);
+    if (!eyeArmed) setEyePreview(null);
+  }
+  const eyePreview = rawEyePreview != null && eyePick(rawEyePreview) ? rawEyePreview : null;
+  const previewTile = eyePreview != null ? tiles.find((t) => t.id === eyePreview) ?? null : null;
+  useEffect(() => { onEyePreview?.(previewTile); }, [previewTile, onEyePreview]);
   // 按下眼牌後就是「點牌直接打出」，原本選的牌不算
   const selectedId = eyeArmed ? null : rawSelectedId;
   // 不是我出牌時也能點牌查場上同一種牌（牌一樣往上抬，沒有「打牌」鈕）；輪到我的那一刻清掉選取，避免誤打
@@ -60,7 +73,8 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
     if (chiBlocked(tile)) { onForbidden?.(); return; }
     if (eyeBlocked(tile.id)) return;
     if (eyeArmed) {
-      onDiscard(tile.id, true);
+      if (eyePreview === tile.id) { setEyePreview(null); onDiscard(tile.id, true); }
+      else setEyePreview(tile.id);
       setSelectedId(null);
       return;
     }
@@ -74,7 +88,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
   }
 
   const dim = (t: Tile) =>
-    !canDiscard ? undefined : eyeBlocked(t.id) || chiBlocked(t) ? { opacity: 0.35 } : eyePick(t.id) ? { transform: "translateY(-6px)" } : undefined;
+    !canDiscard ? undefined : eyeBlocked(t.id) || chiBlocked(t) ? { opacity: 0.35 } : eyePick(t.id) && eyePreview !== t.id ? { transform: "translateY(-6px)" } : undefined;
 
   // Separate drawn tile from the rest
   // If drawnTileId matches a tile, separate it; otherwise show last tile as drawn
@@ -94,6 +108,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
 
   return (
     <div className="flex flex-col items-center gap-2">
+
       {/* Tiles row — pt-5 reserves space for the -translate-y-3 selected-lift */}
       <div className="flex justify-center items-end px-1 pt-5 max-w-full">
         {/* Main hand */}
@@ -102,7 +117,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
             <div key={t.id} style={dim(t)} data-chi-forbidden={chiBlocked(t) ? "1" : undefined}>
               <MjTile
                 tile={t}
-                selected={selectedId === t.id}
+                selected={selectedId === t.id || eyePreview === t.id}
                 onClick={() => handleTileClick(t)}
               />
             </div>
@@ -116,7 +131,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
             ) : (
               <MjTile
                 tile={drawnTile}
-                selected={selectedId === drawnTile.id}
+                selected={selectedId === drawnTile.id || eyePreview === drawnTile.id}
                 onClick={() => handleTileClick(drawnTile)}
               />
             )}

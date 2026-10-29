@@ -19,6 +19,9 @@ import MjFlowerTag from "./MjFlowerTag";
 import MjClaimFx from "./MjClaimFx";
 import MjClaimBanner from "./MjClaimBanner";
 import { seatWindChar } from "./seatWind";
+import { tileKey } from "@/lib/mahjong/tiles";
+import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
+import { MjAvatar, MjTingStrip } from "./MjTingStrip";
 
 interface MjBoardMobileProps extends MjBoardProps {
   roomCode: string;
@@ -234,7 +237,7 @@ function SidePanel({
       {/* 名牌固定大小（88×54，窄螢幕 80×54）：風位＋分數一行／名字獨立一行、不斷行（中文 7 字、英文 10 個字母都放得下，再長結尾才是「…」）／標示一行（不換行），
           名字或標示變多也不會把名牌撐大（老闆 2026-10-24：名牌留在左右兩側、海底左右縮窄） */}
       <div className="l1">
-        <span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>
+        <MjAvatar url={player.avatarUrl} size={16} fallback={<span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>} />
         <Score score={score} />
       </div>
       <span className="mjm-nm">{player.name}</span>
@@ -389,8 +392,16 @@ export default function MjBoardMobile({
   const canEye = canPick && eyeOptions.length > 0;
   const eyeKey = eyeOptions.join(",");
   const eyeArmed = canEye && eyeArmedKey === eyeKey;
-  // 按下眼牌：可以打的牌往上浮、點一下就打出並宣告；其他的變暗不能點
+  // 按下眼牌：可以打的牌往上浮；點一張先預覽（抬起＋上方顯示打這張聽什麼、各剩幾張），再點同一張才打出並宣告（老闆 2026-10-29）
   const eyePick = (id: number) => eyeArmed && eyeOptions.includes(id);
+  const [eyePreviewId, setEyePreviewId] = useState<number | null>(null);
+  const eyePreview = eyePreviewId != null && eyePick(eyePreviewId) ? eyePreviewId : null;
+  // 剩幾張一律用老柯的 tingInfo（只吃本人拿得到的資料；眼牌後才有別家手牌 opponentHands）
+  const tingView = { hand: myHand, players: players.map((p) => ({ seat: p.seat, revealed: p.revealed, discards: p.discards })), opponentHands: opponentHands ?? undefined };
+  const previewTile = eyePreview != null ? myHand.find((t) => t.id === eyePreview) : undefined;
+  const previewWaits = previewTile ? discardTingOptions(tingView, mySeat).find((d) => d.discard === tileKey(previewTile))?.waits ?? [] : [];
+  // 眼牌後常駐（左下）：現在聽的牌各剩幾張，跟著牌局即時重算
+  const eyeWaits = isEye ? waitsLeft(tingView, mySeat) : [];
   const eyeBlocked = (id: number) => eyeArmed && !eyeOptions.includes(id);
   // 吃牌限制：剛吃完這輪不能打的牌變暗、點了不選取（只在輪到我打牌時；其他時候照常能點牌查場上同一種牌）
   const chiBlocked = (t: Tile) => needsDiscard && isChiForbidden(t, chiForbidden);
@@ -434,12 +445,13 @@ export default function MjBoardMobile({
         tile={t}
         width="var(--tile-hand-w)"
         height="var(--tile-hand-h)"
-        selected={selected?.id === t.id}
+        selected={selected?.id === t.id || eyePreview === t.id}
         onClick={() => {
           if (chiBlocked(t)) { showChiHint(); return; }
           if (eyeBlocked(t.id)) return;
           if (eyeArmed) {
-            onDiscard(t.id, true);
+            if (eyePreview === t.id) { setEyePreviewId(null); onDiscard(t.id, true); }
+            else setEyePreviewId(t.id);
             return;
           }
           setSelectedId((prev) => (prev === t.id ? null : t.id));
@@ -453,9 +465,9 @@ export default function MjBoardMobile({
       type="button"
       className={`mjm-btn eye ${eyeArmed ? "on" : ""}`}
       aria-pressed={eyeArmed}
-      onClick={() => setEyeArmedKey(eyeArmed ? null : eyeKey)}
+      onClick={() => { setEyeArmedKey(eyeArmed ? null : eyeKey); setEyePreviewId(null); }}
     >
-      眼牌
+      {eyeArmed ? "取消" : "眼牌"}
     </button>
   );
 
@@ -482,7 +494,7 @@ export default function MjBoardMobile({
         {top && (
           <>
             <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""} ${fxClass(fxOf(top.seat))}`} data-fx-seat={top.seat}>
-              <span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>
+              <MjAvatar url={top.avatarUrl} size={18} fallback={<span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>} />
               <span className="mjm-nm">{top.name}</span>
               <DealerTag player={top} consecutive={dealerConsecutive} />
               <DeclareTags ting={tingSeats.includes(top.seat)} eye={eyeSeats.includes(top.seat)} fx={fxOf(top.seat)} />
@@ -638,12 +650,14 @@ export default function MjBoardMobile({
 
       {/* 我的資訊列＋手牌 */}
       <div className="mjm-me">
+        {/* 聽牌剩張一律在左下：眼牌時點一張可打的牌＝預覽打這張後聽什麼；眼牌後＝常駐目前聽的牌 */}
+        {previewTile ? <MjTingStrip waits={previewWaits} className="dock" testId="preview" /> : eyeWaits.length > 0 && <MjTingStrip waits={eyeWaits} className="dock" testId="dock" />}
         <div className="mjm-me-info">
           {/* 左右兩邊等寬，吃碰區夾在中間就會置中；左邊放不下時不縮，吃碰區往右讓 */}
           <div className="mjm-me-l">
             {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變，分數留在外面） */}
             <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} data-fx-seat={mySeat}>
-              <span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>
+              <MjAvatar url={me?.avatarUrl} size={18} fallback={<span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>} />
               <span className="mjm-nm">{playerName}</span>
               {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
               <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />

@@ -3,7 +3,7 @@
 //                     回前景事件連發只多送一次（大老二 useGame 也用同一個）
 //   readyAfterNextGame：按「下一局」成功後，要不要先把自己標成已同意
 import { compareGameKey, gameKeyOf, type GameKey } from "./flowerTracker";
-import type { RoundInfo } from "./gameState";
+import type { Meld, RoundInfo } from "./gameState";
 
 /** 慢慢摸牌的排隊狀態：on＝排隊中，gen＝每次開始排隊就加 1 */
 export type HoldSnapshot = { on: boolean; gen: number };
@@ -165,4 +165,10 @@ export class EyeDrawGate {
     if (c.tileId === undefined) { c.tileId = tileId; return true; }
     return c.tileId !== tileId;
   }
+}
+
+/** 自己暗槓（審伯退件 2026-10-29）：座位頻道 mj_hand_update 帶的 myRevealed（有牌面），要剛好比畫面上自己的吃碰槓多一副才是這一次暗槓的；
+ *  沒收到、上一局或上一次槓留下的（副數相同或更少）、或已經被 mj_hand_update 套用過（畫面已是新的）→ null，不採用 */
+export function ownConcealedKongMelds(current: Meld[], myRevealed: Meld[] | null): Meld[] | null {
+  return myRevealed && myRevealed.length === current.length + 1 ? myRevealed : null;
 }

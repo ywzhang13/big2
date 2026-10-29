@@ -17,6 +17,7 @@ const ART_SIZE: Record<string, [number, number]> = {
   "bx-gate": [1024, 1024], "bx-sea": [1600, 667], "dsx-beasts": [1024, 1024], "dsx-nebula": [1024, 1024], "dsx-sky": [1600, 667], "dsy-burst": [1024, 1024],
   "dsy-dragons": [1024, 1024], "migi-ground": [1024, 1024], "migi-pillar": [768, 1024], "qq1-flowers": [1024, 512], "qq1-swirl": [1024, 1024], "qys-splash": [1024, 1024],
   "qys-wave": [1024, 1024], "th-dragon": [729, 900], "th-gate": [1024, 1024], "th-palace": [1600, 900], "th-phoenix": [728, 900], "th-starburst": [1600, 900],
+  "lg-core": [640, 640], "lg-jade-l": [480, 640], "lg-jade-r": [480, 640], "lg-pairs": [2100, 240], "lg-ring": [1200, 502],
   "wak-circle": [1024, 1024], "wak-orbs": [1024, 1024], "xsx-clouds": [1280, 200], "xsx-eye": [1024, 1024], "zi-flow": [1600, 800], "zi-ink": [1024, 1024],
   crater: [768, 768], debris: [1024, 512], explosion: [1024, 1024], meteor: [1024, 1024],
 };
