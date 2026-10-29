@@ -90,7 +90,7 @@ export async function insertPlayer(row: { room_id: string; player_id: string; na
   return "ok" as const;
 }
 // 純函式（不連資料庫），沿用真的版本：state 路由、開局廣播用（公開資訊不能含手牌）
-export { toPlayerGameState, toPublicGameState, hideConcealedKongs } from "../../lib/mahjong/db";
+export { toPlayerGameState, toPublicGameState, toSpectatorGameState, hideConcealedKongs } from "../../lib/mahjong/db";
 // 等人階段退出（/api/mahjong/leave）：座位依加入順序（陣列順序＝created_at 先後）
 export async function loadLobbySeats(roomId: string) {
   await wait();
