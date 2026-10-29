@@ -3,6 +3,7 @@
 import * as store from "@/lib/records/store";
 import { deleteRoomEffects } from "@/lib/mahjong/effects/store";
 import { deleteRoomChat, sweepVoices } from "@/lib/mahjong/chat/store";
+import { deleteOldSpectate, deleteRoomSpectate } from "@/lib/mahjong/spectate/store";
 import type { CloseExpect } from "@/lib/records/store";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { broadcast as big2Broadcast } from "@/lib/broadcast";
@@ -39,6 +40,18 @@ async function closeAtomically(game: GameKind, roomId: string, rec: MatchRecordI
         await deleteRoomChat(roomId);
       } catch (err) {
         console.error(`[mj-chat] 刪除房 ${roomId} 的語音失敗：`, err instanceof Error ? err.message : err);
+      }
+      // 觀戰的申請和同意也刪（房間已經不在，觀戰 API 本來就拿不到資料；這裡只是清列。漏刪的由 mj_spectate_request 清掉一天前的）
+      try {
+        await deleteRoomSpectate(roomId);
+      } catch (err) {
+        console.error(`[mj-spectate] 刪除房 ${roomId} 的觀戰資料失敗：`, err instanceof Error ? err.message : err);
+      }
+      // 順手清 7 天前的觀戰資料（別房關房時漏刪的）；失敗只記 log
+      try {
+        await deleteOldSpectate();
+      } catch (err) {
+        console.error("[mj-spectate] 清除 7 天前的觀戰資料失敗：", err instanceof Error ? err.message : err);
       }
     }
     return result === "closed";

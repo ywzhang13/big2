@@ -2,6 +2,18 @@ import { loadRoom, loadPlayers, toPlayerGameState, toPublicGameState } from "@/l
 import { endedResponse } from "@/lib/records/close";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { privateChannelName, seatOwnerError } from "@/lib/mahjong/access";
+import { viewerCounts } from "@/lib/mahjong/spectate/rules";
+import { loadRoomSpectate } from "@/lib/mahjong/spectate/store";
+
+/** 每位玩家的被觀戰人數（名牌旁的眼睛；同桌每個人都看得到）。查不到不擋 state，前端等 mj_spectators 廣播再補 */
+async function spectatorCounts(roomId: string, state: MahjongGameState): Promise<Record<string, number> | undefined> {
+  try {
+    return viewerCounts(await loadRoomSpectate(roomId), state.players.map((p) => p.id));
+  } catch (err) {
+    console.error("[mj-spectate] state counts", err instanceof Error ? err.message : err);
+    return undefined;
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -49,7 +61,7 @@ export async function GET(request: Request) {
       if (denied) return denied;
       const playerView = toPlayerGameState(state, playerId);
       // 本人的座位頻道（重新整理後重新訂閱）
-      Object.assign(playerView, { myChannel: privateChannelName(room.code, playerId) });
+      Object.assign(playerView, { myChannel: privateChannelName(room.code, playerId), spectatorCounts: await spectatorCounts(room.id, state) });
       return Response.json({
         roomId: room.id,
         code: room.code,
@@ -59,7 +71,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const publicView = toPublicGameState(state);
+    const publicView = { ...toPublicGameState(state), spectatorCounts: await spectatorCounts(room.id, state) };
     return Response.json({
       roomId: room.id,
       code: room.code,
