@@ -64,5 +64,16 @@
 - 牌型名字型：public/fonts/noto-sans-tc/bigwin16-black.woff2，Noto Sans TC Black 只取 16 台多用到的「天、胡、字」三個字（其他字照用 bigwin8-black.woff2，那一份不動），
   SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
 
+嚦咕嚦咕特效（2026-10-29 加入；畫面 components/mahjong/BigWin8Fx.tsx 的 ligu）
+- bigwin8/lg-pairs.webp、lg-core.webp、lg-ring.webp、lg-jade-l.webp、lg-jade-r.webp：老闆自行以 AI 生成（2026-10-29：翡翠能量雙生徽印圖集、翡翠星核黄金魔印、
+  翡翠鎏金魔法能量環、翡翠金耀双月魔法徽印），不需標註；老馬加工：透明圖清掉低透明的紅黃綠雜邊、雙生徽印圖集切成 7 格橫條、
+  能量環（黑底）近黑壓到純黑、雙月魔法徽印切成左右兩片並把內側切口羽化、轉 WebP
+- bigwin8/sfx/ligu-pc.mp3（一般版）、ligu-mobile.mp3（手機加強版）：阿妍製作（2026-10-29，〈嚦咕嚦咕音效-評估-2026-10-29〉「雙玉成環・玉璽鎮心」），
+  重擊點對在畫面最重那一下（1.12 秒）。疊進去的真實錄音都來自 Freesound，逐一確認為 CC0（公眾領域，可商用、不用標註）：
+  ・745030 Domino_sfx_putOnBoard（poenia）、334222 marble（jradcoolness）、375599 Bell Tree（sgossner）、402818 White Noise Short Reverse Whoosh（HowardV）、685256 Riser sound effect short（syntheffects）、539968 Deep Boom（Za-Games）、754420 DSGNImpt_Deep Cinematic Impact 1（zazz.sound.design）、816376 DSGNStngr_basic trailer boom impact（harrisonlace）、537206 Magyar gong（Logicogonist）、614832 crystal-bell-08（arseniiv）、549898 bell1（Tairblenn）
+  網址格式 https://freesound.org/people/<作者>/sounds/<編號>/ ；疊加、對齊、手機加強和音量對齊的腳本在阿妍工作資料夾（嚦咕音效-2026-10-29/），不放進專案
+- 牌型名字型：public/fonts/noto-sans-tc/bigwin-ligu-black.woff2，Noto Sans TC Black 只取「嚦、咕」兩個字（其他字照用 bigwin8-black.woff2，那一份不動），
+  SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
+
 程式
 - lottie_light.min.js：lottie-web（Airbnb），MIT License，https://github.com/airbnb/lottie-web/blob/master/LICENSE.md
