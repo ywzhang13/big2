@@ -15,3 +15,7 @@ export function asSeat(body: object): Record<string, string> {
   const pid = (body as { playerId?: string }).playerId;
   return pid ? { authorization: `Bearer as:${pid}` } : {};
 }
+/** lib/auth.ts getPictureUrls 的記憶體版：tokens 裡同一個帳號的 pictureUrl（遊客、沒有的回 null） */
+export async function getPictureUrls(userIds: (string | null | undefined)[]): Promise<(string | null)[]> {
+  return userIds.map((id) => Object.values(tokens).find((u) => u.id === id && !u.isGuest)?.pictureUrl ?? null);
+}

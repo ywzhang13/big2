@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { calculateScore, type ScoringContext } from "../lib/mahjong/scoring";
+import { isLiguHand } from "../lib/mahjong/winCheck";
 import { calculateSettlement, declareWin, isSelfDrawWin, tallyHandStats } from "../lib/mahjong/gameLogic";
 import type { MahjongGameState, Meld } from "../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../lib/mahjong/tiles";
@@ -89,8 +90,21 @@ if (process.env.WRITE_GOLDEN) {
   const changedHands = cases.map((c, i) => i).filter((i) => golden[i] !== before[i]);
   eq([changedHands.length, changedHands.every((i) => /大三元|小三元|小四喜/.test(before[i])), cases.filter((c, i) => /大三元|小三元|小四喜/.test(before[i])).length],
     [10, true, 10], `T6 三元、四喜改台：2000 手裡只有 ${changedHands.length} 手台數變了，全都是大三元、小三元或小四喜的牌（每手少掉構成牌型的三元牌台）；其他 ${2000 - changedHands.length} 手和改前完全一樣（見 T1、T2）`);
-  const non = cases.map((c, i) => i).filter((i) => !isTianhu(cases[i]));
+  // 2026-10-29 嚦咕嚦咕（7 對＋1 刻、門清）：基準檔是加之前產的。整手也是嚦咕嚦咕（多一種拆法、取台數高的），
+  // 或拿掉胡的那張後也聽某張嚦咕嚦咕（多聽一種，不再是獨聽）的手，另外在 T7 驗；其他手照原樣比對
+  const KEYS = ["m", "p", "s"].flatMap((x) => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => x + r)).concat([1, 2, 3, 4, 5, 6, 7].map((r) => "z" + r));
+  const liguTouched = (c: ScoringContext) => {
+    if (isLiguHand(c.concealed, c.revealed.length)) return true;
+    const rest = c.concealed.filter((x) => x.id !== c.winTile.id);
+    return KEYS.some((k) => isLiguHand([...rest, { id: -1, suit: k[0] as TileSuit, rank: Number(k.slice(1)), display: k }], c.revealed.length));
+  };
+  const non = cases.map((c, i) => i).filter((i) => !isTianhu(cases[i]) && !liguTouched(cases[i]));
   const diff = non.filter((i) => out[i] !== golden[i]);
+  const lg = cases.map((c, i) => i).filter((i) => !isTianhu(cases[i]) && liguTouched(cases[i]));
+  const noDuting = (g: string) => { const [n, f] = g.split("|"); const kept = f.split(",").filter((x) => x !== "獨聽1"); return `${Number(n) - (f.split(",").length - kept.length)}|${kept.join(",")}`; };
+  const explained = (i: number) => out[i] === golden[i] || (isLiguHand(cases[i].concealed, 0) && out[i].includes("嚦咕嚦咕8")) || out[i] === noDuting(golden[i]);
+  eq([lg.length, lg.every(explained)], [lg.length, true],
+    `T7 嚦咕嚦咕：2000 手裡只有 ${lg.length} 手牽涉嚦咕嚦咕（${lg.map((i) => `#${i} ${golden[i]} → ${out[i]}`).join("；")}）：整手是嚦咕嚦咕的取台數高的拆法，多聽一張嚦咕嚦咕的不再算獨聽；其他手和改前完全一樣（T1）`);
   const names = new Set(non.flatMap((i) => out[i].split("|")[1].split(",").map((f) => f.replace(/\d+$/, "")).filter(Boolean)));
   eq([golden.length, diff.length, diff.slice(0, 3).map((i) => [i, golden[i], out[i]])], [cases.length, 0, []],
     `T1 非天胡 ${non.length} 手（含地胡、地聽、門清自摸、獨聽、平胡、四喜、八仙等 ${names.size} 種台）：台數、台名和改前完全一樣`);
