@@ -6,7 +6,7 @@ import ZimoFxPreferencePreview from "./ZimoFxPreferencePreview";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { BACKS, FELTS, THEMES, DEFAULT_PREFS, usePrefs, setPrefs, type BackId, type FeltId } from "@/lib/mahjong/prefs";
 import { CloseIcon, SpeakerIcon } from "./MjIcons";
-import { getMyFx, selectMyFx, type MyZimoFx, type ZimoFxChoice } from "@/lib/mahjong/zimoFxClient";
+import { getMyFx, rejectedSelected, selectMyFx, type MyZimoFx, type ZimoFxChoice } from "@/lib/mahjong/zimoFxClient";
 
 type FxChoice = ZimoFxChoice;
 
@@ -79,8 +79,16 @@ export default function MjPrefsPanel() {
     setFxBusy(true); setFxErr(false);
     const r = await selectMyFx(pick);
     setFxBusy(false);
-    if (r.ok) setFx((cur) => (cur ? { ...cur, selected: r.data.selected } : cur));
-    else setFxErr(true);
+    if (r.ok) { setFx((cur) => (cur ? { ...cur, selected: r.data.selected } : cur)); return; }
+    // 被拒（這段時間剛好過期、被收回）：照伺服器說的改回目前實際套用的那一種，畫面不停在被拒的那張；再重抓一次開通清單
+    const now = rejectedSelected(r);
+    if (now) {
+      setFx((cur) => (cur ? { ...cur, selected: now } : cur));
+      setPick(now);
+      void getMyFx().then((g) => { if (g.ok) setFx(g.data); });
+      return;
+    }
+    setFxErr(true);
   };
 
   return (
@@ -103,7 +111,8 @@ export default function MjPrefsPanel() {
               const granted = isGranted(code);
               const current = selectedChoice === code;
               return <button key={code} type="button" data-prefs-fx={code} aria-pressed={pick === code}
-                className={`mjp-fx ${pick === code ? "on" : ""} ${granted ? "granted" : "locked"}`}
+                // 沒開通的只能預覽：點了是灰色虛線框（peek），不會變成和「選中／使用中」一樣的金框；「使用中」只照伺服器回傳的 selected
+                className={`mjp-fx ${pick === code ? (granted ? "on" : "peek") : ""} ${granted ? "granted" : "locked"}`}
                 onClick={() => { setPick(code); setReplay((n) => n + 1); setFxErr(false); }}>
                 <span className={`mjp-fx-thumb ${code === "golden" ? "gold" : ""}`}>
                   {art && <img src={art} alt="" />}

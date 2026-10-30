@@ -186,7 +186,10 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
       const origin = box ?? { left: 0, top: 0 };
       const cx = plate.left + plate.width / 2 - origin.left, cy = plate.top + plate.height / 2 - origin.top;
       const hand = rel === 0 ? scope?.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
-      [lx, ly] = rel === 2 ? [cx, plate.bottom - origin.top + off] : rel === 3 ? [plate.right - origin.left + off, cy] : rel === 1 ? [plate.left - origin.left - off, cy]
+      // 對家：名牌在那一家整列（名牌＋花＋手牌）的左邊，水平落點取整列的中心，才會落在對家正前方（老闆 2026-10-31：對家自摸偏左）
+      const row = rel === 2 ? scope?.querySelector(`[data-fx-seat-row="${seat}"]`)?.getBoundingClientRect() : undefined;
+      const topX = row && row.width > 0 ? row.left + row.width / 2 - origin.left : cx;
+      [lx, ly] = rel === 2 ? [topX, plate.bottom - origin.top + off] : rel === 3 ? [plate.right - origin.left + off, cy] : rel === 1 ? [plate.left - origin.left - off, cy]
         : hand && hand.width > 0 ? [hand.left - origin.left + hand.width / 2, hand.top - origin.top - off * 0.5] : [cx, plate.top - origin.top - off];
       const a = root.querySelector<HTMLElement>(".mt-plate");
       if (a && !embedded) Object.assign(a.style, { display: "block", left: `${plate.left - 4}px`, top: `${plate.top - 3}px`, width: `${plate.width + 8}px`, height: `${plate.height + 6}px` });
@@ -216,11 +219,13 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     set("--es", Math.max(H * 0.75, W * 0.45)); // 爆炸圖放到 1.6 倍時寬度約畫面 70% 以上
     set("--sw", Math.max(W, H) * 1.3);
     set("--ds", H * (mobile ? 0.22 : 0.17));
-    // 收尾：自摸牌在坑正中央；「自摸／名字」放在畫面正中央（大字圖高 14vw×1.2、寬照圖的長寬比 596:347；名字 24px），
+    // 收尾：自摸牌在坑正中央；「自摸／名字」放在畫面正中央（和其他 5 種同一套尺寸），
     // 會擋到坑裡的牌就往上或往下讓開（牌在中線下面就往上，反之往下）
     const tileW = mobile ? 50 : 84, tileH = Math.round(tileW * 1.36);
     set("--tw", tileW); set("--th", tileH);
-    const textH = W * 0.14 * 1.2 + 16 + 34, textW = W * 0.14 * 1.2 * (596 / 347), gap = mobile ? 10 : 16, edge = mobile ? 4 : 16;
+    // 大字和名字的尺寸算法和其他 5 種（ZimoFx）一樣：大字高 1.2em（em＝clamp(92px, 14vw, 202px)），名字手機 22px、桌機 28px
+    const fs = Math.min(202, Math.max(92, W * 0.14)), artH = fs * 1.2;
+    const textH = artH + (mobile ? 6 + 29 : 10 + 37), textW = artH * (596 / 347), gap = mobile ? 10 : 16, edge = mobile ? 4 : 16;
     let top = H / 2 - textH / 2;
     const tTop = ly - tileH / 2 - gap, tBot = ly + tileH / 2 + gap;
     const hitsTile = top < tBot && top + textH > tTop && Math.abs(lx - W / 2) < textW / 2 + tileW / 2 + gap;
@@ -229,7 +234,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
       if (ly >= H / 2) { top = tTop - textH; place = "up"; } else { top = tBot; place = "down"; }
       top = Math.min(Math.max(top, edge), H - textH - edge);
     }
-    set("--zx", W / 2); set("--zy", top); set("--zh", textH);
+    set("--zx", W / 2); set("--zy", top);
     root.dataset.mtText = place;
     root.style.setProperty("--mir", mirror ? "-1" : "1");
     root.style.setProperty("--skx", mirror ? "10%" : "90%");

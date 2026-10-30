@@ -496,8 +496,8 @@ export default function MjBoardMobile({
       {/* 左上選單：設定、房號、圈局、底台、離開（唯一的設定入口） */}
       <MjTableMenu roomCode={roomCode} roundLabel={roundLabel} basePoints={basePoints} fanPoints={fanPoints} onLeave={onLeave} leaveLabel={leaveLabel} spectate={spectateMenu} />
 
-      {/* 對家 */}
-      <div className="mjm-top">
+      {/* 對家（data-fx-seat-row：自摸特效對家的落點取這一整列的水平中心；名牌在這列的左邊，取名牌中心會偏左） */}
+      <div className="mjm-top" data-fx-seat-row={top?.seat}>
         {top && (
           <>
             <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""} ${fxClass(fxOf(top.seat))}`} data-fx-seat={top.seat}>

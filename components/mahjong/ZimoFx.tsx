@@ -94,6 +94,11 @@ export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
   return p;
 }
 
+/**
+ * 風暴的主風向（老闆 2026-10-31：自己看右上往左下、對家看左上往右下，都偏橫向；上家、下家照「從勝者那一側吹過來」對齊）：
+ * 自己、下家看＝往左下（風從右邊來）；對家、上家看＝往右下（風從左邊來）。往下斜 25 度
+ */
+const stormWind = (rel: number) => ({ x: (rel === 0 || rel === 1 ? -1 : 1) * Math.cos((25 * Math.PI) / 180), y: Math.sin((25 * Math.PI) / 180) });
 /** 勝者在我的哪一邊：從桌心指向勝者的方向（0 自己＝下方、1 下家＝右、2 對家＝上、3 上家＝左） */
 const SIDE = [[0, 1], [1, 0], [0, -1], [-1, 0]] as const;
 
@@ -130,11 +135,8 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
   const out: Part[] = [];
   if (fx === "storm") {
     // 風暴 v5（小宜〈風暴自摸特效-v5-實作與素材規格〉）：風牆橫掃全場 → 巨型漏斗從勝者那一側壓進來 → 風眼壓縮 → 1.12 一記風核重擊 → 1.40 牌 → 殘風、斜雨退場。
-    // 風一律從勝者那一側吹向桌心（d），斜雨和速度線偏 20 度（r）；所有零件只依方向轉一次，之後只有位移、縮放、透明度
-    const d = { x: -sx, y: -sy }, D = Math.hypot(W, H), cxo = W / 2 - px, cyo = H / 2 - py;
-    const turn = (v: { x: number; y: number }, a: number) => ({ x: v.x * Math.cos(a) - v.y * Math.sin(a), y: v.x * Math.sin(a) + v.y * Math.cos(a) });
-    const r1 = turn(d, (20 * Math.PI) / 180), r2 = turn(d, (-20 * Math.PI) / 180);
-    const horiz = Math.abs(d.x) > Math.abs(d.y), rd = (horiz ? r1.y > r2.y : r1.x > r2.x) ? r1 : r2; // 橫風時雨往下斜、直風時雨往右斜
+    // 主風向（老闆 2026-10-31）：一律偏橫向、往下斜 25 度（d＝風、斜雨、速度線同一個方向）；所有零件只依方向轉一次，之後只有位移、縮放、透明度
+    const d = stormWind(rel), rd = d, D = Math.hypot(W, H), cxo = W / 2 - px, cyo = H / 2 - py;
     const qx2 = -rd.y, qy2 = rd.x;
     const full = (along: number, side = 0, dir = d): { x: number; y: number } => ({ x: cxo + dir.x * along + -dir.y * side, y: cyo + dir.y * along + dir.x * side });
     // A 風牆：0.12～0.42 第一道橫掃全場（從畫面外一路穿過去），0.56～0.90 第二道較淡，1.40～1.84 殘風
@@ -164,11 +166,11 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
       out.push({ el, w, h: w, rot: deg(Math.atan2(rd.y, rd.x)) - 45, keys: keys.sort((a, b) => a[0] - b[0]), rm: layer === 1 && j === 0 ? { ...at(0.5, 0.7) } : undefined });
     });
     // C 巨型漏斗外殼（桌機 74vw×90vh、手機 88vw×130vh；落點上方空間不夠時整個縮小，底部還在落點）：6 段由下往上、越上越寬，
-    // 0.36～0.94 從勝者那一側壓進來，各段左右擺（下慢上快）；0.94～1.12 往中線壓；主擊往外炸開，1.40～1.84 剝離、淡出
+    // 0.36～0.94 從上風處壓進來，各段左右擺（下慢上快）；0.94～1.12 往中線壓；主擊往外炸開，1.40～1.84 剝離、淡出
     const fw = W * (mobile ? 0.88 : 0.74), fh0 = H * (mobile ? 1.3 : 0.9), fh = fh0 * Math.min(1, Math.max(0.55, (py + H * 0.2) / fh0));
     els("shell").forEach(({ el, i }) => {
       const w = fw * (0.42 + 0.58 * (i / 5)), h = w * 0.871, y0 = -fh * (i + 0.5) / 6, t1 = 360 + i * 60, A = (10 + 6 * i) * k, P = 640 - 70 * i;
-      const inX = sx * W * 0.6, inY = sy * H * 0.5, sd = i % 2 ? 1 : -1;
+      const inX = -d.x * W * 0.6, inY = 0, sd = i % 2 ? 1 : -1; // 從上風處（風吹來的那一側）壓進來
       const sway: [number, Pose][] = [];
       for (let t = t1 + 150; t < 940; t += 80) sway.push([t, { x: A * Math.sin((2 * Math.PI * (t - t1)) / P), y: y0, s: 1 + 0.04 * Math.sin((2 * Math.PI * t) / (P * 1.3)), sy: 1, o: 0.85 }]);
       out.push({ el, w, h, flip: i % 2 === 1, keys: [[0, { x: inX, y: y0 + inY, s: 0.8, o: 0 }], [t1, { x: inX, y: y0 + inY, s: 0.8, o: 0 }],
@@ -454,7 +456,10 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       const origin = embedded ? root.getBoundingClientRect() : { left: 0, top: 0 };
       const cx = plate.left + plate.width / 2 - origin.left, cy = plate.top + plate.height / 2 - origin.top;
       const hand = rel === 0 ? scope?.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
-      [px, py] = rel === 2 ? [cx, plate.bottom - origin.top + off] : rel === 3 ? [plate.right - origin.left + off, cy] : rel === 1 ? [plate.left - origin.left - off, cy]
+      // 對家：名牌在那一家整列（名牌＋花＋手牌）的左邊，水平落點取整列的中心，才會落在對家正前方（老闆 2026-10-31：對家自摸偏左）
+      const row = rel === 2 ? scope?.querySelector(`[data-fx-seat-row="${seat}"]`)?.getBoundingClientRect() : undefined;
+      const topX = row && row.width > 0 ? row.left + row.width / 2 - origin.left : cx;
+      [px, py] = rel === 2 ? [topX, plate.bottom - origin.top + off] : rel === 3 ? [plate.right - origin.left + off, cy] : rel === 1 ? [plate.left - origin.left - off, cy]
         : hand && hand.width > 0 ? [hand.left - origin.left + hand.width / 2, hand.top - origin.top - off * 0.5] : [cx, plate.top - origin.top - off];
     } else {
       [px, py] = [W / 2 + SIDE[rel][0] * W * 0.22, H / 2 + SIDE[rel][1] * H * 0.2];
@@ -513,8 +518,9 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     const stage = warm || embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
     const release = stage ? holdStage(stage, STAGE_SHADOW) : null;
     // 風暴 v5：主擊那一下畫面順著風被推一下（0 → 6px → -4px → 0，120ms，不旋轉）；其他照原本的震動（櫻花不震）
-    if (stage && fx === "storm") anims.push(stage.animate([{ transform: "none" }, { transform: `translate(${(-SIDE[rel][0] * 6).toFixed(1)}px, ${(-SIDE[rel][1] * 6).toFixed(1)}px)` },
-      { transform: `translate(${(SIDE[rel][0] * 4).toFixed(1)}px, ${(SIDE[rel][1] * 4).toFixed(1)}px)` }, { transform: "none" }], { duration: 120, delay: boomOf(fx), easing: "linear" }));
+    const wd = stormWind(rel);
+    if (stage && fx === "storm") anims.push(stage.animate([{ transform: "none" }, { transform: `translate(${(wd.x * 6).toFixed(1)}px, ${(wd.y * 6).toFixed(1)}px)` },
+      { transform: `translate(${(-wd.x * 4).toFixed(1)}px, ${(-wd.y * 4).toFixed(1)}px)` }, { transform: "none" }], { duration: 120, delay: boomOf(fx), easing: "linear" }));
     else if (stage && fx !== "sakura") anims.push(...shakeStage(stage, mobile, true, boomOf(fx)));
     // 黑洞：主擊前整個牌桌被往落點吸過去（縮到 0.94）
     if (stage && fx === "blackhole") stage.style.transformOrigin = `${Math.round(px)}px ${Math.round(py)}px`;
@@ -687,7 +693,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
           </div>
         )}
         {/* 這一種專屬的「自摸」大字＋名字，取代金色自摸浮層 */}
-        <ZimoTitle fx={fx} name={name} t={ZFX_TL[fx].zimo} n={ZFX_TL[fx].name} rm={rm} mobile={mobile} wind={SIDE[rel][0] > 0 ? -1 : 1} src={art(`${fx}-title`)} />
+        <ZimoTitle fx={fx} name={name} t={ZFX_TL[fx].zimo} n={ZFX_TL[fx].name} rm={rm} mobile={mobile} wind={fx === "storm" ? Math.sign(stormWind(rel).x) : SIDE[rel][0] > 0 ? -1 : 1} src={art(`${fx}-title`)} />
         <div className="zf-flash" />
       </div>
     </div>

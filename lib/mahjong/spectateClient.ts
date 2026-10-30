@@ -1,7 +1,7 @@
 // 麻將觀戰模式：前端和伺服器的往來（老馬 2026-10-30）。
 // 格式照老柯〈觀戰模式-前後端對接格式-2026-10-30〉（worktree .tmp/）；畫面照小宜〈麻將觀戰模式-UIUX完整規格-2026-10-30〉。格式有變只改這個檔。
 // 原則：玩家用遊戲裡的 playerId（座位 id）、申請用 requestId，前端拿不到帳號 id；時間都是伺服器的毫秒數，倒數一律用「伺服器時間差」換算。
-import type { MjClientState, MjHandReveal, MjPlayer, MjWinner } from "@/hooks/useMahjong";
+import type { MjClientState, MjHandReveal, MjOpponentHand, MjPlayer, MjWinner } from "@/hooks/useMahjong";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { safeHand } from "./handOrder";
 import type { Meld } from "@/lib/mahjong/gameState";
@@ -36,7 +36,7 @@ export type SpectateLookupError = "not_found" | "not_started" | "not_line" | "is
 
 /** 觀戰者看到的牌桌：和玩家的 state 同一個形狀（給牌桌元件直接用），mySeat＝目前視角的座位、myHand＝那位玩家的手牌，其他三家只有公開資料 */
 export type SpectateView = Pick<MjClientState,
-  "status" | "players" | "mySeat" | "myHand" | "currentTurn" | "dealerSeat" | "lastDiscard" | "focusDiscard" | "tingSeats" | "eyeSeats"
+  "status" | "players" | "mySeat" | "myHand" | "currentTurn" | "dealerSeat" | "lastDiscard" | "focusDiscard" | "tingSeats" | "eyeSeats" | "opponentHands"
   | "wallRemaining" | "hasDrawn" | "drawnTileId" | "roomSettings" | "roundInfo" | "playerScores" | "dice" | "doorSeat" | "gameOver"
   | "winner" | "winners" | "settlement" | "handStats" | "remainingWall" | "nextGameReady">;
 
@@ -87,6 +87,8 @@ interface ServerPlayer { id: string; name: string; seat: number; tileCount: numb
 interface ServerView {
   status: string; players: ServerPlayer[]; wallCount: number; currentTurn: number; lastDiscard: { tile: Tile; from: number } | null; dealerSeat: number;
   hasDrawn: boolean; hand?: Tile[]; myDrawnTileId?: number; tingSeats?: number[]; eyeSeats?: number[]; pendingAddKong?: unknown;
+  // 被觀戰的玩家眼牌時（牌局進行中、他在 eyeSeats 裡），他看得到的其他三家手牌——和眼牌者本人收到的同一個格式（lib/mahjong/events.ts 的 opponentHands）
+  opponentHands?: MjOpponentHand[];
   roomSettings?: MjClientState["roomSettings"]; roundInfo?: MjClientState["roundInfo"]; playerScores?: number[]; dice?: [number, number, number]; doorSeat?: number; gameOver?: boolean;
   // 一局結束後才有（同一般 state）：贏家、一炮多響、結算、四家攤牌、整場統計、剩下的牌牆、同意下一局的人
   winner?: Omit<MjWinner, "name">; winners?: Omit<MjWinner, "name">[]; allHands?: MjHandReveal[]; settlement?: MjClientState["settlement"];
@@ -124,6 +126,8 @@ export function toSpectateView(r: SpectateViewResponse, prevFocus: SpectateView[
     focusDiscard: lastDiscard ?? (prevFocus && gs.players[prevFocus.from]?.discards?.some((t) => t.id === prevFocus.tile.id) ? prevFocus : null),
     tingSeats: gs.tingSeats ?? [],
     eyeSeats: gs.eyeSeats ?? [],
+    // 被觀戰的玩家眼牌時，觀戰者也看到其他三家的牌（同本人畫面：只有牌局進行中、本人在 eyeSeats 裡才有）
+    opponentHands: gs.status === "playing" && (gs.eyeSeats ?? []).includes(r.target.seat) ? gs.opponentHands ?? null : null,
     wallRemaining: gs.wallCount,
     hasDrawn: gs.hasDrawn,
     drawnTileId: gs.myDrawnTileId ?? null,

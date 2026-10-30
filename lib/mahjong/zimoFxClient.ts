@@ -17,13 +17,13 @@ export const ZIMO_FX_LIST: { code: ZimoFxCode; name: string }[] = [
 ];
 export const fxName = (code: string) => ZIMO_FX_LIST.find((f) => f.code === code)?.name ?? code;
 
-export type Res<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
+export type Res<T> = { ok: true; data: T } | { ok: false; status: number; error: string; body?: Record<string, unknown> };
 
 async function call<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>): Promise<Res<T>> {
   try {
     const r = await mjFetch(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
     const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!r.ok) return { ok: false, status: r.status, error: typeof j.error === "string" ? j.error : "network" };
+    if (!r.ok) return { ok: false, status: r.status, error: typeof j.error === "string" ? j.error : "network", body: j };
     return { ok: true, data: j as T };
   } catch {
     return { ok: false, status: 0, error: "network" };
@@ -34,6 +34,9 @@ async function call<T>(method: "GET" | "POST", path: string, body?: Record<strin
 export interface MyZimoFx { serverNow: number; displayName: string; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
 export const getMyFx = () => call<MyZimoFx>("GET", "/api/mahjong/zimo-fx");
 export const selectMyFx = (fx: ZimoFxChoice) => call<{ selected: ZimoFxChoice }>("POST", "/api/mahjong/zimo-fx", { fx });
+/** 選用被拒（403 not_granted：沒開通、過期、被收回）時，伺服器帶回目前實際套用的那一種（老柯 2026-10-31） */
+export const rejectedSelected = (r: Res<unknown>): ZimoFxChoice | null =>
+  !r.ok && r.status === 403 && typeof r.body?.selected === "string" ? (r.body.selected as ZimoFxChoice) : null;
 /** 老闆帳號＝7 種都是永久（到期是 null，對接格式第 4 節）；只用來決定要不要顯示後台入口，真正的權限由後台 API 檢查 */
 export const isPermanentAll = (d: MyZimoFx) => ZIMO_FX_LIST.every((f) => f.code in d.available && d.available[f.code] === null);
 

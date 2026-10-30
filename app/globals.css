@@ -1351,6 +1351,7 @@ body {
   color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
 .mjp-fx:hover { border-color: rgba(201,169,110,.55); } .mjp-fx:active { transform: scale(.98); }
 .mjp-fx.on { border-color: #f0d68a; background: rgba(201,169,110,.16); color: #f0d68a; }
+.mjp-fx.peek { border-style: dashed; border-color: rgba(255,255,255,.42); background: rgba(255,255,255,.06); } /* 沒開通、正在預覽：不像已選中 */
 .mjp-fx .use { font-size: 12px; font-weight: 700; color: #62d6a5; }
 .mjp-fx .ready { font-size: 12px; font-weight: 700; color: #f0d68a; }
 .mjp-fx .lock { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.5); }
