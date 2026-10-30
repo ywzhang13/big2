@@ -1,10 +1,11 @@
-// 斗內給阿瑋：自摸次數（GET /api/mahjong/donate）與歸零（POST /api/mahjong/donate/ack），2026-10-21
+// 斗內給阿瑋：自摸次數（GET /api/mahjong/donate）與按鈕（POST /api/mahjong/donate/ack），2026-10-21
+// 2026-10-31 老闆改規則：玩家按「斗內給阿瑋」只是確認提示、次數不變；老闆在後台記一筆斗內才歸零（同一個交易）
 //   D1 沒登入、訪客、還沒自摸的 LINE 帳號都是 0
 //   D2 真的自摸（action win，自己摸牌）→ 只有自摸的人 +1
 //   D3 放槍胡：胡的人、放槍的人都不算
 //   D4 同一個結算狀態重複存檔、同一局重送 → 不會多算
-//   D5 按斗內歸零；連按冪等、不會變負數
-//   D6 歸零後再自摸從 1 開始；D7 每個人各自獨立
+//   D5 玩家按斗內：回目前次數、次數不變、不寫入；老闆記一筆斗內 → 歸零；非老闆呼叫記帳 403、次數不變；作廢不還原
+//   D6 歸零後再自摸從 1 開始；D7 每個人各自獨立（老闆替 C 記帳只歸零 C）
 //   D8 訪客：自摸不寫入資料庫（伺服器分不出時由資料庫以 auth.users 排除）、按斗內不寫入；沒登入按斗內 401
 //   D10 帳號刪除：自摸紀錄和歸零點跟著刪（外鍵 on delete cascade）
 //   D9 自摸的判斷和整場統計一致（八仙過海算自摸、七搶一不算）；上線前的舊局、沒綁帳號的座位不記
@@ -12,6 +13,9 @@ import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { GET as donateGet } from "../../app/api/mahjong/donate/route";
 import { POST as donateAck } from "../../app/api/mahjong/donate/ack/route";
+import { POST as adminDonate } from "../../app/api/mahjong/admin/donations/route";
+import { POST as adminVoid } from "../../app/api/mahjong/admin/donations/void/route";
+import { users } from "../support/stub-zimofx-store";
 import { recordZimoWins, zimoUserIds } from "../../lib/mahjong/donate/record";
 import { rooms, hooks, saveGameState } from "../support/stub-db";
 import { tokens } from "../support/stub-auth";
@@ -33,6 +37,10 @@ const U = ["a", "b", "c", "d", "e"].map((x) => `${x.repeat(8)}-0000-4000-8000-00
 tokens.guest = { id: U[4], displayName: "訪客", pictureUrl: null, isGuest: true };
 const TOK = ["lineA", "lineB", "lineC", "lineD"];
 for (const [i, u] of U.entries()) await addUser(u, i === 4); // 和正式庫一樣，帳號在 auth.users；U[4] 是遊客
+["A", "B", "C", "D"].forEach((n, i) => (users[U[i]] = { name: n, avatarUrl: null })); // 後台記帳時查的 LINE 名稱
+tokens.boss = { id: "c5707922-f6f0-4c10-9c87-3532fdbf6b72", displayName: "張育瑋", pictureUrl: null, isGuest: false };
+/** 老闆在後台替 who 記一筆斗內（tok 換成別人＝非老闆呼叫） */
+const record = (who: number, tok = "boss") => post(adminDonate, { userId: U[who], amount: 100, donatedAt: new Date(clock.now).toISOString() }, tok);
 
 let nextId = 90000;
 const t = (k: string): Tile => ({ id: nextId++, suit: k[0] as TileSuit, rank: parseInt(k.slice(1), 10), display: k });
@@ -114,17 +122,18 @@ await recordZimoWins(z1.id, rooms[z1.id].game_state);
 const again = await post(action, { roomId: z1.id, playerId: "p1", actionType: "win" }, "lineA");
 eq([again.status === 200, await count("lineA")], [false, 1], "D4 同一局的結算狀態再存檔兩次、直接重記一次、重送胡牌：A 還是 1");
 
-// D5 歸零、連按
+// D5 玩家按斗內只是確認；老闆記帳才歸零
 clock.now += 1000;
 const a1 = await ack("lineA"), a2 = await ack("lineA"), a3 = await ack("lineA");
-eq([a1, a2, a3, await counts()], [{ status: 200, body: { count: 0 } }, { status: 200, body: { count: 0 } }, { status: 200, body: { count: 0 } }, [0, 0, 0, 0]],
-  "D5 A 按斗內：回 { count: 0 }，連按三次都一樣，次數歸零、不會變負數");
-const before = await (await db()).query("select * from mj_donate_acks");
-clock.now -= 10000; // 時鐘倒退（例如較舊的請求晚到）也不會把歸零點往前移
-await ack("lineA");
-clock.now += 10000;
-const after = await (await db()).query("select * from mj_donate_acks");
-eq(JSON.stringify(after.rows) === JSON.stringify(before.rows), true, "D5' 較晚到、時間較早的歸零請求不會把歸零點往前移（舊的自摸不會跑回來）");
+const acksAfterAck = (await (await db()).query("select * from mj_donate_acks")).rows.length;
+eq([a1, a2, a3, await counts(), acksAfterAck], [{ status: 200, body: { count: 1 } }, { status: 200, body: { count: 1 } }, { status: 200, body: { count: 1 } }, [1, 0, 0, 0], 0],
+  "D5 A 按斗內三次：每次都回 { count: 1 }，次數不變，資料庫沒有寫入歸零點");
+const notOwner = [(await record(0, "lineB")).status, (await record(0, "lineA")).status];
+eq([notOwner, await count("lineA")], [[403, 403], 1], "D5 一般玩家（B、A 自己）呼叫後台記帳：403，A 的次數照樣是 1");
+const rec = await record(0);
+eq([rec.status, await counts()], [200, [0, 0, 0, 0]], "D5 老闆替 A 記一筆斗內：A 的次數歸零（同一個交易），其他人不受影響");
+const v = await post(adminVoid, { id: rec.body.id, reason: "測試作廢" }, "boss");
+eq([v.status, await count("lineA")], [200, 0], "D5 作廢那筆斗內：次數不還原，A 還是 0");
 
 // D6 歸零後再自摸
 clock.now += 1000;
@@ -137,8 +146,10 @@ await zimo(seats, 2, "lineC");
 clock.now += 1000;
 await zimo(seats, 2, "lineC", 5); // 另一間房（第 6 局）
 eq(await counts(), [1, 0, 2, 0], "D7 C 自摸兩次：C 是 2，A 還是 1，B、D 是 0");
-await ack("lineC");
-eq(await counts(), [1, 0, 0, 0], "D7' C 按斗內只歸零 C 自己，A 不受影響");
+const cAck = await ack("lineC");
+eq([cAck.body, await counts()], [{ count: 2 }, [1, 0, 2, 0]], "D7' C 按斗內：回 { count: 2 }，次數不變");
+await record(2);
+eq(await counts(), [1, 0, 0, 0], "D7' 老闆替 C 記帳：只歸零 C 自己，A 不受影響");
 
 // D8 訪客、沒登入
 clock.now += 1000;

@@ -35,7 +35,3 @@ export async function countZimo(userId: string): Promise<number> {
   const r = await (await db()).query<{ n: number }>("select public.mj_donate_count($1) as n", [userId]);
   return Number(r.rows[0].n);
 }
-export async function ackDonate(userId: string): Promise<number> {
-  const r = await (await db()).query<{ n: number }>("select public.mj_donate_ack($1, $2) as n", [userId, at()]);
-  return Number(r.rows[0].n);
-}
