@@ -3,6 +3,7 @@
 // 原則：玩家用遊戲裡的 playerId（座位 id）、申請用 requestId，前端拿不到帳號 id；時間都是伺服器的毫秒數，倒數一律用「伺服器時間差」換算。
 import type { MjClientState, MjHandReveal, MjPlayer, MjWinner } from "@/hooks/useMahjong";
 import type { Tile } from "@/lib/mahjong/tiles";
+import { safeHand } from "./handOrder";
 import type { Meld } from "@/lib/mahjong/gameState";
 import { mjFetch } from "./clientAuth";
 
@@ -115,7 +116,8 @@ export function toSpectateView(r: SpectateViewResponse, prevFocus: SpectateView[
       ...(p.winFx ? { winFx: p.winFx } : {}), ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}), viewerCount: counts[p.id] ?? 0,
     })),
     mySeat: r.target.seat,
-    myHand: (gs.hand ?? []).filter((t) => t.suit !== "f"),
+    // 和本人畫面用同一個排序（lib/mahjong/handOrder.ts）：伺服器摸牌是接在手牌最後，不排會亂；剛摸的那張由 drawnTileId 分到右邊
+    myHand: safeHand(gs.hand ?? []),
     currentTurn: gs.currentTurn,
     dealerSeat: gs.dealerSeat,
     lastDiscard,

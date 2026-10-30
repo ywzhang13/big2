@@ -2,26 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { sortTiles, isFlower, tileKey } from "@/lib/mahjong/tiles";
+import { tileKey } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
+import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
 import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 
-/** Filter out any flower tiles that shouldn't be in hand (defensive) */
-function safeHand(tiles: Tile[]): Tile[] {
-  const filtered = tiles.filter((t) => {
-    // Triple check: suit property, isFlower function, and display name
-    if (t.suit === "f") return false;
-    if (isFlower(t)) return false;
-    const flowerNames = ["春", "夏", "秋", "冬", "梅", "蘭", "竹", "菊"];
-    if (flowerNames.includes(t.display)) return false;
-    return true;
-  });
-  if (filtered.length !== tiles.length) {
-    console.warn("[mj] safeHand filtered flowers:", tiles.length - filtered.length, "removed");
-  }
-  return sortTiles(filtered);
-}
 import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile, WinFx } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
