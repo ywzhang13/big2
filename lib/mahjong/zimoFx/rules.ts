@@ -1,6 +1,6 @@
 // 自摸特效庫＋斗內的規則（純資料，不連任何服務）。老闆 2026-10-30／31 定案：
 //   ・一週＝週一 00:00 到週日 23:59:59（Asia/Taipei，沒有日光節約，固定 UTC+8）
-//   ・特效開通有效到開通當週的週日 23:59:59；老闆帳號 6 種永久全開
+//   ・特效開通有效到開通「下一週」的週日 23:59:59（老闆 2026-10-31：本週斗內開通 → 下週也能用，週一不會整批失效）；老闆帳號 6 種永久全開
 //   ・排行榜：本週榜只算本週有效（沒作廢）的斗內；總斗內累計所有有效斗內、不分週（老闆 2026-10-31）。
 //     顯示 LINE 名稱和頭像（不做匿名），不含帳號 id
 import type { WinFx } from "../gameState";
@@ -25,6 +25,9 @@ export function weekOf(now: number): { start: number; end: number } {
   const start = dayStart - dow * DAY_MS - TPE_OFFSET_MS;
   return { start, end: start + 7 * DAY_MS };
 }
+
+/** 開通的到期時間：開通當週的下一週結束（下下週一 00:00，不含）＝下週日 23:59:59 是最後一刻 */
+export const grantExpiresAt = (now: number): number => weekOf(now).end + 7 * DAY_MS;
 
 /** 胡牌時用的「這個座位目前的特效」：until＝null 表示永久（老闆） */
 export interface ZimoFxNow { code: WinFx; until: number | null }

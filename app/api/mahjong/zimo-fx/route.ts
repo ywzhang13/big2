@@ -1,6 +1,7 @@
 // 玩家自己的自摸特效。要 LINE 登入（遊客 403）。
 //   GET：金色自摸（全帳號永久）＋已開通、還在有效期的特效（代號→到期時間；老闆帳號 6 種永久）和目前選用
-//   POST { fx }：金色自摸或已開通的特效可套用（同時寫操作紀錄）；沒開通、過期、被收回 403 not_granted
+//   POST { fx }：金色自摸或已開通的特效可套用（同時寫操作紀錄）；沒開通、過期、被收回 403 not_granted，
+//     不會改到原本的選用，回應附上目前實際套用的 selected（前端照這個顯示，不要留在被拒的那一種）
 import { getAuthUser } from "@/lib/auth";
 import { fail, ok, readBody } from "@/lib/mahjong/zimoFx/admin";
 import { GOLDEN_ZIMO_FX, isOwner, isSelectableZimoFx, ZIMO_FX } from "@/lib/mahjong/zimoFx/rules";
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     if (user.isGuest) return fail(403, "guest_not_allowed");
     const b = await readBody(request);
     if (!b || !isSelectableZimoFx(b.fx)) return fail(400, "bad_request");
-    if (!(await selectFx(user.id, b.fx, isOwner(user.id)))) return fail(403, "not_granted");
+    if (!(await selectFx(user.id, b.fx, isOwner(user.id)))) return fail(403, "not_granted", { selected: (await available(user.id, nowMs())).selected });
     return ok({ selected: b.fx });
   } catch (err) {
     console.error("[mj-zimo-fx] post", err instanceof Error ? err.message : err);

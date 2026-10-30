@@ -1,10 +1,11 @@
 // 自摸特效庫＋斗內的規則（老闆 2026-10-31）：週界線、特效有效判斷、本週排行榜
 //   R1 一週＝台北週一 00:00 到週日 23:59:59：週日 23:59:59 還在這週，週一 00:00:00 是下一週
-//   R2 開通到期＝那一週的結束；週日 23:59:59 有效、週一 00:00:00 失效；老闆永久
+//   R2 特效有效到 until：最後一秒有效、到期那一刻失效；老闆永久
+//   R6 開通到期＝開通當週的下一週結束（老闆 2026-10-31）：週一、週四、週日開通都用到下週日 23:59:59
 //   R3 沒選過、沒有有效開通或代號不認得＝金色自摸回退；老闆可永久選六種特效
 //   R5 總斗內：累計所有週的有效斗內；作廢不算；名稱、頭像用最新一筆「有效」斗內的；沒有帳號 id
 //   R4 排行榜只算本週有效：作廢的不算、上週的不算；同額較早達到的在前；顯示最新一筆的 LINE 名稱和頭像、沒有帳號 id
-import { allTimeBoard, OWNER_USER_ID, resolveZimoFx, weekOf, weeklyBoard, zimoFxValid } from "../lib/mahjong/zimoFx/rules";
+import { allTimeBoard, grantExpiresAt, OWNER_USER_ID, resolveZimoFx, weekOf, weeklyBoard, zimoFxValid } from "../lib/mahjong/zimoFx/rules";
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
   const ok = JSON.stringify(a) === JSON.stringify(e);
@@ -21,6 +22,9 @@ eq([zimoFxValid(g, T("2026-11-01T23:59:59")), zimoFxValid(g, T("2026-11-02T00:00
   ["storm", null, "thunder"], "R2 開通到週日 23:59:59 還有效、週一 00:00:00 失效；老闆選雷霆永久有效");
 eq([resolveZimoFx(OWNER_USER_ID, undefined), resolveZimoFx("u:a", undefined) ?? null, resolveZimoFx("u:a", { fx: "storm", until: null }) ?? null, resolveZimoFx(null, { fx: "storm", until: NEXT }) ?? null, resolveZimoFx("u:a", { fx: "rainbow", until: NEXT }) ?? null],
   [{ code: "golden", until: null }, { code: "golden", until: null }, { code: "golden", until: null }, null, { code: "golden", until: null }], "R3 老闆或一般帳號沒選、一般帳號選未開通特效、不認得代號＝金色自摸；沒綁帳號仍沒有特效");
+const N2 = T("2026-11-09T00:00:00");
+eq([T("2026-10-26T00:00:00"), T("2026-10-29T12:00:00"), T("2026-11-01T23:59:59")].map((t) => grantExpiresAt(t) === N2).concat(grantExpiresAt(T("2026-11-02T00:00:00")) === T("2026-11-16T00:00:00")),
+  [true, true, true, true], "R6 10/26 週一、10/29 週四、11/1 週日 23:59:59 開通都到 11/8 週日 23:59:59（11/9 週一 00:00 失效）；11/2 週一 00:00 開通就到 11/15");
 const row = (userId: string, amount: number, at: string, o: { voided?: boolean; name?: string } = {}) =>
   ({ userId: `uid-${userId}`, name: o.name ?? userId, avatarUrl: `https://pic/${userId}`, amount, donatedAt: T(at), voided: !!o.voided });
 const now = T("2026-10-30T12:00:00");

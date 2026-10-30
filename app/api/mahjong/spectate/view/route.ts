@@ -1,5 +1,6 @@
 // 觀戰：看某位「已同意」玩家的視角。GET ?roomId=…&target=<playerId>
-// 每次都重新檢查同意（收回、房間結束後下一次就拿不到）。只帶目標玩家的手牌；另外三家只有公開資料（暗槓照樣蓋牌）。
+// 每次都重新檢查同意（收回、房間結束後下一次就拿不到）。帶目標玩家的手牌；另外三家只有公開資料（暗槓照樣蓋牌），
+// 目標正在眼牌時例外：再帶他看得到的三家手牌 gameState.opponentHands（和他本人 state 同一份；老闆 2026-10-31）。
 // 同一位觀戰者、同一房每秒最多 10 次，超過 429 rate_limited（retryAfterMs）。
 import { loadRoom, toSpectatorGameState } from "@/lib/mahjong/db";
 import { fail, spectatorUser, startedState } from "@/lib/mahjong/spectate/server";

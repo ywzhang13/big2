@@ -3,7 +3,8 @@
 //   V2 申請：通知只送到被申請者的座位頻道（帶 LINE 本名、頭像，不帶帳號 id），公開頻道收不到；重複申請 409、遊客／同桌 403、不是這桌的玩家 400
 //   V3 沒同意的玩家手牌拿不到（view 403，回應裡沒有那位的手牌）
 //   V4 管理與回應只限座位本人；別人的 requestId 回應不了
-//   V5 同意後 view：只有目標的手牌；另外三家只有公開資料（別家暗槓蓋牌、沒有 opponentHands／動作／座位頻道）；沒有帳號 id
+//   V5 同意後 view：目標沒眼牌時只有目標的手牌（另外三家只有公開資料、別家暗槓蓋牌）；目標眼牌時再加上他看得到的三家手牌
+//      （和本人 state 的 opponentHands 同一份，老闆 2026-10-31）；動作、食替、座位頻道都沒有；沒有帳號 id
 //   V6 觀戰者送出遊戲動作、聊天、語音、特效、下一局、離房投票、讀本人 state 一律被拒，牌局狀態沒變
 //   V7 收回後立刻拿不到；被觀戰人數廣播（公開，只有人數）
 //   V8 冷卻 30 秒、逾時 30 秒（伺服器時間）；拒絕後 30 秒內不能再申請
@@ -151,6 +152,8 @@ let reqId = "";
   const cnt = sent.find((e) => e.event === "mj_spectators");
   eq([a.status, a.body.status, cnt?.channel, cnt?.payload.counts, Object.keys(cnt?.payload ?? {}).sort()], [200, "approved", "mj-1234", { p0: 1, p1: 0, p2: 0, p3: 0 }, ["counts", "serverNow"]],
     "V5 p0 同意：公開頻道廣播 mj_spectators，只有每位玩家的人數");
+  // p0 沒在眼牌：只有 p0 的手牌
+  rooms.R.game_state.eyeSeats = []; rooms.R.game_state.tingSeats = [];
   const v = await get(view, "/?roomId=R&target=p0", "spec");
   const g = v.body.gameState;
   const others = [1, 2, 3].map((seat) => hasId(v.text, handIds(seat)));
@@ -158,7 +161,17 @@ let reqId = "";
     g.players[1].revealed[0].tiles.map((x: Tile) => `${x.suit}${x.rank}`).join(),
     "opponentHands" in g, "myAvailableActions" in g, "chiForbidden" in g, "myChannel" in g, leaks(v.text)],
     [200, { playerId: "p0", name: "P0", seat: 0 }, "p0", handIds(0), [0, 0, 0], 0, "z0,z0,z0,z0", false, false, false, false, 0],
-    "V5 看 p0 視角：只有 p0 的手牌；另外三家手牌一張都沒有、p1 暗槓蓋牌（沒牌面、沒 id）；p0 眼牌看得到的三家手牌、動作、座位頻道都不在；沒有帳號 id");
+    "V5 看 p0 視角（p0 沒眼牌）：只有 p0 的手牌；另外三家手牌一張都沒有、p1 暗槓蓋牌（沒牌面、沒 id）；沒有三家手牌、動作、座位頻道；沒有帳號 id");
+  // p0 眼牌：再加上 p0 本人看得到的三家手牌，和 p0 自己的 state 同一份（老闆 2026-10-31）
+  rooms.R.game_state.eyeSeats = [0]; rooms.R.game_state.tingSeats = [0];
+  const ve = await get(view, "/?roomId=R&target=p0", "spec");
+  const ge = ve.body.gameState;
+  const own = (await get(getState, "/?roomId=R&playerId=p0", "as:p0")).body;
+  const ownOpp = (own.gameState ?? own).opponentHands;
+  eq([ve.status, ge.opponentHands?.map((o: { seat: number }) => o.seat), [1, 2, 3].map((seat) => hasId(ve.text, handIds(seat)) === handIds(seat).length),
+    JSON.stringify(ge.opponentHands) === JSON.stringify(ownOpp) && !!ownOpp, "myAvailableActions" in ge, "chiForbidden" in ge, "myChannel" in ge, leaks(ve.text)],
+    [200, [1, 2, 3], [true, true, true], true, false, false, false, 0],
+    "V5 看 p0 視角（p0 眼牌）：多了三家手牌（含 p1 暗槓牌面），和 p0 本人 state 的 opponentHands 完全一樣；動作、食替、座位頻道照樣沒有；沒有帳號 id");
   const other = await get(view, "/?roomId=R&target=p1", "spec");
   const spec2 = await get(view, "/?roomId=R&target=p0", "spec2");
   eq([other.status, hasId(other.text, handIds(1)), spec2.status, hasId(spec2.text, handIds(0)), (await get(view, "/?roomId=R&target=p0", "guest")).status, (await get(view, "/?roomId=R&target=p0")).status],
@@ -193,9 +206,9 @@ let reqId = "";
   const v = await get(view, "/?roomId=R&target=p0", "spec");
   const cnt = sent.find((e) => e.event === "mj_spectators");
   const list = await get(roomInfo, "/?code=1234", "spec");
-  eq([rv.body.revoked, v.status, v.body.error, hasId(v.text, handIds(0)), cnt?.payload.counts, list.body.players[0].status, list.body.players[0].canRequest],
-    [1, 403, "not_approved", 0, { p0: 0, p1: 0, p2: 0, p3: 0 }, "revoked", false],
-    "V7 p0 收回：下一次看視角就 403、沒有手牌；人數廣播變 0；觀戰者清單顯示已收回（冷卻中不能馬上再申請）");
+  eq([rv.body.revoked, v.status, v.body.error, [0, 1, 2, 3].map((seat) => hasId(v.text, handIds(seat))), rooms.R.game_state.eyeSeats, cnt?.payload.counts, list.body.players[0].status, list.body.players[0].canRequest],
+    [1, 403, "not_approved", [0, 0, 0, 0], [0], { p0: 0, p1: 0, p2: 0, p3: 0 }, "revoked", false],
+    "V7 p0 收回（p0 眼牌中）：下一次看視角就 403、p0 和三家手牌都沒有；人數廣播變 0；觀戰者清單顯示已收回（冷卻中不能馬上再申請）");
   eq([(await post(revoke, { roomId: "R", playerId: "p0" }, "spec")).status, (await post(revoke, { roomId: "R", playerId: "p0", requestId: "x" }, "as:p0")).status],
     [403, 400], "V7 觀戰者不能替 p0 收回；requestId 格式錯 400");
 }
@@ -239,9 +252,10 @@ let reqId = "";
   const pubSt = await get(getState, "/?roomId=R");
   const want = { p0: 0, p1: 0, p2: 2, p3: 1 };
   eq([v2.status, v2.body.gameState.hand.map((x: Tile) => x.id), hasId(v2.text, handIds(3)), v3.status, v3.body.gameState.hand.map((x: Tile) => x.id), hasId(v3.text, handIds(2)),
+    [v2, v3].map((v) => "opponentHands" in v.body.gameState || hasId(v.text, handIds(0)) > 0 || hasId(v.text, handIds(1)) > 0),
     v2.body.spectatorCounts, st.body.gameState.spectatorCounts, pubSt.body.gameState.spectatorCounts, leaks(st.text + pubSt.text)],
-    [200, handIds(2), 0, 200, handIds(3), 0, want, want, want, 0],
-    "V9 同一位觀戰者可以在 p2、p3 之間切換，各自只有那一位的手牌；三處的人數一致（p2 兩人、p3 一人）；state 沒有帳號 id");
+    [200, handIds(2), 0, 200, handIds(3), 0, [false, false], want, want, want, 0],
+    "V9 同一位觀戰者可以在 p2、p3 之間切換，各自只有那一位的手牌（同桌 p0 在眼牌，但 p2、p3 沒眼牌，所以沒有三家手牌）；三處的人數一致（p2 兩人、p3 一人）；state 沒有帳號 id");
   const all = await post(revoke, { roomId: "R", playerId: "p2" }, "as:p2");
   eq([all.body.revoked, (await get(view, "/?roomId=R&target=p2", "spec")).status, (await get(view, "/?roomId=R&target=p2", "spec2")).status, (await get(view, "/?roomId=R&target=p3", "spec")).status],
     [2, 403, 403, 200], "V9 p2 收回全部：兩位都看不到 p2，p3 的同意不受影響");

@@ -513,12 +513,13 @@ export function toPlayerGameState(
   };
 }
 
-/** 觀戰者看到的「已同意那位玩家」的視角：公開狀態＋他的手牌、剛摸進的那張、他自己暗槓的牌面。
- *  刻意不從 toPlayerGameState 刪欄位，而是從公開狀態往上加：可以做的動作、食替、眼牌時看得到的三家手牌、座位頻道都不會帶到 */
+/** 觀戰者看到的「已同意那位玩家」的視角：公開狀態＋他的手牌、剛摸進的那張、他自己暗槓的牌面；
+ *  他眼牌時再加上他看得到的三家手牌（opponentHands，和本人 state 同一個條件、同一份資料；老闆 2026-10-31）。
+ *  刻意不從 toPlayerGameState 刪欄位，而是從公開狀態往上加：可以做的動作、食替、座位頻道都不會帶到 */
 export function toSpectatorGameState(
   state: MahjongGameState,
   targetPlayerId: string
-): PublicGameState & { hand: Tile[]; myDrawnTileId?: number; spectating: string } {
+): PublicGameState & { hand: Tile[]; myDrawnTileId?: number; spectating: string; opponentHands?: ReturnType<typeof opponentHands> } {
   const pub = toPublicGameState(state);
   const target = state.players.find((p) => p.id === targetPlayerId);
   if (!target) throw new Error("觀戰目標不在這桌");
@@ -528,6 +529,7 @@ export function toSpectatorGameState(
     hand: target.hand.filter((t) => t.suit !== "f"),
     myDrawnTileId: state.currentTurn === target.seat ? state.drawnTileId : undefined,
     spectating: target.id,
+    ...(state.status === "playing" && state.eyeSeats?.includes(target.seat) ? { opponentHands: opponentHands(state, target.seat) } : {}),
   };
 }
 
