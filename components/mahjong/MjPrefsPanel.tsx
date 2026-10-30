@@ -2,10 +2,23 @@
 
 import { useEffect, useState } from "react";
 import MjTile from "./MjTile";
+import ZimoFxPreferencePreview from "./ZimoFxPreferencePreview";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { BACKS, FELTS, THEMES, DEFAULT_PREFS, usePrefs, setPrefs, type BackId, type FeltId } from "@/lib/mahjong/prefs";
 import { CloseIcon, SpeakerIcon } from "./MjIcons";
-import { getMyFx, selectMyFx, fxName, ZIMO_FX_LIST, type MyZimoFx, type ZimoFxCode } from "@/lib/mahjong/zimoFxClient";
+import { getMyFx, selectMyFx, type MyZimoFx, type ZimoFxChoice } from "@/lib/mahjong/zimoFxClient";
+
+type FxChoice = ZimoFxChoice;
+
+const FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
+  { code: "golden", name: "金色自摸" },
+  { code: "meteor", name: "隕石", art: "/mahjong-fx/meteor/meteor-title.webp" },
+  { code: "thunder", name: "雷霆", art: "/mahjong-fx/zimo/thunder/thunder-title.webp" },
+  { code: "storm", name: "風暴", art: "/mahjong-fx/zimo/storm/storm-title.webp" },
+  { code: "frost", name: "冰封", art: "/mahjong-fx/zimo/frost/frost-title.webp" },
+  { code: "blackhole", name: "黑洞", art: "/mahjong-fx/zimo/blackhole/blackhole-title.webp" },
+  { code: "sakura", name: "櫻花", art: "/mahjong-fx/zimo/sakura/sakura-title.webp" },
+];
 
 const PREVIEW_TILES: Tile[] = [
   { id: -11, suit: "m", rank: 5, display: "五萬" },
@@ -26,7 +39,7 @@ export default function MjPrefsPanel() {
   const [tab, setTab] = useState<"look" | "sound" | "fx">("look");
   const prefs = usePrefs();
   const [fx, setFx] = useState<MyZimoFx | null>(null); // null＝沒登入 LINE、沒開通或取不到：不顯示分頁
-  const [pick, setPick] = useState<ZimoFxCode | null>(null);
+  const [pick, setPick] = useState<FxChoice | null>(null);
   const [replay, setReplay] = useState(0);
   const [fxBusy, setFxBusy] = useState(false);
   const [fxErr, setFxErr] = useState(false);
@@ -36,10 +49,10 @@ export default function MjPrefsPanel() {
     let alive = true;
     void getMyFx().then((r) => {
       if (!alive) return;
-      const has = r.ok && Object.keys(r.data.available).length > 0;
-      setFx(has ? r.data : null);
-      setPick(has ? r.data.selected ?? (Object.keys(r.data.available)[0] as ZimoFxCode) : null);
-      if (!has) setTab((t) => (t === "fx" ? "look" : t));
+      const signedIn = r.ok;
+      setFx(signedIn ? r.data : null);
+      setPick(signedIn ? r.data.selected ?? "golden" : null);
+      if (!signedIn) setTab((t) => (t === "fx" ? "look" : t));
     });
     return () => { alive = false; };
   }, [open]);
@@ -59,9 +72,10 @@ export default function MjPrefsPanel() {
   if (!open) return null;
   const close = () => setOpen(false);
   const themeOn = THEMES.find((t) => t.back === prefs.back && t.felt === prefs.felt)?.id;
-  const fxCodes = fx ? ZIMO_FX_LIST.map((f) => f.code).filter((c) => c in fx.available) : [];
+  const isGranted = (choice: FxChoice) => !!fx && choice in fx.available;
+  const selectedChoice: FxChoice = fx?.selected ?? "golden";
   const apply = async () => {
-    if (!pick || fxBusy) return;
+    if (!pick || !isGranted(pick) || fxBusy) return;
     setFxBusy(true); setFxErr(false);
     const r = await selectMyFx(pick);
     setFxBusy(false);
@@ -85,13 +99,21 @@ export default function MjPrefsPanel() {
         <div className="mjp-body" id="mjp-body" role="tabpanel" aria-labelledby={`mjp-tab-${tab}`} data-prefs-body={tab}>
           {tab === "fx" && fx ? (
           <div className="mjp-fxs" data-prefs-fx-list>
-            {fxCodes.map((c) => (
-              <button key={c} type="button" data-prefs-fx={c} aria-pressed={pick === c} className={`mjp-fx ${pick === c ? "on" : ""}`}
-                onClick={() => { setPick(c); setReplay((n) => n + 1); setFxErr(false); }}>
-                {fxName(c)}
-                {fx.selected === c && <span className="use" data-prefs-fx-using>使用中</span>}
+            {FX_CARDS.map(({ code, name, art }) => {
+              const granted = isGranted(code);
+              const current = selectedChoice === code;
+              return <button key={code} type="button" data-prefs-fx={code} aria-pressed={pick === code}
+                className={`mjp-fx ${pick === code ? "on" : ""} ${granted ? "granted" : "locked"}`}
+                onClick={() => { setPick(code); setReplay((n) => n + 1); setFxErr(false); }}>
+                <span className={`mjp-fx-thumb ${code === "golden" ? "gold" : ""}`}>
+                  {art && <img src={art} alt="" />}
+                </span>
+                <span>{name}</span>
+                <span className={current ? "use" : granted ? "ready" : "lock"} data-prefs-fx-state={code}>
+                  {current ? "使用中" : granted ? "可使用" : "僅預覽"}
+                </span>
               </button>
-            ))}
+            })}
           </div>
           ) : tab === "look" ? (<>
           <div className="mjp-sec">快速主題</div>
@@ -147,12 +169,12 @@ export default function MjPrefsPanel() {
           <div className="cap" data-prefs-cap>{BACKS[prefs.back].name}／{FELTS[prefs.felt].name}</div>
         </div>}
         {tab === "fx" && pick && <div className="mjp-preview" aria-live="polite">
-          <div className="mjp-fxpv" data-prefs-fx-preview={pick}><b key={replay}>{fxName(pick)}</b></div>
+          <ZimoFxPreferencePreview fx={pick} replay={replay} muted={prefs.fxMuted} volume={prefs.fxVol} />
         </div>}
         <div className="mjp-foot">
           {tab === "fx" ? (
-            <button type="button" className="mjp-apply" data-prefs-fx-apply disabled={!pick || fxBusy || fx?.selected === pick} onClick={apply}>
-              {fxErr ? "套用失敗，再試一次" : fx?.selected === pick ? "使用中" : "套用"}
+            <button type="button" className="mjp-apply" data-prefs-fx-apply disabled={!pick || !isGranted(pick) || fxBusy || selectedChoice === pick} onClick={apply}>
+              {fxErr ? "套用失敗，再試一次" : selectedChoice === pick ? "使用中" : pick && isGranted(pick) ? "套用" : "尚未開通"}
             </button>
           ) : (
           /* 回復預設：只回復目前這個分頁的設定 */

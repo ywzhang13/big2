@@ -46,8 +46,8 @@ export interface WinnerEntry {
   winFx?: WinFx;           // 帳號的自摸特效代號（公開，全桌照這個播）；只有自摸、而且胡牌那一刻特效有效才有（lib/mahjong/winFx.ts）
 }
 
-/** 自摸特效代號（老闆 2026-10-31 定案 6 種：烈焰和隕石太像已移除）；前端照代號播放，還沒做好的代號前端當作一般浮層 */
-export type WinFx = "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
+/** 自摸特效代號（老闆 2026-10-31 定案 6 種付費特效，加上全帳號永久的金色預設）；前端照代號播放，還沒做好的代號前端當作一般浮層 */
+export type WinFx = "golden" | "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
 
 /** 整場統計：每家這場胡牌、放槍、自摸各幾次（座位 0～3） */
 export interface HandStats {

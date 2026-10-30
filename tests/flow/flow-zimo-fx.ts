@@ -6,10 +6,10 @@
 //   Z11 打牌、摸牌、動作、下一局：查自摸特效的請求在登入檢查之前就發出（和登入檢查同時進行，不多串一次往返）
 //   Z12 烈焰（flame）已移除：後台開通、收回、玩家選用都 400；資料庫也寫不進去；老闆帳號的清單沒有烈焰
 //   Z9 老闆記帳＝斗內卡自摸次數歸零（同一個交易）；非老闆呼叫記帳 403、次數不變；作廢不還原
-//   Z4 開通到本週日 23:59:59：週日 23:59:59 自摸帶特效，週一 00:00:00 自摸回一般浮層（固定時鐘）
-//   Z5 提前收回：下一次自摸回一般浮層；只收回一種時，選用的不是那種就照舊
-//   Z6 老闆帳號：6 種永久全開；沒選過＝隕石；選雷霆後自摸帶 thunder；不能被開通／收回；資料庫查不到時照舊隕石、別人沒有
-//   Z7 玩家自己選：只能選有效開通的；過期、收回後 403；遊客 403
+//   Z4 開通到本週日 23:59:59：週日 23:59:59 自摸帶特效，週一 00:00:00 回金色自摸（固定時鐘）
+//   Z5 提前收回：下一次自摸回金色自摸；只收回一種時，選用的不是那種就照舊
+//   Z6 老闆帳號：6 種永久全開；沒選過＝金色自摸；選雷霆後自摸帶 thunder；不能被開通／收回；資料庫查不到時回金色
+//   Z7 玩家自己選：金色自摸永久可選；其他只能選有效開通的；過期、收回後 403；遊客 403
 //   Z8 胡別人打的牌不帶特效；牌局狀態、廣播沒有帳號 id；存著的特效過期了（沒重查）也不播
 import { GET as players } from "../../app/api/mahjong/admin/players/route";
 import { GET as donationsGet, POST as donationsAdd } from "../../app/api/mahjong/admin/donations/route";
@@ -134,7 +134,7 @@ let idA = "", idB = "";
     (await post(donationsAdd, { userId: G, amount: 100, donatedAt: "2026-10-27T20:00:00+08:00" }, "boss")).body.error,
   ];
   const fxAfterDonate = await get(myFxGet, "/", "a");
-  eq([a1.status, b1.status, bad, fxAfterDonate.body.available], [200, 200, [400, 400, 400, 400, "unknown_player"], {}],
+  eq([a1.status, b1.status, bad, fxAfterDonate.body.available], [200, 200, [400, 400, 400, 400, "unknown_player"], { golden: null }],
     "Z2 老闆記兩筆 200；金額 0、小數、超過 999999、未來日期 400；遊客帳號 unknown_player；記帳不會開通特效");
   const before = (await get(board, "/")).body.rows.map((r: { name: string; amount: number }) => `${r.name}:${r.amount}`);
   const v1 = await post(donationVoid, { id: idB, reason: "金額打錯" }, "boss");
@@ -179,8 +179,8 @@ let idA = "", idB = "";
   clock.now = T("2026-11-02T00:00:00");
   const mon = await zimo(A);
   eq([g.status, g.body.granted, g.body.expiresAt === T("2026-11-02T00:00:00"), bad, [sun.fx, sun.overFx], [mon.fx, mon.overFx]],
-    [200, 2, true, [400, 400, "owner_permanent"], ["storm", "storm"], [null, null]],
-    "Z4 週四開通雷霆、風暴（套用風暴）到下週一 00:00 前；週日 23:59:59 自摸帶 storm（廣播也有），週一 00:00:00 自摸回一般浮層");
+    [200, 2, true, [400, 400, "owner_permanent"], ["storm", "storm"], ["golden", "golden"]],
+    "Z4 週四開通雷霆、風暴（套用風暴）到下週一 00:00 前；週日 23:59:59 自摸帶 storm（廣播也有），週一 00:00:00 自摸安全回退金色自摸");
 }
 
 // ---- Z5 提前收回 ----
@@ -194,8 +194,8 @@ let idA = "", idB = "";
   const r3 = await post(fxRevoke, { userId: B }, "boss");
   const info = (await get(fxGet, `/?userId=${B}`, "boss")).body;
   eq([r1.body.revoked, z1.fx, r2.body.revoked, z2.fx, r3.body.revoked, info.active, info.selected, info.grants.length, (await post(fxRevoke, { userId: BOSS }, "boss")).body.error],
-    [1, "blackhole", 1, null, 0, {}, null, 2, "owner_permanent"],
-    "Z5 收回冰封（沒在用）：自摸照樣黑洞；收回黑洞（正在用）：自摸回一般浮層，不會自動換別種；開通紀錄保留 2 筆；老闆帳號不能收回");
+    [1, "blackhole", 1, "golden", 0, {}, "golden", 2, "owner_permanent"],
+    "Z5 收回冰封（沒在用）：自摸照樣黑洞；收回黑洞（正在用）：自摸安全回退金色自摸；開通紀錄保留 2 筆；老闆帳號不能收回");
 }
 
 // ---- Z6 老闆永久 ----
@@ -211,8 +211,8 @@ let idA = "", idB = "";
   const z4 = await zimo(A);
   storeFail.zimoFxFor = false;
   eq([z1.fx, Object.keys(mine.body.available).sort(), Object.values(mine.body.available).every((v) => v === null), mine.body.selected, sel.status, z2.fx, z3.fx, z4.fx],
-    [["meteor"][0], ["blackhole", "frost", "meteor", "sakura", "storm", "thunder"], true, "meteor", 200, "thunder", "meteor", null],
-    "Z6 老闆帳號到 2099 年還有效：沒選過＝隕石；6 種永久；選雷霆後自摸帶 thunder；資料庫查不到時老闆照舊隕石、阿明回一般浮層");
+    ["golden", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"], true, "golden", 200, "thunder", "golden", "golden"],
+    "Z6 老闆帳號到 2099 年還有效：沒選過＝金色自摸；6 種付費特效永久可選；選雷霆後自摸帶 thunder；資料庫查不到時所有帳號安全回退金色自摸");
 }
 
 // ---- Z7 玩家自己選 ----
@@ -229,8 +229,8 @@ let idA = "", idB = "";
   const after = await get(myFxGet, "/", "a");
   const guest = [(await get(myFxGet, "/", "guest")).status, (await post(myFxSet, { fx: "meteor" }, "guest")).status, (await get(myFxGet, "/")).status];
   eq([Object.keys(list.body.available).sort(), list.body.selected, ok1.status, no1.body.error, z1.fx, no2.body.error, no3.body.error, after.body.available, after.body.selected, guest],
-    [["sakura", "storm", "thunder"], "sakura", 200, "not_granted", "thunder", "not_granted", "not_granted", {}, null, [403, 403, 401]],
-    "Z7 阿明這週有雷霆、風暴、櫻花，選雷霆後自摸帶 thunder；沒開通的黑洞、收回的雷霆、週一過期的櫻花都 403；過期後清單是空的；遊客 403、沒登入 401");
+    [["golden", "sakura", "storm", "thunder"], "sakura", 200, "not_granted", "thunder", "not_granted", "not_granted", { golden: null }, "golden", [403, 403, 401]],
+    "Z7 阿明這週有金色自摸、雷霆、風暴、櫻花，選雷霆後自摸帶 thunder；沒開通的黑洞、收回的雷霆、週一過期的櫻花都 403；過期後只剩金色自摸；遊客 403、沒登入 401");
 }
 
 // ---- Z8 胡別人的牌、帳號 id、存著的特效過期 ----
@@ -246,7 +246,7 @@ let idA = "", idB = "";
   const pub = await get(getState, "/?roomId=R&playerId=p2", "as:p2");
   eq([ron.status, ronWin, zz.fx, leaks(zz.text) + leaks(pub.text)], [200, [[1, 0, null]], "storm", 0], "Z8 阿明胡別人打的牌：不帶特效；自摸帶 storm；廣播和 state 都沒有帳號 id");
   eq([selfDrawWinFx({ userId: A, zimoFx: { code: "storm", until: Date.now() - 1 } }) ?? null, selfDrawWinFx({ userId: A, zimoFx: { code: "storm", until: Date.now() + 60000 } }), selfDrawWinFx({ userId: BOSS, zimoFx: undefined }), selfDrawWinFx({ userId: A, zimoFx: undefined }) ?? null],
-    [null, "storm", "meteor", null], "Z8 牌局裡存著的特效已經過期（沒來得及重查）：不播；舊牌局沒查過：老闆照舊隕石、別人沒有");
+    ["golden", "storm", "golden", "golden"], "Z8 牌局裡存著的特效已經過期（沒來得及重查）：安全回退金色自摸；舊牌局沒查過也回金色自摸");
 }
 
 // ---- Z9 老闆記帳＝斗內卡次數歸零 ----
@@ -326,8 +326,25 @@ let idA = "", idB = "";
   }
   const mine = (await get(myFxGet, "/", "boss")).body.available;
   eq([[g1.status, g1.body.error], [g2.status, g2.body.error], [rv.status, rv.body.error], [s1.status, s1.body.error], [s2.status, s2.body.error], sqlTries, "flame" in mine, Object.keys(mine).length],
-    [[400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], ["擋下", "擋下"], false, 6],
-    "Z12 烈焰已移除：後台開通（單選、混在別種裡）、收回、玩家和老闆選用都 400；資料庫直接寫開通和選用都被檢查限制擋下；老闆帳號的清單是 6 種、沒有烈焰");
+    [[400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], ["擋下", "擋下"], false, 7],
+    "Z12 烈焰已移除：後台開通（單選、混在別種裡）、收回、玩家和老闆選用都 400；資料庫直接寫開通和選用都被檢查限制擋下；老闆帳號清單沒有烈焰，另含全帳號金色自摸預設共 7 種");
+}
+
+// ---- Z13 金色自摸永久回退 ----
+{
+  clock.now = T("2026-11-10T14:00:00");
+  const d = await db();
+  await d.query("delete from mj_fx_prefs where user_id = $1", [B]); // 模擬尚未選過任何特效的新帳號
+  const unset = await get(myFxGet, "/", "b");
+  const fallback = await zimo(B);
+  const denied = await post(myFxSet, { fx: "meteor" }, "b");
+  const golden = await post(myFxSet, { fx: "golden" }, "b");
+  const selected = await get(myFxGet, "/", "b");
+  let invalidPref = "沒擋";
+  try { await d.exec("insert into mj_fx_prefs (user_id, fx, updated_at) values ('invalid-fx', 'rainbow', now())"); } catch { invalidPref = "擋下"; }
+  eq([unset.body.available, unset.body.selected, fallback.fx, denied.body.error, golden.status, golden.body.selected, selected.body.selected, invalidPref],
+    [{ golden: null }, "golden", "golden", "not_granted", 200, "golden", "golden", "擋下"],
+    "Z13 金色自摸：未設定帳號自摸和 API 都回金色；未開通的隕石不能套用；金色可永久套用；資料庫拒絕未知代號");
 }
 
 console.log(results.join("\n"));

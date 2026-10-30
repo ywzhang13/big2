@@ -423,8 +423,10 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
  * tile：自摸的那張牌（完整版：主擊後才從落點炸出來，停在那裡）。
  * warm：預熱（components/mahjong/fxWarmUp.tsx）：不出聲、不震、不攔點擊，看不見的狀態把整條時間軸一格一格走一遍，走完 onDone(false)
  */
-export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDone, warm }: {
+export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDone, warm, embedded = false, sound = true }: {
   fx: ZimoFxNew; seat: number; mySeat: number; mobile: boolean; tile: Tile | null | undefined; name?: string; onDone: (skipped: boolean) => void; warm?: WarmMode;
+  /** 設定頁預覽用：限制在自己的手機牌桌容器，不能影響正式牌桌。 */
+  embedded?: boolean; sound?: boolean;
 }) {
   const rm = useReducedMotion();
   const art = (f: string) => (warm ? warmImg(f) : `${ART}/${fx}/${f}.webp`);
@@ -440,15 +442,17 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
   useLayoutEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const W = innerWidth, H = innerHeight;
+    const box = embedded ? root.getBoundingClientRect() : null;
+    const W = box?.width || innerWidth, H = box?.height || innerHeight;
     const u = Math.min(H, W * 0.62);
     // 落點：勝者名牌朝桌心那一邊再往內偏一點（同隕石）；量不到名牌就用畫面中央偏向那一邊
     const off = (mobile ? 20 : 32) + H * 0.12;
-    const plate = document.querySelector(`[data-fx-seat="${seat}"]`)?.getBoundingClientRect();
+    const scope = embedded ? root.parentElement : document;
+    const plate = scope?.querySelector(`[data-fx-seat="${seat}"]`)?.getBoundingClientRect();
     let px: number, py: number;
     if (plate && plate.width > 0) {
       const cx = plate.left + plate.width / 2, cy = plate.top + plate.height / 2;
-      const hand = rel === 0 ? document.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
+      const hand = rel === 0 ? scope?.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
       [px, py] = rel === 2 ? [cx, plate.bottom + off] : rel === 3 ? [plate.right + off, cy] : rel === 1 ? [plate.left - off, cy]
         : hand && hand.width > 0 ? [hand.left + hand.width / 2, hand.top - off * 0.5] : [cx, plate.top - off];
     } else {
@@ -505,7 +509,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
         { offset: Math.min(1, T1 + 0.36), opacity: 0, transform: at(1.12, b.spin * 1.2, b.s * 0.6) }, { offset: 1, opacity: 0, transform: at(1.12, b.spin * 1.2, b.s * 0.6) }];
       anims.push(el.animate(kf, { duration: total, fill: "both" }));
     });
-    const stage = warm ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
+    const stage = warm || embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
     const release = stage ? holdStage(stage, STAGE_SHADOW) : null;
     // 風暴 v5：主擊那一下畫面順著風被推一下（0 → 6px → -4px → 0，120ms，不旋轉）；其他照原本的震動（櫻花不震）
     if (stage && fx === "storm") anims.push(stage.animate([{ transform: "none" }, { transform: `translate(${(-SIDE[rel][0] * 6).toFixed(1)}px, ${(-SIDE[rel][1] * 6).toFixed(1)}px)` },
@@ -515,11 +519,11 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     if (stage && fx === "blackhole") stage.style.transformOrigin = `${Math.round(px)}px ${Math.round(py)}px`;
     if (stage && fx === "blackhole") anims.push(stage.animate([{ transform: "none" }, { transform: "scale(0.94)", offset: 0.9 }, { transform: "none" }], { duration: HIT, easing: "ease-in" }));
     return () => { anims.forEach((a) => a.cancel()); release?.(); };
-  }, [fx, mobile, rm, warm, seat, rel]);
+  }, [fx, mobile, rm, warm, embedded, seat, rel]);
 
   // 跳過：點畫面任一處、Enter、Space（同隕石：0.5 秒內補上的 click 吃掉，不會按到結算浮層的按鈕）
   useEffect(() => {
-    if (warm) return;
+    if (warm || embedded) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
       if (ended.current) return;
@@ -535,7 +539,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     document.addEventListener("pointerdown", skip, true);
     document.addEventListener("keydown", skip, true);
     return () => { document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
-  }, [warm]);
+  }, [warm, embedded]);
 
   // 播放：聲音對齊動畫真正開始那一刻；手機震動在主擊；時間到 onDone(false)（之後還掛著，只留暗幕）
   useEffect(() => {
@@ -553,12 +557,14 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       if (!alive || ended.current) return;
       stopRef.current = playZimoFxSound(fx, z, hit);
     };
-    if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
-    else go(null);
+    if (sound) {
+      if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
+      else go(null);
+    }
     ts.push(setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? OWN_RM : zfxTotal(fx)));
     if (!rm && fx !== "sakura") ts.push(setTimeout(() => { if (typeof navigator.vibrate === "function") navigator.vibrate([110, 50, 40]); }, boomOf(fx)));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
-  }, [fx, rm, warm]);
+  }, [fx, rm, warm, sound]);
 
   const sprite = (f: string, n: number, cols: number, rows: number) => Array.from({ length: n }, (_, i) => (
     <span key={i} className="zf-bit" data-zf-bit style={{ ...bg(f), backgroundSize: `${cols * 100}% ${rows * 100}%`,
@@ -662,7 +668,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
   }
 
   return (
-    <div ref={ref} className={`zfw zf-${fx} side-${rel} own ${mobile ? "m" : "d"} ${rm ? "rm" : ""}`} data-zf={fx} data-zf-seat={seat} data-zf-rel={rel} aria-hidden>
+    <div ref={ref} className={`zfw ${embedded ? "embed" : ""} zf-${fx} side-${rel} own ${mobile ? "m" : "d"} ${rm ? "rm" : ""}`} data-zf={fx} data-zf-seat={seat} data-zf-rel={rel} aria-hidden>
       <div className="zf-l">
         <div className="zf-dim" />
         {base}

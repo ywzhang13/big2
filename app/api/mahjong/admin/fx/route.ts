@@ -3,7 +3,7 @@
 //   POST { userId, fx: [代號...], active: 代號 }：開通（有效到本週日 23:59:59，到期自動失效）並指定目前套用；同時寫操作紀錄。
 //     斗內和開通是兩個獨立動作，這裡不看金額。老闆自己的帳號 6 種永久全開，不用開通（400 owner_permanent）
 import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
-import { isOwner, isZimoFx, weekOf } from "@/lib/mahjong/zimoFx/rules";
+import { GOLDEN_ZIMO_FX, isOwner, isZimoFx, weekOf } from "@/lib/mahjong/zimoFx/rules";
 import { grantFx, lineProfile, nowMs, playerFx } from "@/lib/mahjong/zimoFx/store";
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const { grants, selected } = await playerFx(userId);
     const active: Record<string, number> = {};
     for (const g of grants) if (!g.revokedAt && g.expiresAt > now) active[g.fx] = Math.max(active[g.fx] ?? 0, g.expiresAt);
-    return ok({ serverNow: now, permanent: isOwner(userId), active, selected: selected && (isOwner(userId) || active[selected]) ? selected : null, grants });
+    return ok({ serverNow: now, permanent: isOwner(userId), active, selected: selected === GOLDEN_ZIMO_FX || (selected && (isOwner(userId) || active[selected])) ? selected : GOLDEN_ZIMO_FX, grants });
   } catch (err) {
     console.error("[mj-admin] fx", err instanceof Error ? err.message : err);
     return fail(500, "server_error");

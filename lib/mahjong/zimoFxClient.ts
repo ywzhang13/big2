@@ -5,6 +5,8 @@ import { mjFetch } from "./clientAuth";
 
 // 老闆 2026-10-31：烈焰（flame）和隕石太像，移除，只剩 6 種
 export type ZimoFxCode = "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
+/** 金色自摸是全帳號永久可選的回退效果，不出現在後台授權清單。 */
+export type ZimoFxChoice = "golden" | ZimoFxCode;
 export const ZIMO_FX_LIST: { code: ZimoFxCode; name: string }[] = [
   { code: "meteor", name: "隕石" },
   { code: "thunder", name: "雷霆" },
@@ -29,9 +31,9 @@ async function call<T>(method: "GET" | "POST", path: string, body?: Record<strin
 }
 
 // ---- 玩家自己（設定頁）：第 4 節 ----
-export interface MyZimoFx { serverNow: number; available: Partial<Record<ZimoFxCode, number | null>>; selected: ZimoFxCode | null }
+export interface MyZimoFx { serverNow: number; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
 export const getMyFx = () => call<MyZimoFx>("GET", "/api/mahjong/zimo-fx");
-export const selectMyFx = (fx: ZimoFxCode) => call<{ selected: ZimoFxCode }>("POST", "/api/mahjong/zimo-fx", { fx });
+export const selectMyFx = (fx: ZimoFxChoice) => call<{ selected: ZimoFxChoice }>("POST", "/api/mahjong/zimo-fx", { fx });
 /** 老闆帳號＝7 種都是永久（到期是 null，對接格式第 4 節）；只用來決定要不要顯示後台入口，真正的權限由後台 API 檢查 */
 export const isPermanentAll = (d: MyZimoFx) => ZIMO_FX_LIST.every((f) => f.code in d.available && d.available[f.code] === null);
 

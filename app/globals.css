@@ -1343,16 +1343,38 @@ body {
 .mjp-done { min-height: 40px; padding: 8px 26px; border-radius: 10px; font-weight: 800; color: #0f2a1a; background: linear-gradient(135deg, #C9A96E, #e8c97a); cursor: pointer; }
 .mjp-done:hover { filter: brightness(1.08); } .mjp-done:active { transform: scale(.96); }
 .mjp-card button:focus-visible { outline: 2px solid #f0d68a; outline-offset: 2px; }
-/* 自摸特效分頁（老馬 2026-10-31）：已開通的特效卡（點一下預覽）、右側預覽、底部「套用」 */
+.mjp-card.fx { width: min(1080px, 94vw); height: min(700px, 92dvh); grid-template: "head head" 44px "body pv" minmax(0, 1fr) "foot foot" 52px / minmax(0, 55fr) minmax(0, 45fr); }
+.mjp-card.fx .mjp-fxs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+/* 自摸特效分頁（小宜〈自摸特效偏好頁〉）：所有卡都能點進預覽；鎖定卡只停在預覽，不能套用。 */
 .mjp-fxs { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; padding-top: 10px; }
-.mjp-fx { position: relative; min-height: 56px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
-  color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.mjp-fx { position: relative; min-height: 118px; padding: 7px 8px 6px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+  color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
 .mjp-fx:hover { border-color: rgba(201,169,110,.55); } .mjp-fx:active { transform: scale(.98); }
 .mjp-fx.on { border-color: #f0d68a; background: rgba(201,169,110,.16); color: #f0d68a; }
 .mjp-fx .use { font-size: 12px; font-weight: 700; color: #62d6a5; }
+.mjp-fx .ready { font-size: 12px; font-weight: 700; color: #f0d68a; }
+.mjp-fx .lock { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.5); }
+.mjp-fx.locked .mjp-fx-thumb { filter: grayscale(.55) brightness(.72); }
+.mjp-fx-thumb { width: 72px; height: 50px; border-radius: 8px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 50%, rgba(113,190,255,.42), rgba(12,30,27,.15) 58%), #0b1d14; border: 1px solid rgba(255,255,255,.1); }
+.mjp-fx-thumb.gold { background: radial-gradient(ellipse at 50% 40%, #fff3b4 0 8%, #e8be4e 26%, rgba(201,169,110,.35) 48%, transparent 70%), #1d2519; }
+.mjp-fx-thumb.gold::after { content: "自摸"; color: #fff0ad; font-size: 15px; letter-spacing: .12em; text-shadow: 0 0 7px #c58c18; }
+.mjp-fx-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.zfw.embed { position: absolute; inset: 0; display: block; overflow: hidden; }
+.zfw.embed .zf-l { position: absolute; }
+.zfw.embed .zz { font-size: clamp(24px, 16cqw, 54px); }
+.zfw.embed .zf-tile { --tw: 20px !important; --th: 28px !important; }
+.mjp-fx-stage { position: relative; height: 100%; min-height: 178px; container-type: inline-size; }
+.mjp-phone { position: absolute; inset: 0 0 28px; overflow: hidden; border: 6px solid #050807; border-radius: 22px; background: radial-gradient(ellipse at 50% 42%, #19683f, #06321f 68%); box-shadow: inset 0 0 0 1px rgba(240,214,138,.3), 0 8px 22px rgba(0,0,0,.42); }
+.mjp-phone::before { content: ""; position: absolute; inset: 9% 12%; border: 1px solid rgba(240,214,138,.2); border-radius: 50%; }
+.mjp-seat { position: absolute; z-index: 1; padding: 2px 5px; border-radius: 999px; color: #fff7da; font-size: 10px; line-height: 1.15; background: rgba(4,22,14,.82); border: 1px solid rgba(240,214,138,.5); }
+.mjp-seat.top { left: 50%; top: 7px; transform: translateX(-50%); }.mjp-seat.left { left: 6px; top: 50%; transform: translateY(-50%); }.mjp-seat.right { right: 6px; top: 50%; transform: translateY(-50%); }.mjp-seat.mine { left: 50%; bottom: 5px; transform: translateX(-50%); }
+.mjp-wall { position: absolute; top: 31%; left: 50%; display: flex; gap: 1px; transform: translateX(-50%); opacity: .9; }.mjp-myhand { position: absolute; left: 50%; bottom: 5px; display: flex; gap: 1px; transform: translateX(-50%); }
+.mjp-replay { position: absolute; right: 0; bottom: 0; min-height: 24px; padding: 0 7px; border-radius: 999px; color: #f0d68a; font-size: 11px; font-weight: 700; border: 1px solid rgba(201,169,110,.5); background: rgba(0,0,0,.28); cursor: pointer; }
+.mjp-simple { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; text-align: center; opacity: 0; transition: opacity .18s ease; }.mjp-simple.show { opacity: 1; }.mjp-simple i { position: absolute; inset: 0; background: radial-gradient(circle, rgba(255,218,105,.62), rgba(255,167,42,.15) 28%, transparent 62%); }.mjp-simple.meteor i { background: radial-gradient(circle, rgba(255,96,24,.75), rgba(255,184,66,.18) 35%, transparent 64%); }.mjp-simple b { position: relative; color: #fff2ac; font-size: clamp(28px, 17cqw, 60px); letter-spacing: .15em; text-shadow: 0 0 14px #d6901c, 0 3px 3px #34210b; }.mjp-simple span { position: relative; color: #fff; font-size: 11px; }
 .mjp-fxpv { height: 100%; min-height: 110px; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden;
-  background: radial-gradient(circle at 50% 50%, rgba(240,214,138,.28), rgba(15,42,26,.0) 62%), #0b1d14; border: 1px solid rgba(201,169,110,.3); }
+  position: relative; background: radial-gradient(circle at 50% 50%, rgba(240,214,138,.28), rgba(15,42,26,.0) 62%), #0b1d14; border: 1px solid rgba(201,169,110,.3); }
 .mjp-fxpv b { font-size: 34px; letter-spacing: .12em; color: #f0d68a; text-shadow: 0 0 18px rgba(240,214,138,.7); animation: mjp-fxpv 1.1s cubic-bezier(.2,.9,.3,1.2); }
+.mjp-fxpv > span { position: absolute; right: 10px; bottom: 8px; padding: 3px 7px; border-radius: 999px; font-size: 11px; color: rgba(255,255,255,.72); background: rgba(0,0,0,.35); }
 @keyframes mjp-fxpv { 0% { opacity: 0; transform: scale(1.8); filter: blur(6px); } 55% { opacity: 1; transform: scale(.94); filter: none; } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .mjp-fxpv b { animation: none; } }
 .mjp-apply { min-height: 40px; padding: 8px 22px; border-radius: 10px; font-weight: 800; color: #f0d68a; border: 1px solid #c9a96e; background: rgba(201,169,110,.1); cursor: pointer; }
@@ -1372,6 +1394,19 @@ body {
   .mjp-theme { min-height: 58px; padding: 5px 4px; }
   .mjp-sws { gap: 8px; }
   .mjp-sw { width: 38px; height: 38px; }
+  .mjp-fxs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding-top: 6px; }
+  .mjp-fx { min-height: 84px; padding: 4px 3px; font-size: 12px; gap: 1px; }
+  .mjp-fx-thumb { width: 47px; height: 33px; border-radius: 6px; }
+  .mjp-fx-thumb.gold::after { font-size: 11px; }
+  .mjp-fx .use, .mjp-fx .ready, .mjp-fx .lock { font-size: 10px; }
+  .mjp-fxpv { min-height: 0; }
+  .mjp-fxpv b { font-size: 24px; }
+  .mjp-card.fx .mjp-fxs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .mjp-fx-stage { min-height: 0; }
+  .mjp-phone { border-width: 4px; border-radius: 13px; }
+  .mjp-seat { padding: 1px 3px; font-size: 7px; }.mjp-seat.top { top: 3px; }.mjp-seat.left { left: 3px; }.mjp-seat.right { right: 3px; }.mjp-seat.mine { bottom: 2px; }
+  .mjp-wall { top: 27%; }.mjp-myhand { bottom: 1px; }.mjp-myhand .mjt, .mjp-wall .mjt { transform: scale(.7); transform-origin: bottom; margin-right: -6px; }
+  .mjp-replay { min-height: 22px; font-size: 9px; }
 }
 /* 牌桌上會捲動的區塊（設定內容、結算畫面的牌牆）：細的金色捲動軸，不用瀏覽器原生的白色 */
 .mjp-body, .mjm-result .wall .tiles { scrollbar-width: thin; scrollbar-color: rgba(201,169,110,.7) transparent; }

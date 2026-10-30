@@ -20,6 +20,7 @@ const DSY = pk("大三元", 8), TIAN = pk("天胡", 24), BAXIAN = pk("八仙過�
 
 eq(planWinShow({ pick: null, zimo: true }), ["cele"], "W1 一般自摸：只播浮層");
 eq(planWinShow({ pick: null, zimo: false }), ["cele"], "W1 一般放槍胡：只播浮層");
+eq(planWinShow({ pick: null, zimo: true, winFx: "golden" }), ["cele"], "W1 金色自摸預設：沿用金色自摸浮層");
 eq(planWinShow({ pick: DSY, zimo: true }), ["big", "cele"], "W2 一般人大三元自摸：大牌段 → 浮層");
 eq(planWinShow({ pick: DSY, zimo: false }), ["big", "cele"], "W2 一般人大三元胡：大牌段 → 浮層");
 eq(planWinShow({ pick: ZI1, zimo: true }), ["big", "cele"], "W2 頂級（字一色）也一樣大牌段先播");

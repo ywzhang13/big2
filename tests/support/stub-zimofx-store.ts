@@ -20,8 +20,11 @@ let dbp: Promise<PGlite> | null = null;
 export function db(): Promise<PGlite> {
   dbp ??= (async () => {
     const d = await donateDb(); // 已經建好角色、auth.users 和 20261021 的斗內表
-    const sql = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations/20261031_mahjong_zimo_fx.sql");
-    await d.exec(readFileSync(sql, "utf8"));
+    const migrations = ["20261031_mahjong_zimo_fx.sql", "20261101_mahjong_golden_zimo.sql"];
+    for (const migration of migrations) {
+      const sql = path.resolve(path.dirname(fileURLToPath(import.meta.url)), `../../supabase/migrations/${migration}`);
+      await d.exec(readFileSync(sql, "utf8"));
+    }
     return d;
   })();
   return dbp;

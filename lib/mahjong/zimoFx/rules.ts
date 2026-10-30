@@ -7,6 +7,9 @@ import type { WinFx } from "../gameState";
 
 export const ZIMO_FX: readonly WinFx[] = ["meteor", "thunder", "storm", "frost", "blackhole", "sakura"]; // 烈焰（flame）和隕石太像，老闆 2026-10-31 移除
 export const isZimoFx = (x: unknown): x is WinFx => typeof x === "string" && (ZIMO_FX as readonly string[]).includes(x);
+/** 金色自摸是所有 LINE 帳號永久可選的預設，不屬於後台可開通／收回的特效。 */
+export const GOLDEN_ZIMO_FX: WinFx = "golden";
+export const isSelectableZimoFx = (x: unknown): x is WinFx => x === GOLDEN_ZIMO_FX || isZimoFx(x);
 
 /** 老闆帳號（原本綁隕石的那個 LINE 帳號）：後台只有他能用；6 種特效永久全開，沒選過就是隕石 */
 export const OWNER_USER_ID = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";
@@ -25,11 +28,13 @@ export function weekOf(now: number): { start: number; end: number } {
 
 /** 胡牌時用的「這個座位目前的特效」：until＝null 表示永久（老闆） */
 export interface ZimoFxNow { code: WinFx; until: number | null }
-/** 從資料庫查到的「選用＋有效到期」換成這一刻能不能播 */
+/** 從資料庫查到的「選用＋有效到期」換成這一刻能不能播。
+ *  金色自摸是安全回退：未設定、未開通、已到期、已收回及查詢失敗都回它。 */
 export function resolveZimoFx(userId: string | null | undefined, pref: { fx: string; until: number | null } | undefined): ZimoFxNow | undefined {
   if (!userId) return undefined;
-  if (isOwner(userId)) return { code: isZimoFx(pref?.fx) ? pref.fx : "meteor", until: null };
-  if (!pref || !isZimoFx(pref.fx) || pref.until === null) return undefined; // 選的那一種沒有有效開通（過期、收回）＝一般浮層
+  if (pref?.fx === GOLDEN_ZIMO_FX) return { code: GOLDEN_ZIMO_FX, until: null };
+  if (isOwner(userId) && isZimoFx(pref?.fx)) return { code: pref.fx, until: null };
+  if (!pref || !isZimoFx(pref.fx) || pref.until === null) return { code: GOLDEN_ZIMO_FX, until: null };
   return { code: pref.fx, until: pref.until };
 }
 /** 這一刻還有效嗎（永久或還沒到期） */
