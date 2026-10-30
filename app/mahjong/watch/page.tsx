@@ -130,6 +130,26 @@ export default function MahjongWatchPage() {
   // 觀戰中（老柯對接格式第 0 節）：只訂閱房間公開頻道 mj-{房號}，收到任何事件就重拿一次視角（150ms 內合併）；另外每 3 秒保險一次。
   // 伺服器每次都重新驗權：被收回、沒同意＝403 not_approved → 先清掉手牌，再顯示提示（規格 5.9，順序不可相反）；房間結束＝404／410
   const focusRef = useRef<SpectateView["focusDiscard"]>(null);
+  // 宣告眼牌的特效（老闆 2026-10-31：觀戰者也要看到，和玩家本人畫面一樣；做法照 hooks/useMahjong.ts 的 playDeclareFx）：
+  //   收到公開事件 mj_eye_declared 就播；漏接的保險＝拿到的視角裡 eyeSeats 多了新座位就補播（剛進來的第一次不播舊的）；同一局每個座位只播一次
+  const [declareFx, setDeclareFx] = useState<{ seat: number; both: boolean }[]>([]);
+  const declareRef = useRef({ played: new Set<number>(), init: false, timers: new Map<number, ReturnType<typeof setTimeout>>() });
+  const playDeclareFx = useCallback((seat: number, both: boolean) => {
+    const d = declareRef.current;
+    if (d.played.has(seat)) return;
+    d.played.add(seat);
+    setDeclareFx((prev) => [...prev.filter((f) => f.seat !== seat), { seat, both }]);
+    // MIGI 1.9 秒、一般眼牌 1.3 秒播完（同本人畫面）
+    clearTimeout(d.timers.get(seat));
+    d.timers.set(seat, setTimeout(() => { d.timers.delete(seat); setDeclareFx((prev) => prev.filter((f) => f.seat !== seat)); }, both ? 1900 : 1300));
+  }, []);
+  const syncDeclareFx = useCallback((eyeSeats: number[], tingSeats: number[]) => {
+    const d = declareRef.current;
+    if (eyeSeats.length === 0) d.played.clear(); // 新的一局
+    if (!d.init) { d.init = true; eyeSeats.forEach((seat) => d.played.add(seat)); return; }
+    eyeSeats.forEach((seat) => playDeclareFx(seat, tingSeats.includes(seat)));
+  }, [playDeclareFx]);
+  useEffect(() => { const d = declareRef.current; return () => d.timers.forEach(clearTimeout); }, []);
   useEffect(() => {
     if (viewSeat == null || !room) return;
     const target = room.players.find((p) => p.seat === viewSeat);
@@ -146,6 +166,7 @@ export default function MahjongWatchPage() {
       if (r.ok) {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
+        syncDeclareFx(v.eyeSeats, v.tingSeats);
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
         alive = false;
@@ -173,6 +194,10 @@ export default function MahjongWatchPage() {
     const ch = supabase.channel(`mj-${room.code}`);
     ch.on("broadcast", { event: "*" }, (msg) => {
       soon();
+      if (msg.event === "mj_eye_declared") {
+        const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
+        if (typeof seat === "number") playDeclareFx(seat, ting === true);
+      }
       // 有人同意、拒絕、收回：抽屜裡四位的狀態也更新
       if (msg.event === "mj_spectators") void lookupRoom(room.code).then((rr) => { if (alive && rr.ok) setRoom(rr.data); });
     });
@@ -207,7 +232,7 @@ export default function MahjongWatchPage() {
     const props = v ? {
       players: v.players, mySeat: v.mySeat, myHand: v.myHand, currentTurn: v.currentTurn, dealerSeat: v.dealerSeat, lastDiscard: v.lastDiscard,
       focusDiscard: v.focusDiscard, paceNote: null, availableActions: [], pendingAddKong: null, robKong: false, pendingFlowerRob: null, robFlower: false,
-      tingSeats: v.tingSeats, eyeSeats: v.eyeSeats, eyeOptions: [], eyeWithTing: false, chiForbidden: [], opponentHands: v.opponentHands, declareFx: [],
+      tingSeats: v.tingSeats, eyeSeats: v.eyeSeats, eyeOptions: [], eyeWithTing: false, chiForbidden: [], opponentHands: v.opponentHands, declareFx,
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
       drawnTileId: v.drawnTileId, slowDraw: null, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
