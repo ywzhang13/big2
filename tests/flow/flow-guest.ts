@@ -141,6 +141,10 @@ eq([joins.map((j) => j.status), st.status, rooms[roomId].game_state.players.map(
   eq([lineInGuest.status, lineInGuest.body.error, rooms[lRoom.body.roomId]?.game_state, guestInLine.status, guestInLine.body.error],
     [403, "guest_room", { roomSettings: { totalRounds: 1, basePoints: 100, fanPoints: 20 } }, 403, "guest_not_allowed"],
     "R2 遊客和 LINE 玩家不同桌：LINE 玩家進不了遊客房、遊客進不了一般房（一般房不帶遊客標記）");
+  rooms[lRoom.body.roomId].status = "playing";
+  const guestLate = await req(join, "POST", { code: lRoom.body.code, name: "G", playerId: "gx3" }, bearer(G[2].token));
+  eq([guestLate.status, guestLate.body.error, guestLate.body.started, guestInLine.body.started], [403, "guest_not_allowed", true, false],
+    "R2b 遊客加入已開局的一般房：403 guest_not_allowed 帶 started:true（前端顯示「需要 LINE 登入才能觀戰」）；未開局時 started:false");
 }
 
 // ===================== C 清得掉 =====================

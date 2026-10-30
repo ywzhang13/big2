@@ -76,6 +76,7 @@ let roomId = "", code = "";
   const j3 = await post(join, { code, name: "玩家3", playerId: "p3" }, "tok3");
   const full = await post(join, { code, name: "第五人", playerId: "p5" }, "tok5");
   eq([j3.status, j3.body.seat, full.status, seats[roomId].map((p) => p.user_id)], [200, 3, 400, U], "A7 第四人加入後坐滿，第五人進不來；四個座位各自綁定自己的 LINE 帳號");
+  eq(full.body.started === true, false, "A7b 還沒開局時坐滿：不帶 started（前端不會改走觀戰）");
 }
 {
   const s0 = await post(start, { roomId, playerId: "p0" });
@@ -93,6 +94,8 @@ let roomId = "", code = "";
     // 頻道名稱是 mj-房號-p-<32 字雜湊>；只看雜湊不是玩家 id（隨機雜湊偶爾剛好含有「p0」這種短字串，不能用 includes）
     deal.some((e) => (e.channel ?? "").split("-p-")[1] === e.payload.playerId || !/^[A-Za-z0-9_-]{32}$/.test((e.channel ?? "").split("-p-")[1] ?? ""))],
     [0, false, false], "A11 房間公開頻道沒有任何私人事件、沒有手牌；座位頻道名稱看不出玩家 id（只有伺服器算得出來）");
+  const late = await post(join, { code, name: "第五人", playerId: "p5" }, "tok5");
+  eq([late.status, late.body.started, seats[roomId].length], [400, true, 4], "A12 開局後陌生人加入：400 帶 started:true（前端改進觀戰畫面），座位不變");
 }
 // 開局後：每個動作都要是座位本人
 {

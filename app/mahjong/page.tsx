@@ -222,6 +222,12 @@ export default function MahjongPage() {
       body: JSON.stringify({ code, playerId: getMjId(), name: nm }),
     });
     const data = await res.json();
+    // 房間已開局、你不在這桌：改進觀戰畫面（/mahjong/watch 帶房號直接查房）；觀戰只限 LINE 帳號
+    if (data.started && data.error !== "guest_room") {
+      if (auth.user?.isGuest) setError("需要 LINE 登入才能觀戰");
+      else window.location.href = `/mahjong/watch?code=${encodeURIComponent(code)}`;
+      return null;
+    }
     if (res.status === 401 || res.status === 403) {
       handleAuthError(res.status, data.error);
       return null;
@@ -438,10 +444,6 @@ export default function MahjongPage() {
               >
                 歷史紀錄
               </button>
-              {/* 觀戰（老馬 2026-10-30，小宜觀戰規格 5.1）：獨立頁面 /mahjong/watch，一般打牌頁不載入觀戰程式 */}
-              <a href="/mahjong/watch" className="mjl-btn ghost text-center" data-lobby-spectate>
-                觀戰
-              </a>
               <button onClick={goHome} className="mjl-foot">
                 返回首頁
               </button>

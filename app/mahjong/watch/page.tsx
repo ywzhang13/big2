@@ -103,6 +103,19 @@ export default function MahjongWatchPage() {
     if (r.ok) { setRoom(r.data); setError(null); } else { setError(r.error); }
   }, []);
 
+  // 從大廳輸入房號、房間已開局時會帶 ?code= 進來：確認登入後直接查房，跳到選玩家（大廳沒有觀戰按鈕，直接開這頁仍可手動輸入）
+  const autoCode = useRef<string | null>(null);
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("code");
+    if (c && /^\d{4}$/.test(c)) { autoCode.current = c; setCode(c); }
+  }, []);
+  useEffect(() => {
+    const c = autoCode.current;
+    if (!c || auth.status !== "in") return;
+    autoCode.current = null;
+    if (lineIn) void lookup(c); else setError("not_line");
+  }, [auth.status, lineIn, lookup]);
+
   // 選玩家畫面：每 2 秒向伺服器更新四位的狀態（倒數、同意、拒絕都以伺服器為準）；分頁回前景時馬上更新
   const listCode = room?.code;
   useEffect(() => {
@@ -292,6 +305,7 @@ export default function MahjongWatchPage() {
       <MjPrefsPanel />
       {!room ? (
         <div className="spx-entry" data-spectate-entry>
+          <button type="button" className="spx-btn spx-back" style={{ marginBottom: 14 }} onClick={() => { window.location.href = "/mahjong"; }} data-spectate-exit>返回</button>
           <h1>輸入房號，進入觀戰</h1>
           <p className="lede">對方同意後，你會即時看到他的手牌。</p>
           <form

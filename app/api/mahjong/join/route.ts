@@ -55,13 +55,15 @@ export async function POST(request: Request) {
 
     // 遊客和 LINE 玩家不同桌：遊客房只收遊客、一般房只收 LINE 玩家（遊客的牌局不會出現在 LINE 帳號的歷史紀錄）
     const guestRoom = (room.game_state as { guestRoom?: boolean } | null)?.guestRoom === true;
+    // started：房間已開局，前端改走觀戰（訪客則提示要 LINE 登入）
+    const started = room.status !== "waiting";
     if (guestRoom !== user.isGuest) {
-      return Response.json({ error: guestRoom ? "guest_room" : "guest_not_allowed" }, { status: 403 });
+      return Response.json({ error: guestRoom ? "guest_room" : "guest_not_allowed", started }, { status: 403 });
     }
 
     // New player — only allow if still in lobby
-    if (room.status !== "waiting") {
-      return Response.json({ error: "房間已開始遊戲，無法加入" }, { status: 400 });
+    if (started) {
+      return Response.json({ error: "房間已開始遊戲，無法加入", started }, { status: 400 });
     }
 
     if (existingPlayers.length >= 4) {
