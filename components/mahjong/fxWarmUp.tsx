@@ -20,6 +20,21 @@ const ART_SIZE: Record<string, [number, number]> = {
   "lg-core": [640, 640], "lg-jade-l": [480, 640], "lg-jade-r": [480, 640], "lg-pairs": [2100, 240], "lg-ring": [1200, 502],
   "wak-circle": [1024, 1024], "wak-orbs": [1024, 1024], "xsx-clouds": [1280, 200], "xsx-eye": [1024, 1024], "zi-flow": [1600, 800], "zi-ink": [1024, 1024],
   crater: [768, 768], debris: [1024, 512], explosion: [1024, 1024], meteor: [1024, 1024],
+  // 隕石、冰封、雷霆的補細節層（老闆 2026-10-31 補充特效2）
+  "meteor-impact-rocks-single": [832, 558], "meteor-ground-dust-rings": [1472, 307], "meteor-heat-smoke": [1104, 343], "meteor-embers-single": [880, 660], "frost-veins-branches": [1440, 450], "frost-spear-splinters": [1340, 508], "frost-crack-junctions": [1200, 600], "frost-cold-mist-puffs": [1472, 348], "thunder-plasma-sparks": [880, 660], "thunder-cloud-crawl": [1080, 720], "thunder-side-forks": [1040, 780], "thunder-ground-arcs": [1200, 600], "thunder-residual-current": [1300, 520],
+  // 老闆生成的「自摸」大字圖（MeteorFx、ZimoTitle）
+  "meteor-title": [596, 347], "thunder-title": [656, 346], "storm-title": [725, 363], "frost-title": [647, 352], "blackhole-title": [696, 343], "sakura-title": [646, 345],
+  // 自摸特效庫 5 種新特效（components/mahjong/ZimoFx.tsx）
+  "thunder-clouds": [1600, 533], "thunder-bolt": [400, 1200], "thunder-forks": [1050, 700], "thunder-flash": [900, 900], "thunder-web": [1024, 1024],
+  "storm-blast": [900, 900], "storm-air-ribbons": [1632, 706], "storm-funnel-bands": [1056, 888], "storm-rocks-single": [992, 711],
+  "storm-v5-wind-wall": [1200, 800], "storm-v5-rain-debris": [1200, 600], "storm-v5-funnel-shells": [1284, 746], "storm-v5-ground-spray": [1472, 197],
+  "storm-v5-speed-lines": [1200, 800],
+  "frost-edges": [1200, 800], "frost-spear": [551, 1200], "frost-sheet": [1024, 1024], "frost-spikes": [1024, 1024], "frost-shards": [1024, 512], "frost-mist": [1200, 400],
+  "blackhole-core": [1200, 800], "blackhole-pinpoint": [768, 768], "blackhole-nova": [1024, 1024], "blackhole-stardust": [1024, 512],
+  "blackhole-light-streams": [2040, 604], "blackhole-accretion-back": [1200, 556], "blackhole-accretion-front": [1200, 593], "blackhole-debris-single": [1056, 780],
+  "blackhole-nova-filaments": [2048, 683],
+  "sakura-bud": [683, 1024], "sakura-halo": [900, 900], "sakura-petal-clusters": [1216, 924], "sakura-bud-opening": [1320, 880], "sakura-impact-petal-burst": [1392, 622],
+  "sakura-branch-growth": [2440, 393],
 };
 export function warmImg(file: string): string {
   const [w, h] = ART_SIZE[file.replace(/^.*\//, "").replace(/\.webp$/, "")] ?? [1, 1];

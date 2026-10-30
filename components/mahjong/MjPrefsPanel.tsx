@@ -5,6 +5,7 @@ import MjTile from "./MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { BACKS, FELTS, THEMES, DEFAULT_PREFS, usePrefs, setPrefs, type BackId, type FeltId } from "@/lib/mahjong/prefs";
 import { CloseIcon, SpeakerIcon } from "./MjIcons";
+import { getMyFx, selectMyFx, fxName, ZIMO_FX_LIST, type MyZimoFx, type ZimoFxCode } from "@/lib/mahjong/zimoFxClient";
 
 const PREVIEW_TILES: Tile[] = [
   { id: -11, suit: "m", rank: 5, display: "五萬" },
@@ -17,11 +18,31 @@ const PREVIEW_TILES: Tile[] = [
  *  每個分頁在手機橫向都不用捲動就放得下（老闆 2026-10-21：不要原生捲動軸）；預覽只在「外觀」分頁。
  *  外觀只換牌背、桌布；牌面一律原本的白色（老闆 2026-10-22），沒有牌面底色。
  *  聲音：語音、互動音效各一條 0～100 拉霸＋靜音鈕（靜音時拉霸停用、數值保留），加「收到語音時自動播放」。
- *  改了立刻生效；點遮罩、關閉鈕、「完成」或 Esc 關閉 */
+ *  改了立刻生效；點遮罩、關閉鈕、「完成」或 Esc 關閉。
+ *  「自摸特效」分頁（老馬 2026-10-31，小宜〈自摸特效庫與斗內系統〉5）：打開面板時問一次伺服器，有開通的特效才出現；
+ *  點卡片＝預覽（先顯示特效名稱，新特效素材到了再換成真的動畫），按「套用」才改設定。老闆：不顯示到期、說明文字 */
 export default function MjPrefsPanel() {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"look" | "sound">("look");
+  const [tab, setTab] = useState<"look" | "sound" | "fx">("look");
   const prefs = usePrefs();
+  const [fx, setFx] = useState<MyZimoFx | null>(null); // null＝沒登入 LINE、沒開通或取不到：不顯示分頁
+  const [pick, setPick] = useState<ZimoFxCode | null>(null);
+  const [replay, setReplay] = useState(0);
+  const [fxBusy, setFxBusy] = useState(false);
+  const [fxErr, setFxErr] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void getMyFx().then((r) => {
+      if (!alive) return;
+      const has = r.ok && Object.keys(r.data.available).length > 0;
+      setFx(has ? r.data : null);
+      setPick(has ? r.data.selected ?? (Object.keys(r.data.available)[0] as ZimoFxCode) : null);
+      if (!has) setTab((t) => (t === "fx" ? "look" : t));
+    });
+    return () => { alive = false; };
+  }, [open]);
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -38,6 +59,15 @@ export default function MjPrefsPanel() {
   if (!open) return null;
   const close = () => setOpen(false);
   const themeOn = THEMES.find((t) => t.back === prefs.back && t.felt === prefs.felt)?.id;
+  const fxCodes = fx ? ZIMO_FX_LIST.map((f) => f.code).filter((c) => c in fx.available) : [];
+  const apply = async () => {
+    if (!pick || fxBusy) return;
+    setFxBusy(true); setFxErr(false);
+    const r = await selectMyFx(pick);
+    setFxBusy(false);
+    if (r.ok) setFx((cur) => (cur ? { ...cur, selected: r.data.selected } : cur));
+    else setFxErr(true);
+  };
 
   return (
     <div className="mjp-mask" onClick={close} data-prefs-panel>
@@ -45,7 +75,7 @@ export default function MjPrefsPanel() {
         <div className="mjp-head">
           <b>設定</b>
           <div className="mjp-tabs" role="tablist" aria-label="設定分頁">
-            {([["look", "外觀"], ["sound", "聲音"]] as const).map(([id, name]) => (
+            {([["look", "外觀"], ["sound", "聲音"], ...(fx ? [["fx", "自摸特效"]] as const : [])] as const).map(([id, name]) => (
               <button key={id} type="button" role="tab" id={`mjp-tab-${id}`} aria-selected={tab === id} aria-controls="mjp-body" data-prefs-tab={id}
                 className={tab === id ? "on" : ""} onClick={() => setTab(id)}>{name}</button>
             ))}
@@ -53,7 +83,17 @@ export default function MjPrefsPanel() {
           <button type="button" className="mjp-x" aria-label="關閉" onClick={close}><CloseIcon /></button>
         </div>
         <div className="mjp-body" id="mjp-body" role="tabpanel" aria-labelledby={`mjp-tab-${tab}`} data-prefs-body={tab}>
-          {tab === "look" ? (<>
+          {tab === "fx" && fx ? (
+          <div className="mjp-fxs" data-prefs-fx-list>
+            {fxCodes.map((c) => (
+              <button key={c} type="button" data-prefs-fx={c} aria-pressed={pick === c} className={`mjp-fx ${pick === c ? "on" : ""}`}
+                onClick={() => { setPick(c); setReplay((n) => n + 1); setFxErr(false); }}>
+                {fxName(c)}
+                {fx.selected === c && <span className="use" data-prefs-fx-using>使用中</span>}
+              </button>
+            ))}
+          </div>
+          ) : tab === "look" ? (<>
           <div className="mjp-sec">快速主題</div>
           <div className="mjp-themes">
             {THEMES.map((t) => (
@@ -106,11 +146,20 @@ export default function MjPrefsPanel() {
           </div>
           <div className="cap" data-prefs-cap>{BACKS[prefs.back].name}／{FELTS[prefs.felt].name}</div>
         </div>}
+        {tab === "fx" && pick && <div className="mjp-preview" aria-live="polite">
+          <div className="mjp-fxpv" data-prefs-fx-preview={pick}><b key={replay}>{fxName(pick)}</b></div>
+        </div>}
         <div className="mjp-foot">
-          {/* 回復預設：只回復目前這個分頁的設定 */}
+          {tab === "fx" ? (
+            <button type="button" className="mjp-apply" data-prefs-fx-apply disabled={!pick || fxBusy || fx?.selected === pick} onClick={apply}>
+              {fxErr ? "套用失敗，再試一次" : fx?.selected === pick ? "使用中" : "套用"}
+            </button>
+          ) : (
+          /* 回復預設：只回復目前這個分頁的設定 */
           <button type="button" className="mjp-reset" data-prefs-reset onClick={() => setPrefs(tab === "look"
             ? { back: DEFAULT_PREFS.back, felt: DEFAULT_PREFS.felt }
             : { voiceVol: DEFAULT_PREFS.voiceVol, voiceMuted: DEFAULT_PREFS.voiceMuted, fxVol: DEFAULT_PREFS.fxVol, fxMuted: DEFAULT_PREFS.fxMuted, autoVoice: DEFAULT_PREFS.autoVoice })}>回復預設</button>
+          )}
           <button type="button" className="mjp-done" onClick={close}>完成</button>
         </div>
       </div>

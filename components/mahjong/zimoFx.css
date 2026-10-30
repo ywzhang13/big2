@@ -1,0 +1,156 @@
+/* 自摸特效庫 5 種新特效（components/mahjong/ZimoFx.tsx；老闆 2026-10-31，分鏡照小宜 v2／v3／v4）。素材 /mahjong-fx/zimo/<代號>/*.webp。
+   CSS 動畫都是 1.8 秒同一條時間軸（冰封另外標），百分比＝毫秒 ÷ 18；風暴、黑洞、櫻花 v4 的零件用 Web Animations（ZimoFx.tsx v4Parts）：
+   150＝8.33%  360＝20%  600＝33.33%  1040＝57.78%  1080＝60%  1120（主擊）＝62.22%  1200＝66.67%  1420＝78.89%  1600＝88.89%
+   z 63（和隕石一樣）：蓋在牌桌、大牌專屬段（62）上面，自摸浮層（65）下面；播完只留暗幕墊在浮層底下。
+   主角位置 --px/--py（畫面中下方，放自摸的那張牌）、尺寸單位 --u（畫面高度，電腦版不超過寬度 62%）。只動 transform、opacity */
+.zfw { display: contents; --T: 1800ms; }
+.zf-l { position: fixed; inset: 0; z-index: 63; pointer-events: none; overflow: hidden; }
+.zf-blend { mix-blend-mode: screen; }
+.zfw i, .zfw .zf-bit, .zfw .zf-dim, .zfw .zf-flash, .zfw .zf-tile { animation-duration: var(--T); animation-fill-mode: both; animation-timing-function: linear; }
+.zfw i, .zf-bit { position: absolute; display: block; background: no-repeat center / 100% 100%; will-change: transform, opacity; }
+
+/* ---------- 共用：暗幕、主擊白閃、自摸的那張牌 ---------- */
+.zf-dim { position: absolute; inset: -40px; opacity: 0; animation-name: zf-dim; background: var(--dim); }
+@keyframes zf-dim { 0% { opacity: 0; } 8.33%, 100% { opacity: 1; } }
+.zf-flash { position: absolute; inset: 0; opacity: 0; animation-name: zf-flash; background: var(--flash); }
+@keyframes zf-flash { 0%, 61.4% { opacity: 0; } 61.9% { opacity: var(--flash-a, .45); } 67% { opacity: 0; } 100% { opacity: 0; } }
+.zf-tile { position: absolute; left: var(--px); top: var(--py); width: var(--tw); height: var(--th); margin: calc(var(--th) / -2) 0 0 calc(var(--tw) / -2);
+  opacity: 0; animation-name: zf-tile; }
+@keyframes zf-tile { 0%, 12% { opacity: 0; transform: translateY(12px) scale(.9); } 20% { opacity: 1; transform: none; }
+  60% { transform: scale(1); } 62.22% { transform: scale(1.18); } 68% { transform: scale(1); } 88.89% { opacity: 1; } 100% { opacity: 0; transform: none; } }
+.zf-aura { inset: -60% -70%; border-radius: 50%; background: radial-gradient(closest-side, var(--glow), transparent) !important; animation-name: zf-aura; }
+@keyframes zf-aura { 0%, 15% { opacity: 0; transform: scale(.6); } 25% { opacity: .7; transform: scale(1); } 62.22% { opacity: 1; transform: scale(1.5); } 78.89% { opacity: .8; transform: scale(1.1); } 100% { opacity: 0; } }
+.zf-at { position: absolute; left: var(--px); top: var(--py); width: 0; height: 0; }
+.zf-bit { left: calc(var(--u) * -.07); top: calc(var(--u) * -.07); width: calc(var(--u) * .14); height: calc(var(--u) * .14); opacity: 0; }
+/* 俯視的地面圖層：外層壓扁、裡面的圖自己轉 */
+.zs-floor { left: var(--px); top: var(--py); width: 0; height: 0; transform: scaleY(.42); }
+.zfw .zs-floor { animation: none; }
+/* 風暴、黑洞、櫻花 v4 的零件：都放在落點正中央，尺寸、位移、透明度由 ZimoFx.tsx（v4Parts）用 Web Animations 給 */
+.zfw .zp { left: var(--px); top: var(--py); opacity: 0; }
+/* 黑底的零件互相疊的地方也要去黑（不然後面那張的黑底會蓋住前面的光）：screen 層裡每一個零件自己也用 screen；
+   黑洞另外加橢圓遮罩（見下一行） */
+.zf-blend .zp { mix-blend-mode: screen; }
+/* 黑洞的超新星、能量絲：黑底邊不是全黑（放大後看得到方框）→ 橢圓遮罩把四邊淡掉。櫻花光陣邊本來就是純黑，不加（遮罩很吃效能） */
+.zf-blackhole .zf-blend .zp { -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
+
+/* ---------- 雷霆：雲層壓下 → 細雷試探 → 垂直主雷 → 地面電網 → 電弧淡出 ---------- */
+.zf-thunder { --dim: radial-gradient(ellipse at 50% 0%, rgba(20,60,120,.55), transparent 70%), rgba(2,6,16,.66); --flash: radial-gradient(circle at 50% 55%, #eaf6ff, rgba(120,190,255,.7) 45%, rgba(40,90,200,.2)); --glow: rgba(120,200,255,.95); }
+.zt-clouds { left: calc(var(--W) * -.15); top: calc(var(--u) * -.06); width: calc(var(--W) * 1.3); height: calc(var(--u) * .46); opacity: 0; animation-name: zt-clouds; }
+@keyframes zt-clouds { 0% { opacity: 0; transform: translateY(-45%); } 15% { opacity: 1; transform: translateY(0); } 20% { opacity: .85; } 24% { opacity: 1; } 44% { opacity: .9; }
+  62.22% { opacity: 1; transform: translateY(2%); } 85% { opacity: .75; } 100% { opacity: 0; transform: translateY(-10%); } }
+.zt-fork { top: calc(var(--u) * .2); width: calc(var(--u) * .5); height: calc(var(--u) * .5); opacity: 0; }
+.zt-fork.f0 { left: calc(var(--px) - var(--u) * .78); animation-name: zt-fork-a; }
+.zt-fork.f1 { left: calc(var(--px) + var(--u) * .28); animation-name: zt-fork-b; }
+.zt-fork.f2 { left: calc(var(--px) - var(--u) * .45); top: calc(var(--u) * .12); animation-name: zt-fork-c; }
+.zt-fork.f3 { left: calc(var(--px) + var(--u) * .02); top: calc(var(--u) * .1); animation-name: zt-fork-a; animation-delay: 160ms; }
+@keyframes zt-fork-a { 0%, 20% { opacity: 0; } 20.5% { opacity: 1; } 24% { opacity: 0; } 34% { opacity: 0; } 34.5% { opacity: .9; } 38% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes zt-fork-b { 0%, 26% { opacity: 0; } 26.5% { opacity: 1; } 30% { opacity: 0; } 46% { opacity: 0; } 46.5% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes zt-fork-c { 0%, 38% { opacity: 0; } 38.5% { opacity: 1; } 42% { opacity: 0; } 53% { opacity: 0; } 53.5% { opacity: .9; } 56.5% { opacity: 0; } 100% { opacity: 0; } }
+/* 主雷：從畫面頂端一路劈到牌上（頂端固定，往下長） */
+.zt-bolt { left: calc(var(--px) - var(--u) * .16); top: calc(var(--u) * -.04); width: calc(var(--u) * .32); height: calc(var(--py) + var(--u) * .1); transform-origin: 50% 0; opacity: 0; animation-name: zt-bolt; }
+@keyframes zt-bolt { 0%, 59.4% { opacity: 0; transform: scaleY(0); } 60% { opacity: 1; transform: scaleY(.45); } 62.22% { opacity: 1; transform: scaleY(1); }
+  64% { opacity: .55; } 65.5% { opacity: 1; } 68% { opacity: .7; } 70% { opacity: 1; transform: scaleY(1); } 80% { opacity: 0; transform: scaleY(1) scaleX(.6); } 100% { opacity: 0; } }
+.zt-flash { left: calc(var(--px) - var(--u) * .5); top: calc(var(--py) - var(--u) * .5); width: var(--u); height: var(--u); opacity: 0; animation-name: zt-burst; }
+@keyframes zt-burst { 0%, 61.6% { opacity: 0; transform: scale(.2); } 62.22% { opacity: 1; transform: scale(.9); } 72% { opacity: .8; transform: scale(1.3); } 86% { opacity: 0; transform: scale(1.45); } 100% { opacity: 0; } }
+/* 地面電網：俯視壓扁，主擊後從牌下擴散、閃兩下後淡掉 */
+.zt-web { left: calc(var(--px) - var(--u) * .8); top: calc(var(--py) - var(--u) * .8); width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); opacity: 0; animation-name: zt-web; }
+@keyframes zt-web { 0%, 62.22% { opacity: 0; transform: scaleY(.42) scale(.2); } 68% { opacity: 1; transform: scaleY(.42) scale(.85); } 74% { opacity: .55; } 76% { opacity: 1; }
+  80% { transform: scaleY(.42) scale(1.05); } 90% { opacity: .5; } 100% { opacity: 0; transform: scaleY(.42) scale(1.1); } }
+
+/* ---------- 風暴 v5（零件的位移在 ZimoFx.tsx v4Parts）：衝擊環（主擊的水平風壓環）照 1.8 秒百分比（1.12 秒主擊） ---------- */
+/* 風暴 v5：牌從風眼落點 .52 → 1.05 → 1 彈出，之後固定不動。要寫完整的 animation（含 var(--tt)）：
+   只改 animation-name 的話，--tt 還沒設好前這條就生效，動畫會比特效開始早一格（實測早 50ms） */
+.zfw.own.zf-storm .zf-tile-in { animation: zs-tile-pop 420ms cubic-bezier(.2, .9, .3, 1.25) var(--tt) both; }
+@keyframes zs-tile-pop { 0% { opacity: 0; transform: scale(.52); } 55% { opacity: 1; transform: scale(1.05); } 100% { opacity: 1; transform: none; } }
+.zf-storm { --tile-glow: rgba(120,255,210,.85); --dim: radial-gradient(ellipse at 50% 60%, rgba(10,80,60,.45), transparent 70%), rgba(2,10,8,.64); --flash: radial-gradient(circle at 50% 58%, #effff8, rgba(120,240,190,.6) 45%, rgba(20,120,90,.15)); --glow: rgba(120,255,200,.9); }
+.zs-floor.b .zs-blast, .zs-blast { left: calc(var(--u) * -.75); top: calc(var(--u) * -.75); width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); opacity: 0; animation-name: zs-blast; }
+@keyframes zs-blast { 0%, 61.6% { opacity: 0; transform: scale(.25); } 62.22% { opacity: 1; transform: scale(.5); } 72% { opacity: 1; transform: scale(1.1); } 85% { opacity: 0; transform: scale(1.6); } 100% { opacity: 0; } }
+
+/* ---------- 冰封 v3（小宜 v3 規格 4.2，老闆 2026-10-31）：全長 2.9 秒，百分比＝毫秒 ÷ 29：
+   520＝17.93%  1044＝36%  1080（主擊）＝37.24%  1170＝40.34%  1300（牌）＝44.83%  1450＝50%
+   四邊結霜往落點收 → 冰槍從勝者那一側畫面外刺向落點（圖本身是直的，依視角固定轉一次，動態只有沿槍身的位移）
+   → 刺中瞬間整桌 90ms 內凍住、冰晶炸開 → 1.30 冰面像玻璃碎掉、牌隨碎冰彈出（碎冰在 ZimoFx.tsx）→ 1.56 冰封「自摸」 ---------- */
+.zf-frost { --T: 2900ms; --dim: radial-gradient(ellipse at 50% 55%, rgba(60,130,190,.35), transparent 70%), rgba(4,12,22,.62);
+  --flash: radial-gradient(circle at var(--px) var(--py), #ffffff, rgba(190,235,255,.7) 30%, rgba(90,170,230,.2) 70%); --glow: rgba(190,240,255,.95); --tile-glow: rgba(150,220,255,.9); }
+.zf-frost .zf-dim { animation-name: zr-dim; }
+@keyframes zr-dim { 0% { opacity: 0; } 5%, 100% { opacity: 1; } }
+.zf-frost .zf-flash { animation-name: zr-flash; }
+@keyframes zr-flash { 0%, 37% { opacity: 0; } 37.4% { opacity: .32; } 41% { opacity: 0; } 100% { opacity: 0; } }
+/* 四邊霜花：從畫面外往落點收（縮放中心＝落點），主擊時一震，之後慢慢淡 */
+.zr-edges { left: 0; top: 0; width: var(--W); height: var(--H); background-size: 100% 100%; opacity: 0; transform-origin: var(--px) var(--py); animation-name: zr-edges; }
+@keyframes zr-edges { 0% { opacity: 0; transform: scale(1.16); } 30% { opacity: .9; transform: scale(1.02); } 37.24% { opacity: 1; transform: scale(.985); } 40% { transform: scale(1); }
+  53.79% { opacity: .5; } 82.76% { opacity: .38; } 100% { opacity: 0; } }
+/* 低處寒霧：開場淡淡一層，「自摸」字出來時再濃一點 */
+.zr-mist { left: calc(var(--W) * -.1); top: calc(var(--H) - var(--u) * .42); width: calc(var(--W) * 1.2); height: calc(var(--u) * .5); opacity: 0; animation-name: zr-mist; }
+@keyframes zr-mist { 0% { opacity: 0; transform: translateX(-3%); } 20% { opacity: .5; } 45% { opacity: .35; } 60% { opacity: .75; } 100% { opacity: 0; transform: translateX(3%); } }
+/* 冰槍：外層放在落點、依視角轉好方向；裡層的槍尖對準落點，從畫面外（往後退 --sd）沿槍身衝進來，最後 0.04 秒刺進去一點 */
+.zr-spear-w { left: var(--px); top: var(--py); width: 0; height: 0; transform: rotate(var(--sr)); }
+.zfw .zr-spear-w { animation: none; }
+.zr-spear { left: calc(var(--sw) / -2); top: calc(var(--sl) * -1); width: var(--sw); height: var(--sl); opacity: 0; animation-name: zr-spear;
+  filter: drop-shadow(0 0 10px rgba(150,220,255,.8)); }
+@keyframes zr-spear { 0%, 17.9% { opacity: 0; transform: translateY(calc(var(--sd) * -1)); }
+  17.93% { opacity: 1; transform: translateY(calc(var(--sd) * -1)); animation-timing-function: cubic-bezier(.6, 0, .95, .55); }
+  36% { opacity: 1; transform: translateY(calc(var(--sl) * -.03)); } 37.24% { opacity: 1; transform: translateY(calc(var(--sl) * .08)); }
+  44.5% { opacity: 1; transform: translateY(calc(var(--sl) * .08)); } 46.5% { opacity: 0; transform: translateY(calc(var(--sl) * .1)) scale(1.04); } 100% { opacity: 0; } }
+/* 整桌瞬凍：主擊後 90ms 內鋪滿的冰色罩（以落點為中心），冰面碎掉後退成淡淡一層 */
+.zr-freeze { inset: 0; opacity: 0; animation-name: zr-freeze;
+  background: radial-gradient(circle at var(--px) var(--py), rgba(225,248,255,.55) 0%, rgba(150,210,245,.3) 35%, rgba(90,150,220,.16) 75%) !important; }
+@keyframes zr-freeze { 0%, 37.24% { opacity: 0; } 40.34% { opacity: 1; } 44.83% { opacity: 1; } 50% { opacity: .45; } 82.76% { opacity: .3; } 100% { opacity: 0; } }
+/* 冰面：俯視壓扁，主擊後 90ms 從落點鋪開；1.30 秒像玻璃碎掉往外散 */
+.zr-sheet-w { left: var(--px); top: var(--py); width: 0; height: 0; transform: scaleY(.5); }
+.zfw .zr-sheet-w { animation: none; }
+.zr-sheet { left: calc(var(--u) * -1.25); top: calc(var(--u) * -1.25); width: calc(var(--u) * 2.5); height: calc(var(--u) * 2.5); opacity: 0; animation-name: zr-sheet; }
+@keyframes zr-sheet { 0%, 37.24% { opacity: 0; transform: scale(.2); } 40.34% { opacity: .85; transform: scale(1); } 44.83% { opacity: .85; transform: scale(1.02); }
+  47% { opacity: .55; transform: scale(1.14); } 52% { opacity: 0; transform: scale(1.25); } 100% { opacity: 0; } }
+/* 冰晶：主擊那一刻從落點炸開，冰面碎掉時跟著碎掉 */
+.zr-spikes { left: calc(var(--px) - var(--u) * .55); top: calc(var(--py) - var(--u) * .55); width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); opacity: 0; animation-name: zr-spikes; }
+@keyframes zr-spikes { 0%, 37.2% { opacity: 0; transform: scale(.15); } 38.6% { opacity: 1; transform: scale(1.06); } 41.38% { transform: scale(1); } 44.83% { opacity: 1; transform: scale(1.01); }
+  49% { opacity: 0; transform: scale(1.14); } 100% { opacity: 0; } }
+
+/* ---------- 黑洞 v4（零件的位移在 ZimoFx.tsx v4Parts） ---------- */
+.zf-blackhole { --tile-glow: rgba(210,150,255,.9); --dim: radial-gradient(circle at 50% 50%, rgba(40,10,70,.4), transparent 70%), rgba(5,2,12,.7); --flash: radial-gradient(circle at 50% 50%, #fff6ff, rgba(220,170,255,.7) 40%, rgba(120,60,200,.2)); --glow: rgba(230,180,255,.95); }
+.zfw .zb-void { background: rgba(3,0,8,.92); }
+/* 黑洞的白閃在 1.19 秒反爆那一刻（1.8 秒百分比：1190＝66.11%） */
+.zf-blackhole .zf-flash { animation-name: zb-flash; }
+@keyframes zb-flash { 0%, 65.6% { opacity: 0; } 66.11% { opacity: .5; } 72% { opacity: 0; } 100% { opacity: 0; } }
+
+/* ---------- 櫻花 v4（零件的位移在 ZimoFx.tsx v4Parts）：不震，白閃較淡 ---------- */
+.zf-sakura { --tile-glow: rgba(255,190,200,.9); --dim: radial-gradient(ellipse at 50% 40%, rgba(120,30,70,.35), transparent 70%), rgba(14,4,10,.58); --flash: radial-gradient(circle at 50% 50%, #fff8f2, rgba(255,200,215,.6) 45%, rgba(255,170,90,.15)); --glow: rgba(255,210,150,.95); }
+.zf-sakura .zf-flash { animation-name: zk-flash; }
+@keyframes zk-flash { 0%, 61% { opacity: 0; } 62.22% { opacity: .3; } 72% { opacity: 0; } 100% { opacity: 0; } }
+
+/* ---------- 完整版共用（5 種；老闆 2026-10-31）：主擊時牌不在畫面上，--tt（雷霆 1.42、冰封 1.30、風暴 1.38、黑洞、櫻花 1.42 秒）從落點炸出來，停在那裡（同隕石：坑中央浮出後就不動）；
+   之後畫面中央是這一種專屬的「自摸」大字＋名字（ZimoTitle），播完直接出結算。這幾個用自己的毫秒長度和起始時間（不是 1.8 秒的百分比） ---------- */
+.zf-tile-in { position: absolute; inset: 0; }
+.zfw.own .zf-tile { opacity: 1; animation: none; transform: none; }
+.zfw.own .zf-tile-in { opacity: 0; animation: zf-tile-pop 420ms cubic-bezier(.2, .9, .3, 1.25) var(--tt) both; border-radius: 5px;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.85), 0 0 14px 4px var(--tile-glow), 0 0 34px 10px var(--tile-glow); }
+@keyframes zf-tile-pop { 0% { opacity: 0; transform: translateY(20%) scale(.2); } 45% { opacity: 1; } 75% { transform: translateY(-6%) scale(1.2); } 100% { opacity: 1; transform: none; } }
+.zfw.own .zf-aura { animation: zf-aura-own 900ms ease-in-out var(--tt) infinite alternate both; }
+@keyframes zf-aura-own { from { opacity: .65; transform: scale(.92); } to { opacity: 1; transform: scale(1.1); } }
+.zf-thunder { --tile-glow: rgba(90,190,255,.85); }
+/* 雷霆：牌從劈中的地方炸出來那一下的電光 */
+.zt-pop { left: calc(var(--px) - var(--u) * .3); top: calc(var(--py) - var(--u) * .3); width: calc(var(--u) * .6); height: calc(var(--u) * .6); opacity: 0;
+  animation: zt-pop 500ms ease-out 1400ms both !important; }
+@keyframes zt-pop { 0% { opacity: 0; transform: scale(.2) rotate(0); } 25% { opacity: 1; transform: scale(.8) rotate(10deg); } 100% { opacity: 0; transform: scale(1.4) rotate(25deg); } }
+/* 雷霆的地面電網留久一點（2.6 秒的百分比：1120＝43.08%）：電弧淡出時牌和大字接上，畫面不會空 */
+.zf-thunder .zt-web { animation-duration: 2600ms; animation-name: zt-web-long; }
+@keyframes zt-web-long { 0%, 43.08% { opacity: 0; transform: scaleY(.42) scale(.2); } 47% { opacity: 1; transform: scaleY(.42) scale(.85); } 51% { opacity: .55; } 53% { opacity: 1; }
+  58% { transform: scaleY(.42) scale(1.05); } 70% { opacity: .55; } 100% { opacity: 0; transform: scaleY(.42) scale(1.12); } }
+
+/* ---------- 減少動態：不動、不閃，主擊畫面直接淡入（1 秒） ---------- */
+.zfw.rm i, .zfw.rm .zf-bit, .zfw.rm .zf-flash { display: none; }
+.zfw.rm .zf-dim, .zfw.rm .zf-tile { animation: zf-rm 1000ms both; }
+.zfw.rm .zf-aura { display: block; animation: zf-rm 1000ms both; }
+.zf-thunder.rm .zt-web { display: block; animation: zf-rm 1000ms both; }
+.zf-thunder.rm .zt-web { transform: scaleY(.42); }
+/* 完整版減少動態 1.6 秒（小宜 v3 規格 8）：0～0.18 暗幕＋最終殘留淡入 → 0.18～0.42 牌和「自摸」淡入 → 0.38 名字 → 定格；不位移、不縮放、不閃 */
+.zfw.own.rm .zf-dim { animation: zf-rm-own 1600ms both; }
+.zfw.own.rm .zf-tile-in { animation: zf-in-only 240ms ease-out 180ms both; transform: none; }
+.zfw.own.rm .zf-aura { animation: zf-in-only 240ms ease-out 180ms both; }
+.zf-frost.rm .zr-edges, .zf-frost.rm .zr-mist, .zf-frost.rm .zr-freeze { display: block; animation: zf-in-only 180ms ease-out both; transform: none; }
+.zf-frost.rm .zr-freeze { opacity: .3; }
+/* 風暴、黑洞、櫻花：留一個主擊後的定格零件（風暴煙塵、黑洞能量絲、櫻花開滿的花），位置在 ZimoFx.tsx 給好 */
+.zfw.rm .zp[data-rmk] { display: block; animation: zf-in-only 240ms ease-out 180ms both; }
+@keyframes zf-rm-own { 0% { opacity: 0; } 11%, 100% { opacity: 1; } }
+@keyframes zf-in-only { from { opacity: 0; } to { opacity: 1; } }

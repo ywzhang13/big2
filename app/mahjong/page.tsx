@@ -18,6 +18,8 @@ import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
 import { bigWinPlayed } from "@/lib/mahjong/bigWin";
 import { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
+import { preloadZimoFx } from "@/components/mahjong/ZimoFx";
+import { isZimoFxNew } from "@/lib/mahjong/winShow";
 import { setBgWarmPaused } from "@/components/mahjong/FxBgWarm";
 import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
@@ -26,6 +28,7 @@ import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
 import { SpectateManage, SpectateRequestCard, useSpectateManage } from "@/components/mahjong/spectate/SpectateHost";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
+import { getMyFx, isPermanentAll } from "@/lib/mahjong/zimoFxClient";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -265,6 +268,15 @@ export default function MahjongPage() {
     };
   }, [lobbyHome]);
 
+  // 斗內後台入口（老馬 2026-10-31）：只有老闆帳號看得到（7 種特效都是永久＝老闆）；真正的權限由後台 API 在伺服器檢查
+  const [isOwner, setIsOwner] = useState(false);
+  useEffect(() => {
+    if (!lobbyHome) return;
+    let alive = true;
+    void getMyFx().then((r) => { if (alive) setIsOwner(r.ok && isPermanentAll(r.data)); });
+    return () => { alive = false; };
+  }, [lobbyHome]);
+
   async function handleResume(code: string) {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -444,6 +456,11 @@ export default function MahjongPage() {
               >
                 歷史紀錄
               </button>
+              {/* 斗內榜（公開）；老闆帳號同一列多一顆「斗內後台」 */}
+              <div className="flex gap-3">
+                <a href="/mahjong/donations" className="mjl-btn ghost text-center flex-1" data-lobby-board>斗內榜</a>
+                {isOwner && <a href="/mahjong/admin" className="mjl-btn ghost text-center flex-1" data-lobby-admin>斗內後台</a>}
+              </div>
               <button onClick={goHome} className="mjl-foot">
                 返回首頁
               </button>
@@ -786,6 +803,9 @@ function RoomView({
   useEffect(() => () => setBgWarmPaused(false), []);
   const meteorInRoom = state.players.some((p) => p.winFx === "meteor") || showWinner?.winFx === "meteor";
   useEffect(() => { if (meteorInRoom) void preloadMeteorFx(); }, [meteorInRoom]);
+  // 自摸特效庫的新特效：房間裡有人選了哪一種，就先載那一種（和隕石一樣；一般牌局沒人有，不下載）
+  const zfxInRoom = [...new Set([...state.players.map((p) => p.winFx), showWinner?.winFx].filter(isZimoFxNew))].sort().join();
+  useEffect(() => { for (const fx of zfxInRoom.split(",").filter(isZimoFxNew)) void preloadZimoFx(fx); }, [zfxInRoom]);
 
 
   // Pass roomId (登入房另有玩家 id、座位頻道) from create/join to the hook

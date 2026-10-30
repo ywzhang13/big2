@@ -9,12 +9,13 @@
 // 減少動態：不飛、不震、不閃、沒有碎石，隕石坑＋牌＋字直接出現，1.6 秒。
 // 落點照勝者名牌（data-fx-seat，絕對座位）算；入場方向照「勝者在我的哪一邊」（相對座位）。
 // 素材：/mahjong-fx/meteor/*.webp（老闆生成）、音效 s/meteor-*.mp3（阿妍，CC0；授權見 public/mahjong-fx/LICENSE.txt）、
-// 「自摸」字型 /fonts/noto-sans-tc/zimo-black.woff2（Noto Sans TC Black 子集，SIL OFL 1.1）。
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+// 「自摸」大字：老闆生成的大字圖 /mahjong-fx/meteor/meteor-title.webp（2026-10-31 取代字型；時間不變），定格後餘燼一直往上飄。
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { playMeteorSound, preloadMeteorSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
+import { runParts, type Part, type Pose } from "./fxParts";
 import "./meteorFx.css";
 
 const ART = "/mahjong-fx/meteor";
@@ -40,22 +41,69 @@ function useReducedMotion() {
   );
 }
 
-/** 先載好、解碼好四張圖、「自摸」字型和音效（房間裡有這個帳號時就叫；第一次播也不會閃空白、字也不會先用別的字型） */
+/** 先載好、解碼好四張圖、「自摸」大字圖和音效（房間裡有這個帳號時就叫；第一次播也不會閃空白） */
 const artImgs: HTMLImageElement[] = []; // 留著參考，瀏覽器不會把解碼好的圖丟掉
 let artReady: Promise<boolean> | null = null;
 export function preloadMeteorFx(): Promise<boolean> {
   artReady ??= Promise.all([
-    ...["meteor.webp", "explosion.webp", "crater.webp", "debris.webp"].map((f) => {
+    ...["meteor.webp", "explosion.webp", "crater.webp", "debris.webp", "meteor-title.webp", ...DETAIL_ART].map((f) => {
       const i = new Image();
       i.src = `${ART}/${f}`;
       artImgs.push(i);
       return i.decode().then(() => true, () => false);
     }),
-    new FontFace("MjMeteorZimo", "url(/fonts/noto-sans-tc/zimo-black.woff2)", { weight: "900" }).load().then((f) => { document.fonts.add(f); return true; }, () => false),
     preloadMeteorSound().then((b) => !!b),
   ]).then((ok) => ok.every(Boolean));
   return artReady;
 }
+
+/** 補細節層的素材（老闆 2026-10-31 補充特效2，照小宜〈隕石冰封雷霆-補細節素材清單 v1〉；只加層，原本的畫面、時間、音效對位不動） */
+const DETAIL_ART = ["meteor-impact-rocks-single.webp", "meteor-ground-dust-rings.webp", "meteor-heat-smoke.webp", "meteor-embers-single.webp"];
+const cellAt = (k: number, cols: number, rows: number) => `${cols > 1 ? ((k % cols) / (cols - 1)) * 100 : 0}% ${rows > 1 ? (Math.floor(k / cols) / (rows - 1)) * 100 : 0}%`;
+
+/**
+ * 隕石補細節層的時間軸（相對落點，ms 從特效開始算）：撞擊 0.75 秒、牌 1.05、「自摸」1.25 都不動。
+ *   熔岩碎石：撞擊後各沿拋物線飛出去（近大遠小、自轉速度各不同），1.6 秒前落地淡掉
+ *   塵浪：撞擊後 4 段不完整的弧從落點往外擴散（錯開 30ms，貼地壓扁）
+ *   熱浪煙：0.9～1.8 秒在落點上方淡淡往上冒
+ *   餘燼（黑底，screen）：撞擊後一群群往上飄，「自摸」出來以後越來越少，2.3 秒前散光
+ * 高速尾流（八款火焰流星）2026-10-31 老闆覺得加上去怪，已拿掉。
+ */
+function meteorDetail(root: HTMLElement, g: { u: number }): Part[] {
+  const { u } = g;
+  const els = (kind: string) => [...root.querySelectorAll<HTMLElement>(`[data-md="${kind}"]`)].map((el) => ({ el, i: Number(el.dataset.i) }));
+  const out: Part[] = [];
+  const rk = els("rock");
+  rk.forEach(({ el, i }) => {
+    const a = (i / rk.length) * Math.PI * 2 + 0.35, R = u * (0.45 + 0.1 * (i % 4)), w = u * (0.07 + 0.025 * (i % 3)), spin = (i % 2 ? 1 : -1) * (160 + (i % 5) * 50);
+    const ex = Math.cos(a) * R, ey = Math.sin(a) * R * 0.6;
+    out.push({ el, w, h: w * 0.96, keys: [[0, { x: 0, y: 0, s: 0.5, o: 0 }], [755, { x: 0, y: 0, s: 0.5, o: 0 }], [775, { x: ex * 0.08, y: ey * 0.08, s: 1, o: 1, r: 0, e: "cubic-bezier(.15,.7,.35,1)" }],
+      [980, { x: ex * 0.55, y: ey * 0.55 - u * 0.2, s: 1, o: 1, r: spin * 0.4 }], [1250, { x: ex * 0.85, y: ey * 0.85 - u * 0.05, s: 0.95, o: 0.9, r: spin * 0.8 }],
+      [1550 + (i % 3) * 50, { x: ex, y: ey + u * 0.12, s: 0.9, o: 0, r: spin }]] });
+  });
+  els("dust").forEach(({ el, i }) => {
+    const a = ((i * 90 + 45) * Math.PI) / 180, t = 760 + i * 30, w = u * 0.5;
+    const at = (f: number, s: number, o: number): Pose => ({ x: Math.cos(a) * u * f, y: Math.sin(a) * u * f * 0.45, s, sy: s * 0.55, o });
+    out.push({ el, w, h: w * 0.83, rot: (a * 180) / Math.PI - 90, keys: [[0, at(0.08, 0.4, 0)], [t, at(0.08, 0.4, 0)], [t + 40, { ...at(0.14, 0.7, 0.85), e: "cubic-bezier(.15,.7,.35,1)" }],
+      [t + 520, at(0.42, 1.15, 0.4)], [t + 800, at(0.5, 1.25, 0)]] });
+  });
+  els("smoke").forEach(({ el, i }) => {
+    const x = (i - 1) * u * 0.2, w = u * 0.36;
+    out.push({ el, w, h: w * 0.93, keys: [[0, { x, y: -u * 0.1, s: 0.8, o: 0 }], [880 + i * 60, { x, y: -u * 0.1, s: 0.8, o: 0 }], [1100 + i * 60, { x, y: -u * 0.2, s: 1, o: 0.3 }],
+      [1800, { x: x * 1.2, y: -u * 0.45, s: 1.2, o: 0 }]] });
+  });
+  const em = els("ember");
+  em.forEach(({ el, i }) => {
+    const a = (i / em.length) * Math.PI * 2, r0 = u * 0.06, r1 = u * (0.3 + 0.08 * (i % 4)), t = 760 + (i % 4) * 80, end = i % 2 ? 1600 : 2250, w = u * 0.2;
+    out.push({ el, w, h: w * 0.75, keys: [[0, { x: Math.cos(a) * r0, y: Math.sin(a) * r0, s: 0.6, o: 0 }], [t, { x: Math.cos(a) * r0, y: Math.sin(a) * r0, s: 0.6, o: 0 }],
+      [t + 60, { x: Math.cos(a) * r0 * 2, y: Math.sin(a) * r0 * 2 - u * 0.03, s: 0.9, o: 1 }],
+      [end, { x: Math.cos(a) * r1, y: Math.sin(a) * r1 * 0.6 - u * 0.4, s: 1, o: 0 }]] });
+  });
+  return out;
+}
+
+/** 「自摸」定格後的餘燼：從字的下半部往上飄（橫向位置、延遲、大小固定） */
+const EMBERS = Array.from({ length: 10 }, (_, i) => ({ x: 8 + ((i * 37) % 85), d: i * 230, s: 0.7 + (i % 3) * 0.3 }));
 
 // 碎石：手機 10、電腦 14 塊；方向、距離、轉速固定。
 // 碎石圖的頭朝左下（135 度）、火尾朝右上：轉 (飛行角度 − 135) 度，火尾就在飛行方向的反方向；飛行中再小幅轉動
@@ -165,11 +213,11 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     set("--es", Math.max(H * 0.75, W * 0.45)); // 爆炸圖放到 1.6 倍時寬度約畫面 70% 以上
     set("--sw", Math.max(W, H) * 1.3);
     set("--ds", H * (mobile ? 0.22 : 0.17));
-    // 收尾：自摸牌在坑正中央；「自摸／名字」放在畫面正中央（字級＝一般自摸浮層：自摸 14vw、名字 24px），
+    // 收尾：自摸牌在坑正中央；「自摸／名字」放在畫面正中央（大字圖高 14vw×1.2、寬照圖的長寬比 596:347；名字 24px），
     // 會擋到坑裡的牌就往上或往下讓開（牌在中線下面就往上，反之往下）
     const tileW = mobile ? 50 : 84, tileH = Math.round(tileW * 1.36);
     set("--tw", tileW); set("--th", tileH);
-    const textH = W * 0.14 + 16 + 34, textW = W * 0.14 * 2.6, gap = mobile ? 10 : 16, edge = mobile ? 4 : 16;
+    const textH = W * 0.14 * 1.2 + 16 + 34, textW = W * 0.14 * 1.2 * (596 / 347), gap = mobile ? 10 : 16, edge = mobile ? 4 : 16;
     let top = H / 2 - textH / 2;
     const tTop = ly - tileH / 2 - gap, tBot = ly + tileH / 2 + gap;
     const hitsTile = top < tBot && top + textH > tTop && Math.abs(lx - W / 2) < textW / 2 + tileW / 2 + gap;
@@ -188,6 +236,8 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     const anims = stage ? shakeStage(stage, mobile) : [];
     // 碎石用 Web Animations 直接給算好的數字（CSS 關鍵影格裡用 calc(var()) 時，Chrome 合成層偶爾有一顆停在原地不動）
     const dr = H * (mobile ? 1.0 : 0.85);
+    // 補細節層（只加層，用自己的 Web Animations，原本的 CSS 動畫不動）
+    anims.push(...runParts(meteorDetail(root, { u: Math.min(H, W * 0.62) }), METEOR_MS, false));
     root.querySelectorAll<HTMLElement>(".mt-rock").forEach((el, i) => {
       const d = DEBRIS[i];
       const x = d.x * d.r * dr, y = d.y * d.r * dr;
@@ -244,6 +294,10 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
   }, [rm, sfxUrl, warm]);
 
   const n = mobile ? 10 : 14;
+  const detail = (kind: string, f: string, cols: number, rows: number, i: number, c: number) => (
+    <span key={`${kind}${i}`} className="mt-dz" data-md={kind} data-i={i}
+      style={{ backgroundImage: `url("${art(f)}")`, backgroundSize: `${cols * 100}% ${rows * 100}%`, backgroundPosition: cellAt(c, cols, rows) }} />
+  );
   const mover = (
     <div className="mt-mover">
       {/* eslint-disable-next-line @next/next/no-img-element -- 固定檔名素材，預載好再播 */}
@@ -268,9 +322,16 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
           <div className="mt-main"><div className="mt-path">{mover}</div></div>
         </div>
       </div>
-      <div className="mt mt-blend"><div className="mt-at"><div className="mt-boom" /></div></div>
+      <div className="mt mt-blend"><div className="mt-at"><div className="mt-boom" />
+        {/* 補細節層：餘燼（黑底，screen） */}
+        {Array.from({ length: mobile ? 10 : 16 }, (_, i) => detail("ember", "meteor-embers-single.webp", 4, 4, i, i % 16))}
+      </div></div>
       <div className="mt"><div className="mt-at">
         <div className="mt-wave" />
+        {/* 補細節層：塵浪、熱浪煙、熔岩碎石 */}
+        {[0, 1, 2, 3].map((i) => detail("dust", "meteor-ground-dust-rings.webp", 4, 1, i, i))}
+        {[0, 1, 2].map((i) => detail("smoke", "meteor-heat-smoke.webp", 3, 1, i, i))}
+        {Array.from({ length: mobile ? 10 : 12 }, (_, i) => detail("rock", "meteor-impact-rocks-single.webp", 4, 3, i, i % 12))}
         {DEBRIS.slice(0, n).map((d, i) => (
           <span key={i} className="mt-rock" style={{ backgroundPosition: `${(d.f % 4) * 33.333}% ${Math.floor(d.f / 4) * 100}%` }} />
         ))}
@@ -285,7 +346,9 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
       {/* 「自摸」＋名字：畫面正中央，程式排字；縮放加光爆砸出 */}
       <div className="mt-zimo" data-mt-zimo>
         <i className="mt-burst" />
-        <b>自摸</b>
+        <b role="img" aria-label="自摸" style={{ backgroundImage: `url("${art("meteor-title.webp")}")` }} />
+        {/* 定格後的餘燼：一直從字往上飄 */}
+        {EMBERS.map((e, k) => <em key={k} className="mt-ember" style={{ "--ex": `${e.x}%`, "--ed": `${e.d}ms`, "--es": e.s } as CSSProperties} />)}
         <span>{name}</span>
       </div>
       <div className="mt-flash" /></div>

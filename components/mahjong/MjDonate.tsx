@@ -4,7 +4,8 @@
 // 歷史紀錄的成就回饋，不是付款頁：按下去只跳感謝訊息，不跳轉、不開 LINE Pay、不追蹤有沒有付款。
 // 只給 LINE 玩家：自摸次數由伺服器照登入帳號算（GET /api/mahjong/donate → { count }），> 0 才顯示；
 // 金額＝自摸次數 × 10（老闆 2026-10-21，原本固定 NT$50）。
-// 按斗內 → POST /api/mahjong/donate/ack，成功才把次數設成 0（卡片收起）；失敗照樣跳感謝訊息，但卡片留著，下次打開再取一次。
+// 按斗內 → POST /api/mahjong/donate/ack 只是確認，不清除次數（老闆 2026-10-31：次數由後台記一筆斗內時歸零）：
+// 用回應的 count 更新卡片（卡片照舊顯示）；「知道了」只關閉感謝訊息。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
@@ -16,7 +17,7 @@ export const donateAmount = (count: number) => count * 10;
 export default function MjDonate({ user, focusBack }: { user: MjAuthUser; focusBack: () => void }) {
   const [count, setCount] = useState<number | null>(null); // null＝還沒取到或取失敗：不顯示
   const [later, setLater] = useState(false); // 「下次自摸再說」：只在這次瀏覽收起，不歸零
-  const [thanks, setThanks] = useState<number | null>(null); // 感謝訊息開著：記下按的時候的金額（按完次數會歸零）
+  const [thanks, setThanks] = useState<number | null>(null); // 感謝訊息開著：記下按的時候的金額
   const [busy, setBusy] = useState(false);
   const doneRef = useRef<HTMLButtonElement>(null);
 
@@ -35,7 +36,8 @@ export default function MjDonate({ user, focusBack }: { user: MjAuthUser; focusB
     setBusy(true);
     try {
       const r = await mjFetch("/api/mahjong/donate/ack", { method: "POST", body: "{}" });
-      if (r.ok) setCount(0); // 伺服器已歸零：卡片收起，等下次自摸再出現
+      const d = r.ok ? ((await r.json()) as { count?: unknown }) : null;
+      if (d && typeof d.count === "number") setCount(d.count); // 伺服器回目前次數（不歸零）
     } catch { /* 失敗：卡片留著，下次打開歷史紀錄再取一次正確的次數 */ }
     setBusy(false);
     setThanks(donateAmount(count ?? 0));
@@ -43,7 +45,7 @@ export default function MjDonate({ user, focusBack }: { user: MjAuthUser; focusB
 
   const close = useCallback(() => {
     setThanks(null);
-    focusBack(); // 卡片可能已經收起：焦點回到「歷史紀錄」標題
+    focusBack(); // 焦點回到「歷史紀錄」標題
   }, [focusBack]);
 
   useEffect(() => {

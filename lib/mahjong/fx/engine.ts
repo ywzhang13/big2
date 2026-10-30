@@ -266,6 +266,59 @@ export function playMeteorSound(zeroAt: number | null, impactMs: number, url = m
   };
 }
 
+// ---------------- 自摸特效庫 5 種的專屬音效（阿妍 2026-10-31；畫面在 components/mahjong/ZimoFx.tsx） ----------------
+// 雷霆、風暴、冰封、黑洞、櫻花各一般版／手機加強版一檔（s/zimo-<代號>-pc|mobile.mp3）。檔案 0 秒＝特效開始那一格，
+// 主擊、牌、「自摸」字的點都做在檔案裡，從頭放就對準（和隕石不同：隕石是從撞擊點往回推）。
+// 和隕石、大牌音效同一條路（互動音效的音量、靜音、壓縮器）。觸控裝置（手機）放手機加強版、其他放一般版。只有這一手真的要播那一種、或房間裡有人選了那一種才載
+const zimoFxBufs = new Map<string, Promise<AudioBuffer | null>>();
+const zimoFxUrl = (fx: string) => `${BASE}s/zimo-${fx}-${typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? "mobile" : "pc"}.mp3`;
+/** 先載好、解碼好（要等特效引擎的音訊建好；載不到就回 null，特效照播、不出聲） */
+export function preloadZimoFxSound(fx: string): Promise<AudioBuffer | null> {
+  const url = zimoFxUrl(fx);
+  if (!zimoFxBufs.has(url)) {
+    zimoFxBufs.set(url, preloadFx().then(async () => {
+      if (!AC) return null;
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return AC.decodeAudioData(await r.arrayBuffer());
+    }).catch(() => null));
+  }
+  return zimoFxBufs.get(url)!;
+}
+/**
+ * 播自摸特效的專屬音效；回傳停止函式（跳過、換局、離開時呼叫）。靜音、還沒載好、音訊沒解鎖就不響。
+ * zeroAt：特效動畫真正開始那一刻（performance.now）：從檔案「已經過了多久＋輸出延遲」的位置開始放，畫面和聲音同一條時間軸。
+ * zeroAt＝null（減少動態）：從主擊前 0.05 秒開始放（hitMs＝這一種的主擊時間），只聽到主擊之後
+ */
+export function playZimoFxSound(fx: string, zeroAt: number | null, hitMs: number): () => void {
+  const ac = AC;
+  let stopped = false;
+  let stopNow = () => {};
+  if (!ac || masterGain === 0) return () => {};
+  const start = (b: AudioBuffer | null) => {
+    if (!b || stopped || ac.state !== "running") return;
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = b;
+    s.connect(g).connect(MIX ?? ac.destination);
+    const latency = (ac.outputLatency || 0) + (ac.baseLatency || 0);
+    const offset = zeroAt == null ? Math.max(0, hitMs / 1000 - 0.05) : Math.max(0, (performance.now() - zeroAt) / 1000 + latency);
+    if (offset >= b.duration) return;
+    try { s.start(ac.currentTime, offset); } catch { return; }
+    stopNow = () => {
+      g.gain.setTargetAtTime(0, ac.currentTime, 0.012);
+      try { s.stop(ac.currentTime + 0.05); } catch { /* 已經播完 */ }
+    };
+  };
+  const go = () => void preloadZimoFxSound(fx).then(start);
+  if (ac.state === "running") go();
+  else void ac.resume().then(go, () => {});
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    stopNow();
+  };
+}
+
 // ---------------- 八台大牌新版的專屬音效（老闆 2026-10-25 定案阿妍的推薦款；畫面在 components/mahjong/BigWin8Fx.tsx） ----------------
 // 每種牌型一個檔（一般版／手機加強版，網址由 BigWin8Fx 依裝置給），長度＝大牌段總長，重擊點已對在檔案裡（lib/mahjong/bigWin.ts 的 BIG_WIN8.hit）。
 // 和大牌、隕石音效同一條路（互動音效的音量、靜音、壓縮器），播放音量 1。只有這一手真的是那一種大牌時才載

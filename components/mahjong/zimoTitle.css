@@ -1,0 +1,93 @@
+/* 自摸特效庫的專屬「自摸」大字（components/mahjong/ZimoTitle.tsx；老闆 2026-10-31 改用老闆生成的大字圖）。
+   --zx／--zy＝中線、上緣；--zt／--zn＝大字、名字出現的時間；--wd＝風暴的風向；--ar＝大字圖寬÷高；--src＝大字圖（掃光的遮罩也用它）。
+   字級 clamp(92px, 14vw, 202px)（和原本字型版同一個字級）；大字高 1.2em。名字手機 22px、桌機 28px；大字出現前 80ms 先墊暗底。
+   登場只動 transform、opacity（冰封另外有一次 0.15 秒的模糊轉清楚），不旋轉，最後一定停在正的位置。
+   用 span／b，不用 i（外層 .zfw i 有特效圖層的共用規則）。z 跟著外層特效（63） */
+.zz { position: absolute; left: var(--zx); top: var(--zy); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center;
+  white-space: nowrap; pointer-events: none; z-index: 2; font-size: clamp(92px, 14vw, 202px); }
+.zz-back { position: absolute; inset: -6% -24% -10%; z-index: -1; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 45%, rgba(3,8,12,.7) 0%, rgba(3,8,12,.42) 45%, transparent 72%);
+  opacity: 0; animation: zz-in 220ms ease-out calc(var(--zt) - 80ms) both; }
+.zz-art { position: relative; display: block; height: 1.2em; width: calc(1.2em * var(--ar)); background: var(--src) no-repeat center / 100% 100%; opacity: 0; }
+.zz-name { margin: 6px 0 0; padding-left: .12em; max-width: 12em; overflow: hidden; text-overflow: ellipsis;
+  font: 700 22px/1.3 "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; letter-spacing: .12em; opacity: 0;
+  text-shadow: 0 2px 0 rgba(0,0,0,.65), 0 0 10px rgba(0,0,0,.6); }
+.zz.d .zz-name { font-size: 28px; margin-top: 10px; }
+@keyframes zz-in { from { opacity: 0; } to { opacity: 1; } }
+/* 掃光：只照在字的形狀上（用大字圖本身當遮罩），裡面一條斜光帶從左掃到右；光帶寬 40%，走完全寬＝位移 350% */
+.zz-hl { position: absolute; inset: 0; overflow: hidden; mix-blend-mode: screen; opacity: 0;
+  -webkit-mask: var(--src) no-repeat center / 100% 100%; mask: var(--src) no-repeat center / 100% 100%; animation: zz-in 200ms ease-out calc(var(--zt) + 420ms) both; }
+.zz-band { position: absolute; top: -10%; bottom: -10%; left: -40%; width: 40%; transform: translateX(0);
+  background: linear-gradient(100deg, transparent 0%, var(--hl, rgba(255,255,255,.8)) 50%, transparent 100%); }
+@keyframes zz-sweep { 0% { transform: translateX(0); } 55%, 100% { transform: translateX(350%); } }
+/* 粒子都以大字中心（高 1.2em 的一半）為原點 */
+.zz-wind, .zz-leaf, .zz-dust, .zz-petal { position: absolute; left: 50%; top: .6em; opacity: 0; }
+
+/* ---------- ⚡ 雷霆：從上往下劈出（拉長 → 壓扁 → 回正）；之後提亮的同一張圖一直閃（電弧閃爍），白光每 1.4 秒掃一次 ---------- */
+.zz-thunder .zz-art { transform-origin: 50% 0; animation: zz-thunder-in 300ms cubic-bezier(.3, 0, .3, 1) var(--zt) both; }
+@keyframes zz-thunder-in { 0% { opacity: 0; transform: scaleY(1.9) scaleX(.72); } 40% { opacity: 1; transform: scaleY(.86) scaleX(1.08); } 66% { transform: scaleY(1.04) scaleX(.98); } 100% { opacity: 1; transform: none; } }
+.zz-glow { position: absolute; inset: 0; background: var(--src) no-repeat center / 100% 100%; filter: brightness(1.8) saturate(1.5); mix-blend-mode: screen; opacity: 0;
+  animation: zz-flicker 190ms steps(2) calc(var(--zt) + 300ms) infinite, zz-flicker2 1300ms steps(6) calc(var(--zt) + 300ms) infinite; }
+@keyframes zz-flicker { 0% { opacity: .55; } 50% { opacity: .1; } 100% { opacity: .55; } }
+@keyframes zz-flicker2 { 0%, 100% { visibility: visible; } 34%, 50% { visibility: hidden; } }
+.zz-thunder .zz-band { --hl: rgba(235,250,255,.95); animation: zz-sweep 1400ms ease-in-out calc(var(--zt) + 420ms) infinite; }
+.zz-thunder .zz-name { color: #DDF8FF; animation: zz-name-up 260ms ease-out var(--zn) both; }
+@keyframes zz-name-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- 🌪️ 風暴：順著風從側邊被捲進來（拉長 → 回彈），不傾斜；之後兩道風帶一直從字前面流過去、葉片往風吹的那一側飛走 ---------- */
+.zz-storm .zz-art { animation: zz-storm-in 420ms cubic-bezier(.2, .8, .3, 1.15) var(--zt) both; }
+@keyframes zz-storm-in { 0% { opacity: 0; transform: translateX(calc(-60px * var(--wd))) scaleX(1.3) scaleY(.82); }
+  60% { opacity: 1; transform: translateX(calc(6px * var(--wd))) scaleX(.96) scaleY(1.04); } 100% { opacity: 1; transform: none; } }
+.zz-wind { width: 1.6em; height: .14em; margin: -.07em 0 0 -.8em; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(235,255,248,.75) 0%, rgba(140,240,205,.35) 45%, transparent 72%); }
+.zz-wind.w1 { --wy: -.12em; animation: zz-wind 1100ms ease-in-out calc(var(--zt) + 380ms) infinite; }
+.zz-wind.w2 { --wy: .3em; animation: zz-wind 1100ms ease-in-out calc(var(--zt) + 930ms) infinite; }
+@keyframes zz-wind { 0% { opacity: 0; transform: translate(calc(-1.3em * var(--wd)), var(--wy)) scaleX(.5); } 30% { opacity: 1; }
+  70% { opacity: .8; } 100% { opacity: 0; transform: translate(calc(1.3em * var(--wd)), var(--wy)) scaleX(1.1); } }
+.zz-leaf { width: .12em; height: .06em; margin: -.03em 0 0 -.06em; border-radius: 0 80% 0 80%; background: linear-gradient(135deg, #D7FFE9 0%, #42C98A 55%, #137A4E 100%);
+  animation: zz-leaf 1500ms ease-in calc(var(--zt) + 420ms + var(--ld)) infinite; }
+@keyframes zz-leaf { 0% { opacity: 0; transform: translate(var(--lx), var(--ly)) scale(var(--ls)) rotate(0deg); } 15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(var(--lx) + 1.6em * var(--wd)), calc(var(--ly) - .35em)) scale(var(--ls)) rotate(calc(320deg * var(--wd))); } }
+.zz-storm .zz-name { color: #D7FFEF; animation: zz-name-wind 300ms ease-out var(--zn) both; }
+@keyframes zz-name-wind { from { opacity: 0; transform: translateX(calc(-18px * var(--wd))); } to { opacity: 1; transform: none; } }
+
+/* ---------- ❄️ 冰封：從模糊瞬間凍結清楚（0.15 秒，不彈跳）；之後冰面反光每 2.2 秒斜斜掃過一次 ---------- */
+.zz-frost .zz-art { animation: zz-frost-in 150ms linear var(--zt) both; }
+@keyframes zz-frost-in { 0% { opacity: 0; transform: scale(.9); filter: blur(7px); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+.zz-frost .zz-band { --hl: rgba(255,255,255,.9); width: 26%; left: -26%; animation: zz-sweep-ice 2200ms ease-in-out calc(var(--zt) + 420ms) infinite; }
+@keyframes zz-sweep-ice { 0% { transform: translateX(0); } 45%, 100% { transform: translateX(485%); } }
+.zz-frost .zz-name { color: #ECFBFF; animation: zz-name-ice 220ms linear var(--zn) both; }
+@keyframes zz-name-ice { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- 🌌 黑洞：從一個光點展開；之後星塵沿橢圓軌道繞著字走（只有位移，前半圈亮、後半圈暗），金邊微光慢慢掃過 ---------- */
+.zz-blackhole .zz-art { animation: zz-void-in 520ms cubic-bezier(.2, .9, .3, 1.1) var(--zt) both; }
+@keyframes zz-void-in { 0% { opacity: 0; transform: scale(.06); } 20% { opacity: 1; } 70% { transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
+.zz-blackhole .zz-band { --hl: rgba(255,214,120,.75); animation: zz-sweep 2600ms ease-in-out calc(var(--zt) + 520ms) infinite; }
+.zz-dust { --rx: 1.32em; --ry: .44em; width: .07em; height: .07em; margin: -.035em 0 0 -.035em; border-radius: 50%;
+  background: radial-gradient(circle, #FFFFFF 0 30%, rgba(255,220,140,.85) 45%, transparent 72%);
+  animation: zz-in 300ms ease-out calc(var(--zt) + 420ms) both, zz-orbit-dust 3600ms linear calc(var(--zt) + 420ms + var(--dd)) infinite; }
+.zz-dust.k1 { --rx: 1.12em; --ry: .36em; background: radial-gradient(circle, #FFF6D8 0 30%, rgba(200,150,255,.85) 45%, transparent 72%); }
+@keyframes zz-orbit-dust { 0.00% { transform: translate(calc(var(--rx) * 1.000), calc(var(--ry) * 0.000)) scale(var(--ds)); opacity: 0.35; } 6.25% { transform: translate(calc(var(--rx) * 0.924), calc(var(--ry) * 0.383)) scale(var(--ds)); opacity: 1; } 12.50% { transform: translate(calc(var(--rx) * 0.707), calc(var(--ry) * 0.707)) scale(var(--ds)); opacity: 1; } 18.75% { transform: translate(calc(var(--rx) * 0.383), calc(var(--ry) * 0.924)) scale(var(--ds)); opacity: 1; } 25.00% { transform: translate(calc(var(--rx) * 0.000), calc(var(--ry) * 1.000)) scale(var(--ds)); opacity: 1; } 31.25% { transform: translate(calc(var(--rx) * -0.383), calc(var(--ry) * 0.924)) scale(var(--ds)); opacity: 1; } 37.50% { transform: translate(calc(var(--rx) * -0.707), calc(var(--ry) * 0.707)) scale(var(--ds)); opacity: 1; } 43.75% { transform: translate(calc(var(--rx) * -0.924), calc(var(--ry) * 0.383)) scale(var(--ds)); opacity: 1; } 50.00% { transform: translate(calc(var(--rx) * -1.000), calc(var(--ry) * 0.000)) scale(var(--ds)); opacity: 1; } 56.25% { transform: translate(calc(var(--rx) * -0.924), calc(var(--ry) * -0.383)) scale(var(--ds)); opacity: 0.35; } 62.50% { transform: translate(calc(var(--rx) * -0.707), calc(var(--ry) * -0.707)) scale(var(--ds)); opacity: 0.35; } 68.75% { transform: translate(calc(var(--rx) * -0.383), calc(var(--ry) * -0.924)) scale(var(--ds)); opacity: 0.35; } 75.00% { transform: translate(calc(var(--rx) * -0.000), calc(var(--ry) * -1.000)) scale(var(--ds)); opacity: 0.35; } 81.25% { transform: translate(calc(var(--rx) * 0.383), calc(var(--ry) * -0.924)) scale(var(--ds)); opacity: 0.35; } 87.50% { transform: translate(calc(var(--rx) * 0.707), calc(var(--ry) * -0.707)) scale(var(--ds)); opacity: 0.35; } 93.75% { transform: translate(calc(var(--rx) * 0.924), calc(var(--ry) * -0.383)) scale(var(--ds)); opacity: 0.35; } 100.00% { transform: translate(calc(var(--rx) * 1.000), calc(var(--ry) * -0.000)) scale(var(--ds)); opacity: 0.35; } }
+.zz-blackhole .zz-name { color: #FFE7A0; animation: zz-name-void 280ms ease-out var(--zn) both; }
+@keyframes zz-name-void { from { opacity: 0; transform: scale(.86); } to { opacity: 1; transform: none; } }
+
+/* ---------- 🌸 櫻花：從小慢慢放大成形（只有縮放、透明度，手機才不會掉幀）；之後花瓣在字旁慢慢飄落、金邊一閃一閃地掃過 ---------- */
+.zz-sakura .zz-art { animation: zz-sakura-in 480ms cubic-bezier(.2, .8, .3, 1.1) var(--zt) both; }
+@keyframes zz-sakura-in { 0% { opacity: 0; transform: scale(.76); } 100% { opacity: 1; transform: none; } }
+.zz-sakura .zz-band { --hl: rgba(255,236,170,.85); width: 22%; left: -22%; animation: zz-sweep-gold 1900ms ease-in-out calc(var(--zt) + 500ms) infinite; }
+@keyframes zz-sweep-gold { 0% { transform: translateX(0); } 50%, 100% { transform: translateX(560%); } }
+.zz-sakura .zz-name { color: #FFF4EA; animation: zz-name-down 300ms ease-out var(--zn) both; }
+@keyframes zz-name-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.zz-petal { width: .13em; height: .09em; margin: -.045em 0 0 -.065em; border-radius: 0 80% 0 80%;
+  background: linear-gradient(135deg, #FFF0F6 0%, #FFB3D2 55%, #F07BB3 100%); box-shadow: 0 0 6px rgba(255,180,210,.8);
+  animation: zz-petal-in 520ms ease-out calc(var(--zt) - 120ms) both, zz-petal-fall 2200ms ease-in-out calc(var(--zt) + 400ms + var(--pd)) infinite; }
+@keyframes zz-petal-in { 0% { opacity: 0; transform: translate(calc(var(--x0) * 1.9), calc(var(--y0) * 2.2)) rotate(var(--r0)); }
+  100% { opacity: 1; transform: translate(var(--x0), var(--y0)) rotate(calc(var(--r0) + 120deg)); } }
+@keyframes zz-petal-fall { 0% { opacity: 1; transform: translate(var(--x0), var(--y0)) rotate(calc(var(--r0) + 120deg)); }
+  100% { opacity: 0; transform: translate(calc(var(--x0) + var(--dx)), calc(var(--y0) + .7em)) rotate(calc(var(--r0) + 300deg)); } }
+
+/* ---------- 減少動態：大字直接定格顯示；名字淡入；沒有登場動作、閃爍、掃光、粒子 ---------- */
+.zz.rm .zz-art { animation: none; opacity: 1; transform: none; }
+.zz.rm .zz-back { animation: none; opacity: 1; }
+.zz.rm .zz-name { animation: zz-in 220ms ease-out 380ms both; }
+.zz.rm .zz-glow, .zz.rm .zz-hl, .zz.rm .zz-wind, .zz.rm .zz-leaf, .zz.rm .zz-dust, .zz.rm .zz-petal { display: none; }
