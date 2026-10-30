@@ -38,8 +38,30 @@
   ・①（A）：496908 SCI-FI Falling metior（Quezthepoet）、242721 burning air（sergeeo）、178886 red whoosh gladiator 04（martian）
   ・②③（C）：132929 Explosion and Rubble/Debris（作者帳號已刪除，CC0 不能撤回）、539968 Deep Boom（Za-Games）、
     567251 Stones Falling（iwanPlays）、475094 thunder3（Josh74000MC）
+
   網址格式 https://freesound.org/people/<作者>/sounds/<編號>/
 - 「自摸」字型：public/fonts/noto-sans-tc/zimo-black.woff2，Noto Sans TC Black 只取「自摸」兩個字，SIL Open Font License 1.1（全文 public/fonts/noto-sans-tc/OFL.txt）
+自摸特效庫 5 種新特效（2026-10-31 加入；畫面 components/mahjong/ZimoFx.tsx）
+- zimo/thunder、zimo/storm、zimo/frost、zimo/blackhole、zimo/sakura 底下照 v4 檔名的 WebP：老闆自行以 AI 生成（2026-10-31，照阿哲
+  〈自摸特效5種-素材prompt-各自分鏡版-v4〉），不需標註；老馬加工：照 v4 檔名改名、縮圖、轉 WebP（黑底的維持不透明，畫面用 screen 疊加去黑），
+  碎片精靈表統一成 1024×512（4×2）。風暴、黑洞、櫻花 v4 沒用到的舊版（storm-funnel、storm-debris、blackhole-warp、sakura-blizzard、sakura-spiral、
+  sakura-tree、sakura-petals）已移除
+- zimo/storm（-air-ribbons、-funnel-bands、-rocks-single、-dust-puffs）、zimo/blackhole（-light-streams、-accretion-back、-accretion-front、
+  -debris-single、-nova-filaments）、zimo/sakura（-petal-clusters、-bud-opening、-impact-petal-burst、-branch-growth）13 張細素材：老闆自行以 AI 生成
+  （2026-10-31「補充特效.zip」，照阿哲〈風暴黑洞櫻花-13張細素材GPT指令〉），不需標註；老馬加工：零件逐一裁出、放進等大格子重排成精靈表（序列幀保持對齊）、
+  縮圖、轉 WebP；黑洞前層吸積盤原圖把透明棋盤格畫進了像素，老馬去掉棋盤格後做成透明背景
+- s/zimo-thunder|storm|frost|blackhole|sakura-pc.mp3（一般版）、-mobile.mp3（手機加強版）：阿妍製作（2026-10-31，〈自摸特效4種音效〉，雷霆另見〈雷霆自摸音效-評估-2026-10-30〉），
+  檔案 0 秒＝特效開始；用到的 Freesound 素材阿妍逐一確認為 CC0（清單和原檔在她的「原檔-Freesound-CC0」資料夾）
+- zimo/frost/frost-spear.webp（冰封 v3 的冰槍）、zimo/sakura/sakura-bud.webp（櫻花 v4 落下的花苞）：老闆自行以 AI 生成（2026-10-31，霜耀冰晶魔槍、
+  璀璨鎏金魔法花苞），不需標註；老馬加工：冰槍轉成槍尖朝正下（圖本身斜 14 度）、縮圖、轉 WebP
+- 補細節層（2026-10-31「補充特效2.zip」，照小宜〈隕石冰封雷霆-補細節素材清單 v1〉）：meteor/meteor-impact-rocks-single、-ground-dust-rings、-heat-smoke、
+  -embers-single；zimo/frost/frost-veins-branches、-spear-splinters、-crack-junctions、-cold-mist-puffs；zimo/thunder/thunder-cloud-crawl、-side-forks、
+  -plasma-sparks、-ground-arcs、-residual-current：老闆自行以 AI 生成，不需標註；老馬加工：零件裁出重排成精靈表、黑底的近黑壓成純黑、轉 WebP。
+  隕石的高速尾流（meteor-trail-strands，八款火焰流星）老闆覺得怪，已拿掉
+- zimo/storm/storm-v5-wind-wall、-rain-debris、-funnel-shells、-ground-spray、-speed-lines（風暴 v5）：老闆自行以 AI 生成（2026-10-31「風暴.zip」，照小宜
+  〈風暴自摸特效-v5-實作與素材規格〉），不需標註；老馬加工：風牆、速度線四邊羽化，漏斗外殼、地面水霧零件裁出重排，轉 WebP。v5 不用的 storm-swirl、storm-dust-puffs 已移除
+- 「自摸」大字圖 zimo/<代號>/<代號>-title.webp（5 種）、meteor/meteor-title.webp（隕石）：老闆自行以 AI 生成（2026-10-31，zimo-titles-6.png，
+  照阿哲〈自摸大字6款-一次生成GPT指令〉），不需標註；老馬加工：照透明度把 6 款逐一裁出（原尺寸不縮）、轉 WebP。取代上一版的子集字型（public/fonts/zimo/ 已移除）
 
 八台大牌新版特效（2026-10-25 加入；畫面 components/mahjong/BigWin8Fx.tsx，大三元、小四喜、清一色、五暗刻、八仙過海、七搶一、MIGI）
 - bigwin8/*.webp：老闆自行以 AI 生成（2026-10-25，大牌素材 7 種 × 2 張：三龍金焰盤旋圖、赤綠金白魔法能量爆發、四元素金色漩渦之眼、金白祥雲風效八格素材集、
