@@ -5,6 +5,12 @@
 import type { FxKind } from "../lib/mahjong/fx/engine"; // 只拿型別（不會先載入 engine，假 DOM 要先裝好）
 
 import { el, installFakeDom } from "./support/fake-dom";
+
+// 這個檔只驗證「中止後佇列能恢復」的先後關係，不需要用真實播放秒數。
+// 縮短假 DOM 的計時器，避免完整回歸被這五輪動畫等待卡住；本行程結束即自動還原。
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: TimerHandler, ms?: number, ...args: unknown[]) =>
+  realSetTimeout(fn, Math.max(1, Math.round((ms ?? 0) * 0.1)), ...args)) as typeof setTimeout;
 installFakeDom();
 
 const E = await import("../lib/mahjong/fx/engine");

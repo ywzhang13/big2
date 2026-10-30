@@ -31,7 +31,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: Record<strin
 }
 
 // ---- 玩家自己（設定頁）：第 4 節 ----
-export interface MyZimoFx { serverNow: number; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
+export interface MyZimoFx { serverNow: number; displayName: string; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
 export const getMyFx = () => call<MyZimoFx>("GET", "/api/mahjong/zimo-fx");
 export const selectMyFx = (fx: ZimoFxChoice) => call<{ selected: ZimoFxChoice }>("POST", "/api/mahjong/zimo-fx", { fx });
 /** 老闆帳號＝7 種都是永久（到期是 null，對接格式第 4 節）；只用來決定要不要顯示後台入口，真正的權限由後台 API 檢查 */

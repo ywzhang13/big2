@@ -1,10 +1,10 @@
-// 帳號專屬的自摸特效（老闆 2026-10-25「隕石自摸」）：設定表裡的帳號自摸時，胡牌紀錄帶公開代號 winFx
-//   F1 指定帳號（座位 1）手動自摸：winners[0].winFx="meteor"，mj_game_over 廣播、重新整理讀到的 state（另一家看）都有
+// 自摸特效（老闆 2026-10-31「金色自摸預設」）：所有登入帳號未選或特效失效時回退 golden；胡牌紀錄帶公開代號 winFx
+//   F1 指定帳號（座位 1）手動自摸：winners[0].winFx="golden"，mj_game_over 廣播、重新整理讀到的 state（另一家看）都有
 //   F2 指定帳號胡別人打的牌：沒有 winFx
-//   F3 其他人自摸：沒有 winFx
-//   F4 指定帳號大牌自摸（大三元）：照樣有 winFx
-//   F5 指定帳號眼牌、伺服器自動自摸：也有 winFx
-//   F7 公開座位資料帶代號（開局就能預載）：牌局中讀 state，指定帳號那個座位 players[i].winFx="meteor"、其他座位沒有；
+//   F3 其他人自摸：也帶 golden 回退
+//   F4 指定帳號大牌自摸（大三元）：照樣有 golden winFx
+//   F5 指定帳號眼牌、伺服器自動自摸：也有 golden winFx
+//   F7 公開座位資料帶代號（開局就能預載）：牌局中所有登入帳號 players[i].winFx="golden"；
 //      開局廣播 mj_game_start 的 players 也一樣（開局會隨機排座位，用玩家 id 對）
 //   F6 全部廣播和 state 回應裡都沒有帳號 id（userId）（含 F7 的回應）
 import { POST as action } from "../../app/api/mahjong/action/route";
@@ -77,8 +77,8 @@ const keep = () => allSent.push(JSON.stringify(sent));
   keep();
   const other = await stateFor(2);
   eq([r.status, st().status, st().winners?.map((w) => [w.seat, w.from, w.winFx]), overPayload()?.winners?.map((w) => w.winFx), other.gameState?.winners?.map((w: { winFx?: string }) => w.winFx)],
-    [200, "finished", [[1, null, "meteor"]], ["meteor"], ["meteor"]],
-    "F1 指定帳號自摸：胡牌紀錄 winFx=meteor；mj_game_over 廣播有；另一家重新整理讀到的 state 也有");
+    [200, "finished", [[1, null, "golden"]], ["golden"], ["golden"]],
+    "F1 指定帳號自摸：胡牌紀錄 winFx=golden；mj_game_over 廣播有；另一家重新整理讀到的 state 也有");
 }
 // F2 指定帳號胡別人打的牌
 {
@@ -98,8 +98,8 @@ const keep = () => allSent.push(JSON.stringify(sent));
   const r = await call(action, 2, { actionType: "win" });
   keep();
   eq([r.status, st().winners?.map((w) => [w.seat, w.from, w.winFx ?? null]), overPayload()?.winners?.map((w) => w.winFx ?? null)],
-    [200, [[2, null, null]], [null]],
-    "F3 其他人（座位 2，一般帳號）自摸：沒有 winFx");
+    [200, [[2, null, "golden"]], ["golden"]],
+    "F3 其他人（座位 2，一般帳號）自摸：帶 golden 回退 winFx");
 }
 // F4 指定帳號大牌自摸
 {
@@ -109,8 +109,8 @@ const keep = () => allSent.push(JSON.stringify(sent));
   keep();
   const w = st().winners?.[0];
   eq([r.status, w?.score.fans.some((f) => f.name.includes("大三元")), w?.winFx, overPayload()?.winners?.[0]?.winFx],
-    [200, true, "meteor", "meteor"],
-    "F4 指定帳號大三元自摸：大牌自摸也帶 winFx=meteor");
+    [200, true, "golden", "golden"],
+    "F4 指定帳號大三元自摸：大牌自摸也帶 winFx=golden");
 }
 // F5 指定帳號眼牌，摸到胡牌由伺服器自動自摸
 {
@@ -120,8 +120,8 @@ const keep = () => allSent.push(JSON.stringify(sent));
   const r = await call(draw, 1, {});
   keep();
   eq([r.status, st().status, st().winners?.map((w) => [w.seat, w.from, w.winFx]), overPayload()?.winners?.map((w) => w.winFx)],
-    [200, "finished", [[1, null, "meteor"]], ["meteor"]],
-    "F5 指定帳號眼牌、伺服器自動自摸：也帶 winFx=meteor");
+    [200, "finished", [[1, null, "golden"]], ["golden"]],
+    "F5 指定帳號眼牌、伺服器自動自摸：也帶 winFx=golden");
   await stateFor(0); await stateFor(1);
 }
 // F7 公開座位資料帶代號
@@ -139,13 +139,13 @@ const keep = () => allSent.push(JSON.stringify(sent));
   const byId = (list: { id: string; winFx?: string }[] | undefined) => Object.fromEntries((list ?? []).map((p) => [p.id, p.winFx ?? null]).sort());
   delete seats.R;
   eq([fxOf(asOther.gameState?.players), fxOf(asSelf.gameState?.players), sr.status, byId(startPlayers)],
-    [[["p0", null], ["p1", "meteor"], ["p2", null], ["p3", null]], [["p0", null], ["p1", "meteor"], ["p2", null], ["p3", null]], 200, { p0: null, p1: null, p2: "meteor", p3: null }],
-    "F7 牌局中 state（別家看、自己看）：指定帳號那個座位 players[i].winFx=meteor，其他座位沒有；開局廣播 mj_game_start 的 players 也是（p2 綁指定帳號）");
+    [[["p0", "golden"], ["p1", "golden"], ["p2", "golden"], ["p3", "golden"]], [["p0", "golden"], ["p1", "golden"], ["p2", "golden"], ["p3", "golden"]], 200, { p0: "golden", p1: "golden", p2: "golden", p3: "golden" }],
+    "F7 牌局中 state（別家看、自己看）：所有登入帳號 players[i].winFx=golden；開局廣播 mj_game_start 的 players 也是（p2 綁指定帳號）");
 }
 // F6 帳號 id 不能出現在任何廣播或 state 回應
 {
   const blob = allSent.join("\n");
-  eq([allSent.length > 0, blob.includes("meteor"), blob.includes(BOSS), /"userId"/.test(blob)], [true, true, false, false],
+  eq([allSent.length > 0, blob.includes("golden"), blob.includes(BOSS), /"userId"/.test(blob)], [true, true, false, false],
     "F6 F1～F5、F7 的所有廣播和 state 回應：有 winFx 代號，但沒有帳號 id、沒有 userId 欄位");
 }
 

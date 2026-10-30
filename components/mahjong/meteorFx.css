@@ -5,6 +5,8 @@
    疊在牌桌和大牌專屬段（.bw z 62）上面、結算浮層（z 50）上面；收尾（坑中央的牌＋「自摸／名字」）播完由頁面接大牌專屬段或結算。只動 transform、opacity。 */
 .mtw { display: contents; --T: 1800ms; }
 .mt { position: fixed; inset: 0; z-index: 63; pointer-events: none; overflow: hidden; }
+.mtw.embed { position: absolute; inset: 0; display: block; overflow: hidden; }
+.mtw.embed .mt { position: absolute; }
 /* 爆炸那一層用 screen 和底下整個畫面（牌桌＋暗幕）疊：黑底變透明、只留火光 */
 .mt-blend { mix-blend-mode: screen; }
 .mtw * { animation-duration: var(--T); animation-fill-mode: both; animation-timing-function: linear; }

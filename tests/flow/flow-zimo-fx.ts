@@ -228,9 +228,9 @@ let idA = "", idB = "";
   const no3 = await post(myFxSet, { fx: "sakura" }, "a");
   const after = await get(myFxGet, "/", "a");
   const guest = [(await get(myFxGet, "/", "guest")).status, (await post(myFxSet, { fx: "meteor" }, "guest")).status, (await get(myFxGet, "/")).status];
-  eq([Object.keys(list.body.available).sort(), list.body.selected, ok1.status, no1.body.error, z1.fx, no2.body.error, no3.body.error, after.body.available, after.body.selected, guest],
-    [["golden", "sakura", "storm", "thunder"], "sakura", 200, "not_granted", "thunder", "not_granted", "not_granted", { golden: null }, "golden", [403, 403, 401]],
-    "Z7 阿明這週有金色自摸、雷霆、風暴、櫻花，選雷霆後自摸帶 thunder；沒開通的黑洞、收回的雷霆、週一過期的櫻花都 403；過期後只剩金色自摸；遊客 403、沒登入 401");
+  eq([list.body.displayName, Object.keys(list.body.available).sort(), list.body.selected, ok1.status, no1.body.error, z1.fx, no2.body.error, no3.body.error, after.body.available, after.body.selected, guest],
+    ["阿明", ["golden", "sakura", "storm", "thunder"], "sakura", 200, "not_granted", "thunder", "not_granted", "not_granted", { golden: null }, "golden", [403, 403, 401]],
+    "Z7 API 回傳登入者 LINE 顯示名供預覽大字使用；阿明這週有金色自摸、雷霆、風暴、櫻花，選雷霆後自摸帶 thunder；沒開通的黑洞、收回的雷霆、週一過期的櫻花都 403；過期後只剩金色自摸；遊客 403、沒登入 401");
 }
 
 // ---- Z8 胡別人的牌、帳號 id、存著的特效過期 ----

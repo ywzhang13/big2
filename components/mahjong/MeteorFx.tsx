@@ -156,9 +156,9 @@ function shakeStage(stage: HTMLElement, mobile: boolean) {
  * font、sfxUrl：預覽站試按台切換候選用，正式牌局不用給（厚重黑體、A 呼嘯＋C 撞擊）
  * warm：預熱（components/mahjong/fxWarmUp.tsx）：不出聲音、不震動牌桌、不攔點擊，在看不見的狀態把整條時間軸一格一格走一遍，走完 onDone(false)
  */
-export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, font, sfxUrl, warm }: {
+export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, font, sfxUrl, warm, embedded = false, sound = true }: {
   seat: number; mySeat: number; mobile: boolean; tile: Tile | null | undefined; name: string; onDone: (skipped: boolean) => void;
-  font?: string; sfxUrl?: string; warm?: WarmMode;
+  font?: string; sfxUrl?: string; warm?: WarmMode; embedded?: boolean; sound?: boolean;
 }) {
   const rm = useReducedMotion();
   // 預熱（warm）時圖換成同尺寸的內嵌占位圖：開局背景預熱不下載任何素材
@@ -174,19 +174,22 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
   useLayoutEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const W = innerWidth, H = innerHeight;
+    const box = embedded ? root.getBoundingClientRect() : null;
+    const W = box?.width || innerWidth, H = box?.height || innerHeight;
     const crater = Math.round(H * (mobile ? 0.42 : 0.4));
     // 落點：名牌朝桌心那一邊再往內偏（加上半個隕石坑，坑不會整個蓋住名牌）；量不到名牌就用桌面中央偏向該座位
     const off = (mobile ? 20 : 32) + crater * 0.3;
-    const plate = document.querySelector(`[data-fx-seat="${seat}"]`)?.getBoundingClientRect();
+    const scope = embedded ? root.parentElement : document;
+    const plate = scope?.querySelector(`[data-fx-seat="${seat}"]`)?.getBoundingClientRect();
     let lx: number, ly: number;
     if (plate && plate.width > 0) {
-      const cx = plate.left + plate.width / 2, cy = plate.top + plate.height / 2;
-      const hand = rel === 0 ? document.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
-      [lx, ly] = rel === 2 ? [cx, plate.bottom + off] : rel === 3 ? [plate.right + off, cy] : rel === 1 ? [plate.left - off, cy]
-        : hand && hand.width > 0 ? [hand.left + hand.width / 2, hand.top - off * 0.5] : [cx, plate.top - off];
+      const origin = box ?? { left: 0, top: 0 };
+      const cx = plate.left + plate.width / 2 - origin.left, cy = plate.top + plate.height / 2 - origin.top;
+      const hand = rel === 0 ? scope?.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
+      [lx, ly] = rel === 2 ? [cx, plate.bottom - origin.top + off] : rel === 3 ? [plate.right - origin.left + off, cy] : rel === 1 ? [plate.left - origin.left - off, cy]
+        : hand && hand.width > 0 ? [hand.left - origin.left + hand.width / 2, hand.top - origin.top - off * 0.5] : [cx, plate.top - origin.top - off];
       const a = root.querySelector<HTMLElement>(".mt-plate");
-      if (a) Object.assign(a.style, { display: "block", left: `${plate.left - 4}px`, top: `${plate.top - 3}px`, width: `${plate.width + 8}px`, height: `${plate.height + 6}px` });
+      if (a && !embedded) Object.assign(a.style, { display: "block", left: `${plate.left - 4}px`, top: `${plate.top - 3}px`, width: `${plate.width + 8}px`, height: `${plate.height + 6}px` });
       root.style.setProperty("--ax", `${cx}px`);
       root.style.setProperty("--ay", `${cy}px`);
       root.style.setProperty("--arx", `${plate.width * 0.75 + 12}px`);
@@ -231,7 +234,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     root.style.setProperty("--mir", mirror ? "-1" : "1");
     root.style.setProperty("--skx", mirror ? "10%" : "90%");
     if (rm) return;
-    const stage = warm ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
+    const stage = warm || embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
     const release = stage ? holdStage(stage, METEOR_STAGE_SHADOW) : null;
     const anims = stage ? shakeStage(stage, mobile) : [];
     // 碎石用 Web Animations 直接給算好的數字（CSS 關鍵影格裡用 calc(var()) 時，Chrome 合成層偶爾有一顆停在原地不動）
@@ -251,11 +254,11 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
       ], { duration: SEG, delay: d.d, fill: "both" }));
     });
     return () => { anims.forEach((a) => a.cancel()); release?.(); };
-  }, [seat, rel, mobile, rm, warm]);
+  }, [seat, rel, mobile, rm, warm, embedded]);
 
   // 跳過：點畫面任一處、Enter、Space。手機點一下之後瀏覽器還會補一個 click，0.5 秒內的 click 吃掉，不會按到結算浮層的按鈕
   useEffect(() => {
-    if (warm) return;
+    if (warm || embedded) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
       if (ended.current) return;
@@ -272,7 +275,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     document.addEventListener("pointerdown", skip, true);
     document.addEventListener("keydown", skip, true);
     return () => { document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
-  }, [warm]);
+  }, [warm, embedded]);
 
   // 播放：聲音對齊動畫真正開始的那一刻（白閃的 CSS 動畫和整條時間軸同一刻開始）；手機震動在撞擊那一刻；時間到 onDone(false)
   useEffect(() => {
@@ -285,13 +288,15 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     }
     const anim = ref.current?.querySelector(".mt-flash")?.getAnimations()[0];
     const go = (z: number | null) => { if (alive && !ended.current) stopRef.current = playMeteorSound(rm ? null : z, IMPACT, sfxUrl); };
-    if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
-    else go(null);
+    if (sound) {
+      if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
+      else go(null);
+    }
     const ts = [setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? TOTAL_RM : METEOR_MS)];
     // 手機真的震動：重、停、輕（Android Chrome 等支援的瀏覽器；iPhone Safari 不支援，會直接略過）
-    if (!rm) ts.push(setTimeout(() => { if (typeof navigator.vibrate === "function") navigator.vibrate([150, 60, 50]); }, IMPACT));
+    if (!rm && !embedded) ts.push(setTimeout(() => { if (typeof navigator.vibrate === "function") navigator.vibrate([150, 60, 50]); }, IMPACT));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
-  }, [rm, sfxUrl, warm]);
+  }, [rm, sfxUrl, warm, embedded, sound]);
 
   const n = mobile ? 10 : 14;
   const detail = (kind: string, f: string, cols: number, rows: number, i: number, c: number) => (
@@ -307,7 +312,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
   // 三層（同一個 z，照順序疊）：①暗幕、隕石坑、隕石 ②爆炸（自己一層用 screen 和底下整個牌桌疊，黑底自動消失）
   // ③衝擊波、碎石、坑中央的牌、白閃；「自摸／名字」在第三層最上面。外面那層 display: contents 只是用來放座標變數和狀態 class
   return (
-    <div ref={ref} className={`mtw ${mobile ? "m" : "d"} ${rm ? "rm" : ""} ${font ? `f-${font}` : ""}`} data-mt-seat={seat} aria-hidden>
+    <div ref={ref} className={`mtw ${embedded ? "embed" : ""} ${mobile ? "m" : "d"} ${rm ? "rm" : ""} ${font ? `f-${font}` : ""}`} data-mt-seat={seat} aria-hidden>
       <div className="mt">
         <div className="mt-dim" />
         <div className="mt-sky" />

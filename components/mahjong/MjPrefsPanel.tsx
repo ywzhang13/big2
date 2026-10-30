@@ -169,7 +169,7 @@ export default function MjPrefsPanel() {
           <div className="cap" data-prefs-cap>{BACKS[prefs.back].name}／{FELTS[prefs.felt].name}</div>
         </div>}
         {tab === "fx" && pick && <div className="mjp-preview" aria-live="polite">
-          <ZimoFxPreferencePreview fx={pick} replay={replay} muted={prefs.fxMuted} volume={prefs.fxVol} />
+          <ZimoFxPreferencePreview fx={pick} replay={replay} muted={prefs.fxMuted} volume={prefs.fxVol} name={fx?.displayName ?? "LINE 使用者"} />
         </div>}
         <div className="mjp-foot">
           {tab === "fx" ? (

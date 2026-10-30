@@ -451,10 +451,11 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     const plate = scope?.querySelector(`[data-fx-seat="${seat}"]`)?.getBoundingClientRect();
     let px: number, py: number;
     if (plate && plate.width > 0) {
-      const cx = plate.left + plate.width / 2, cy = plate.top + plate.height / 2;
+      const origin = embedded ? root.getBoundingClientRect() : { left: 0, top: 0 };
+      const cx = plate.left + plate.width / 2 - origin.left, cy = plate.top + plate.height / 2 - origin.top;
       const hand = rel === 0 ? scope?.querySelector("[data-mj-myhand]")?.getBoundingClientRect() : undefined;
-      [px, py] = rel === 2 ? [cx, plate.bottom + off] : rel === 3 ? [plate.right + off, cy] : rel === 1 ? [plate.left - off, cy]
-        : hand && hand.width > 0 ? [hand.left + hand.width / 2, hand.top - off * 0.5] : [cx, plate.top - off];
+      [px, py] = rel === 2 ? [cx, plate.bottom - origin.top + off] : rel === 3 ? [plate.right - origin.left + off, cy] : rel === 1 ? [plate.left - origin.left - off, cy]
+        : hand && hand.width > 0 ? [hand.left - origin.left + hand.width / 2, hand.top - origin.top - off * 0.5] : [cx, plate.top - origin.top - off];
     } else {
       [px, py] = [W / 2 + SIDE[rel][0] * W * 0.22, H / 2 + SIDE[rel][1] * H * 0.2];
     }

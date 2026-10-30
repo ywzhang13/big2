@@ -1364,11 +1364,9 @@ body {
 .zfw.embed .zz { font-size: clamp(24px, 16cqw, 54px); }
 .zfw.embed .zf-tile { --tw: 20px !important; --th: 28px !important; }
 .mjp-fx-stage { position: relative; height: 100%; min-height: 178px; container-type: inline-size; }
-.mjp-phone { position: absolute; inset: 0 0 28px; overflow: hidden; border: 6px solid #050807; border-radius: 22px; background: radial-gradient(ellipse at 50% 42%, #19683f, #06321f 68%); box-shadow: inset 0 0 0 1px rgba(240,214,138,.3), 0 8px 22px rgba(0,0,0,.42); }
-.mjp-phone::before { content: ""; position: absolute; inset: 9% 12%; border: 1px solid rgba(240,214,138,.2); border-radius: 50%; }
-.mjp-seat { position: absolute; z-index: 1; padding: 2px 5px; border-radius: 999px; color: #fff7da; font-size: 10px; line-height: 1.15; background: rgba(4,22,14,.82); border: 1px solid rgba(240,214,138,.5); }
-.mjp-seat.top { left: 50%; top: 7px; transform: translateX(-50%); }.mjp-seat.left { left: 6px; top: 50%; transform: translateY(-50%); }.mjp-seat.right { right: 6px; top: 50%; transform: translateY(-50%); }.mjp-seat.mine { left: 50%; bottom: 5px; transform: translateX(-50%); }
-.mjp-wall { position: absolute; top: 31%; left: 50%; display: flex; gap: 1px; transform: translateX(-50%); opacity: .9; }.mjp-myhand { position: absolute; left: 50%; bottom: 5px; display: flex; gap: 1px; transform: translateX(-50%); }
+.mjp-fx-stage-inner { position: absolute; inset: 0 0 28px; overflow: hidden; border-radius: 14px; background: radial-gradient(ellipse at 50% 65%, rgba(24,91,58,.34), transparent 60%), #050b0a; box-shadow: inset 0 0 0 1px rgba(240,214,138,.28), 0 8px 22px rgba(0,0,0,.42); }
+.mjp-fx-anchor { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.mjp-fx-anchor.s0 { left: 50%; top: 76%; }.mjp-fx-anchor.s1 { left: 78%; top: 50%; }.mjp-fx-anchor.s2 { left: 50%; top: 24%; }.mjp-fx-anchor.s3 { left: 22%; top: 50%; }
 .mjp-replay { position: absolute; right: 0; bottom: 0; min-height: 24px; padding: 0 7px; border-radius: 999px; color: #f0d68a; font-size: 11px; font-weight: 700; border: 1px solid rgba(201,169,110,.5); background: rgba(0,0,0,.28); cursor: pointer; }
 .mjp-simple { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; text-align: center; opacity: 0; transition: opacity .18s ease; }.mjp-simple.show { opacity: 1; }.mjp-simple i { position: absolute; inset: 0; background: radial-gradient(circle, rgba(255,218,105,.62), rgba(255,167,42,.15) 28%, transparent 62%); }.mjp-simple.meteor i { background: radial-gradient(circle, rgba(255,96,24,.75), rgba(255,184,66,.18) 35%, transparent 64%); }.mjp-simple b { position: relative; color: #fff2ac; font-size: clamp(28px, 17cqw, 60px); letter-spacing: .15em; text-shadow: 0 0 14px #d6901c, 0 3px 3px #34210b; }.mjp-simple span { position: relative; color: #fff; font-size: 11px; }
 .mjp-fxpv { height: 100%; min-height: 110px; border-radius: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden;
@@ -1403,9 +1401,7 @@ body {
   .mjp-fxpv b { font-size: 24px; }
   .mjp-card.fx .mjp-fxs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .mjp-fx-stage { min-height: 0; }
-  .mjp-phone { border-width: 4px; border-radius: 13px; }
-  .mjp-seat { padding: 1px 3px; font-size: 7px; }.mjp-seat.top { top: 3px; }.mjp-seat.left { left: 3px; }.mjp-seat.right { right: 3px; }.mjp-seat.mine { bottom: 2px; }
-  .mjp-wall { top: 27%; }.mjp-myhand { bottom: 1px; }.mjp-myhand .mjt, .mjp-wall .mjt { transform: scale(.7); transform-origin: bottom; margin-right: -6px; }
+  .mjp-fx-stage-inner { border-radius: 10px; }
   .mjp-replay { min-height: 22px; font-size: 9px; }
 }
 /* 牌桌上會捲動的區塊（設定內容、結算畫面的牌牆）：細的金色捲動軸，不用瀏覽器原生的白色 */

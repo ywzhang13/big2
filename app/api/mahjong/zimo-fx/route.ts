@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     if (user.isGuest) return fail(403, "guest_not_allowed");
     const now = nowMs();
     const a = await available(user.id, now);
-    return ok({ serverNow: now, available: a.fx, selected: a.selected });
+    return ok({ serverNow: now, displayName: user.displayName ?? "LINE 使用者", available: a.fx, selected: a.selected });
   } catch (err) {
     console.error("[mj-zimo-fx] get", err instanceof Error ? err.message : err);
     return fail(500, "server_error");
