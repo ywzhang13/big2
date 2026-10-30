@@ -1,14 +1,13 @@
-// 帳號專屬的自摸特效（老闆 2026-10-25）：設定表裡的帳號自摸時，胡牌紀錄帶上公開的特效代號（WinnerEntry.winFx），
-// 全桌照代號播放；公開座位資料（PublicPlayerState.winFx）也帶代號，開局就能預載素材。
-// 只在伺服器用（gameLogic 的 declareWin、db 的 toPublicPlayerState 呼叫），帳號 id 不會送到前端。
-// 之後幫別人加特效：在下面加一筆「帳號 id: 代號」就好（新代號要先在 gameState.ts 的 WinFx 加上、前端做好播放）。
-import type { WinFx } from "./gameState";
+// 帳號的自摸特效（老闆 2026-10-25 隕石；2026-10-31 改成特效庫＋後台開通）：
+//   座位的 zimoFx 由伺服器在開局、每次打牌／摸牌／動作前查資料庫填上（lib/mahjong/zimoFx/attach.ts），這裡只判斷「這一刻還有效嗎」。
+//   自摸時胡牌紀錄帶公開的代號（WinnerEntry.winFx），全桌照代號播；公開座位資料（PublicPlayerState.winFx）也帶代號，開局就能預載素材。
+//   只在伺服器用（gameLogic 的 declareWin、db 的 toPublicPlayerState 呼叫），帳號 id 不會送到前端。
+import type { PlayerState, WinFx } from "./gameState";
+import { isOwner, zimoFxValid } from "./zimoFx/rules";
 
-const WIN_FX_BY_USER: Readonly<Record<string, WinFx>> = {
-  "c5707922-f6f0-4c10-9c87-3532fdbf6b72": "meteor", // 張育瑋（LINE 登入；正式庫 2026-10-25 用 33 場麻將對局紀錄比對確認）
-};
-
-/** 這個帳號自摸時要播的特效代號；沒有設定（或座位沒綁帳號）回 undefined */
-export function selfDrawWinFx(userId: string | null | undefined): WinFx | undefined {
-  return userId ? WIN_FX_BY_USER[userId] : undefined;
+/** 這個座位現在自摸要播的特效代號；沒有、過期、被收回回 undefined（一般自摸浮層）。
+ *  還沒查過資料庫的舊牌局（zimoFx 是 undefined）：老闆帳號照舊是隕石，其他人沒有 */
+export function selfDrawWinFx(player: Pick<PlayerState, "userId" | "zimoFx">, now: number = Date.now()): WinFx | undefined {
+  if (player.zimoFx === undefined) return isOwner(player.userId) ? "meteor" : undefined;
+  return zimoFxValid(player.zimoFx ?? undefined, now);
 }

@@ -1242,7 +1242,7 @@ export function declareWin(
     waits: waitsOf(concealed, winTile.id, player.revealed.length),
   };
   // 帳號專屬的自摸特效：只有自摸才帶（胡別人打的牌、搶槓不帶），大牌自摸也帶
-  const winFx = isSelfDraw ? selfDrawWinFx(player.userId) : undefined;
+  const winFx = isSelfDraw ? selfDrawWinFx(player) : undefined;
   if (winFx) entry.winFx = winFx;
   // 一砲多響：winners 和 winner 一律照順位（離放槍的人最近的下家優先）排，不照誰先按（老闆 2026-10-22）
   s.winners = sortByWinnerPriority(s, [...(s.winners ?? []), entry]);

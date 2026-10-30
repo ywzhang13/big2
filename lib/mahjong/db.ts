@@ -313,7 +313,7 @@ export interface PublicPlayerState {
   discards: Tile[];
   isDealer: boolean;
   avatarUrl: string | null; // LINE 大頭貼網址（只有登入玩家；遊客、上線前開局的牌局是 null）。只有網址，不帶帳號
-  winFx?: WinFx; // 這個座位的帳號有專屬自摸特效（設定表 lib/mahjong/winFx.ts）：開局就知道，前端可以先預載素材；只有代號，不帶帳號
+  winFx?: WinFx; // 這個座位的帳號目前有效的自摸特效（lib/mahjong/winFx.ts）：開局就知道，前端可以先預載素材；只有代號，不帶帳號
 }
 
 /**
@@ -341,7 +341,7 @@ export function hideConcealedKongs(revealed: Meld[], seat: number): Meld[] {
 }
 
 export function toPublicPlayerState(player: PlayerState, taken: Set<number> = new Set()): PublicPlayerState {
-  const winFx = selfDrawWinFx(player.userId);
+  const winFx = selfDrawWinFx(player);
   return {
     id: player.id,
     name: player.name,

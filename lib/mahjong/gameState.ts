@@ -19,6 +19,9 @@ export interface PlayerState {
   isDealer: boolean;
   userId?: string | null; // 這個座位的 LINE 登入使用者（Supabase auth user id）；只在伺服器用，不公開
   avatarUrl?: string | null; // LINE 大頭貼網址（開局時從登入資料取；遊客、查不到是 null）；公開給同桌
+  // 這個帳號目前的自摸特效（伺服器在開局和每次打牌、摸牌、動作前查一次資料庫填上；只在伺服器用，前端只看到代號 winFx）：
+  // until＝有效到期（epoch 毫秒；null＝永久，老闆帳號）；null＝查過、沒有；undefined＝還沒查過（舊牌局）
+  zimoFx?: { code: WinFx; until: number | null } | null;
 }
 
 export interface ScoreResult {
@@ -40,11 +43,11 @@ export interface WinnerEntry {
   winTile?: Tile;          // 胡的那張牌；八仙過海＝第 8 張花、七搶一＝搶來的花
   from?: number | null;    // 那張牌來自哪個座位；自摸、八仙過海＝null；放槍、搶槓、七搶一＝那家的座位（七搶一＝那 1 張花的人，也是付錢的人）
   waits?: WaitTile[];      // 拿掉胡的那張後，手牌原本聽哪些牌；花牌胡＝[]
-  winFx?: WinFx;           // 帳號專屬的自摸特效代號（公開，全桌照這個播）；只有設定表裡的帳號自摸才有（lib/mahjong/winFx.ts）
+  winFx?: WinFx;           // 帳號的自摸特效代號（公開，全桌照這個播）；只有自摸、而且胡牌那一刻特效有效才有（lib/mahjong/winFx.ts）
 }
 
-/** 帳號專屬的自摸特效代號；新增特效時在這裡加一種，前端照代號播放 */
-export type WinFx = "meteor";
+/** 自摸特效代號（老闆 2026-10-31 定案 6 種：烈焰和隕石太像已移除）；前端照代號播放，還沒做好的代號前端當作一般浮層 */
+export type WinFx = "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
 
 /** 整場統計：每家這場胡牌、放槍、自摸各幾次（座位 0～3） */
 export interface HandStats {

@@ -1,3 +1,4 @@
+import { applyZimoFx, prefetchZimoFx } from "@/lib/mahjong/zimoFx/attach";
 import {
   loadRoom,
   loadPlayers,
@@ -81,8 +82,11 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   // 記下每個座位綁定的使用者，之後每個動作都用它確認本人、整場結束寫進對局紀錄
   state.players.forEach((p, i) => (p.userId = seated[i].user_id ?? null));
   // 同桌顯示 LINE 大頭貼（老闆 2026-10-29）：開局時取一次，之後每局沿用
+  // 自摸特效和大頭貼同時查（不多串一次往返）：公開座位資料帶代號讓前端預載；起手就胡也照這個
+  const zimoFxPrefs = prefetchZimoFx(state);
   const pics = await getPictureUrls(state.players.map((p) => p.userId));
   state.players.forEach((p, i) => (p.avatarUrl = pics[i]));
+  applyZimoFx(state, await zimoFxPrefs);
 
   // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
   // 起莊者 = 開門者（第一局同一顆骰子）

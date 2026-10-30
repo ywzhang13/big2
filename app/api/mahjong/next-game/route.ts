@@ -1,3 +1,4 @@
+import { applyZimoFx, prefetchZimoFx } from "@/lib/mahjong/zimoFx/attach";
 import {
   loadRoom,
   saveGameStateIfUnchanged,
@@ -37,6 +38,8 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
   if (!room) {
     return Response.json({ error: "找不到房間" }, { status: 404 });
   }
+  // 自摸特效：換局重查（這週到期、被收回的，新的一局就不帶）；先發出查詢，和下面的登入檢查同時進行
+  const zimoFxPrefs = prefetchZimoFx(room.game_state);
   // 確認是這個座位的本人（一律要登入）
   const denied = await seatOwnerError(request, room.game_state, playerId);
   if (denied) return denied;
@@ -53,6 +56,7 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
   if (isAllRoundsComplete(state)) {
     return Response.json({ error: "所有圈數已結束" }, { status: 400 });
   }
+  applyZimoFx(state, await zimoFxPrefs);
 
   // Verify player is in the room
   const player = state.players.find((p) => p.id === playerId);

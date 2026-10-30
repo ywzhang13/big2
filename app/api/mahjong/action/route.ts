@@ -1,3 +1,4 @@
+import { applyZimoFx, prefetchZimoFx } from "@/lib/mahjong/zimoFx/attach";
 import {
   loadRoom,
   saveGameStateIfUnchanged,
@@ -95,6 +96,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   if (!room || !room.game_state) {
     return Response.json({ error: "找不到遊戲" }, { status: 404 });
   }
+  // 自摸特效：先發出查詢，和下面的登入檢查、等特效時間同時進行（不多串一次往返）；進遊戲邏輯前才等結果
+  const zimoFxPrefs = prefetchZimoFx(room.game_state);
   // 確認是這個座位的本人（一律要登入）
   const denied = await seatOwnerError(request, room.game_state, playerId);
   if (denied) return denied;
@@ -109,6 +112,8 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   if (state.status !== "playing") {
     return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
   }
+  // 自摸特效：這次請求就可能胡牌，填上這一刻四家的特效（過期、收回就沒有）
+  applyZimoFx(state, await zimoFxPrefs);
 
   const seat = findSeatByPlayerId(state, playerId);
   if (seat === -1) {

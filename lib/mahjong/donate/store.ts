@@ -15,10 +15,3 @@ export async function countZimo(userId: string): Promise<number> {
   if (error) throw new Error(`查詢自摸次數失敗：${error.message}`);
   return Math.max(0, Number(data) || 0);
 }
-
-/** 按了斗內：歸零點設成現在，回傳歸零後的次數（正常是 0） */
-export async function ackDonate(userId: string): Promise<number> {
-  const { data, error } = await getSupabaseAdmin().rpc("mj_donate_ack", { p_user_id: userId });
-  if (error) throw new Error(`斗內歸零失敗：${error.message}`);
-  return Math.max(0, Number(data) || 0);
-}
