@@ -3,7 +3,7 @@
 //   K2 剛好斗完：7 次斗 NT$70 → 抵 7 次、剩 0
 //   K3 斗超過：3 次斗 NT$500 → 抵 3 次、剩 0、打賞 NT$470（不預存：之後自摸從 1 開始）
 //   K4 零頭：5 次斗 NT$35 → 抵 3 次、剩 2、打賞 NT$5；2 次斗 NT$5 → 抵 0 次、還是 2、打賞 NT$5
-//   K5 手動清除：歸零、寫 zimo_clear 操作紀錄 { cleared }；已經是 0 回 409 nothing_to_clear、不寫紀錄；非老闆 403、遊客 unknown_player
+//   K5 手動清除已停用（老闆 2026-10-31）：清除 API 一律 410 gone，不寫任何紀錄、次數不變；停用前寫進去的 zimo_clear 紀錄照樣保留
 //   K6 看過才收起：show＝次數 > 看過；看過不改次數；看到的數字不能超過目前次數；次數被抵扣變少，看過跟著降，之後再自摸卡片照常出現
 //   K7 後台清單：每人次數、應斗（次數 × 10）、上次歸零時間／方式／清掉幾次；0 次的人也列出；不含遊客；非老闆 403
 //   K8 操作紀錄寫明抵扣：記帳前幾次、抵扣幾次、剩幾次、打賞、單價
@@ -99,22 +99,22 @@ clock.now = T("2026-11-05T20:00:00");
     "K4 王阿明 5 次斗 NT$35：抵 3 次、剩 2、零頭 NT$5 算打賞；再斗 NT$5：抵 0 次、還是 2、打賞 NT$5");
 }
 
-// ---- K5 手動清除 ----
+// ---- K5 手動清除已停用（老闆 2026-10-31） ----
 {
   clock.now += 60_000;
   await wins(P4, 4);
   const auditN = async () => Number((await d.query<{ n: number }>("select count(*)::int n from mj_fx_audit where action = 'zimo_clear'")).rows[0].n);
-  const notOwner = await post(countsClear, { userId: P4 }, "p1");
-  const guest = await post(countsClear, { userId: G }, "boss");
-  const bad = await post(countsClear, {}, "boss");
-  const c = await post(countsClear, { userId: P4 }, "boss");
-  const n1 = await auditN();
-  const again = await post(countsClear, { userId: P4 }, "boss");
-  const n2 = await auditN();
+  const acks = async () => JSON.stringify((await d.query("select * from mj_donate_acks where user_id = $1", [P4])).rows);
+  const before = [await count(P4), await auditN(), await acks()];
+  const calls = [await post(countsClear, { userId: P4 }, "boss"), await post(countsClear, { userId: P4 }, "p1"), await post(countsClear, { userId: P4 }),
+    await post(countsClear, {}, "boss"), await post(countsClear, { userId: G }, "boss"), await get(countsClear, "/", "boss")];
+  const after = [await count(P4), await auditN(), await acks()];
+  // 停用前已經寫進去的清除紀錄（直接呼叫資料庫函式模擬）：照樣保留、照樣列在後台操作紀錄
+  const legacy = Number((await d.query<{ n: number }>("select public.mj_zimo_clear($1, $2, $3) n", [BOSS, P4, new Date(clock.now).toISOString()])).rows[0].n);
   const rec = (await d.query<{ actor_id: string; detail: unknown }>("select actor_id, detail from mj_fx_audit where action = 'zimo_clear' and target_user_id = $1", [P4])).rows;
-  eq([notOwner.status, guest.body.error, bad.status, c.status, c.body.ok, c.body.cleared, typeof c.body.resetAt, await count(P4), n1, again.status, again.body.error, n2, rec],
-    [403, "unknown_player", 400, 200, true, 4, "number", 0, 1, 409, "nothing_to_clear", 1, [{ actor_id: BOSS, detail: { cleared: 4 } }]],
-    "K5 李阿華 4 次：非老闆 403、遊客 unknown_player、沒帶 userId 400；老闆清除 → 清掉 4 次、歸零、操作紀錄 zimo_clear {cleared:4}（actor 是老闆）；再清一次 409 nothing_to_clear、不多寫紀錄");
+  eq([calls.map((r) => [r.status, r.body?.error]), JSON.stringify(after) === JSON.stringify(before), before[0], legacy, rec],
+    [[[410, "gone"], [410, "gone"], [410, "gone"], [410, "gone"], [410, "gone"], [410, "gone"]], true, 4, 4, [{ actor_id: BOSS, detail: { cleared: 4 } }]],
+    "K5 清除 API 已停用：老闆、一般帳號、沒登入、參數錯、遊客、GET 一律 410 gone；李阿華次數 4、清除紀錄數、歸零列都沒變；停用前的 zimo_clear 紀錄照樣保留");
 }
 
 // ---- K6 看過才收起 ----

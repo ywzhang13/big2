@@ -81,8 +81,8 @@
 .fxs-zbar .fxs-in { max-width: 320px; }
 .fxs-sort { margin-left: auto; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(215,181,84,.4); background: rgba(255,255,255,.04); color: #F8F2DF; font-weight: 700; cursor: pointer; }
 .fxs-sort .arr { color: #D7B554; }
-.fxs-zc { display: grid; grid-template-columns: 40px minmax(0, 1fr) 110px auto; gap: 12px; align-items: center; min-height: 58px; padding: 8px 12px; border-radius: 12px;
-  background: #11221E; border: 1px solid rgba(255,255,255,.06); transition: border-color 1.6s ease, box-shadow 1.6s ease; }
+.fxs-zc { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 58px; padding: 8px 12px; border-radius: 12px;
+  background: #11221E; border: 1px solid rgba(255,255,255,.06); }
 .fxs-zc .who { display: flex; flex-direction: column; min-width: 0; }
 .fxs-zc .who b { font-size: 16px; font-weight: 700; color: #F8F2DF; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fxs-zc .rs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #AEBDB7; font-variant-numeric: tabular-nums; }
@@ -92,18 +92,8 @@
 .fxs-zc.zero .n { color: #AEBDB7; opacity: .6; }
 .fxs-zc .owe { display: block; margin-top: 4px; text-align: right; font-size: 13px; font-weight: 700; color: #AEBDB7; font-variant-numeric: tabular-nums; }
 .fxs-zc .owe b { color: #F8F2DF; }
-.fxs-zc.just { border-color: rgba(98,214,165,.7); box-shadow: 0 0 0 3px rgba(98,214,165,.12); transition: none; }
 .fxs-tag.sm { padding: 1px 8px; font-size: 12px; }
 .fxs-tag.clr { background: rgba(174,189,183,.16); color: #D5DED9; }
-.fxs-btn.dangerfill { background: #FF7667; color: #2a0d09; border-color: transparent; }
-.fxs-shade { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(3,12,7,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-.fxs-dlg { width: min(360px, 100%); padding: 22px 22px 18px; border-radius: 16px; background: #11221E; border: 1px solid rgba(215,181,84,.35); text-align: center; color: #F8F2DF; }
-.fxs-dlg h3 { margin: 0 0 12px; font-size: 17px; font-weight: 800; }
-.fxs-dlg .who { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px; }
-.fxs-dlg .big { display: flex; align-items: baseline; justify-content: center; gap: 12px; margin-bottom: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.fxs-dlg .from { font-size: 34px; color: #D7B554; } .fxs-dlg .ar { font-size: 20px; color: #AEBDB7; } .fxs-dlg .to { font-size: 34px; color: #fff; }
-.fxs-dlg .owe { margin: -12px 0 16px; font-size: 14px; color: #AEBDB7; }
-.fxs-dlg .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fxs-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; padding: 10px 18px; border-radius: 12px; background: #163428; border: 1px solid rgba(98,214,165,.55);
   color: #F8F2DF; font-size: 15px; font-weight: 700; white-space: nowrap; }
 /* ---- 記一筆：應斗、抵扣預覽（v2 3.9）---- */
@@ -117,14 +107,12 @@
 .fxs-audit .s { color: #AEBDB7; }
 @media (max-width: 899px) {
   .fxs-zbar { margin-bottom: 8px; }
-  .fxs-zc { grid-template-columns: 36px minmax(0, 1fr) 96px auto; min-height: 52px; padding: 6px 12px; }
+  .fxs-zc { grid-template-columns: 36px minmax(0, 1fr) auto; min-height: 52px; padding: 6px 12px; }
   .fxs-zc .fxs-av { width: 36px; height: 36px; }
   .fxs-zc .n { font-size: 22px; }
-  .fxs-dlg { padding: 16px 20px 14px; } .fxs-dlg .from, .fxs-dlg .to { font-size: 30px; }
   .fxs-toast { bottom: 12px; font-size: 14px; }
   .fxs-deduct { margin-top: 8px; padding: 8px 12px; font-size: 14px; } .fxs-deduct .left { font-size: 16px; }
 }
-@media (prefers-reduced-motion: reduce) { .fxs-zc { transition: none; } }
 
 @media (max-width: 899px) {
   .fxs { padding: 10px 14px 24px; }

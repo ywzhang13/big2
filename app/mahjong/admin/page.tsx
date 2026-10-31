@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import {
-  addDonation, clearZimoCount, deductPreview, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, getZimoCounts, grantFx, nowTaipeiLocal, revokeFx,
+  addDonation, deductPreview, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, getZimoCounts, grantFx, nowTaipeiLocal, revokeFx,
   taipeiIso, voidDonation, ZIMO_FX_LIST, ZIMO_UNIT, type AdminPlayer, type AuditRecord, type DonationRecord, type PlayerFx, type ZimoCountRow, type ZimoFxCode,
 } from "@/lib/mahjong/zimoFxClient";
 import { FxsAvatar } from "@/components/mahjong/fxshop/FxsAvatar";
@@ -15,7 +15,7 @@ import "@/components/mahjong/fxshop/fxshop.css";
 
 type Tab = "donations" | "zimo" | "fx" | "audit";
 const ERR: Record<string, string> = {
-  bad_request: "資料有誤", unknown_player: "找不到這位玩家", nothing_to_clear: "已經是 0", owner_permanent: "老闆帳號永久全開", not_voidable: "這筆已作廢", forbidden: "沒有權限", not_logged_in: "沒有權限",
+  bad_request: "資料有誤", unknown_player: "找不到這位玩家", owner_permanent: "老闆帳號永久全開", not_voidable: "這筆已作廢", forbidden: "沒有權限", not_logged_in: "沒有權限",
 };
 const errText = (e: string) => ERR[e] ?? "失敗，再試一次";
 const nt = (n: number) => `NT$${n.toLocaleString("en-US")}`;
@@ -259,19 +259,13 @@ function useToast() {
   return [msg ? <div className="fxs-toast" role="status" data-admin-toast>✓ {msg}</div> : null, show] as const;
 }
 
-/** 自摸次數：每人一列（頭像、名字、上次減少的方式和時間、次數、應斗、清除）；搜尋、排序在前端做。清除後原位更新，不重新排序 */
+/** 自摸次數：每人一列（頭像、名字、上次減少的方式和時間、次數、應斗）；搜尋、排序在前端做。老闆 2026-10-31：次數只靠記一筆自動抵扣，拿掉清除 */
 function ZimoTab() {
   const [rows, setRows] = useState<ZimoCountRow[] | null>(null);
-  const [order, setOrder] = useState<string[]>([]); // 目前的排列順序（清除後不重排）
+  const [order, setOrder] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [desc, setDesc] = useState(true);
   const [err, setErr] = useState("");
-  const [ask, setAsk] = useState<ZimoCountRow | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [dlgErr, setDlgErr] = useState("");
-  const [just, setJust] = useState<string | null>(null);
-  const [toast, showToast] = useToast();
-  const cancelRef = useRef<HTMLButtonElement>(null);
   const sortIds = (list: ZimoCountRow[], d: boolean) =>
     [...list].sort((a, b) => (d ? b.count - a.count : a.count - b.count) || a.name.localeCompare(b.name, "zh-Hant")).map((r) => r.userId);
   const load = useCallback(async (d: boolean) => {
@@ -282,30 +276,6 @@ function ZimoTab() {
   }, []);
   useEffect(() => { void load(true); }, [load]);
   const flip = () => { const d = !desc; setDesc(d); if (rows) setOrder(sortIds(rows, d)); };
-
-  useEffect(() => {
-    if (!ask) return;
-    cancelRef.current?.focus(); // 焦點在「取消」：誤按 Enter 不會清掉
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) setAsk(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [ask, busy]);
-
-  const doClear = async () => {
-    if (!ask || busy) return;
-    setBusy(true); setDlgErr("");
-    const r = await clearZimoCount(ask.userId);
-    setBusy(false);
-    if (r.ok) {
-      const id = ask.userId, name = ask.name;
-      setRows((cur) => cur?.map((x) => (x.userId === id ? { ...x, count: 0, owed: 0, lastResetAt: r.data.resetAt, lastResetSource: "clear", lastResetCleared: r.data.cleared } : x)) ?? cur);
-      setAsk(null); setJust(id); setTimeout(() => setJust((j) => (j === id ? null : j)), 1600);
-      showToast(`已清除 ${name} ${r.data.cleared} 次`);
-    } else if (r.status === 409) {
-      // 已經是 0（例如另一個分頁剛清過）：關框、提示、重抓清單
-      setAsk(null); showToast(`${ask.name} 已經是 0`); void load(desc);
-    } else setDlgErr(errText(r.error));
-  };
 
   const byId = new Map(rows?.map((r) => [r.userId, r]) ?? []);
   const key = q.trim().toLowerCase();
@@ -324,7 +294,7 @@ function ZimoTab() {
         {rows && rows.length === 0 && <div className="fxs-empty">沒有紀錄</div>}
         {rows && rows.length > 0 && shown.length === 0 && <div className="fxs-empty">找不到</div>}
         {shown.map((r) => (
-          <div key={r.userId} className={`fxs-zc${r.count === 0 ? " zero" : ""}${just === r.userId ? " just" : ""}`} data-admin-zrow={r.name} data-count={r.count}>
+          <div key={r.userId} className={`fxs-zc${r.count === 0 ? " zero" : ""}`} data-admin-zrow={r.name} data-count={r.count}>
             <FxsAvatar url={r.avatarUrl} name={r.name} />
             <div className="who">
               <b>{r.name}</b>
@@ -337,26 +307,9 @@ function ZimoTab() {
               <span className="n">{r.count}<small>次</small></span>
               {r.count > 0 && <span className="owe">應斗 <b>{nt(r.owed)}</b></span>}
             </div>
-            <button type="button" className="fxs-btn sm danger" disabled={r.count === 0} onClick={() => { setDlgErr(""); setAsk(r); }} data-admin-zclear={r.name}>清除</button>
           </div>
         ))}
       </div>
-      {ask && (
-        <div className="fxs-shade" onClick={(e) => { if (e.target === e.currentTarget && !busy) setAsk(null); }}>
-          <section className="fxs-dlg" role="alertdialog" aria-modal="true" aria-labelledby="fxs-zdlg-t" data-admin-zdlg>
-            <h3 id="fxs-zdlg-t">清除自摸次數</h3>
-            <div className="who"><FxsAvatar url={ask.avatarUrl} name={ask.name} /><b>{ask.name}</b></div>
-            <div className="big"><span className="from">{ask.count}</span><span className="ar">→</span><span className="to">0</span></div>
-            <div className="owe">應斗 {nt(ask.owed)}</div>
-            <div className="acts">
-              <button type="button" className="fxs-btn" ref={cancelRef} disabled={busy} onClick={() => setAsk(null)} data-admin-zcancel>取消</button>
-              <button type="button" className="fxs-btn dangerfill" disabled={busy} onClick={() => void doClear()} data-admin-zconfirm>清除</button>
-            </div>
-            {dlgErr && <div className="fxs-err">{dlgErr}</div>}
-          </section>
-        </div>
-      )}
-      {toast}
     </>
   );
 }

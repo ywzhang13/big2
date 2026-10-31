@@ -1,20 +1,6 @@
-// 斗內後台：手動清除自摸次數。POST { userId } → { ok: true, cleared, resetAt }。只有老闆帳號能用。
-//   同一個交易裡歸零並寫 zimo_clear 操作紀錄（{ cleared }）。不是 LINE 帳號／遊客 400 unknown_player；已經是 0 回 409 nothing_to_clear，什麼都不寫。
-import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
-import { clearZimo, lineProfile, nowMs } from "@/lib/mahjong/zimoFx/store";
-
-export async function POST(request: Request) {
-  try {
-    const owner = await requireOwner(request);
-    if (owner instanceof Response) return owner;
-    const b = await readBody(request);
-    if (!b || typeof b.userId !== "string") return fail(400, "bad_request");
-    if (!(await lineProfile(b.userId))) return fail(400, "unknown_player");
-    const cleared = await clearZimo(owner.id, b.userId);
-    if (cleared === 0) return fail(409, "nothing_to_clear");
-    return ok({ ok: true, cleared, resetAt: nowMs() });
-  } catch (err) {
-    console.error("[mj-admin] zimo clear", err instanceof Error ? err.message : err);
-    return fail(500, "server_error");
-  }
-}
+// 斗內後台：手動清除自摸次數 — 已停用（老闆 2026-10-31：不要手動清除，次數只在記一筆斗內時自動抵扣）。
+// 不管誰呼叫、帶什麼參數，一律回 410 { error: "gone" }，不查也不寫任何資料（不登入檢查，免得多一次往返）。
+// 已經寫進操作紀錄的 zimo_clear 照樣保留、照樣列在操作紀錄裡；資料庫的 mj_zimo_clear 函式也留著不動（沒有任何程式會呼叫）。
+const gone = async (): Promise<Response> => Response.json({ error: "gone" }, { status: 410, headers: { "cache-control": "no-store" } });
+export const POST = gone;
+export const GET = gone;

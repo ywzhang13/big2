@@ -43,9 +43,6 @@ export async function addDonation(actor: string, d: { userId: string; name: stri
   const r = await one<{ id: string } & Deduction>("select mj_donation_record($1, $2, $3, $4, $5, $6, $7, $8) as r", [actor, d.userId, d.name, d.avatarUrl, d.amount, iso(d.donatedAt), d.note, iso(clock.now)]);
   return { id: String(r.id), deduction: { before: r.before, deducted: r.deducted, remaining: r.remaining, tip: r.tip, price: r.price } };
 }
-export async function clearZimo(actor: string, userId: string): Promise<number> {
-  return Number(await one("select mj_zimo_clear($1, $2, $3) as r", [actor, userId, iso(clock.now)])) || 0;
-}
 export async function zimoCounts(): Promise<ZimoCountRow[]> {
   const r = await (await db()).query<Record<string, unknown>>("select * from mj_zimo_counts()");
   return r.rows.map((x) => ({ userId: String(x.user_id), count: Number(x.count) || 0, lastResetAt: ms(x.last_reset_at),

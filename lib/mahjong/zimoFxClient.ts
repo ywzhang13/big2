@@ -81,7 +81,6 @@ export interface ZimoCountRow {
   lastResetAt: number | null; lastResetSource: "donation" | "clear" | null; lastResetCleared: number | null;
 }
 export const getZimoCounts = () => call<{ price: number; players: ZimoCountRow[] }>("GET", "/api/mahjong/admin/zimo-counts");
-export const clearZimoCount = (userId: string) => call<{ ok: true; cleared: number; resetAt: number }>("POST", "/api/mahjong/admin/zimo-counts/clear", { userId });
 export const voidDonation = (id: string, reason: string) => call<{ voided: true }>("POST", "/api/mahjong/admin/donations/void", { id, reason });
 export const getPlayerFx = (userId: string) => call<PlayerFx>("GET", `/api/mahjong/admin/fx?userId=${encodeURIComponent(userId)}`);
 export const grantFx = (userId: string, fx: ZimoFxCode[], active: ZimoFxCode) => call<{ granted: number }>("POST", "/api/mahjong/admin/fx", { userId, fx, active });

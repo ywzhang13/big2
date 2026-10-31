@@ -30,10 +30,6 @@ export async function addDonation(actor: string, d: { userId: string; name: stri
   });
   return { id: String(r.id), deduction: { before: r.before, deducted: r.deducted, remaining: r.remaining, tip: r.tip, price: r.price } };
 }
-/** 後台清除：自摸次數歸零（連同 zimo_clear 操作紀錄），回傳清掉幾次；已經是 0 回 0、不寫任何東西 */
-export async function clearZimo(actor: string, userId: string): Promise<number> {
-  return Number(await rpc<number>("mj_zimo_clear", { p_actor: actor, p_user: userId })) || 0;
-}
 export interface ZimoCountRow { userId: string; count: number; lastResetAt: number | null; lastResetSource: "donation" | "clear" | null; lastResetCleared: number | null }
 /** 後台「自摸次數」清單的原始資料：有自摸紀錄、或曾經被歸零過的帳號（含遊客，由路由用 LINE 帳號資料過濾） */
 export async function zimoCounts(): Promise<ZimoCountRow[]> {
