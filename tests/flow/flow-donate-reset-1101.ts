@@ -4,7 +4,7 @@
 //   R3 mj_zimo_wins、mj_donations、mj_fx_audit 的筆數不變（操作紀錄只多 1 筆 zimo_reset_all，記人數和清掉的總次數）
 //   R4 後台清單：歸零方式是 system（系統重置）、清掉幾次＝重置前的次數；應斗＝次數 × 10
 //   R5 重置後再自摸：次數從 1 開始、斗內卡出現；記一筆的自動抵扣只扣 11/1 之後的
-//   R6 再套用一次不會再重置、也不會多寫紀錄；回滾檔把 mj_donate_acks 還原成備份（重置時新增的列刪掉）
+//   R6 再套用一次不會再重置、也不會多寫紀錄；回滾：重置後沒動過的人還原成備份（重置時新增的列刪掉），記過帳的人保留抵扣、只加回清掉的次數
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -93,8 +93,12 @@ const acks2 = await acksRows();
 await d.exec(readFileSync(path.join(MIG, "20261103_mahjong_donate_reset_1101.sql"), "utf8"));
 const same = (await acksRows()) === acks2 && (await n("select count(*)::int n from mj_fx_audit")) === audit2;
 await d.exec(readFileSync(path.join(MIG, "20261103_mahjong_donate_reset_1101_rollback.sql"), "utf8"));
-const restored = (await acksRows()) === beforeAcks;
-eq([same, restored, await count(C)], [true, true, 2], "R6 再套用一次什麼都不變、不多寫紀錄；回滾後 mj_donate_acks 和重置前完全一樣（重置時新增的列刪掉），C 回到 2 次");
+const rowOf = (rows: string, u: string) => JSON.stringify(JSON.parse(rows).find((r: { user_id: string }) => r.user_id === u) ?? null);
+const nowRows = await acksRows();
+const aRow = JSON.parse(rowOf(nowRows, A));
+eq([same, { A: await count(A), B: await count(B), C: await count(C) }, rowOf(nowRows, B) === rowOf(beforeAcks, B), rowOf(nowRows, C), [aRow.carried, aRow.reset_source, new Date(aRow.acked_at).getTime() === T("2026-11-01T20:00:00")]],
+  [true, { A: 3, B: 6, C: 2 }, true, "null", [3, "donation", true]],
+  "R6 再套用一次什麼都不變、不多寫紀錄；回滾：B、C 重置後沒動過 → B 整列還原成備份、C 重置時新增的列刪掉（B＝舊 5＋新 1＝6、C 回到 2）；A 重置後記過帳 → 那筆抵扣保留，只把清掉的 3 次加回去（3）");
 
 console.log(results.join("\n"));
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);
