@@ -118,7 +118,7 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   // Save full state to DB
   const baseVersion = (room.game_state as { stateVersion?: number } | null)?.stateVersion;
   applyPace(state, dealPaceMs(state)); // 起手補花的特效播完，莊家才能打第一張
-  await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
+  const sv = await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
 
   // Broadcast public game start (no hands)
   const publicState = toPublicGameState(state);
@@ -132,7 +132,7 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
     playerScores: state.playerScores,
     dice: state.dice,
     doorSeat: state.doorSeat,
-  });
+  }, sv);
 
   // Send each player their hand privately (defensive: filter flowers from hand)
   for (const player of state.players) {
@@ -143,11 +143,11 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
       // 開局莊家打第一張時可以宣告眼牌（同時算地聽）：能宣告的出牌選項（其他人是空陣列）
       eyeOptions: eyeDiscardOptions(state, player.seat).map((t) => t.id),
       eyeWithTing: canDeclareTingNow(state, player.seat),
-    });
+    }, sv);
   }
 
   // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
-  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(state)] : flowerRobEvents(state));
+  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(state)] : flowerRobEvents(state), sv);
   if (endedAtDeal) await closeMahjongIfOver(roomId, room.code, state); // 只有一局又開局八仙：整場打完
 
   return Response.json({ success: true });

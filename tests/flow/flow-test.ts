@@ -60,7 +60,7 @@ function eq(a: unknown, e: unknown, msg: string) {
   const id = setup({ 1: W_MID, 3: NOT_WAIT_PONG });
   const r = await call(action, { playerId: "p2", actionType: "add_kong", tiles: [id] });
   eq([r.status, r.body.robWindow, evs()], [200, true, ["mj_add_kong_pending", "mj_hand_update", "mj_available_actions"]], "F2a 有人能搶：開窗口，只私訊能胡的人");
-  eq(sent.find((e) => e.event === "mj_available_actions")!.payload, { playerId: "p1", actions: [{ type: "win", playerSeat: 1 }], robKong: true }, "F2b 給 seat1 的提示是 win＋robKong");
+  eq({ ...sent.find((e) => e.event === "mj_available_actions")!.payload, sv: undefined }, { playerId: "p1", actions: [{ type: "win", playerSeat: 1 }], robKong: true }, "F2b 給 seat1 的提示是 win＋robKong");
   eq((await call(discard, { playerId: "p2", tileId: st().players[2].hand[0].id })).status, 409, "F2c 窗口中加槓者不能打牌");
   eq((await call(action, { playerId: "p2", actionType: "pass" })).status, 409, "F2d 窗口中加槓者不能 pass");
   eq((await call(action, { playerId: "p3", actionType: "chi", tiles: st().players[3].hand.filter((x) => x.suit === "p").map((x) => x.id) })).status, 409, "F2e 窗口中別人不能吃這張");

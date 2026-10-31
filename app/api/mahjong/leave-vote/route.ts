@@ -81,7 +81,7 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
     newState = { ...state, leaveRequest: lr };
   }
 
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, newState.status);
+  const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, newState.status);
 
   await mjBroadcast(room.code, "mj_leave_vote", {
     voterId: playerId,
@@ -92,7 +92,7 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
     result: broadcastEvent, // "granted" | "denied" | "vote"
     requesterSeat: lr.requesterSeat,
     requesterName: lr.requesterName,
-  });
+  }, sv);
 
   // 四家同意解散：打過至少一局就記下當下總分（中途解散），再關房；一局都沒打完的直接刪
   if (broadcastEvent === "granted") {

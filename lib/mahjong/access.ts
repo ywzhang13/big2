@@ -45,6 +45,12 @@ export function privateChannelName(roomCode: string, playerId: string): string {
   return `mj-${roomCode}-p-${h}`;
 }
 
+/** 每個事件的 payload 加上這次存檔後的牌局版本號 sv（沒給就原樣）。
+ *  前端記住看過的最大版本，跳號＝中間漏了事件，立刻補抓一次狀態（lib/mahjong/syncPolicy.ts；老馬 2026-11-01） */
+export function withVersion<T extends { event: string; payload: Record<string, unknown> }>(events: T[], sv?: number): T[] {
+  return sv === undefined ? events : events.map((e) => ({ ...e, payload: { ...e.payload, sv } }));
+}
+
 /** 每個事件要送到哪個頻道：私人事件送到本人頻道，其他都送房間公開頻道 */
 export function routeEvents(
   roomCode: string,

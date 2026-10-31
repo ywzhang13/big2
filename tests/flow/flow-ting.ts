@@ -59,7 +59,7 @@ function backToDealer(key: string) {
   eq([old.status, bad.status, bad.body.error, st().tingSeats ?? [], st().eyeSeats ?? [], st().turnCount], [400, 400, "現在不能宣告眼牌，或打出這張後沒有聽牌", [], [], 0],
     "T2 舊的 declareTing 單獨宣告：400；用打出後不會聽牌的 1 萬宣告眼牌：400；狀態都不變");
   const ok = await call(discard, { playerId: "p0", tileId: st().players[0].hand[16].id, declareEye: true });
-  eq([ok.status, ok.body.ting, ok.body.eye, st().tingSeats, st().eyeSeats, evs().slice(0, 3), sent[0].payload, sent[1].payload],
+  eq([ok.status, ok.body.ting, ok.body.eye, st().tingSeats, st().eyeSeats, evs().slice(0, 3), { ...sent[0].payload, sv: undefined }, { ...sent[1].payload, sv: undefined }],
     [200, true, true, [0], [0], ["mj_eye_declared", "mj_ting_declared", "mj_discard"], { seat: 0, tile: st().lastDiscard!.tile, ting: true }, { seat: 0, tile: st().lastDiscard!.tile }],
     "T3 第一輪打出中並宣告眼牌：200（ting、eye 都是 true），同時記地聽；先送 mj_eye_declared(ting:true)、mj_ting_declared，再送 mj_discard");
   const pub = toPlayerGameState(st(), "p2");

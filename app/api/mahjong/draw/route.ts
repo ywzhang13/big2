@@ -81,8 +81,8 @@ async function handleDraw(request: Request, body: unknown, fresh: boolean, budge
 
   if (newState.status === "finished") {
     applySettlement(newState);
-    await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, "finished");
-    await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+    const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, "finished");
+    await mjBroadcastBatch(room.code, [gameOverEvent(newState)], sv);
     await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
     return Response.json({ success: true, draw: !newState.winners?.length });
   }
@@ -92,8 +92,8 @@ async function handleDraw(request: Request, body: unknown, fresh: boolean, budge
   const auto = eyeAutoplay(newState);
   // 補到花：等補花特效；眼牌的人摸牌：等翻牌＋停 1 秒（自動打出／自動胡要等這段播完，別人才能接著動）
   applyPace(auto.s, paceMs(state, newState, seat));
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, auto.s, auto.finished ? "finished" : undefined);
-  await mjBroadcastBatch(room.code, [...events, ...auto.events, ...eyeViewEvents(auto.s)]);
+  const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, auto.s, auto.finished ? "finished" : undefined);
+  await mjBroadcastBatch(room.code, [...events, ...auto.events, ...eyeViewEvents(auto.s)], sv);
   if (auto.finished) await closeMahjongIfOver(roomId, room.code, auto.s); // 整場打完：寫紀錄後關房
 
   const player = newState.players[seat];

@@ -130,7 +130,7 @@ export async function saveGameStateIfUnchanged(
   baseVersion: number | undefined,
   state: MahjongGameState,
   status?: string
-): Promise<void> {
+): Promise<number> {
   const supabase = getSupabaseAdmin();
   state.stateVersion = (baseVersion ?? 0) + 1;
   const update: Record<string, unknown> = { game_state: state };
@@ -151,6 +151,7 @@ export async function saveGameStateIfUnchanged(
   }
   await recordZimoWins(roomId, state); // 這局結算了：記下自摸的人（斗內卡用；失敗只記 log）
   void cacheGameState(roomId, state).catch(() => {});
+  return state.stateVersion; // 存好的版本號：廣播時帶 sv，前端看到跳號就立刻補抓（lib/mahjong/syncPolicy.ts）
 }
 
 // 樂觀鎖寫入衝突時最多重做幾次（每次都重新從 Postgres 讀最新狀態）
@@ -359,6 +360,7 @@ export function toPublicPlayerState(player: PlayerState, taken: Set<number> = ne
 export interface PublicGameState {
   roomCode: string;
   status: MahjongGameState["status"];
+  stateVersion?: number;
   players: PublicPlayerState[];
   wallCount: number;
   currentTurn: number;
@@ -397,6 +399,8 @@ export function toPublicGameState(state: MahjongGameState): PublicGameState {
   return {
     roomCode: state.roomCode,
     status: state.status,
+    // 牌局版本號（每次存檔 +1）：前端和事件的 sv 比對，跳號就立刻補抓（老馬〈事件帶版本號〉2026-11-01）
+    stateVersion: state.stateVersion,
     players: state.players.map((p) => toPublicPlayerState(p, taken)),
     wallCount: state.wall.length,
     currentTurn: state.currentTurn,

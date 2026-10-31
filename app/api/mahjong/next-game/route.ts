@@ -75,10 +75,10 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
       ...state,
       nextGameReady: readyList,
     };
-    await saveGameStateIfUnchanged(roomId, state.stateVersion, partialState);
+    const partialSv = await saveGameStateIfUnchanged(roomId, state.stateVersion, partialState);
     await mjBroadcast(room.code, "mj_next_game_ready", {
       readyIds: readyList,
-    });
+    }, partialSv);
     return Response.json({ success: true, ready: readyList.length, total: 4 });
   }
 
@@ -94,7 +94,7 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
   const endedAtDeal = newState.status === "finished";
   if (endedAtDeal) applySettlement(newState);
   applyPace(newState, dealPaceMs(newState)); // 起手補花的特效播完，莊家才能打第一張
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, endedAtDeal ? "finished" : "playing");
+  const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, endedAtDeal ? "finished" : "playing");
 
   // Broadcast public game start
   const publicState = toPublicGameState(newState);
@@ -108,7 +108,7 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
     playerScores: newState.playerScores,
     dice: newState.dice,
     doorSeat: newState.doorSeat,
-  });
+  }, sv);
 
   // Send each player their hand privately
   for (const p of newState.players) {
@@ -119,11 +119,11 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
       // 開局莊家打第一張時可以宣告眼牌（同時算地聽）：能宣告的出牌選項（其他人是空陣列）
       eyeOptions: eyeDiscardOptions(newState, p.seat).map((t) => t.id),
       eyeWithTing: canDeclareTingNow(newState, p.seat),
-    });
+    }, sv);
   }
 
   // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
-  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(newState)] : flowerRobEvents(newState));
+  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(newState)] : flowerRobEvents(newState), sv);
   if (endedAtDeal) await closeMahjongIfOver(roomId, room.code, newState); // 最後一局開局就八仙：整場打完
 
   return Response.json({ success: true, ready: 4, total: 4, started: true });

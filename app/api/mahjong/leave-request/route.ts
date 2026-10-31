@@ -53,13 +53,13 @@ async function handleLeaveRequest(request: Request, body: unknown, fresh: boolea
       deniedBy: [],
     },
   };
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState);
+  const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState);
 
   await mjBroadcast(room.code, "mj_leave_request", {
     requesterId: playerId,
     requesterName: player.name,
     requesterSeat: player.seat,
-  });
+  }, sv);
 
   return Response.json({ success: true });
 }

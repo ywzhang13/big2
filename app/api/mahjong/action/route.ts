@@ -107,8 +107,10 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   if (await waitPaceOnce(state, budget)) return handleAction(request, body, true, budget);
   const baseVersion = state.stateVersion;
   // 槓後補牌補到花：等補花特效播完，別人才能接著動
-  const save = (s: MahjongGameState, status?: string) =>
-    saveGameStateIfUnchanged(roomId, baseVersion, applyPace(s, paceMs(state, s)), status);
+  let sv: number | undefined; // 這次請求存檔後的版本號：之後的廣播都帶（前端看到跳號就立刻補抓）
+  const save = async (s: MahjongGameState, status?: string) => {
+    sv = await saveGameStateIfUnchanged(roomId, baseVersion, applyPace(s, paceMs(state, s)), status);
+  };
   if (state.status !== "playing") {
     return Response.json({ error: "遊戲未在進行中" }, { status: 400 });
   }
@@ -132,7 +134,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
       newState = robFlower(state);
       applySettlement(newState);
       await save(newState, "finished");
-      await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+      await mjBroadcastBatch(room.code, [gameOverEvent(newState)], sv);
       await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
       return Response.json({ success: true });
     }
@@ -150,7 +152,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     newState = auto.s;
     events.push(...auto.events, ...eyeViewEvents(newState));
     await save(newState, auto.finished ? "finished" : undefined);
-    await mjBroadcastBatch(room.code, events);
+    await mjBroadcastBatch(room.code, events, sv);
     if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
     return Response.json({ success: true });
   }
@@ -218,7 +220,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
       newState = auto.s;
       events.push(...auto.events, ...eyeViewEvents(newState));
       await save(newState, newState.status === "finished" ? "finished" : undefined);
-      await mjBroadcastBatch(room.code, events);
+      await mjBroadcastBatch(room.code, events, sv);
       await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
       return Response.json({ success: true, robWindow: false });
     }
@@ -232,7 +234,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     newState = auto.s;
     if (auto.finished) {
       await save(newState, "finished");
-      await mjBroadcastBatch(room.code, [...events, ...auto.events]);
+      await mjBroadcastBatch(room.code, [...events, ...auto.events], sv);
       await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
       return Response.json({ success: true, robWindow: true });
     }
@@ -249,7 +251,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
         },
       });
     }
-    await mjBroadcastBatch(room.code, [...events, ...eyeViewEvents(newState)]);
+    await mjBroadcastBatch(room.code, [...events, ...eyeViewEvents(newState)], sv);
     return Response.json({ success: true, robWindow: true });
   }
 
@@ -310,7 +312,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
         seat,
         winnerName: newState.players[seat].name,
         score: newState.winners!.find((w) => w.seat === seat)!.score, // winners 照順位排，不是按胡的先後
-      });
+      }, sv);
       return Response.json({ success: true, partial: true });
     }
 
@@ -326,7 +328,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     await save(newState, "finished");
 
     // Broadcast game over with all hands revealed（含 winTile／from／waits）
-    await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+    await mjBroadcastBatch(room.code, [gameOverEvent(newState)], sv);
     await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
     return Response.json({ success: true });
@@ -360,7 +362,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
           newState.status = "finished";
           applySettlement(newState);
           await save(newState, "finished");
-          await mjBroadcastBatch(room.code, [gameOverEvent(newState)]);
+          await mjBroadcastBatch(room.code, [gameOverEvent(newState)], sv);
           await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
           return Response.json({ success: true, finalized: true });
         }
@@ -380,7 +382,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
             ...events,
             ...auto.events,
             ...eyeViewEvents(newState),
-          ]);
+          ], sv);
           await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
           return Response.json({ success: true });
         }
@@ -447,7 +449,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
       }
     }
 
-    await mjBroadcastBatch(room.code, [...events, ...eyeViewEvents(newState)]);
+    await mjBroadcastBatch(room.code, [...events, ...eyeViewEvents(newState)], sv);
     return Response.json({ success: true });
   }
 
@@ -542,7 +544,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     await mjBroadcastBatch(room.code, [
       { event: "mj_action", payload: { type: m.type, seat, tiles: hideConcealedKongs(newState.players[seat].revealed, seat).at(-1)!.tiles, tileCount: newState.players[seat].hand.length } },
       gameOverEvent(newState),
-    ]);
+    ], sv);
     await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
     return Response.json({ success: true });
   }
@@ -593,7 +595,7 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
     ...(actionType === "kong" ? drawEvents(newState, seat) : []),
     ...auto.events,
     ...eyeViewEvents(newState),
-  ]);
+  ], sv);
   if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
   return Response.json({ success: true, chiForbidden: chiForbiddenKeys(newState, seat) });

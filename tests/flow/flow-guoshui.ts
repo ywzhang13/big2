@@ -241,7 +241,7 @@ function kongSetup(guoShui: boolean) {
   await giveAndDiscard(0, "m2");
   const p = await call(action, { playerId: "p1", actionType: "pass" });
   const passEvent = sent.find((e) => e.event === "mj_pass")!;
-  eq([gs(), Object.keys(passEvent.payload).sort(), Object.keys(p.body).sort()], [[1], ["allPassed", "currentTurn", "hasDrawn", "seat"], ["success"]],
+  eq([gs(), Object.keys(passEvent.payload).sort(), Object.keys(p.body).sort()], [[1], ["allPassed", "currentTurn", "hasDrawn", "seat", "sv"], ["success"]],
     "G34 過水的 pass：廣播和回應的欄位跟一般 pass 一樣");
   const leak: string[] = [];
   for (const seat of [0, 1, 2, 3]) {

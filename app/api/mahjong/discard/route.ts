@@ -106,8 +106,8 @@ async function handleDiscard(request: Request, body: unknown, fresh: boolean, bu
   events.push(...auto.events, ...eyeViewEvents(newState));
 
   // Save state
-  await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, auto.finished ? "finished" : undefined);
-  await mjBroadcastBatch(room.code, events);
+  const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, auto.finished ? "finished" : undefined);
+  await mjBroadcastBatch(room.code, events, sv);
   if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
   const actions = (discarded[0].payload.availableActions ?? []) as { type: string; playerSeat: number }[];

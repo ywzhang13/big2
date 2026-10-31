@@ -36,6 +36,7 @@ export async function saveGameStateIfUnchanged(id: string, base: number | undefi
   rooms[id].game_state = clone(s); stats.writes++;
   if (status) rooms[id].status = status;
   await hooks.onSaved?.(id, s);
+  return s.stateVersion; // 和真的 saveGameStateIfUnchanged 一樣：回傳存好的版本號
 }
 export function findSeatByPlayerId(s: MahjongGameState, pid: string) { const p = s.players.find((x) => x.id === pid); return p ? p.seat : -1; }
 export async function retryOnConflict(handler: (fresh: boolean) => Promise<Response>): Promise<Response> {
