@@ -40,8 +40,8 @@ const all = allTimeBoard([
   row("B", 700, "2026-10-01T10:00:00"), row("B", 100, "2026-11-20T10:00:00"), row("C", 800, "2026-10-05T10:00:00"), row("D", 5000, "2026-10-29T10:00:00", { voided: true }),
 ]);
 eq([all.map((r) => [r.rank, r.name, r.amount, r.avatarUrl]), JSON.stringify(all).includes("uid-"), Object.keys(all[0]).sort()],
-  [[[1, "C", 800, "https://pic/C"], [2, "阿明", 800, "https://pic/A"], [3, "B", 800, "https://pic/B"]], false, ["amount", "avatarUrl", "name", "rank"]],
+  [[[1, "C", 800, "https://pic/C"], [2, "阿明", 800, "https://pic/A"], [3, "B", 800, "https://pic/B"]], false, ["amount", "avatarUrl", "me", "name", "rank"]],
   "R5 總斗內：A 跨 3 週 500＋300＝800（999 作廢不算，名稱用最新一筆有效的「阿明」）、B 跨月 800、C 800、D 全作廢不上榜；同額依較早達到排（C 10/5、A 10/27、B 11/20）；沒有帳號 id");
-eq([JSON.stringify(board).includes("uid-"), Object.keys(board[0]).sort()], [false, ["amount", "avatarUrl", "name", "rank"]], "R4 排行榜每列只有名次、名稱、頭像、金額，沒有帳號 id");
+eq([JSON.stringify(board).includes("uid-"), Object.keys(board[0]).sort()], [false, ["amount", "avatarUrl", "me", "name", "rank"]], "R4 排行榜每列只有名次、名稱、頭像、金額，沒有帳號 id");
 console.log(results.join("\n"));
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);

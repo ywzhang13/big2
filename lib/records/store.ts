@@ -235,3 +235,54 @@ export async function listIdleBig2Rooms(
     players: (players ?? []).filter((p) => p.room_id === room.id) as Big2PlayerRow[],
   }));
 }
+
+/** 伺服器現在時間（測試換成可控制的時鐘） */
+export const nowMs = () => Date.now();
+
+/**
+ * 輸贏排行榜的原始資料：麻將對局紀錄裡有綁帳號的每一位（每場一列），只要 userId 和整場輸贏。
+ * range＝場次結束時間在 [from, to) 之間；不給就是全部。打完、中途解散都算（和歷史紀錄的累計同一份資料）。
+ * 分頁讀完（每頁 1000），不會被筆數上限截掉。
+ */
+export async function listMahjongScores(range?: { from: number; to: number }): Promise<{ userId: string; score: number }[]> {
+  const out: { userId: string; score: number }[] = [];
+  for (let page = 0; ; page++) {
+    let q = getSupabaseAdmin()
+      .from("match_record_players")
+      .select("match_id, seat, user_id, total_score, match_records!inner(game, ended_at)")
+      .eq("match_records.game", "mahjong")
+      .not("user_id", "is", null);
+    if (range) q = q.gte("match_records.ended_at", new Date(range.from).toISOString()).lt("match_records.ended_at", new Date(range.to).toISOString());
+    const { data, error } = await q.order("match_id").order("seat").range(page * 1000, page * 1000 + 999);
+    if (error) throw new Error(`讀取輸贏紀錄失敗：${error.message}`);
+    const rows = (data ?? []) as unknown as { user_id: string; total_score: number }[];
+    for (const r of rows) out.push({ userId: String(r.user_id), score: Number(r.total_score) || 0 });
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+
+/**
+ * 這些帳號裡「可以上排行榜」的：帳號還在、用 LINE 登入、不是遊客。回傳目前的 LINE 名稱和頭像。
+ * 遊客、已刪除的帳號、email 建的測試帳號都不在結果裡。人數少，直接列全部帳號比對。
+ */
+export async function lineBoardAccounts(userIds: string[]): Promise<Map<string, { name: string; avatarUrl: string | null }>> {
+  const want = new Set(userIds), out = new Map<string, { name: string; avatarUrl: string | null }>();
+  if (want.size === 0) return out;
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await getSupabaseAdmin().auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`讀取玩家資料失敗：${error.message}`);
+    for (const u of data.users) {
+      if (!want.has(u.id)) continue;
+      const app = (u.app_metadata ?? {}) as Record<string, unknown>;
+      const providers = [app.provider, ...(Array.isArray(app.providers) ? app.providers : [])].map(String);
+      if (app.guest === true || !providers.some((p) => p.includes("line"))) continue;
+      const m = (u.user_metadata ?? {}) as Record<string, unknown>;
+      const name = [m.name, m.full_name, m.nickname].find((v): v is string => typeof v === "string" && !!v);
+      const pic = [m.picture, m.avatar_url].find((v): v is string => typeof v === "string" && v.startsWith("https://"));
+      out.set(u.id, { name: name ?? "LINE 使用者", avatarUrl: pic ?? null });
+    }
+    if (data.users.length < 1000) break;
+  }
+  return out;
+}

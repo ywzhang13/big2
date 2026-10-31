@@ -50,10 +50,11 @@ export const zimoFxValid = (fx: ZimoFxNow | undefined, now: number): WinFx | und
 /** 排行榜：範圍內（null＝不分週）的有效斗內依玩家加總。同額時較早達到該金額（最後一筆較早）的排前面。
  *  名稱、頭像用範圍內最新一筆有效斗內記帳時存的 */
 export interface DonationRow { userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number; voided: boolean }
-export type BoardRow = { rank: number; name: string; avatarUrl: string | null; amount: number };
-export const weeklyBoard = (rows: DonationRow[], now: number): BoardRow[] => board(rows, weekOf(now));
-export const allTimeBoard = (rows: DonationRow[]): BoardRow[] => board(rows, null);
-function board(rows: DonationRow[], range: { start: number; end: number } | null): BoardRow[] {
+/** me＝這列是登入的本人（伺服器判斷，前端不比對名字；沒登入全部 false）。仍然不含帳號 id */
+export type BoardRow = { rank: number; name: string; avatarUrl: string | null; amount: number; me: boolean };
+export const weeklyBoard = (rows: DonationRow[], now: number, meId: string | null = null): BoardRow[] => board(rows, weekOf(now), meId);
+export const allTimeBoard = (rows: DonationRow[], meId: string | null = null): BoardRow[] => board(rows, null, meId);
+function board(rows: DonationRow[], range: { start: number; end: number } | null, meId: string | null): BoardRow[] {
   const by = new Map<string, { name: string; avatarUrl: string | null; amount: number; last: number; nameAt: number }>();
   for (const r of rows) {
     if (r.voided || (range && (r.donatedAt < range.start || r.donatedAt >= range.end))) continue;
@@ -63,7 +64,7 @@ function board(rows: DonationRow[], range: { start: number; end: number } | null
     if (r.donatedAt >= g.nameAt) { g.name = r.name; g.avatarUrl = r.avatarUrl; g.nameAt = r.donatedAt; } // 用最新一筆的名稱
     by.set(r.userId, g);
   }
-  return [...by.values()]
-    .sort((a, b) => b.amount - a.amount || a.last - b.last)
-    .map((g, i) => ({ rank: i + 1, name: g.name, avatarUrl: g.avatarUrl, amount: g.amount }));
+  return [...by.entries()]
+    .sort(([, a], [, b]) => b.amount - a.amount || a.last - b.last)
+    .map(([userId, g], i) => ({ rank: i + 1, name: g.name, avatarUrl: g.avatarUrl, amount: g.amount, me: !!meId && userId === meId }));
 }

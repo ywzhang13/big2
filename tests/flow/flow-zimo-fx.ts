@@ -1,7 +1,7 @@
 // 自摸特效庫＋斗內後台（老闆 2026-10-31 定案），走真的 API、真的 migration（記憶體 PostgreSQL）
 //   Z1 後台 8 支 API：沒登入 401；一般玩家、遊客、遊客身分的老闆帳號都 403，回應沒有任何資料
 //   Z2 記帳、作廢：只記帳不開通；作廢要原因、只能一次；排行榜扣回；操作紀錄都在；資料庫刪不掉、改不了
-//   Z3 排行榜：只算本週有效；顯示 LINE 名稱和頭像（老闆 2026-10-31 不做匿名）；公開 API 沒有任何帳號 id
+//   Z3 排行榜：只算本週有效；顯示 LINE 名稱和頭像（老闆 2026-10-31 不做匿名）；公開 API 沒有任何帳號 id；有登入時自己那列 me
 //   Z10 總斗內（range=all）：累計多週的有效斗內、作廢不算、名稱頭像用最新一筆有效的、沒有帳號 id；本週榜不受影響；range 亂填 400
 //   Z11 打牌、摸牌、動作、下一局：查自摸特效的請求在登入檢查之前就發出（和登入檢查同時進行，不多串一次往返）
 //   Z12 烈焰（flame）已移除：後台開通、收回、玩家選用都 400；資料庫也寫不進去；老闆帳號的清單沒有烈焰
@@ -163,8 +163,13 @@ let idA = "", idB = "";
   const b2 = await post(donationsAdd, { userId: B, amount: 900, donatedAt: "2026-10-29T10:00:00+08:00" }, "boss");
   const r = await get(board, "/");
   eq([b2.status, r.status, r.body.rows.map((x: { rank: number; name: string; avatarUrl: string | null; amount: number }) => [x.rank, x.name, x.avatarUrl, x.amount]), Object.keys(r.body.rows[0]).sort(), leaks(r.text), /anonym|熱心玩家/.test(r.text)],
-    [200, 200, [[1, "阿華", "https://pic/b", 900], [2, "阿明", "https://pic/a", 500]], ["amount", "avatarUrl", "name", "rank"], 0, false],
-    "Z3 公開排行榜：顯示 LINE 名稱和頭像（阿華 900、阿明 500），每列只有名次、名稱、頭像、金額，沒有任何帳號 id，也沒有匿名欄位");
+    [200, 200, [[1, "阿華", "https://pic/b", 900], [2, "阿明", "https://pic/a", 500]], ["amount", "avatarUrl", "me", "name", "rank"], 0, false],
+    "Z3 公開排行榜：顯示 LINE 名稱和頭像（阿華 900、阿明 500），每列只有名次、名稱、頭像、金額、me，沒有任何帳號 id，也沒有匿名欄位");
+  const meOf = async (tok?: string, range = "week") => (await get(board, `/?range=${range}`, tok)).body.rows.filter((x: { me: boolean }) => x.me).map((x: { name: string }) => x.name);
+  const withMe = await get(board, "/", "a");
+  eq([await meOf("a"), await meOf("b"), await meOf("a", "all"), await meOf(), await meOf("guest"), await meOf("boss"), leaks(withMe.text)],
+    [["阿明"], ["阿華"], ["阿明"], [], [], [], 0],
+    "Z3 斗內榜標出自己：阿明登入只有阿明那列 me（本週、總斗內都是）、阿華登入就是阿華；沒登入、遊客、沒上榜的老闆都沒有 me；帶登入也不回帳號 id");
   clock.now = T("2026-11-02T00:00:00");
   const next = await get(board, "/");
   eq([next.body.rows.length, next.body.weekStart === T("2026-11-02T00:00:00")], [0, true], "Z3 到了週一 00:00 排行榜從 0 開始");
@@ -292,7 +297,7 @@ let idA = "", idB = "";
   const dflt = await get(board, "/");
   const rowsOf = (r: { body: { rows: { rank: number; name: string; avatarUrl: string | null; amount: number }[] } }) => r.body.rows.map((x) => [x.rank, x.name, x.avatarUrl, x.amount]);
   eq([all.status, all.body.range, rowsOf(all), Object.keys(all.body.rows[0]).sort(), leaks(all.text), "weekStart" in all.body],
-    [200, "all", [[1, "阿華新名", "https://pic/b2", 950], [2, "阿明", "https://pic/a", 800]], ["amount", "avatarUrl", "name", "rank"], 0, false],
+    [200, "all", [[1, "阿華新名", "https://pic/b2", 950], [2, "阿明", "https://pic/a", 800]], ["amount", "avatarUrl", "me", "name", "rank"], 0, false],
     "Z10 總斗內：阿華跨兩週 900＋50＝950、名稱頭像換成最新一筆的；阿明跨兩週 500＋300＝800，作廢的 100、70 不算，改名那筆作廢所以名稱還是「阿明」；每列只有 4 個欄位、沒有帳號 id");
   eq([rowsOf(week), week.body.range, rowsOf(dflt), (await get(board, "/?range=month")).status],
     [[[1, "阿華新名", "https://pic/b2", 50]], "week", [[1, "阿華新名", "https://pic/b2", 50]], 400],

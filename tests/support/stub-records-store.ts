@@ -119,3 +119,17 @@ export async function listMahjongRoomsCreatedBefore(beforeIso: string) {
       mj_players: (mjSeats[r.id] ?? []).map(({ seat, name, user_id }) => ({ seat, name, user_id })),
     }));
 }
+
+// 輸贏排行榜：模擬 listMahjongScores／lineBoardAccounts（同一份 records；帳號資料用 accounts，provider 不是 LINE、遊客、沒有的都不算）
+export const clock = { now: Date.parse("2026-11-04T12:00:00+08:00") };
+export const nowMs = () => clock.now;
+export const accounts: Record<string, { name: string; avatarUrl: string | null; provider: string; guest?: boolean }> = {};
+export async function listMahjongScores(range?: { from: number; to: number }) {
+  return records
+    .filter((r) => r.game === "mahjong" && (!range || (Date.parse(r.endedAt) >= range.from && Date.parse(r.endedAt) < range.to)))
+    .flatMap((r) => r.players.filter((p) => p.userId).map((p) => ({ userId: p.userId as string, score: p.totalScore })));
+}
+export async function lineBoardAccounts(userIds: string[]) {
+  return new Map(userIds.filter((id) => accounts[id] && !accounts[id].guest && accounts[id].provider.includes("line"))
+    .map((id) => [id, { name: accounts[id].name, avatarUrl: accounts[id].avatarUrl }]));
+}
