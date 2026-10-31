@@ -299,7 +299,7 @@ function ZimoTab() {
             <div className="who">
               <b>{r.name}</b>
               <span className="rs">
-                {r.lastResetSource === "donation" ? <span className="fxs-tag gold sm">斗內</span> : r.lastResetSource === "clear" ? <span className="fxs-tag clr sm">清除</span> : null}
+                {r.lastResetSource === "donation" ? <span className="fxs-tag gold sm">斗內</span> : r.lastResetSource === "clear" ? <span className="fxs-tag clr sm">清除</span> : r.lastResetSource === "system" ? <span className="fxs-tag clr sm">系統重置</span> : null}
                 {r.lastResetAt != null ? fmtTaipei(r.lastResetAt) : "—"}
               </span>
             </div>
@@ -399,6 +399,7 @@ function auditText(a: AuditRecord): string {
   switch (a.action) {
     case "donation_add": return `記一筆 ${who} ${nt(Number(d.amount) || 0)}`;
     case "zimo_clear": return `清除 ${who} 自摸 ${Number(d.cleared) || 0} 次`;
+    case "zimo_reset_all": return `系統重置：全部玩家自摸次數從 11/1 起從 0 開始（${Number(d.users) || 0} 人、共 ${Number(d.cleared) || 0} 次，舊紀錄保留）`;
     case "donation_void": return `作廢 ${who} ${nt(Number(d.amount) || 0)}${d.reason ? `（${String(d.reason)}）` : ""}`;
     case "fx_grant": return `開通 ${who} ${fxList(d.fx)}`;
     case "fx_revoke": return `收回 ${who} ${fxList(d.fx)}`;

@@ -83,7 +83,7 @@ export function deductPreview(count: number, amount: number): Deduction {
 }
 export interface ZimoCountRow {
   userId: string; shortId: string; name: string; avatarUrl: string | null; count: number; owed: number;
-  lastResetAt: number | null; lastResetSource: "donation" | "clear" | null; lastResetCleared: number | null;
+  lastResetAt: number | null; lastResetSource: "donation" | "clear" | "system" | null; lastResetCleared: number | null;
 }
 export const getZimoCounts = () => call<{ price: number; players: ZimoCountRow[] }>("GET", "/api/mahjong/admin/zimo-counts");
 export const voidDonation = (id: string, reason: string) => call<{ voided: true }>("POST", "/api/mahjong/admin/donations/void", { id, reason });

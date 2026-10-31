@@ -30,12 +30,12 @@ export async function addDonation(actor: string, d: { userId: string; name: stri
   });
   return { id: String(r.id), deduction: { before: r.before, deducted: r.deducted, remaining: r.remaining, tip: r.tip, price: r.price } };
 }
-export interface ZimoCountRow { userId: string; count: number; lastResetAt: number | null; lastResetSource: "donation" | "clear" | null; lastResetCleared: number | null }
+export interface ZimoCountRow { userId: string; count: number; lastResetAt: number | null; lastResetSource: "donation" | "clear" | "system" | null; lastResetCleared: number | null }
 /** 後台「自摸次數」清單的原始資料：有自摸紀錄、或曾經被歸零過的帳號（含遊客，由路由用 LINE 帳號資料過濾） */
 export async function zimoCounts(): Promise<ZimoCountRow[]> {
   const rows = await rpc<{ user_id: string; count: number; last_reset_at: string | null; last_reset_source: string | null; last_reset_cleared: number | null }[]>("mj_zimo_counts", {});
   return (rows ?? []).map((r) => ({ userId: String(r.user_id), count: Number(r.count) || 0, lastResetAt: ms(r.last_reset_at),
-    lastResetSource: r.last_reset_source === "donation" || r.last_reset_source === "clear" ? r.last_reset_source : null, lastResetCleared: r.last_reset_cleared ?? null }));
+    lastResetSource: r.last_reset_source === "donation" || r.last_reset_source === "clear" || r.last_reset_source === "system" ? r.last_reset_source : null, lastResetCleared: r.last_reset_cleared ?? null }));
 }
 export async function voidDonation(actor: string, id: string, reason: string): Promise<boolean> {
   return (await rpc<boolean>("mj_donation_void", { p_actor: actor, p_id: id, p_reason: reason })) === true;

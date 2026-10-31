@@ -46,7 +46,7 @@ export async function addDonation(actor: string, d: { userId: string; name: stri
 export async function zimoCounts(): Promise<ZimoCountRow[]> {
   const r = await (await db()).query<Record<string, unknown>>("select * from mj_zimo_counts()");
   return r.rows.map((x) => ({ userId: String(x.user_id), count: Number(x.count) || 0, lastResetAt: ms(x.last_reset_at),
-    lastResetSource: x.last_reset_source === "donation" || x.last_reset_source === "clear" ? x.last_reset_source : null, lastResetCleared: (x.last_reset_cleared as number | null) ?? null }));
+    lastResetSource: x.last_reset_source === "donation" || x.last_reset_source === "clear" || x.last_reset_source === "system" ? x.last_reset_source : null, lastResetCleared: (x.last_reset_cleared as number | null) ?? null }));
 }
 export async function lineProfiles(userIds: string[]) {
   return new Map(userIds.filter((id) => users[id] && !users[id].guest).map((id) => [id, { name: users[id].name, avatarUrl: users[id].avatarUrl }]));
