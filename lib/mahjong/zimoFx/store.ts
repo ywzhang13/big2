@@ -21,11 +21,25 @@ export async function zimoFxFor(userIds: string[]): Promise<Map<string, { fx: st
   return new Map((rows ?? []).map((r) => [r.user_id, { fx: r.fx, until: ms(r.until) }]));
 }
 
-/** 記一筆斗內；同一個交易裡把這位玩家的斗內卡自摸次數歸零（mj_donate_acks） */
-export async function addDonation(actor: string, d: { userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number; note: string }): Promise<string> {
-  return rpc<string>("mj_donation_add", {
+/** 記一筆斗內抵扣的結果：記帳前幾次、抵扣幾次、剩幾次（繼續欠）、打賞多少（超過應斗和零頭）、單價 */
+export interface Deduction { before: number; deducted: number; remaining: number; tip: number; price: number }
+/** 記一筆斗內；同一個交易裡每 NT$10 抵扣這位玩家 1 次自摸（mj_donation_record） */
+export async function addDonation(actor: string, d: { userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number; note: string }): Promise<{ id: string; deduction: Deduction }> {
+  const r = await rpc<{ id: string } & Deduction>("mj_donation_record", {
     p_actor: actor, p_user: d.userId, p_name: d.name, p_avatar: d.avatarUrl, p_amount: d.amount, p_donated_at: iso(d.donatedAt), p_note: d.note,
   });
+  return { id: String(r.id), deduction: { before: r.before, deducted: r.deducted, remaining: r.remaining, tip: r.tip, price: r.price } };
+}
+/** 後台清除：自摸次數歸零（連同 zimo_clear 操作紀錄），回傳清掉幾次；已經是 0 回 0、不寫任何東西 */
+export async function clearZimo(actor: string, userId: string): Promise<number> {
+  return Number(await rpc<number>("mj_zimo_clear", { p_actor: actor, p_user: userId })) || 0;
+}
+export interface ZimoCountRow { userId: string; count: number; lastResetAt: number | null; lastResetSource: "donation" | "clear" | null; lastResetCleared: number | null }
+/** 後台「自摸次數」清單的原始資料：有自摸紀錄、或曾經被歸零過的帳號（含遊客，由路由用 LINE 帳號資料過濾） */
+export async function zimoCounts(): Promise<ZimoCountRow[]> {
+  const rows = await rpc<{ user_id: string; count: number; last_reset_at: string | null; last_reset_source: string | null; last_reset_cleared: number | null }[]>("mj_zimo_counts", {});
+  return (rows ?? []).map((r) => ({ userId: String(r.user_id), count: Number(r.count) || 0, lastResetAt: ms(r.last_reset_at),
+    lastResetSource: r.last_reset_source === "donation" || r.last_reset_source === "clear" ? r.last_reset_source : null, lastResetCleared: r.last_reset_cleared ?? null }));
 }
 export async function voidDonation(actor: string, id: string, reason: string): Promise<boolean> {
   return (await rpc<boolean>("mj_donation_void", { p_actor: actor, p_id: id, p_reason: reason })) === true;
@@ -84,6 +98,25 @@ export async function listAudit(limit: number): Promise<AuditRecord[]> {
   const { data, error } = await getSupabaseAdmin().from("mj_fx_audit").select("id, at, actor_id, action, target_user_id, record_id, detail").order("id", { ascending: false }).limit(limit);
   if (error) throw new Error(`讀取操作紀錄失敗：${error.message}`);
   return (data ?? []).map((r) => ({ id: Number(r.id), at: Date.parse(r.at), actorId: String(r.actor_id), action: String(r.action), targetUserId: String(r.target_user_id), recordId: r.record_id ?? null, detail: r.detail ?? {} }));
+}
+
+/** 這些帳號目前的 LINE 名稱和頭像（不含遊客、不存在的帳號）。人數少，直接列全部帳號比對 */
+export async function lineProfiles(userIds: string[]): Promise<Map<string, { name: string; avatarUrl: string | null }>> {
+  const want = new Set(userIds), out = new Map<string, { name: string; avatarUrl: string | null }>();
+  if (want.size === 0) return out;
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await getSupabaseAdmin().auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`讀取玩家資料失敗：${error.message}`);
+    for (const u of data.users) {
+      if (!want.has(u.id) || (u.app_metadata as Record<string, unknown>)?.guest === true) continue;
+      const m = (u.user_metadata ?? {}) as Record<string, unknown>;
+      const name = [m.name, m.full_name, m.nickname].find((v): v is string => typeof v === "string" && !!v);
+      const pic = [m.picture, m.avatar_url].find((v): v is string => typeof v === "string" && v.startsWith("https://"));
+      out.set(u.id, { name: name ?? "LINE 使用者", avatarUrl: pic ?? null });
+    }
+    if (data.users.length < 1000) break;
+  }
+  return out;
 }
 
 /** 後台找玩家：LINE 登入帳號（不含遊客），名稱包含 q。人數少，直接列全部帳號比對 */

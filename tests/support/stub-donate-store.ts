@@ -1,5 +1,6 @@
 // 測試用：lib/mahjong/donate/store.ts 的記憶體版本。
 // 在 PGlite（記憶體 PostgreSQL）跑真的 20261021_mahjong_donate.sql，呼叫真的函式，時間用 clock.now 控制。
+// 次數、看過次數要用到 20261102（斗內抵扣）改過的函式：查詢前先等 stub-zimofx-store 把後面的 migration 都套上（同一個資料庫）。
 // 模擬 Supabase 的 auth.users（遊客的 app_metadata.guest = true）；測試用 addUser 先建帳號。
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
@@ -31,7 +32,16 @@ export async function recordZimo(roomId: string, handNo: number, userIds: string
   const r = await (await db()).query<{ n: number }>("select public.mj_zimo_record($1, $2, $3::uuid[], $4) as n", [roomId, handNo, userIds, at()]);
   return Number(r.rows[0].n);
 }
+async function full(): Promise<PGlite> { return (await import("./stub-zimofx-store")).db(); }
 export async function countZimo(userId: string): Promise<number> {
-  const r = await (await db()).query<{ n: number }>("select public.mj_donate_count($1) as n", [userId]);
+  const r = await (await full()).query<{ n: number }>("select public.mj_donate_count($1) as n", [userId]);
   return Number(r.rows[0].n);
+}
+export async function donateStatus(userId: string): Promise<{ count: number; seen: number }> {
+  const r = await (await full()).query<{ count: number; seen: number }>("select * from public.mj_donate_status($1)", [userId]);
+  return { count: Number(r.rows[0].count), seen: Number(r.rows[0].seen) };
+}
+export async function markSeen(userId: string, count: number): Promise<{ count: number; seen: number }> {
+  const r = await (await full()).query<{ count: number; seen: number }>("select * from public.mj_donate_seen($1, $2)", [userId, count]);
+  return { count: Number(r.rows[0].count), seen: Number(r.rows[0].seen) };
 }

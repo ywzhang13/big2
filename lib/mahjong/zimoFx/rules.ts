@@ -26,6 +26,9 @@ export function weekOf(now: number): { start: number; end: number } {
   return { start, end: start + 7 * DAY_MS };
 }
 
+/** 自摸一次要斗 NT$10（老闆 2026-10-21 定、2026-10-31 確認固定）。資料庫 mj_donation_record 用同一個數字 */
+export const ZIMO_PRICE = 10;
+
 /** 開通的到期時間：開通當週的下一週結束（下下週一 00:00，不含）＝下週日 23:59:59 是最後一刻 */
 export const grantExpiresAt = (now: number): number => weekOf(now).end + 7 * DAY_MS;
 
