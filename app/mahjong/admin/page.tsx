@@ -1,20 +1,21 @@
 "use client";
 // 斗內後台（老馬 2026-10-31；老柯對接格式第 2 節，小宜〈自摸特效庫與斗內系統〉3、6.2）：只有老闆帳號。
 // 權限在伺服器：先打一次後台 API，401／403 就只顯示「沒有權限」，不顯示任何資料（直接打網址也一樣）。
-// 三個分頁：斗內紀錄（記一筆＝兩步確認、作廢要填原因）、玩家特效（開通／收回）、操作紀錄。
+// 四個分頁：斗內紀錄（記一筆＝兩步確認、作廢要填原因；自動帶入應斗、預覽抵扣）、自摸次數（應斗、清除）、玩家特效（開通／收回）、操作紀錄。
+// 自摸次數與自動抵扣（小宜〈斗內卡收起與後台自摸次數〉v2、老柯 API 格式；老闆 2026-10-31：剩的繼續欠、多的算打賞、一次 NT$10）
 // 老闆 2026-10-31：文字越少越好——不顯示有效日期、到期、說明文字；沒有匿名。
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import {
-  addDonation, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, grantFx, nowTaipeiLocal, revokeFx, taipeiIso, voidDonation,
-  ZIMO_FX_LIST, type AdminPlayer, type AuditRecord, type DonationRecord, type PlayerFx, type ZimoFxCode,
+  addDonation, clearZimoCount, deductPreview, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, getZimoCounts, grantFx, nowTaipeiLocal, revokeFx,
+  taipeiIso, voidDonation, ZIMO_FX_LIST, ZIMO_UNIT, type AdminPlayer, type AuditRecord, type DonationRecord, type PlayerFx, type ZimoCountRow, type ZimoFxCode,
 } from "@/lib/mahjong/zimoFxClient";
 import { FxsAvatar } from "@/components/mahjong/fxshop/FxsAvatar";
 import "@/components/mahjong/fxshop/fxshop.css";
 
-type Tab = "donations" | "fx" | "audit";
+type Tab = "donations" | "zimo" | "fx" | "audit";
 const ERR: Record<string, string> = {
-  bad_request: "資料有誤", unknown_player: "找不到這位玩家", owner_permanent: "老闆帳號永久全開", not_voidable: "這筆已作廢", forbidden: "沒有權限", not_logged_in: "沒有權限",
+  bad_request: "資料有誤", unknown_player: "找不到這位玩家", nothing_to_clear: "已經是 0", owner_permanent: "老闆帳號永久全開", not_voidable: "這筆已作廢", forbidden: "沒有權限", not_logged_in: "沒有權限",
 };
 const errText = (e: string) => ERR[e] ?? "失敗，再試一次";
 const nt = (n: number) => `NT$${n.toLocaleString("en-US")}`;
@@ -52,12 +53,12 @@ export default function MahjongAdminPage() {
           {back}
           <h1>斗內後台</h1>
           <div className="fxs-tabs" role="tablist">
-            {([["donations", "斗內紀錄"], ["fx", "玩家特效"], ["audit", "操作紀錄"]] as const).map(([id, label]) => (
+            {([["donations", "斗內紀錄"], ["zimo", "自摸次數"], ["fx", "玩家特效"], ["audit", "操作紀錄"]] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} data-admin-tab={id} onClick={() => setTab(id)}>{label}</button>
             ))}
           </div>
         </div>
-        {tab === "donations" ? <DonationsTab /> : tab === "fx" ? <FxTab /> : <AuditTab />}
+        {tab === "donations" ? <DonationsTab /> : tab === "zimo" ? <ZimoTab /> : tab === "fx" ? <FxTab /> : <AuditTab />}
       </div>
     </main>
   );
@@ -97,11 +98,25 @@ function PlayerSearch({ onPick }: { onPick: (p: AdminPlayer) => void }) {
   );
 }
 
-function Chosen({ p, onClear }: { p: AdminPlayer; onClear: () => void }) {
+function Chosen({ p, onClear, due }: { p: AdminPlayer; onClear: () => void; due?: ZimoCountRow | null }) {
   return (
     <div className="fxs-chosen" data-admin-chosen={p.name}>
       <FxsAvatar url={p.avatarUrl} name={p.name} /><b>{p.name}</b><span className="fxs-muted">#{p.shortId}</span>
       <button type="button" className="fxs-btn sm" onClick={onClear}>換人</button>
+      {due && due.count > 0 && <span className="due" data-admin-due={due.count}>應斗 <b>{nt(due.owed)}</b>・{due.count} 次</span>}
+    </div>
+  );
+}
+
+/** 抵扣預覽：應斗 NT$80 − NT$50 → 剩 NT$30（3 次）／歸零／打賞（小宜規格 v2 3.9 的表） */
+function DeductLine({ count, amount }: { count: number; amount: number }) {
+  const d = deductPreview(count, amount);
+  if (count <= 0) return <div className="fxs-deduct" data-admin-deduct="tip"><span className="fxs-tag gold">打賞 {nt(d.tip)}</span></div>;
+  return (
+    <div className="fxs-deduct" data-admin-deduct={d.remaining > 0 ? "left" : "zero"}>
+      <span className="k">應斗</span><span>{nt(count * ZIMO_UNIT)}</span><span className="op">−</span><span>{nt(amount)}</span><span className="op">→</span>
+      {d.remaining > 0 ? <span className="left">剩 {nt(d.remaining * ZIMO_UNIT)}（{d.remaining} 次）</span> : <span className="fxs-tag ok">歸零</span>}
+      {d.tip > 0 && <span className="fxs-tag gold">打賞 {nt(d.tip)}</span>}
     </div>
   );
 }
@@ -115,6 +130,7 @@ function DonationsTab() {
   const [err, setErr] = useState("");
   const [reload, setReload] = useState(0);
   const load = () => setReload((n) => n + 1);
+  const [toast, showToast] = useToast();
   useEffect(() => {
     let alive = true;
     void getDonations(scope).then((r) => {
@@ -141,7 +157,7 @@ function DonationsTab() {
         </div>
         <button type="button" className="fxs-btn gold" onClick={() => setAdding((v) => !v)} data-admin-add>{adding ? "取消" : "＋ 記一筆"}</button>
       </div>
-      {adding && <AddDonation onDone={() => { setAdding(false); load(); }} />}
+      {adding && <AddDonation onDone={(m) => { setAdding(false); load(); showToast(m); }} />}
       {err && <div className="fxs-err">{err}</div>}
       <div className="fxs-list" style={{ marginTop: 12 }} data-admin-records>
         {data?.records.length === 0 && <div className="fxs-empty">沒有紀錄</div>}
@@ -161,14 +177,17 @@ function DonationsTab() {
           </div>
         ))}
       </div>
+      {toast}
     </>
   );
 }
 
-/** 記一筆：選玩家、金額、實收時間、備註 → 確認（重列玩家和金額）→ 送出。只記帳，不開通特效 */
-function AddDonation({ onDone }: { onDone: () => void }) {
+/** 記一筆：選玩家（自動帶入應斗）、金額、實收時間、備註 → 確認（重列玩家、金額和抵扣結果）→ 送出。只記帳，不開通特效；抵扣由伺服器在同一個交易裡算 */
+function AddDonation({ onDone }: { onDone: (msg: string) => void }) {
   const [p, setP] = useState<AdminPlayer | null>(null);
+  const [due, setDue] = useState<ZimoCountRow | null>(null);
   const [amount, setAmount] = useState("");
+  const [typed, setTyped] = useState(false); // 老闆自己改過金額：之後不再被應斗覆蓋（換人才重新帶入）
   const [at, setAt] = useState(nowTaipeiLocal);
   const [note, setNote] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -176,19 +195,35 @@ function AddDonation({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState("");
   const n = Number(amount);
   const valid = !!p && Number.isInteger(n) && n >= 1 && n <= 999999 && !!at;
+  // 選好人：查他目前的次數和應斗，金額欄帶入應斗（0 次就留空）
+  useEffect(() => {
+    if (!p) { setDue(null); return; }
+    let alive = true;
+    void getZimoCounts().then((r) => {
+      if (!alive) return;
+      const row = r.ok ? r.data.players.find((x) => x.userId === p.userId) ?? null : null;
+      setDue(row);
+      if (!typed) setAmount(row && row.owed > 0 ? String(row.owed) : "");
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在換人時查、帶入
+  }, [p?.userId]);
+  const pick = (x: AdminPlayer | null) => { setP(x); setTyped(false); setConfirm(false); if (!x) setAmount(""); };
+  const count = due?.count ?? 0;
   const submit = async () => {
     if (!p || !valid || busy) return;
     setBusy(true);
     const r = await addDonation(p.userId, n, taipeiIso(at), note.trim());
     setBusy(false);
-    if (r.ok) onDone(); else { setErr(errText(r.error)); setConfirm(false); }
+    // 提示只寫金額不寫次數（記帳時剛好又自摸的話，實際抵扣以伺服器為準，避免數字對不上）
+    if (r.ok) onDone(`已記一筆 ${p.name} ${nt(n)}`); else { setErr(errText(r.error)); setConfirm(false); }
   };
   return (
     <div className="fxs-card" data-admin-add-form>
       <div className="fxs-form">
-        <div className="full">{p ? <Chosen p={p} onClear={() => { setP(null); setConfirm(false); }} /> : <PlayerSearch onPick={setP} />}</div>
+        <div className="full">{p ? <Chosen p={p} due={due} onClear={() => pick(null)} /> : <PlayerSearch onPick={pick} />}</div>
         <label>金額
-          <input className="fxs-in" inputMode="numeric" value={amount} onChange={(e) => { setAmount(e.target.value.replace(/\D/g, "").slice(0, 6)); setConfirm(false); }} data-admin-amount />
+          <input className="fxs-in" inputMode="numeric" value={amount} onChange={(e) => { setAmount(e.target.value.replace(/\D/g, "").slice(0, 6)); setTyped(true); setConfirm(false); }} data-admin-amount />
         </label>
         <label>時間
           <input className="fxs-in" type="datetime-local" value={at} onChange={(e) => { setAt(e.target.value); setConfirm(false); }} data-admin-at />
@@ -197,11 +232,13 @@ function AddDonation({ onDone }: { onDone: () => void }) {
           <input className="fxs-in" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} data-admin-note />
         </label>
       </div>
+      {!confirm && valid && due !== undefined && <DeductLine count={count} amount={n} />}
       {confirm && p ? (
         <div className="fxs-confirm" data-admin-confirm>
           <FxsAvatar url={p.avatarUrl} name={p.name} /><b>{p.name}・{nt(n)}</b>
           <button type="button" className="fxs-btn gold" style={{ marginLeft: "auto" }} disabled={busy} onClick={() => void submit()} data-admin-submit>確定記帳</button>
           <button type="button" className="fxs-btn" onClick={() => setConfirm(false)}>返回修改</button>
+          <DeductLine count={count} amount={n} />
         </div>
       ) : (
         <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
@@ -210,6 +247,117 @@ function AddDonation({ onDone }: { onDone: () => void }) {
       )}
       {err && <div className="fxs-err">{err}</div>}
     </div>
+  );
+}
+
+/** 底部提示（2.4 秒消失） */
+function useToast() {
+  const [msg, setMsg] = useState("");
+  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = useCallback((m: string) => { setMsg(m); if (t.current) clearTimeout(t.current); t.current = setTimeout(() => setMsg(""), 2400); }, []);
+  useEffect(() => () => { if (t.current) clearTimeout(t.current); }, []);
+  return [msg ? <div className="fxs-toast" role="status" data-admin-toast>✓ {msg}</div> : null, show] as const;
+}
+
+/** 自摸次數：每人一列（頭像、名字、上次減少的方式和時間、次數、應斗、清除）；搜尋、排序在前端做。清除後原位更新，不重新排序 */
+function ZimoTab() {
+  const [rows, setRows] = useState<ZimoCountRow[] | null>(null);
+  const [order, setOrder] = useState<string[]>([]); // 目前的排列順序（清除後不重排）
+  const [q, setQ] = useState("");
+  const [desc, setDesc] = useState(true);
+  const [err, setErr] = useState("");
+  const [ask, setAsk] = useState<ZimoCountRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [dlgErr, setDlgErr] = useState("");
+  const [just, setJust] = useState<string | null>(null);
+  const [toast, showToast] = useToast();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const sortIds = (list: ZimoCountRow[], d: boolean) =>
+    [...list].sort((a, b) => (d ? b.count - a.count : a.count - b.count) || a.name.localeCompare(b.name, "zh-Hant")).map((r) => r.userId);
+  const load = useCallback(async (d: boolean) => {
+    const r = await getZimoCounts();
+    if (!r.ok) { setErr(errText(r.error)); return; }
+    r.data.players.forEach((x) => names.set(x.userId, x.name));
+    setRows(r.data.players); setOrder(sortIds(r.data.players, d)); setErr("");
+  }, []);
+  useEffect(() => { void load(true); }, [load]);
+  const flip = () => { const d = !desc; setDesc(d); if (rows) setOrder(sortIds(rows, d)); };
+
+  useEffect(() => {
+    if (!ask) return;
+    cancelRef.current?.focus(); // 焦點在「取消」：誤按 Enter 不會清掉
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) setAsk(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ask, busy]);
+
+  const doClear = async () => {
+    if (!ask || busy) return;
+    setBusy(true); setDlgErr("");
+    const r = await clearZimoCount(ask.userId);
+    setBusy(false);
+    if (r.ok) {
+      const id = ask.userId, name = ask.name;
+      setRows((cur) => cur?.map((x) => (x.userId === id ? { ...x, count: 0, owed: 0, lastResetAt: r.data.resetAt, lastResetSource: "clear", lastResetCleared: r.data.cleared } : x)) ?? cur);
+      setAsk(null); setJust(id); setTimeout(() => setJust((j) => (j === id ? null : j)), 1600);
+      showToast(`已清除 ${name} ${r.data.cleared} 次`);
+    } else if (r.status === 409) {
+      // 已經是 0（例如另一個分頁剛清過）：關框、提示、重抓清單
+      setAsk(null); showToast(`${ask.name} 已經是 0`); void load(desc);
+    } else setDlgErr(errText(r.error));
+  };
+
+  const byId = new Map(rows?.map((r) => [r.userId, r]) ?? []);
+  const key = q.trim().toLowerCase();
+  const shown = order.map((id) => byId.get(id)!).filter((r) => r && (!key || r.name.toLowerCase().includes(key)));
+  return (
+    <>
+      <div className="fxs-zbar">
+        <input className="fxs-in" placeholder="搜尋 LINE 名稱" value={q} onChange={(e) => setQ(e.target.value)} aria-label="搜尋 LINE 名稱" data-admin-zsearch />
+        <button type="button" className="fxs-sort" onClick={flip} aria-label={`依次數排序，目前${desc ? "多到少" : "少到多"}`} data-admin-zsort={desc ? "desc" : "asc"}>
+          次數 <span className="arr">{desc ? "↓" : "↑"}</span>
+        </button>
+      </div>
+      {err && <div className="fxs-err">{err}</div>}
+      {!rows && !err && <span className="fxs-muted">讀取中…</span>}
+      <div className="fxs-list" data-admin-zlist>
+        {rows && rows.length === 0 && <div className="fxs-empty">沒有紀錄</div>}
+        {rows && rows.length > 0 && shown.length === 0 && <div className="fxs-empty">找不到</div>}
+        {shown.map((r) => (
+          <div key={r.userId} className={`fxs-zc${r.count === 0 ? " zero" : ""}${just === r.userId ? " just" : ""}`} data-admin-zrow={r.name} data-count={r.count}>
+            <FxsAvatar url={r.avatarUrl} name={r.name} />
+            <div className="who">
+              <b>{r.name}</b>
+              <span className="rs">
+                {r.lastResetSource === "donation" ? <span className="fxs-tag gold sm">斗內</span> : r.lastResetSource === "clear" ? <span className="fxs-tag clr sm">清除</span> : null}
+                {r.lastResetAt != null ? fmtTaipei(r.lastResetAt) : "—"}
+              </span>
+            </div>
+            <div className="nb">
+              <span className="n">{r.count}<small>次</small></span>
+              {r.count > 0 && <span className="owe">應斗 <b>{nt(r.owed)}</b></span>}
+            </div>
+            <button type="button" className="fxs-btn sm danger" disabled={r.count === 0} onClick={() => { setDlgErr(""); setAsk(r); }} data-admin-zclear={r.name}>清除</button>
+          </div>
+        ))}
+      </div>
+      {ask && (
+        <div className="fxs-shade" onClick={(e) => { if (e.target === e.currentTarget && !busy) setAsk(null); }}>
+          <section className="fxs-dlg" role="alertdialog" aria-modal="true" aria-labelledby="fxs-zdlg-t" data-admin-zdlg>
+            <h3 id="fxs-zdlg-t">清除自摸次數</h3>
+            <div className="who"><FxsAvatar url={ask.avatarUrl} name={ask.name} /><b>{ask.name}</b></div>
+            <div className="big"><span className="from">{ask.count}</span><span className="ar">→</span><span className="to">0</span></div>
+            <div className="owe">應斗 {nt(ask.owed)}</div>
+            <div className="acts">
+              <button type="button" className="fxs-btn" ref={cancelRef} disabled={busy} onClick={() => setAsk(null)} data-admin-zcancel>取消</button>
+              <button type="button" className="fxs-btn dangerfill" disabled={busy} onClick={() => void doClear()} data-admin-zconfirm>清除</button>
+            </div>
+            {dlgErr && <div className="fxs-err">{dlgErr}</div>}
+          </section>
+        </div>
+      )}
+      {toast}
+    </>
   );
 }
 
@@ -297,12 +445,26 @@ function auditText(a: AuditRecord): string {
   const d = a.detail ?? {};
   switch (a.action) {
     case "donation_add": return `記一筆 ${who} ${nt(Number(d.amount) || 0)}`;
+    case "zimo_clear": return `清除 ${who} 自摸 ${Number(d.cleared) || 0} 次`;
     case "donation_void": return `作廢 ${who} ${nt(Number(d.amount) || 0)}${d.reason ? `（${String(d.reason)}）` : ""}`;
     case "fx_grant": return `開通 ${who} ${fxList(d.fx)}`;
     case "fx_revoke": return `收回 ${who} ${fxList(d.fx)}`;
     case "fx_select": return `${who} 換成 ${fxList(d.fx)}`;
     default: return `${a.action} ${who}`;
   }
+}
+
+/** 記一筆的抵扣灰字（小宜規格 v2 3.3 的表）：舊紀錄沒有抵扣欄位，不顯示 */
+function deductNote(d: Record<string, unknown>): string {
+  if (typeof d.deducted !== "number" || typeof d.remaining !== "number") return "";
+  const tip = Number(d.tip) || 0, parts: string[] = [];
+  if (d.deducted === 0 && d.remaining === 0) parts.push("沒有應斗");
+  else {
+    if (d.deducted > 0) parts.push(`抵扣 ${d.deducted} 次`);
+    parts.push(d.remaining > 0 ? `剩 ${d.remaining} 次` : "歸零");
+  }
+  if (tip > 0) parts.push(`打賞 ${nt(tip)}`);
+  return parts.map((x) => `・${x}`).join("");
 }
 
 function AuditTab() {
@@ -325,7 +487,7 @@ function AuditTab() {
       {rows?.length === 0 && <div className="fxs-empty">沒有紀錄</div>}
       {rows?.map((a) => (
         <div key={a.id} className="fxs-audit" data-admin-audit-row={a.action}>
-          <span className="t">{fmtTaipei(a.at)}</span><span>{auditText(a)}</span>
+          <span className="t">{fmtTaipei(a.at)}</span><span>{auditText(a)}{a.action === "donation_add" && <span className="s">{deductNote(a.detail ?? {})}</span>}</span>
         </div>
       ))}
     </div>

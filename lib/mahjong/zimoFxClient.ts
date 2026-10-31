@@ -65,7 +65,23 @@ export interface AuditRecord { id: number; at: number; actorId: string; action: 
 export const findPlayers = (q: string) => call<{ players: AdminPlayer[] }>("GET", `/api/mahjong/admin/players?q=${encodeURIComponent(q)}`);
 export const getDonations = (scope: "week" | "all") => call<{ weekTotal: number; records: DonationRecord[] }>("GET", `/api/mahjong/admin/donations?scope=${scope}`);
 export const addDonation = (userId: string, amount: number, donatedAt: string, note: string) =>
-  call<{ id: string }>("POST", "/api/mahjong/admin/donations", { userId, amount, donatedAt, ...(note ? { note } : {}) });
+  call<{ id: string; deduction?: Deduction & { before: number; price: number } }>("POST", "/api/mahjong/admin/donations", { userId, amount, donatedAt, ...(note ? { note } : {}) });
+
+// ---- 自摸次數與自動抵扣（老柯〈斗內卡與自摸次數-API格式〉、小宜規格 v2 3.9；老闆 2026-10-31 定案）----
+/** 自摸一次 NT$10（和後端 MJ_ZIMO_UNIT 一樣；後台清單的金額以伺服器回的 owed 為準） */
+export const ZIMO_UNIT = 10;
+export interface Deduction { deducted: number; remaining: number; tip: number }
+/** 記一筆的抵扣預覽（和後端同一個公式）：抵 min(次數, ⌊金額÷10⌋) 次，沒抵完的繼續欠，超過應斗的部分和零頭算打賞 */
+export function deductPreview(count: number, amount: number): Deduction {
+  const deducted = Math.min(Math.max(0, count), Math.floor(Math.max(0, amount) / ZIMO_UNIT));
+  return { deducted, remaining: count - deducted, tip: amount - deducted * ZIMO_UNIT };
+}
+export interface ZimoCountRow {
+  userId: string; shortId: string; name: string; avatarUrl: string | null; count: number; owed: number;
+  lastResetAt: number | null; lastResetSource: "donation" | "clear" | null; lastResetCleared: number | null;
+}
+export const getZimoCounts = () => call<{ price: number; players: ZimoCountRow[] }>("GET", "/api/mahjong/admin/zimo-counts");
+export const clearZimoCount = (userId: string) => call<{ ok: true; cleared: number; resetAt: number }>("POST", "/api/mahjong/admin/zimo-counts/clear", { userId });
 export const voidDonation = (id: string, reason: string) => call<{ voided: true }>("POST", "/api/mahjong/admin/donations/void", { id, reason });
 export const getPlayerFx = (userId: string) => call<PlayerFx>("GET", `/api/mahjong/admin/fx?userId=${encodeURIComponent(userId)}`);
 export const grantFx = (userId: string, fx: ZimoFxCode[], active: ZimoFxCode) => call<{ granted: number }>("POST", "/api/mahjong/admin/fx", { userId, fx, active });
