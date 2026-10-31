@@ -456,9 +456,9 @@ export default function MahjongPage() {
               >
                 歷史紀錄
               </button>
-              {/* 斗內榜（公開）；老闆帳號同一列多一顆「斗內後台」 */}
+              {/* 排行榜（公開，輸贏／斗內）；老闆帳號同一列多一顆「斗內後台」 */}
               <div className="flex gap-3">
-                <a href="/mahjong/donations" className="mjl-btn ghost text-center flex-1" data-lobby-board>斗內榜</a>
+                <a href="/mahjong/ranks" className="mjl-btn ghost text-center flex-1" data-lobby-board>排行榜</a>
                 {isOwner && <a href="/mahjong/admin" className="mjl-btn ghost text-center flex-1" data-lobby-admin>斗內後台</a>}
               </div>
               <button onClick={goHome} className="mjl-foot">

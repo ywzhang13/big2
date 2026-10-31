@@ -41,17 +41,22 @@ export const rejectedSelected = (r: Res<unknown>): ZimoFxChoice | null =>
 export const isPermanentAll = (d: MyZimoFx) => ZIMO_FX_LIST.every((f) => f.code in d.available && d.available[f.code] === null);
 
 // ---- 公開排行榜：第 3 節（不用登入）；week＝本週榜，all＝總斗內（累計所有有效斗內） ----
-export interface BoardRow { rank: number; name: string; avatarUrl: string | null; amount: number }
-export async function getLeaderboard(scope: "week" | "all" = "week"): Promise<{ ok: true; rows: BoardRow[] } | { ok: false }> {
+// 有登入就帶 token：伺服器判斷哪一列是自己（me），前端不比對名字（可能同名）。沒登入照樣能看
+export interface BoardRow { rank: number; name: string; avatarUrl: string | null; amount: number; me?: boolean }
+async function board<T>(path: string): Promise<{ ok: true; rows: T[] } | { ok: false }> {
   try {
-    const r = await fetch(`/api/mahjong/donations/leaderboard?range=${scope}`, { cache: "no-store" });
+    const r = await mjFetch(path, { cache: "no-store" });
     if (!r.ok) return { ok: false };
-    const j = (await r.json()) as { rows?: BoardRow[] };
+    const j = (await r.json()) as { rows?: T[] };
     return { ok: true, rows: j.rows ?? [] };
   } catch {
     return { ok: false };
   }
 }
+export const getLeaderboard = (scope: "week" | "all" = "week") => board<BoardRow>(`/api/mahjong/donations/leaderboard?range=${scope}`);
+/** 輸贏榜（老柯〈輸贏排行榜-API格式〉）：score＝期間內打完（含中途解散）的場次淨輸贏加總，和歷史紀錄的「累計」同一個算法；rank 同分同名次由後端算 */
+export interface ScoreRow { rank: number; name: string; avatarUrl: string | null; score: number; me?: boolean }
+export const getScoreBoard = (scope: "week" | "all" = "week") => board<ScoreRow>(`/api/mahjong/ranks/score?range=${scope}`);
 
 // ---- 後台：第 2 節（只有老闆帳號；其他人 401／403） ----
 export interface AdminPlayer { userId: string; name: string; avatarUrl: string | null; shortId: string }
