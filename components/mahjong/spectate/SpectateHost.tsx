@@ -2,9 +2,10 @@
 // 牌桌上被申請／被觀戰的玩家這一側（小宜〈麻將觀戰模式-UIUX完整規格-2026-10-30〉5.5、5.8；老柯〈觀戰模式-前後端對接格式〉第 4 節）：
 //   ・申請卡：非阻斷（沒有遮罩，只有卡片吃點擊），手機在左上、桌機在右上；一次只顯示最早一筆，其他寫「另有 n 筆」；30 秒倒數用伺服器時間
 //   ・觀戰管理：牌桌選單「觀戰管理・n 人」打開，可單筆或全部收回，收回前先確認
-// 清單用 useSpectateManage 抓（進牌桌時、收到 mj_spectate_request／mj_spectators 時、每 5 秒保險一次）
+// 清單用 useSpectateManage 抓（進牌桌時、收到 mj_spectate_request／mj_spectators 時、分頁回前景時；2026-11-01 起不再每 5 秒輪詢，見 lib/mahjong/spectate/manageSync.ts）
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clockSkew, fetchManage, respondSpectate, revokeSpectate, secondsLeft, type SpectateManageInfo } from "@/lib/mahjong/spectateClient";
+import { browserManageSyncEnv, startManageSync } from "@/lib/mahjong/spectate/manageSync";
 import "./spectate.css";
 
 export function SpxAvatar({ url, name, large }: { url: string | null; name: string; large?: boolean }) {
@@ -39,7 +40,7 @@ export function SpxToast({ text, assertive }: { text: string | null; assertive?:
   );
 }
 
-/** 被觀戰的玩家本人的觀戰清單（申請中、已同意）。active＝牌局進行中、本人有座位；tick 變了（收到觀戰事件）就重抓 */
+/** 被觀戰的玩家本人的觀戰清單（申請中、已同意）。active＝牌局進行中、本人有座位；tick 變了（收到觀戰事件）就重抓；不輪詢 */
 export function useSpectateManage(roomId: string, playerId: string, tick: number | undefined, active: boolean) {
   const [info, setInfo] = useState<SpectateManageInfo | null>(null);
   const reload = useCallback(async () => {
@@ -50,10 +51,9 @@ export function useSpectateManage(roomId: string, playerId: string, tick: number
   useEffect(() => {
     if (!active || !roomId || !playerId) return;
     let alive = true;
-    const load = () => fetchManage(roomId, playerId).then((r) => { if (alive && r.ok) setInfo(r.data); });
-    const first = setTimeout(load, 0);
-    const t = setInterval(load, 5000);
-    return () => { alive = false; clearTimeout(first); clearInterval(t); };
+    const load = () => { void fetchManage(roomId, playerId).then((r) => { if (alive && r.ok) setInfo(r.data); }); };
+    const stop = startManageSync(load, browserManageSyncEnv);
+    return () => { alive = false; stop(); };
   }, [active, roomId, playerId, tick]);
   return { info: active ? info : null, reload };
 }
