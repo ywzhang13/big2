@@ -7,6 +7,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
 import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
 import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
+import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 
 import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile, WinFx } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -399,6 +400,8 @@ export function useMahjong(
   const progressRef = useRef(0);
   // 我送出、還沒回來的吃碰槓過請求數：這段期間伺服器可能還沒處理到，state 回應裡的按鈕不能信
   const actionsInFlightRef = useRef(0);
+  // 即時推播為主、輪詢只當保險：頻道是否訂閱上、上次抓完整狀態的時間、看過的最新牌局版本號（見 syncPolicy）
+  const syncRef = useRef(new SyncPolicy());
   /** 訂閱廣播事件；慢慢摸牌期間，除了摸牌本身的事件以外都先排隊 */
   const onHeld = useCallback((ch: RealtimeChannel, event: string, fn: (msg: { payload: Record<string, unknown> }) => void) => {
     ch.on("broadcast", { event }, (msg) => {
@@ -408,6 +411,11 @@ export function useMahjong(
       const h = holdRef.current;
       if (h.on && !SLOW_DRAW_PASS.has(event)) h.queue.push(() => fn(m));
       else fn(m);
+      // 事件帶的牌局版本號跳號＝中間漏了事件：馬上補抓完整狀態，不等保險輪詢（省量 2026-11-01）
+      if (syncRef.current.noteVersion(m.payload.sv)) {
+        const rid = roomIdRef.current;
+        if (rid && !closedRef.current) fetchStateRef.current?.(rid);
+      }
     });
   }, []);
   useEffect(() => {
@@ -432,6 +440,7 @@ export function useMahjong(
     if (closedRef.current) return;
     if (holdRef.current.on) { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; } // 慢慢摸牌中：伺服器已經是打出後的狀態，翻完再說
     const holdGen = holdRef.current.gen;
+    syncRef.current.markSent(Date.now());
     const reqId = stateGateRef.current.begin();
     const progressAtSend = progressRef.current;
     const actionInFlightAtSend = actionsInFlightRef.current > 0;
@@ -484,6 +493,7 @@ export function useMahjong(
       if (verdict === "refetchAfterHold") { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; }
       if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
       if (verdict === "drop") return;
+      syncRef.current.noteVersion((data.gameState as { stateVersion?: number } | null)?.stateVersion, { fromState: true });
       // 牌局節奏：伺服器說特效還沒播完（重新整理、切回前景時接上），剩下的時間用伺服器的兩個時間相減，不用手機時鐘
       {
         const g = data.gameState as { paceUntil?: number; serverNow?: number; currentTurn?: number } | null;
@@ -816,11 +826,14 @@ export function useMahjong(
     const ch = supabase.channel(privateChannel);
     // 座位頻道名稱是 mj-<房號>-p-<雜湊>（lib/mahjong/access.ts privateChannelName）
     bindPrivateEvents(ch, myId, /^mj-(.+?)-p-/.exec(privateChannel)?.[1] ?? "");
+    const sync = syncRef.current;
     ch.subscribe((status) => {
-      // 訂閱好之前送的私人事件收不到，用 state 補
+      sync.setChannel("private", status === "SUBSCRIBED");
+      // 訂閱好之前送的私人事件收不到，用 state 補（斷線重連後再訂閱上也一樣）
       if (status === "SUBSCRIBED" && roomIdRef.current) fetchState(roomIdRef.current);
     });
     return () => {
+      sync.removeChannel("private");
       supabase.removeChannel(ch);
     };
   }, [privateChannel, playerName, myId, bindPrivateEvents, fetchState]);
@@ -1392,24 +1405,35 @@ export function useMahjong(
       }));
     });
 
+    const sync = syncRef.current;
+    sync.resetVersion(); // 換房間：版本號從這間房重新算
     channel.subscribe((status) => {
+      sync.setChannel("room", status === "SUBSCRIBED");
       if (status === "SUBSCRIBED") {
         console.log("[mj] connected to room", roomCode);
         const rid = roomIdRef.current;
         if (rid) {
-          fetchState(rid);
+          fetchState(rid); // 第一次訂閱上、斷線重連後再訂閱上：都補抓一次
         }
       }
     });
 
     channelRef.current = channel;
 
-    // Periodic state poll for recovery
+    // 保險輪詢（省量 2026-11-01）：牌局靠即時推播更新。即時連線正常時，25 秒沒拿過完整狀態才補抓一次；
+    // 連線斷了、還沒重連上時照舊每 5 秒；分頁在背景時不抓（回前景由下面的 onResume 馬上抓）
     const pollTimer = setInterval(() => {
       const rid = roomIdRef.current;
       if (!rid || closedRef.current) return;
+      if (sync.due(Date.now(), document.hidden)) fetchState(rid);
+    }, POLL_TICK_MS);
+    // 網路恢復：馬上補抓，不等即時連線重連或下一次輪詢
+    const onOnline = () => {
+      const rid = roomIdRef.current;
+      if (document.hidden || !rid || closedRef.current) return;
       fetchState(rid);
-    }, 5000);
+    };
+    window.addEventListener("online", onOnline);
     // iPhone 主畫面 App／Safari 從背景回來：計時器和即時連線可能停過，馬上重抓一次，不等下一輪輪詢（最多 5 秒）
     const onResume = () => {
       const rid = roomIdRef.current;
@@ -1423,6 +1447,8 @@ export function useMahjong(
     return () => {
       document.removeEventListener("visibilitychange", onResume);
       window.removeEventListener("pageshow", onResume);
+      window.removeEventListener("online", onOnline);
+      sync.removeChannel("room");
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
       channelRef.current = null;

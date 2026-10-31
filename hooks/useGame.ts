@@ -384,7 +384,7 @@ export function useGame(roomCode: string, playerName: string) {
     const pollTimer = setInterval(() => {
       const s = stateRef.current;
       const rid = roomIdRef.current;
-      if (!rid || closedRef.current) return;
+      if (!rid || closedRef.current || document.hidden) return; // 分頁在背景時不抓（省量 2026-11-01）
       // During gameplay, poll if it's NOT our turn (we might have missed a broadcast)
       if (s.status === "playing" && s.currentTurn !== s.mySeat) {
         fetchState(rid);
@@ -394,8 +394,15 @@ export function useGame(roomCode: string, playerName: string) {
         fetchState(rid);
       }
     }, 4000);
+    // 回前景馬上抓一次，不等下一輪（省量 2026-11-01）
+    const onVisible = () => {
+      const rid = roomIdRef.current;
+      if (document.visibilityState === "visible" && rid && !closedRef.current) fetchState(rid);
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
       channelRef.current = null;

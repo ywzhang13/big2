@@ -6,6 +6,7 @@
 // 觀戰中牌桌用一般牌桌元件畫，但所有操作都不接（不出牌、不吃碰槓胡、不眼牌），聊天、語音、互動特效都不掛。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
@@ -121,13 +122,15 @@ export default function MahjongWatchPage() {
   useEffect(() => {
     if (!listCode || viewSeat != null) return;
     const refresh = async () => { const r = await lookupRoom(listCode); if (r.ok) setRoom(r.data); };
-    const t = setInterval(refresh, 2000);
+    const t = setInterval(() => { if (!document.hidden) void refresh(); }, 2000); // 分頁在背景時不拿（省量 2026-11-01）
     const onVis = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [listCode, viewSeat]);
 
-  // 觀戰中（老柯對接格式第 0 節）：只訂閱房間公開頻道 mj-{房號}，收到任何事件就重拿一次視角（150ms 內合併）；另外每 3 秒保險一次。
+  // 觀戰中（老柯對接格式第 0 節）：只訂閱房間公開頻道 mj-{房號}，收到任何事件就重拿一次視角（150ms 內合併）。
+  // 省量 2026-11-01：保險輪詢從每 3 秒改成「即時連線正常時 20 秒沒拿過才拿」，連線斷了照舊 5 秒；分頁在背景不拿，
+  // 回前景、網路恢復、斷線重連後再訂閱上都馬上拿一次
   // 伺服器每次都重新驗權：被收回、沒同意＝403 not_approved → 先清掉手牌，再顯示提示（規格 5.9，順序不可相反）；房間結束＝404／410
   const focusRef = useRef<SpectateView["focusDiscard"]>(null);
   // 宣告眼牌的特效（老闆 2026-10-31：觀戰者也要看到，和玩家本人畫面一樣；做法照 hooks/useMahjong.ts 的 playDeclareFx）：
@@ -154,12 +157,14 @@ export default function MahjongWatchPage() {
     if (viewSeat == null || !room) return;
     const target = room.players.find((p) => p.seat === viewSeat);
     if (!target) return;
-    let alive = true, timer: ReturnType<typeof setTimeout> | null = null, inFlight = false, again = false, backoffUntil = 0;
+    let alive = true, timer: ReturnType<typeof setTimeout> | null = null, inFlight = false, again = false, backoffUntil = 0, subscribedOnce = false;
+    const sync = new SyncPolicy(20_000);
     const slowT = setTimeout(() => { if (alive) setSlow(true); }, 300); // 切換超過 300ms 才出現「載入中」
     const pull = async () => {
       if (Date.now() < backoffUntil) return; // 429 等待中：保險輪詢也不另外打（等待結束時 timer 會補拿一次）
       if (inFlight) { again = true; return; }
       inFlight = true;
+      sync.markSent(Date.now());
       const r = await fetchView(room.roomId, target.playerId);
       inFlight = false;
       if (!alive) return;
@@ -189,7 +194,10 @@ export default function MahjongWatchPage() {
     };
     const soon = () => { if (timer) return; timer = setTimeout(() => { timer = null; void pull(); }, 150); };
     void pull();
-    const poll = setInterval(pull, 3000);
+    const poll = setInterval(() => { if (sync.due(Date.now(), document.hidden)) void pull(); }, POLL_TICK_MS);
+    const onBack = () => { if (!document.hidden) void pull(); };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("online", onBack);
     const supabase = getSupabase();
     const ch = supabase.channel(`mj-${room.code}`);
     ch.on("broadcast", { event: "*" }, (msg) => {
@@ -201,8 +209,17 @@ export default function MahjongWatchPage() {
       // 有人同意、拒絕、收回：抽屜裡四位的狀態也更新
       if (msg.event === "mj_spectators") void lookupRoom(room.code).then((rr) => { if (alive && rr.ok) setRoom(rr.data); });
     });
-    ch.subscribe();
-    return () => { alive = false; clearInterval(poll); clearTimeout(slowT); if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
+    ch.subscribe((status) => {
+      sync.setChannel("room", status === "SUBSCRIBED");
+      if (status !== "SUBSCRIBED") return;
+      if (subscribedOnce) void pull(); // 斷線重連後再訂閱上：中間的事件收不到，補拿一次（第一次訂閱上時已經拿過）
+      subscribedOnce = true;
+    });
+    return () => {
+      alive = false; clearInterval(poll); clearTimeout(slowT); if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onBack); window.removeEventListener("online", onBack);
+      supabase.removeChannel(ch);
+    };
     // 換視角才重訂（room 每次更新都是新物件，只看 roomId／code）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewSeat, room?.roomId, room?.code]);

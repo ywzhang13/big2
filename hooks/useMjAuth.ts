@@ -260,7 +260,7 @@ export function useMjAuth() {
       }
       fail(res.status === 429 ? tooManyText(body.retryAfter) : "登入逾時，請再試一次");
     };
-    const timer = setInterval(poll, POLL_MS);
+    const timer = setInterval(() => { if (!document.hidden) void poll(); }, POLL_MS); // 分頁在背景時不問（回前景馬上問，見下面；省量 2026-11-01）
     const onVisible = () => {
       if (document.visibilityState === "visible") poll();
     };
