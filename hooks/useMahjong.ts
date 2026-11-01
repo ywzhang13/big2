@@ -405,11 +405,27 @@ export function useMahjong(
   /** 訂閱廣播事件；慢慢摸牌期間，除了摸牌本身的事件以外都先排隊 */
   const onHeld = useCallback((ch: RealtimeChannel, event: string, fn: (msg: { payload: Record<string, unknown> }) => void) => {
     ch.on("broadcast", { event }, (msg) => {
+      // 亂序晚到、比看過的最新版本還舊的牌局事件：不套用，免得畫面被蓋回舊狀態；內容還沒被完整狀態涵蓋（例如晚到的手牌）就補抓一次（見 syncPolicy）
+      const sv = (msg.payload as Record<string, unknown> | undefined)?.sv;
+      const svKey = typeof sv === "number" ? `${ch.topic}|${event}|${JSON.stringify(msg.payload)}` : "";
+      if (typeof sv === "number" && syncRef.current.isStale(sv)) {
+        const rid = roomIdRef.current;
+        const dup = syncRef.current.wasApplied(svKey); // 同一個事件重送：內容已經套用過，不用補抓
+        if (!dup && rid && !closedRef.current && syncRef.current.needsRefetchAfterStale(sv, Date.now())) fetchStateRef.current?.(rid);
+        return;
+      }
+      if (svKey) syncRef.current.markApplied(svKey);
       progressRef.current++;
       stateGateRef.current.noteLocalChange(); // 牌局變了：在這之前送出的 state 請求回來時不能整份蓋掉（老闆 2026-10-25 打出去畫面回朔）
       const m = { payload: (msg.payload ?? {}) as Record<string, unknown> };
       const h = holdRef.current;
-      if (h.on && !SLOW_DRAW_PASS.has(event)) h.queue.push(() => fn(m));
+      if (h.on && !SLOW_DRAW_PASS.has(event)) h.queue.push(() => {
+        // 排隊期間可能已經套用了更新的事件或狀態：已經比畫面舊就不改畫面，完整狀態還沒涵蓋它才補抓一次（見 syncPolicy.checkQueued）
+        const v = syncRef.current.checkQueued(m.payload.sv, Date.now());
+        if (v === "run") { fn(m); return; }
+        const rid = roomIdRef.current;
+        if (v === "refetch" && rid && !closedRef.current) fetchStateRef.current?.(rid);
+      });
       else fn(m);
       // 事件帶的牌局版本號跳號＝中間漏了事件：馬上補抓完整狀態，不等保險輪詢（省量 2026-11-01）
       if (syncRef.current.noteVersion(m.payload.sv)) {
@@ -493,7 +509,12 @@ export function useMahjong(
       if (verdict === "refetchAfterHold") { holdRef.current.refetch = () => fetchStateRef.current?.(rid); return; }
       if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
       if (verdict === "drop") return;
-      syncRef.current.noteVersion((data.gameState as { stateVersion?: number } | null)?.stateVersion, { fromState: true });
+      const stateSv = (data.gameState as { stateVersion?: number } | null)?.stateVersion;
+      // 回來的狀態比畫面上已經套用的版本還舊（例如伺服器快取落後）：不能蓋掉畫面，再抓一次（連續幾次都舊就等保險輪詢，見 syncPolicy）
+      const svVerdict = syncRef.current.checkState(stateSv);
+      if (svVerdict === "refetch") { if (!closedRef.current) fetchStateRef.current?.(rid); return; }
+      if (svVerdict === "drop") return;
+      syncRef.current.noteVersion(stateSv, { fromState: true });
       // 牌局節奏：伺服器說特效還沒播完（重新整理、切回前景時接上），剩下的時間用伺服器的兩個時間相減，不用手機時鐘
       {
         const g = data.gameState as { paceUntil?: number; serverNow?: number; currentTurn?: number } | null;
