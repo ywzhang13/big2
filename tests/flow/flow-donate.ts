@@ -15,6 +15,9 @@ import { GET as donateGet } from "../../app/api/mahjong/donate/route";
 import { POST as donateAck } from "../../app/api/mahjong/donate/ack/route";
 import { POST as adminDonate } from "../../app/api/mahjong/admin/donations/route";
 import { POST as adminVoid } from "../../app/api/mahjong/admin/donations/void/route";
+import { legacyDonationsAdd } from "../support/legacy-donation"; // 以場結清上線前的記一筆（自動抵扣）
+import { extraMigrations } from "../support/stub-zimofx-store";
+extraMigrations.length = 0; // 測的是以場結清（20261104）之前的歸零制，不套用它
 import { users } from "../support/stub-zimofx-store";
 import { recordZimoWins, zimoUserIds } from "../../lib/mahjong/donate/record";
 import { rooms, hooks, saveGameState } from "../support/stub-db";
@@ -40,7 +43,8 @@ for (const [i, u] of U.entries()) await addUser(u, i === 4); // 和正式庫一�
 ["A", "B", "C", "D"].forEach((n, i) => (users[U[i]] = { name: n, avatarUrl: null })); // 後台記帳時查的 LINE 名稱
 tokens.boss = { id: "c5707922-f6f0-4c10-9c87-3532fdbf6b72", displayName: "張育瑋", pictureUrl: null, isGuest: false };
 /** 老闆在後台替 who 記一筆斗內（tok 換成別人＝非老闆呼叫） */
-const record = (who: number, tok = "boss") => post(adminDonate, { userId: U[who], amount: 100, donatedAt: new Date(clock.now).toISOString() }, tok);
+const record = (who: number, tok = "boss") => post(tok === "boss" ? legacyDonationsAdd : adminDonate, // 老闆走舊的抵扣；一般玩家照樣打真的 API（403）
+  { userId: U[who], amount: 100, donatedAt: new Date(clock.now).toISOString() }, tok);
 
 let nextId = 90000;
 const t = (k: string): Tile => ({ id: nextId++, suit: k[0] as TileSuit, rank: parseInt(k.slice(1), 10), display: k });

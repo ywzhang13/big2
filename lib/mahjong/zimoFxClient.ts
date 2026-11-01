@@ -70,7 +70,7 @@ export interface AuditRecord { id: number; at: number; actorId: string; action: 
 export const findPlayers = (q: string) => call<{ players: AdminPlayer[] }>("GET", `/api/mahjong/admin/players?q=${encodeURIComponent(q)}`);
 export const getDonations = (scope: "week" | "all") => call<{ weekTotal: number; records: DonationRecord[] }>("GET", `/api/mahjong/admin/donations?scope=${scope}`);
 export const addDonation = (userId: string, amount: number, donatedAt: string, note: string) =>
-  call<{ id: string; deduction?: Deduction & { before: number; price: number } }>("POST", "/api/mahjong/admin/donations", { userId, amount, donatedAt, ...(note ? { note } : {}) });
+  call<{ id: string; tip: number }>("POST", "/api/mahjong/admin/donations", { userId, amount, donatedAt, ...(note ? { note } : {}) }); // 2026-11-02 起只記打賞，不抵扣
 
 // ---- 自摸次數與自動抵扣（老柯〈斗內卡與自摸次數-API格式〉、小宜規格 v2 3.9；老闆 2026-10-31 定案）----
 /** 自摸一次 NT$10（和後端 MJ_ZIMO_UNIT 一樣；後台清單的金額以伺服器回的 owed 為準） */
@@ -88,7 +88,19 @@ export interface ZimoCountRow {
 export const getZimoCounts = () => call<{ price: number; players: ZimoCountRow[] }>("GET", "/api/mahjong/admin/zimo-counts");
 export const voidDonation = (id: string, reason: string) => call<{ voided: true }>("POST", "/api/mahjong/admin/donations/void", { id, reason });
 export const getPlayerFx = (userId: string) => call<PlayerFx>("GET", `/api/mahjong/admin/fx?userId=${encodeURIComponent(userId)}`);
-export const grantFx = (userId: string, fx: ZimoFxCode[], active: ZimoFxCode) => call<{ granted: number }>("POST", "/api/mahjong/admin/fx", { userId, fx, active });
+/** 開通：老闆 2026-11-02 起一律一次開全部 6 種（伺服器不管送哪幾種都寫 6 種）；active 選填，不送就不改玩家目前的選擇 */
+export const grantFx = (userId: string, fx: ZimoFxCode[], active?: ZimoFxCode) => call<{ granted: number }>("POST", "/api/mahjong/admin/fx", { userId, fx, ...(active ? { active } : {}) });
+/** 台灣時間的月/日 */
+export function mdTaipei(ms: number): string {
+  const d = new Date(ms + 8 * 3600_000);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+/** 現在開通會到哪天：這週（週一～週日，台灣時間）的下一個週日 */
+export function nextWeekSunday(nowMs: number): number {
+  const d = new Date(nowMs + 8 * 3600_000);
+  const dow = (d.getUTCDay() + 6) % 7; // 週一＝0
+  return nowMs + (6 - dow + 7) * 86_400_000;
+}
 export const revokeFx = (userId: string, fx?: ZimoFxCode[]) => call<{ revoked: number }>("POST", "/api/mahjong/admin/fx/revoke", { userId, ...(fx ? { fx } : {}) });
 export const getAudit = () => call<{ records: AuditRecord[] }>("GET", "/api/mahjong/admin/audit?limit=200");
 
@@ -103,4 +115,32 @@ export const taipeiIso = (local: string) => `${local}:00+08:00`;
 export function fmtTaipei(ms: number): string {
   const d = new Date(ms + 8 * 3600_000).toISOString();
   return `${d.slice(5, 7)}/${d.slice(8, 10)} ${d.slice(11, 16)}`;
+}
+
+// ---- 斗內以場結清（老柯 app/api/mahjong/admin/settlements；小宜〈斗內改版〉規格 C）----
+// 老闆 2026-11-02：按「已收」要有金額欄，預設帶入應給金額（多場就是合計），可以改；多給的算打賞（和應給記成同一筆斗內），少給不能送出
+/** 依人列表的一列：只列還有已打完、未結清場次的人（金額多的在前，同額看最早的場次） */
+export interface UnsettledPlayer { userId: string; name: string; avatarUrl: string | null; matches: number; zimo: number; amount: number }
+/** 一場：zimo＝這場 11/1 之後的自摸次數、due＝應給；時間是毫秒 */
+export interface SettleMatch { roomId: string; roomCode: string | null; startedAt: number | null; endedAt: number | null; zimo: number; due: number }
+/** 已結清的一場：batchId＝那筆斗內 id（同一批結清共用，撤回整批）；amount／tip＝那批的實收和打賞 */
+export interface SettledMatch {
+  settlementId: string; roomId: string; roomCode: string | null; endedAt: number | null; zimo: number; due: number;
+  batchId: string; amount: number; tip: number; settledAt: number; source: "settle" | "migrate";
+}
+export interface SettleRoom { roomId: string; roomCode: string | null; zimo: number; due: number }
+export const getUnsettled = () => call<{ price: number; total: number; players: UnsettledPlayer[] }>("GET", "/api/mahjong/admin/settlements");
+/** 一個人的場次：unpaid＝打完、未結清；playing＝還在打（不能結清）；paid＝最近 30 天結清的 */
+export const getPlayerMatches = (userId: string) =>
+  call<{ price: number; unpaid: SettleMatch[]; playing: SettleMatch[]; paid: SettledMatch[]; totalDue: number }>("GET", `/api/mahjong/admin/settlements?userId=${encodeURIComponent(userId)}`);
+/** 結清：amount＝老闆實收（≥ 這幾場應給合計）；409 short 附 { due, amount, shortBy } */
+export const settleMatches = (userId: string, roomIds: string[], amount: number) =>
+  call<{ batchId: string; due: number; amount: number; tip: number; rooms: SettleRoom[] }>("POST", "/api/mahjong/admin/settlements", { userId, roomIds, amount });
+/** 撤回一批結清：這批場次全部回到未結清，那筆斗內（含打賞）整筆作廢 */
+export const revokeBatch = (batchId: string, reason: string) =>
+  call<{ batchId: string; amount: number | null; rooms: SettleRoom[] }>("POST", "/api/mahjong/admin/settlements/revoke", { batchId, reason });
+/** 實收和應給比：多給＝打賞、少給＝還差多少（少給不能送出） */
+export function payCheck(due: number, paid: number): { ok: boolean; tip: number; short: number } {
+  const p = Number.isFinite(paid) ? paid : 0;
+  return { ok: p >= due && due > 0, tip: Math.max(0, p - due), short: Math.max(0, due - p) };
 }

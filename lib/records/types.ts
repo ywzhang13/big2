@@ -46,6 +46,9 @@ export interface MyMatch {
   handsPlayed: number | null;
   myScore: number;
   players: { seat: number; playerName: string; totalScore: number; isMe: boolean }[];
+  /** 伺服器內部用（對自摸紀錄），路由回傳前拿掉：原房間 id、每個座位的帳號 id */
+  roomId: string;
+  seatUserIds: Record<number, string | null>;
 }
 
 /** 等待中閒置多久清掉、進行中閒置多久清掉 */

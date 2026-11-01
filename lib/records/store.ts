@@ -107,6 +107,7 @@ export async function findRecentRecordByCode(
 
 type MyMatchRow = {
   id: string;
+  room_id: string;
   room_code: string;
   ended_at: string;
   end_reason: MyMatch["endReason"];
@@ -129,7 +130,7 @@ export async function listMyMahjongMatches(
   let q = getSupabaseAdmin()
     .from("match_records")
     .select(
-      "id, room_code, ended_at, end_reason, total_rounds, base_points, fan_points, hands_played, " +
+      "id, room_id, room_code, ended_at, end_reason, total_rounds, base_points, fan_points, hands_played, " +
         "me:match_record_players!inner(user_id), players:match_record_players(seat, player_name, total_score, user_id)"
     )
     .eq("game", "mahjong")
@@ -154,6 +155,8 @@ export async function listMyMahjongMatches(
       handsPlayed: r.hands_played,
       myScore: players.find((p) => p.isMe)?.totalScore ?? 0,
       players,
+      roomId: r.room_id,
+      seatUserIds: Object.fromEntries(r.players.map((p) => [p.seat, p.user_id])),
     };
   });
 }

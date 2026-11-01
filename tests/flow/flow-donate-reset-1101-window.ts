@@ -7,10 +7,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { POST as donationsAdd } from "../../app/api/mahjong/admin/donations/route";
+import { legacyDonationsAdd as donationsAdd } from "../support/legacy-donation"; // 以場結清上線前的記一筆（自動抵扣）
 import { tokens } from "../support/stub-auth";
 import { addUser } from "../support/stub-donate-store";
 import { clock, db, users } from "../support/stub-zimofx-store";
+import { extraMigrations } from "../support/stub-zimofx-store";
+extraMigrations.length = 0; // 測的是以場結清（20261104）之前的抵扣制，不套用它
 
 const MIG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations");
 const BOSS = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";

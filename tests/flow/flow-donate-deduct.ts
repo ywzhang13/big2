@@ -10,7 +10,7 @@
 //   K9 記帳那一刻之後才記進來的自摸不會被抵扣（留到下一輪）；作廢斗內不還原次數；舊的 mj_donation_add 介面也一樣是抵扣
 import { GET as donateGet } from "../../app/api/mahjong/donate/route";
 import { POST as donateSeen } from "../../app/api/mahjong/donate/seen/route";
-import { POST as donationsAdd } from "../../app/api/mahjong/admin/donations/route";
+import { legacyDonationsAdd as donationsAdd } from "../support/legacy-donation"; // 以場結清上線前的記一筆（自動抵扣）
 import { POST as donationVoid } from "../../app/api/mahjong/admin/donations/void/route";
 import { GET as countsGet } from "../../app/api/mahjong/admin/zimo-counts/route";
 import { POST as countsClear } from "../../app/api/mahjong/admin/zimo-counts/clear/route";
@@ -18,6 +18,8 @@ import { GET as audit } from "../../app/api/mahjong/admin/audit/route";
 import { tokens } from "../support/stub-auth";
 import { addUser } from "../support/stub-donate-store";
 import { clock, db, users } from "../support/stub-zimofx-store";
+import { extraMigrations } from "../support/stub-zimofx-store";
+extraMigrations.length = 0; // 測的是以場結清（20261104）之前的抵扣制，不套用它
 
 const BOSS = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";
 const id = (n: number) => `d0d0d0d0-0000-4000-8000-00000000000${n}`;

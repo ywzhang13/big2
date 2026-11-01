@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AuditRecord, Deduction, DonationRecord, GrantRecord, ZimoCountRow } from "../../lib/mahjong/zimoFx/store";
+import { toSettled, toSettleResult, toUnsettled, toUnsettleResult, type SettledMatch, type SettleResult, type UnsettledMatch, type UnsettleResult } from "../../lib/mahjong/zimoFx/settle";
 
 import { clock, db as donateDb } from "./stub-donate-store";
 export { clock };
@@ -17,10 +18,20 @@ export const users: Record<string, { name: string; avatarUrl: string | null; gue
 export const fail = { zimoFxFor: false }; // true：zimoFxFor 丟錯（測查不到時老闆照樣有隕石、其他人回一般浮層）
 
 let dbp: Promise<PGlite> | null = null;
+/** 建資料庫時接在後面套用的 migration（預設套以場結清；要先建舊資料再套用的測試，在第一次呼叫 db() 前清空，自己 exec） */
+export const extraMigrations: string[] = ["20261104_mahjong_match_settle.sql"];
+/** 測試用：記一場打完的對戰紀錄（ended＝null 就不記，代表還在打） */
+export async function addMatch(roomId: string, code: string, started: number, ended: number | null): Promise<void> {
+  if (ended === null) return;
+  await (await db()).query("insert into match_records (game, room_id, room_code, started_at, ended_at) values ('mahjong', $1, $2, $3, $4)", [roomId, code, iso(started), iso(ended)]);
+}
 export function db(): Promise<PGlite> {
   dbp ??= (async () => {
     const d = await donateDb(); // 已經建好角色、auth.users 和 20261021 的斗內表
-    const migrations = ["20261031_mahjong_zimo_fx.sql", "20261101_mahjong_golden_zimo.sql", "20261102_mahjong_donate_deduct.sql"];
+    // 對戰紀錄表（正式庫由 20261016_match_records.sql 建；這裡只建以場結清用得到的欄位）
+    await d.exec(`create table if not exists public.match_records (id uuid primary key default gen_random_uuid(), game text not null, room_id uuid not null,
+      room_code char(4) not null, started_at timestamptz, ended_at timestamptz not null, hands_played int, unique (game, room_id));`);
+    const migrations = ["20261031_mahjong_zimo_fx.sql", "20261101_mahjong_golden_zimo.sql", "20261102_mahjong_donate_deduct.sql", ...extraMigrations];
     for (const migration of migrations) {
       const sql = path.resolve(path.dirname(fileURLToPath(import.meta.url)), `../../supabase/migrations/${migration}`);
       await d.exec(readFileSync(sql, "utf8"));
@@ -62,7 +73,7 @@ export async function listDonations(range?: { from: number; to: number }): Promi
     donatedAt: ms(x.donated_at)!, note: String(x.note ?? ""), createdAt: ms(x.created_at)!, voided: !!x.voided_at, voidedAt: ms(x.voided_at), voidReason: (x.void_reason as string) ?? null,
   }));
 }
-export async function grantFx(actor: string, userId: string, fx: string[], active: string, expiresAt: number): Promise<number> {
+export async function grantFx(actor: string, userId: string, fx: string[], active: string | null, expiresAt: number): Promise<number> {
   return Number(await one("select mj_fx_grant($1, $2, $3, $4, $5, $6) as r", [actor, userId, fx, active, iso(expiresAt), iso(clock.now)]));
 }
 export async function revokeFx(actor: string, userId: string, fx: string[] | null): Promise<number> {
@@ -87,4 +98,25 @@ export async function searchUsers(q: string) {
 export async function lineProfile(userId: string) {
   const u = users[userId];
   return u && !u.guest ? { name: u.name, avatarUrl: u.avatarUrl } : null;
+}
+
+export async function addTip(actor: string, d: { userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number; note: string }): Promise<string> {
+  return String(await one("select mj_donation_tip($1, $2, $3, $4, $5, $6, $7, $8) as r", [actor, d.userId, d.name, d.avatarUrl, d.amount, iso(d.donatedAt), d.note, iso(clock.now)]));
+}
+export async function unsettledMatches(userId: string | null): Promise<UnsettledMatch[]> {
+  return (await (await db()).query<Parameters<typeof toUnsettled>[0]>("select * from mj_match_unsettled($1)", [userId])).rows.map(toUnsettled);
+}
+export async function settledMatches(userId: string, since: number): Promise<SettledMatch[]> {
+  return (await (await db()).query<Parameters<typeof toSettled>[0]>("select * from mj_match_settled($1, $2)", [userId, iso(since)])).rows.map(toSettled);
+}
+export async function settleMatches(actor: string, d: { userId: string; name: string; avatarUrl: string | null; roomIds: string[]; amount: number | null }): Promise<SettleResult> {
+  return toSettleResult(await one("select mj_match_settle($1, $2, $3, $4, $5::uuid[], $6, $7) as r", [actor, d.userId, d.name, d.avatarUrl, d.roomIds, d.amount, iso(clock.now)]));
+}
+export async function unsettleBatch(actor: string, batchId: string, reason: string): Promise<UnsettleResult> {
+  return toUnsettleResult(await one("select mj_match_unsettle($1, $2, $3, $4) as r", [actor, batchId, reason, iso(clock.now)]));
+}
+export async function matchZimo(roomIds: string[]) {
+  if (roomIds.length === 0) return [];
+  const r = await (await db()).query<{ room_id: string; hand_no: number; user_id: string; won_at: unknown }>("select * from mj_match_zimo($1::uuid[])", [roomIds]);
+  return r.rows.map((x) => ({ roomId: String(x.room_id), handNo: Number(x.hand_no), userId: String(x.user_id), wonAt: ms(x.won_at)! }));
 }

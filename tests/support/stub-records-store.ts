@@ -100,6 +100,7 @@ export async function listMyMahjongMatches(userId: string, limit: number, cursor
       return {
         id, roomCode: r.roomCode, endedAt: r.endedAt, endReason: r.endReason, totalRounds: r.totalRounds, basePoints: r.basePoints,
         fanPoints: r.fanPoints, handsPlayed: r.handsPlayed, myScore: players.find((p) => p.isMe)?.totalScore ?? 0, players,
+        roomId: r.roomId, seatUserIds: Object.fromEntries(r.players.map((p) => [p.seat, p.userId ?? null])),
       };
     });
 }

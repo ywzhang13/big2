@@ -1,6 +1,7 @@
 "use client";
 
-// 歷史紀錄面板（小宜規格 v2 §9）：摘要列固定、一場一列（不可點）、載入更多
+// 歷史紀錄面板（小宜規格 v2 §9）：摘要列固定、一場一列、載入更多
+// 斗內改版（小宜〈斗內改版〉A，老闆 2026-11-02）：每個座位標「摸N」（這場自摸幾次），點一列開明細（每一把誰自摸、我這場的結清狀態）
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
@@ -25,6 +26,14 @@ interface RecordItem {
   fanPoints: number;
   myScore: number;
   players: RecordPlayer[];
+  /** 這場每個座位自摸幾次：只列有自摸的座位（遊客沒有紀錄，不會出現） */
+  zimo?: { seat: number; count: number }[];
+  /** 有人自摸的把：第幾把、哪個座位（放槍、流局沒有記錄） */
+  zimoHands?: { hand: number; seat: number }[];
+  /** 這場總共打了幾把（舊紀錄沒有＝null，不顯示「共 N 把」） */
+  handsPlayed?: number | null;
+  /** 我這場 11/1 之後的自摸：zimo 次、due 應給、結清了沒；沒有就是 null */
+  myDue?: { zimo: number; due: number; settled: boolean } | null;
 }
 
 interface RecordsPage {
@@ -56,9 +65,12 @@ function scoreText(n: number): string {
 
 const scoreClass = (n: number) => (n > 0 ? "pos" : n < 0 ? "neg" : "zero");
 
-function RecordRow({ r }: { r: RecordItem }) {
+const zimoOf = (r: RecordItem, seat: number) => r.zimo?.find((z) => z.seat === seat)?.count ?? 0;
+
+function RecordRow({ r, onOpen }: { r: RecordItem; onOpen: (r: RecordItem, el: HTMLElement) => void }) {
   return (
-    <div className="mjl-row">
+    <div className="mjl-row tap" role="button" tabIndex={0} data-record-row={r.roomCode}
+      onClick={(e) => onOpen(r, e.currentTarget)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(r, e.currentTarget); } }}>
       <div className="meta">
         <span className="t">{formatTime(r.endedAt)}</span>
         <span className="dot">・</span>
@@ -70,14 +82,78 @@ function RecordRow({ r }: { r: RecordItem }) {
         {r.endReason === "dissolved" && <span className="mjl-badge">中途解散</span>}
         <span className="sp" />
         <span className={`mine ${scoreClass(r.myScore)}`}>{scoreText(r.myScore)}</span>
+        <span className="go" aria-hidden>›</span>
       </div>
       <div className="mjl-seats">
-        {r.players.map((p) => (
-          <div key={p.seat} className={`mjl-seat${p.isMe ? " me" : ""}`}>
-            <span className="n">{p.playerName}</span>
-            <span className={`s ${scoreClass(p.totalScore)}`}>{scoreText(p.totalScore)}</span>
+        {r.players.map((p) => {
+          const z = zimoOf(r, p.seat);
+          return (
+            <div key={p.seat} className={`mjl-seat${p.isMe ? " me" : ""}`}>
+              <span className="n">{p.playerName}</span>
+              {z > 0 && <span className="zm" data-record-zimo={z}>摸{z}</span>}
+              <span className={`s ${scoreClass(p.totalScore)}`}>{scoreText(p.totalScore)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** 一場明細（A2、A3）：關閉＝×、Esc、點遮罩；關閉後焦點回到那一列 */
+function RecordDetail({ r, onClose }: { r: RecordItem; onClose: () => void }) {
+  const xRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    xRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const nameOf = (seat: number) => r.players.find((p) => p.seat === seat);
+  const hands = [...(r.zimoHands ?? [])].sort((a, b) => a.hand - b.hand);
+  return (
+    <div className="mjl-dmask" onClick={onClose}>
+      <div className="mjl-detail" role="dialog" aria-modal="true" aria-labelledby="mjl-detail-t" onClick={(e) => e.stopPropagation()} data-record-detail={r.roomCode}>
+        <div className="hd">
+          <b id="mjl-detail-t">房 {r.roomCode}</b>
+          <span className="sub">{formatTime(r.endedAt)}・{r.totalRounds}圈{r.handsPlayed ? `・共 ${r.handsPlayed} 把` : ""}</span>
+          <button ref={xRef} type="button" className="x" aria-label="關閉" onClick={onClose}>×</button>
+        </div>
+        <div className="bd">
+          {r.myDue && r.myDue.zimo > 0 && (
+            <div className="mydue" data-record-mydue={r.myDue.settled ? "settled" : "unsettled"}>
+              你這場自摸 {r.myDue.zimo} 次・NT${r.myDue.due.toLocaleString("en-US")}
+              <span className={`pill ${r.myDue.settled ? "ok" : "no"}`}>{r.myDue.settled ? "已結清" : "未結清"}</span>
+            </div>
+          )}
+          <div className="mjl-seats four">
+            {r.players.map((p) => {
+              const z = zimoOf(r, p.seat);
+              return (
+                <div key={p.seat} className={`mjl-seat${p.isMe ? " me" : ""}`}>
+                  <span className="n">{p.playerName}</span>
+                  {z > 0 && <span className="zm">摸{z}</span>}
+                  <span className={`s ${scoreClass(p.totalScore)}`}>{scoreText(p.totalScore)}</span>
+                </div>
+              );
+            })}
           </div>
-        ))}
+          {hands.length === 0 ? <p className="none" data-record-nozimo>這場沒有人自摸</p> : (
+            <div className="hands" data-record-hands={hands.length}>
+              {hands.map((h) => {
+                const p = nameOf(h.seat);
+                return (
+                  <div key={`${h.hand}-${h.seat}`} className="hand">
+                    <span className="no">第 {h.hand} 把</span>
+                    <span className={`who${p?.isMe ? " me" : ""}`}>{p?.playerName ?? ""}</span>
+                    <span className="pill zm">自摸</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="note">自摸只算 LINE 登入的玩家</p>
+        </div>
       </div>
     </div>
   );
@@ -115,6 +191,10 @@ export default function MjRecords({
   const [failed, setFailed] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const focusTitle = useCallback(() => titleRef.current?.focus(), []);
+  const [open, setOpen] = useState<RecordItem | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const openDetail = useCallback((r: RecordItem, el: HTMLElement) => { openerRef.current = el; setOpen(r); }, []);
+  const closeDetail = useCallback(() => { setOpen(null); openerRef.current?.focus(); }, []);
 
   const load = useCallback(
     async (cursor: string | null) => {
@@ -186,7 +266,7 @@ export default function MjRecords({
         ) : (
           <div className="mjl-rec-list">
             {items.map((r) => (
-              <RecordRow key={r.id} r={r} />
+              <RecordRow key={r.id} r={r} onOpen={openDetail} />
             ))}
             {failed ? (
               <div className="mjl-err" role="alert" style={{ alignSelf: "center", margin: "4px 0 10px" }}>
@@ -203,6 +283,7 @@ export default function MjRecords({
           </div>
         )}
       </div>
+      {open && <RecordDetail r={open} onClose={closeDetail} />}
     </div>
   );
 }

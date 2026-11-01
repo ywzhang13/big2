@@ -146,3 +146,67 @@
   .fxs-fx { min-height: 54px; font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .fxs-btn:active { transform: none; } }
+
+/* ---- 斗內改版：未結清（小宜〈斗內改版〉C1～C6；老闆 2026-11-02 已收要填實收金額）、一次全開（D1）---- */
+.fxs-zbar .sum { font-size: 22px; font-weight: 800; color: #D7B554; font-variant-numeric: tabular-nums; }
+.fxs-owe { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 14px; gap: 12px; align-items: center; min-height: 58px; padding: 8px 12px; border-radius: 12px;
+  background: #11221E; border: 1px solid rgba(255,255,255,.06); color: #F8F2DF; text-align: left; cursor: pointer; width: 100%; }
+.fxs-owe:hover { border-color: rgba(215,181,84,.4); }
+.fxs-owe .who { display: flex; flex-direction: column; min-width: 0; }
+.fxs-owe .who b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxs-owe .who span { font-size: 13px; color: #AEBDB7; }
+.fxs-owe .amt { font-size: 22px; font-weight: 800; color: #D7B554; font-variant-numeric: tabular-nums; }
+.fxs-owe .go { color: rgba(255,255,255,.35); font-size: 18px; }
+.fxs-allclear { margin-top: 12vh; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.fxs-allclear .ck { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; color: #62D6A5; background: rgba(98,214,165,.14); }
+.fxs-allclear b { font-size: 18px; color: #62D6A5; }
+.fxs-allclear.sm { margin: 8px 0 4px; flex-direction: row; gap: 10px; }
+.fxs-allclear.sm .ck { width: 32px; height: 32px; font-size: 17px; }
+.fxs-settle { padding-bottom: 76px; }
+.fxs-shead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; min-height: 48px; }
+.fxs-shead b { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxs-shead .sum, .fxs-shead .fxs-tag { margin-left: auto; }
+.fxs-shead .sum { font-size: 22px; font-weight: 800; color: #D7B554; font-variant-numeric: tabular-nums; }
+.fxs-m { display: grid; grid-template-columns: 44px 96px 80px minmax(0, 1fr) auto auto; gap: 8px 12px; align-items: center; min-height: 54px; padding: 4px 12px 4px 4px; border-radius: 12px;
+  background: #11221E; border: 1px solid rgba(255,255,255,.06); font-variant-numeric: tabular-nums; }
+.fxs-m.sel { border-color: rgba(215,181,84,.7); background: rgba(215,181,84,.08); }
+.fxs-m .ck { width: 44px; height: 44px; display: grid; place-items: center; }
+.fxs-m .ck input { width: 20px; height: 20px; accent-color: #D7B554; cursor: pointer; }
+.fxs-m .t { color: #AEBDB7; font-size: 14px; white-space: nowrap; }
+.fxs-m .code { white-space: nowrap; }
+.fxs-m .z { color: #AEBDB7; font-size: 14px; white-space: nowrap; }
+.fxs-m .amt { font-weight: 800; color: #D7B554; white-space: nowrap; }
+.fxs-m.done { opacity: .75; }
+.fxs-m.done .amt { color: #AEBDB7; }
+.fxs-m.just { opacity: 1; border-color: rgba(98,214,165,.8); box-shadow: 0 0 0 3px rgba(98,214,165,.25); transition: box-shadow 1.6s; }
+.fxs-sub { margin: 16px 0 6px; font-size: 14px; font-weight: 700; color: #AEBDB7; }
+.fxs-act { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 50; width: min(1100px, calc(100% - 28px)); display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  padding: 10px 12px 10px 18px; border-radius: 14px; background: #183a2a; border: 1px solid rgba(215,181,84,.6); box-shadow: 0 12px 36px rgba(0,0,0,.45); font-weight: 700; color: #F8F2DF; }
+.fxs-act .k b { color: #D7B554; font-size: 18px; margin-left: 4px; }
+.fxs-act .sp { flex: 1; }
+.fxs-act .in { display: flex; align-items: center; gap: 6px; color: #AEBDB7; white-space: nowrap; }
+.fxs-act .in .fxs-in { width: 110px; min-height: 40px; font-weight: 800; color: #F8F2DF; text-align: right; }
+.fxs-act .short { color: #FF7667; white-space: nowrap; }
+.fxs-toast .fxs-link { margin-left: 12px; color: #D7B554; font-weight: 800; text-decoration: underline; cursor: pointer; min-height: 32px; }
+.fxs-mask { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 16px; background: rgba(3,12,7,.72); }
+.fxs-dlg { width: min(380px, 100%); padding: 20px; border-radius: 16px; background: #12261d; border: 1px solid rgba(215,181,84,.45); display: flex; flex-direction: column; gap: 6px; text-align: center; color: #F8F2DF; }
+.fxs-dlg > b { font-size: 18px; }
+.fxs-dlg .big { font-size: 28px; font-weight: 800; color: #D7B554; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
+.fxs-dlg .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fxs-btn.dangerfill { background: #c2483c; border-color: #c2483c; color: #fff; }
+.fxs-grant { margin-top: 12px; padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.fxs-grant.on { border-color: rgba(98,214,165,.6); }
+.fxs-grant .st { display: flex; flex-direction: column; gap: 2px; }
+.fxs-grant .st b { font-size: 17px; }
+.fxs-grant .st b.ok { color: #62D6A5; }
+.fxs-grant .acts { margin-left: auto; display: flex; gap: 10px; }
+.fxs-grant .chips { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.fxs-grant .chips .fxs-tag:not(.ok) { background: rgba(255,255,255,.06); color: #AEBDB7; }
+@media (max-width: 899px) {
+  .fxs-m { grid-template-columns: 44px auto auto minmax(0, 1fr) auto auto; gap: 6px 10px; min-height: 50px; }
+  .fxs-m .t { font-size: 13px; }
+  .fxs-act { bottom: 8px; padding: 8px 10px 8px 14px; gap: 8px 10px; }
+  .fxs-settle { padding-bottom: 70px; }
+  .fxs-allclear { margin-top: 6vh; }
+}
+.fxs-m.live { opacity: .8; }

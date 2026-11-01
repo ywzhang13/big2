@@ -2,6 +2,8 @@
 // 測試時整個檔案會被換成 tests/support/stub-zimofx-store.ts（在記憶體 PostgreSQL 跑真的 migration 和 SQL 函式）。
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { DonationRow } from "./rules";
+import { toSettled, toSettleResult, toUnsettled, toUnsettleResult, type SettledMatch, type SettleResult, type UnsettledMatch, type UnsettleResult } from "./settle";
+export type { SettledMatch, SettleResult, SettleRoom, UnsettledMatch, UnsettleResult } from "./settle";
 
 /** 伺服器現在時間（測試換成可控制的時鐘） */
 export const nowMs = () => Date.now();
@@ -30,6 +32,39 @@ export async function addDonation(actor: string, d: { userId: string; name: stri
   });
   return { id: String(r.id), deduction: { before: r.before, deducted: r.deducted, remaining: r.remaining, tip: r.tip, price: r.price } };
 }
+/** 記一筆打賞：只記錢，不結清任何場次（以場結清上線後的「記一筆」；mj_donation_tip） */
+export async function addTip(actor: string, d: { userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number; note: string }): Promise<string> {
+  return String(await rpc<string>("mj_donation_tip", {
+    p_actor: actor, p_user: d.userId, p_name: d.name, p_avatar: d.avatarUrl, p_amount: d.amount, p_donated_at: iso(d.donatedAt), p_note: d.note,
+  }));
+}
+
+// ---- 以場結清（老闆 2026-11-02）：一場＝一間房（room_id）；應給＝這場 11/1 00:00 之後的自摸次數 × 10 ----
+/** 未結清的場次（userId 為 null＝所有人） */
+export async function unsettledMatches(userId: string | null): Promise<UnsettledMatch[]> {
+  return ((await rpc<Parameters<typeof toUnsettled>[0][]>("mj_match_unsettled", { p_user: userId })) ?? []).map(toUnsettled);
+}
+/** 這個人 since 之後結清、還有效的場次（新的在前） */
+export async function settledMatches(userId: string, since: number): Promise<SettledMatch[]> {
+  return ((await rpc<Parameters<typeof toSettled>[0][]>("mj_match_settled", { p_user: userId, p_since: iso(since) })) ?? []).map(toSettled);
+}
+/** 結清（同一個交易：記一筆斗內＝實收、寫結清列、看過次數往下調、操作紀錄）；amount 為 null＝實收等於應給 */
+export async function settleMatches(actor: string, d: { userId: string; name: string; avatarUrl: string | null; roomIds: string[]; amount: number | null }): Promise<SettleResult> {
+  return toSettleResult(await rpc<Record<string, unknown>>("mj_match_settle", {
+    p_actor: actor, p_user: d.userId, p_name: d.name, p_avatar: d.avatarUrl, p_rooms: d.roomIds, p_amount: d.amount,
+  }));
+}
+/** 撤回一批結清（batchId＝那筆斗內的 id）：這批全部回到未結清，那筆斗內整筆作廢 */
+export async function unsettleBatch(actor: string, batchId: string, reason: string): Promise<UnsettleResult> {
+  return toUnsettleResult(await rpc<Record<string, unknown>>("mj_match_unsettle", { p_actor: actor, p_donation: batchId, p_reason: reason }));
+}
+/** 對戰紀錄：這幾場每一把是誰自摸（只有 LINE 帳號有紀錄） */
+export async function matchZimo(roomIds: string[]): Promise<{ roomId: string; handNo: number; userId: string; wonAt: number }[]> {
+  if (roomIds.length === 0) return [];
+  const rows = await rpc<{ room_id: string; hand_no: number; user_id: string; won_at: string }[]>("mj_match_zimo", { p_rooms: roomIds });
+  return (rows ?? []).map((r) => ({ roomId: String(r.room_id), handNo: Number(r.hand_no), userId: String(r.user_id), wonAt: Date.parse(r.won_at) }));
+}
+
 export interface ZimoCountRow { userId: string; count: number; lastResetAt: number | null; lastResetSource: "donation" | "clear" | "system" | null; lastResetCleared: number | null }
 /** 後台「自摸次數」清單的原始資料：有自摸紀錄、或曾經被歸零過的帳號（含遊客，由路由用 LINE 帳號資料過濾） */
 export async function zimoCounts(): Promise<ZimoCountRow[]> {
@@ -64,7 +99,7 @@ export async function listDonations(range?: { from: number; to: number }): Promi
   }));
 }
 
-export async function grantFx(actor: string, userId: string, fx: string[], active: string, expiresAt: number): Promise<number> {
+export async function grantFx(actor: string, userId: string, fx: string[], active: string | null, expiresAt: number): Promise<number> {
   return Number(await rpc<number>("mj_fx_grant", { p_actor: actor, p_user: userId, p_fx: fx, p_active: active, p_expires: iso(expiresAt) }));
 }
 export async function revokeFx(actor: string, userId: string, fx: string[] | null): Promise<number> {

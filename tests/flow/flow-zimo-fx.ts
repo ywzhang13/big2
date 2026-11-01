@@ -190,8 +190,8 @@ let idA = "", idB = "";
   const mon = await zimo(A);
   const monMine = (await get(myFxGet, "/", "a")).body;
   eq([g.status, g.body.granted, g.body.expiresAt === T("2026-11-09T00:00:00"), bad, [mon1.fx, mon1.overFx], [sun.fx, sun.overFx], [sunMine.selected, sunMine.available.storm === T("2026-11-09T00:00:00")], [mon.fx, mon.overFx], [monMine.selected, monMine.available]],
-    [200, 2, true, [400, 400, "owner_permanent"], ["storm", "storm"], ["storm", "storm"], ["storm", true], ["golden", "golden"], ["golden", { golden: null }]],
-    "Z4 週四（10/29）開通雷霆、風暴（套用風暴）到 11/9 週一 00:00 前：隔週一 11/2 照樣帶 storm；下週日 11/8 23:59:59 自摸帶 storm（廣播也有）、設定頁顯示風暴；11/9 00:00:00 自摸安全回退金色、設定頁也回金色只剩金色可選");
+    [200, 6, true, [400, 400, "owner_permanent"], ["storm", "storm"], ["storm", "storm"], ["storm", true], ["golden", "golden"], ["golden", { golden: null }]],
+    "Z4 週四（10/29）開通（舊格式送雷霆、風暴，一次全開後一律開 6 種）（套用風暴）到 11/9 週一 00:00 前：隔週一 11/2 照樣帶 storm；下週日 11/8 23:59:59 自摸帶 storm（廣播也有）、設定頁顯示風暴；11/9 00:00:00 自摸安全回退金色、設定頁也回金色只剩金色可選");
 }
 
 // ---- Z5 提前收回 ----
@@ -205,8 +205,8 @@ let idA = "", idB = "";
   const r3 = await post(fxRevoke, { userId: B }, "boss");
   const info = (await get(fxGet, `/?userId=${B}`, "boss")).body;
   eq([r1.body.revoked, z1.fx, r2.body.revoked, z2.fx, r3.body.revoked, info.active, info.selected, info.grants.length, (await post(fxRevoke, { userId: BOSS }, "boss")).body.error],
-    [1, "blackhole", 1, "golden", 0, {}, "golden", 2, "owner_permanent"],
-    "Z5 收回冰封（沒在用）：自摸照樣黑洞；收回黑洞（正在用）：自摸安全回退金色自摸；開通紀錄保留 2 筆；老闆帳號不能收回");
+    [6, "golden", 0, "golden", 0, {}, "golden", 6, "owner_permanent"],
+    "Z5 一次全開（2026-11-02）：收回一律全部收回（舊格式只帶冰封也一樣）→ 收回 6 列、自摸安全回退金色；再收回 0 列；開通紀錄保留 6 筆；老闆帳號不能收回");
 }
 
 // ---- Z6 老闆永久 ----
@@ -240,8 +240,8 @@ let idA = "", idB = "";
   const after = await get(myFxGet, "/", "a");
   const guest = [(await get(myFxGet, "/", "guest")).status, (await post(myFxSet, { fx: "meteor" }, "guest")).status, (await get(myFxGet, "/")).status];
   eq([list.body.displayName, Object.keys(list.body.available).sort(), list.body.selected, ok1.status, no1.body.error, z1.fx, no2.body.error, no3.body.error, after.body.available, after.body.selected, guest],
-    ["阿明", ["golden", "sakura", "storm", "thunder"], "sakura", 200, "not_granted", "thunder", "not_granted", "not_granted", { golden: null }, "golden", [403, 403, 401]],
-    "Z7 API 回傳登入者 LINE 顯示名供預覽大字使用；阿明這週有金色自摸、雷霆、風暴、櫻花，選雷霆後自摸帶 thunder；沒開通的黑洞、收回的雷霆、11/9 週一過期的櫻花都 403；過期後只剩金色自摸；遊客 403、沒登入 401");
+    ["阿明", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"], "sakura", 200, null, "blackhole", "not_granted", "not_granted", { golden: null }, "golden", [403, 403, 401]],
+    "Z7 API 回傳登入者 LINE 顯示名供預覽大字使用；阿明這週有開通 → 6 種全開（一次全開 2026-11-02），選雷霆、再選黑洞都可以，自摸帶 blackhole；收回後、11/9 週一過期後都 403；過期後只剩金色自摸；遊客 403、沒登入 401");
 }
 
 // ---- Z8 胡別人的牌、帳號 id、存著的特效過期 ----
@@ -279,8 +279,8 @@ let idA = "", idB = "";
   await post(donationVoid, { id: rec.body.id, reason: "測試" }, "boss");
   const afterVoid = await cnt();
   eq([before, ackR.body, afterAck, byA.status, byB.status, afterNonOwner, rec.status, afterOwner, bCount, afterVoid],
-    [2, { count: 2 }, 2, 403, 403, 2, 200, 0, 0, 0],
-    "Z9 阿明斗內卡 2 次：自己按斗內回 2、次數不變；阿明、阿華呼叫記帳 403、還是 2；老闆記一筆後歸零；作廢那筆不還原");
+    [2, { count: 2 }, 2, 403, 403, 2, 200, 2, 0, 2],
+    "Z9 阿明斗內卡 2 次：自己按斗內回 2、次數不變；阿明、阿華呼叫記帳 403、還是 2；老闆記一筆（以場結清後只算打賞，2026-11-02）次數不變；作廢那筆也不變");
 }
 
 // ---- Z10 總斗內 ----
@@ -377,9 +377,9 @@ let idA = "", idB = "";
   const z2 = await zimo(B);
   eq([[deny.status, deny.body.error, deny.body.selected], [mine.selected, Object.keys(mine.available).sort()], admin.selected, z1.fx, after - before,
     [mine2.selected, mine2.available], [admin2.selected, admin2.active], [deny2.status, deny2.body.selected], [z2.fx, z2.overFx]],
-    [[403, "not_granted", "frost"], ["frost", ["frost", "golden"]], "frost", "frost", 0,
+    [[200, null, "blackhole"], ["blackhole", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"]], "blackhole", "blackhole", 1,
       ["golden", { golden: null }], ["golden", {}], [403, "golden"], ["golden", "golden"]],
-    "Z14 阿華只開通冰封：選沒開通的黑洞 403、回應附目前實際套用的冰封、選用沒被改、沒寫選用紀錄，自摸照樣冰封；冰封 11/30 到期後設定頁、後台都顯示金色、再選冰封 403 回金色，自摸金色");
+    "Z14 阿華只開通冰封（一次全開 2026-11-02 → 6 種都能用）：選黑洞成功、寫一筆選用紀錄，自摸黑洞；冰封 11/30 到期後設定頁、後台都顯示金色、再選冰封 403 回金色，自摸金色");
 }
 
 console.log(results.join("\n"));
