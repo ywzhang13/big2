@@ -19,7 +19,7 @@ export const fail = { zimoFxFor: false }; // true：zimoFxFor 丟錯（測查不
 
 let dbp: Promise<PGlite> | null = null;
 /** 建資料庫時接在後面套用的 migration（預設套以場結清；要先建舊資料再套用的測試，在第一次呼叫 db() 前清空，自己 exec） */
-export const extraMigrations: string[] = ["20261104_mahjong_match_settle.sql"];
+export const extraMigrations: string[] = ["20261104_mahjong_match_settle.sql", "20261105_mahjong_hand_results.sql"];
 /** 測試用：記一場打完的對戰紀錄（ended＝null 就不記，代表還在打） */
 export async function addMatch(roomId: string, code: string, started: number, ended: number | null): Promise<void> {
   if (ended === null) return;
@@ -119,4 +119,9 @@ export async function matchZimo(roomIds: string[]) {
   if (roomIds.length === 0) return [];
   const r = await (await db()).query<{ room_id: string; hand_no: number; user_id: string; won_at: unknown }>("select * from mj_match_zimo($1::uuid[])", [roomIds]);
   return r.rows.map((x) => ({ roomId: String(x.room_id), handNo: Number(x.hand_no), userId: String(x.user_id), wonAt: ms(x.won_at)! }));
+}
+export async function matchHandStats(roomIds: string[]) {
+  if (roomIds.length === 0) return [];
+  const r = await (await db()).query<{ room_id: string; hands: number; seat: number; wins: number; self_draws: number; deal_ins: number }>("select * from mj_match_hand_stats($1::uuid[])", [roomIds]);
+  return r.rows.map((x) => ({ roomId: String(x.room_id), hands: Number(x.hands), seat: Number(x.seat), wins: Number(x.wins), selfDraws: Number(x.self_draws), dealIns: Number(x.deal_ins) }));
 }

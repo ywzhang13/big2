@@ -45,3 +45,9 @@ export async function markSeen(userId: string, count: number): Promise<{ count: 
   const r = await (await full()).query<{ count: number; seen: number }>("select * from public.mj_donate_seen($1, $2)", [userId, count]);
   return { count: Number(r.rows[0].count), seen: Number(r.rows[0].seen) };
 }
+export const handFail = { on: false }; // true：記每把結果丟錯（測失敗不影響存檔）
+export async function recordHandResults(roomId: string, handNo: number, rows: { winnerSeat: number; fromSeat: number | null; selfDraw: boolean }[]): Promise<void> {
+  if (handFail.on) throw new Error("模擬資料庫錯誤");
+  const d = await full();
+  for (const r of rows) await d.query("insert into mj_hand_results (room_id, hand_no, winner_seat, from_seat, self_draw, recorded_at) values ($1, $2, $3, $4, $5, $6) on conflict do nothing", [roomId, handNo, r.winnerSeat, r.fromSeat, r.selfDraw, at()]);
+}

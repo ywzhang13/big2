@@ -1,7 +1,7 @@
 "use client";
 
 // 歷史紀錄面板（小宜規格 v2 §9）：摘要列固定、一場一列、載入更多
-// 斗內改版（小宜〈斗內改版〉A，老闆 2026-11-02）：每個座位標「摸N」（這場自摸幾次），點一列開明細（每一把誰自摸、我這場的結清狀態）
+// 斗內改版（小宜〈斗內改版〉A，老闆 2026-11-02）：點一列開明細（每位玩家這場的胡牌、放槍、自摸次數，我這場的結清狀態）
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
@@ -14,6 +14,11 @@ interface RecordPlayer {
   playerName: string;
   totalScore: number;
   isMe: boolean;
+  /** 這場胡牌（含自摸）、自摸、放槍幾次（老柯 2026-11-02）；沒有紀錄＝null（前端顯示「—」）：
+   *  胡牌、放槍要這場每一把都有紀錄（上線後開局）才有；自摸舊場次照舊從自摸紀錄算（只有 LINE 帳號） */
+  wins?: number | null;
+  selfDraws?: number | null;
+  dealIns?: number | null;
 }
 
 interface RecordItem {
@@ -26,10 +31,6 @@ interface RecordItem {
   fanPoints: number;
   myScore: number;
   players: RecordPlayer[];
-  /** 這場每個座位自摸幾次：只列有自摸的座位（遊客沒有紀錄，不會出現） */
-  zimo?: { seat: number; count: number }[];
-  /** 有人自摸的把：第幾把、哪個座位（放槍、流局沒有記錄） */
-  zimoHands?: { hand: number; seat: number }[];
   /** 這場總共打了幾把（舊紀錄沒有＝null，不顯示「共 N 把」） */
   handsPlayed?: number | null;
   /** 我這場 11/1 之後的自摸：zimo 次、due 應給、結清了沒；沒有就是 null */
@@ -65,8 +66,6 @@ function scoreText(n: number): string {
 
 const scoreClass = (n: number) => (n > 0 ? "pos" : n < 0 ? "neg" : "zero");
 
-const zimoOf = (r: RecordItem, seat: number) => r.zimo?.find((z) => z.seat === seat)?.count ?? 0;
-
 function RecordRow({ r, onOpen }: { r: RecordItem; onOpen: (r: RecordItem, el: HTMLElement) => void }) {
   return (
     <div className="mjl-row tap" role="button" tabIndex={0} data-record-row={r.roomCode}
@@ -85,16 +84,13 @@ function RecordRow({ r, onOpen }: { r: RecordItem; onOpen: (r: RecordItem, el: H
         <span className="go" aria-hidden>›</span>
       </div>
       <div className="mjl-seats">
-        {r.players.map((p) => {
-          const z = zimoOf(r, p.seat);
-          return (
-            <div key={p.seat} className={`mjl-seat${p.isMe ? " me" : ""}`}>
-              <span className="n">{p.playerName}</span>
-              {z > 0 && <span className="zm" data-record-zimo={z}>摸{z}</span>}
-              <span className={`s ${scoreClass(p.totalScore)}`}>{scoreText(p.totalScore)}</span>
-            </div>
-          );
-        })}
+        {/* 老闆 2026-11-02：列表不顯示「摸N」，點進明細才看胡牌、放槍、自摸次數 */}
+        {r.players.map((p) => (
+          <div key={p.seat} className={`mjl-seat${p.isMe ? " me" : ""}`}>
+            <span className="n">{p.playerName}</span>
+            <span className={`s ${scoreClass(p.totalScore)}`}>{scoreText(p.totalScore)}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -109,8 +105,8 @@ function RecordDetail({ r, onClose }: { r: RecordItem; onClose: () => void }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  const nameOf = (seat: number) => r.players.find((p) => p.seat === seat);
-  const hands = [...(r.zimoHands ?? [])].sort((a, b) => a.hand - b.hand);
+  const n = (v: number | null | undefined) => (v == null ? "—" : String(v));
+  const noHands = r.players.every((p) => p.wins == null); // 舊場次：沒有每一把的紀錄
   return (
     <div className="mjl-dmask" onClick={onClose}>
       <div className="mjl-detail" role="dialog" aria-modal="true" aria-labelledby="mjl-detail-t" onClick={(e) => e.stopPropagation()} data-record-detail={r.roomCode}>
@@ -126,33 +122,20 @@ function RecordDetail({ r, onClose }: { r: RecordItem; onClose: () => void }) {
               <span className={`pill ${r.myDue.settled ? "ok" : "no"}`}>{r.myDue.settled ? "已結清" : "未結清"}</span>
             </div>
           )}
-          <div className="mjl-seats four">
-            {r.players.map((p) => {
-              const z = zimoOf(r, p.seat);
-              return (
-                <div key={p.seat} className={`mjl-seat${p.isMe ? " me" : ""}`}>
-                  <span className="n">{p.playerName}</span>
-                  {z > 0 && <span className="zm">摸{z}</span>}
-                  <span className={`s ${scoreClass(p.totalScore)}`}>{scoreText(p.totalScore)}</span>
-                </div>
-              );
-            })}
-          </div>
-          {hands.length === 0 ? <p className="none" data-record-nozimo>這場沒有人自摸</p> : (
-            <div className="hands" data-record-hands={hands.length}>
-              {hands.map((h) => {
-                const p = nameOf(h.seat);
-                return (
-                  <div key={`${h.hand}-${h.seat}`} className="hand">
-                    <span className="no">第 {h.hand} 把</span>
-                    <span className={`who${p?.isMe ? " me" : ""}`}>{p?.playerName ?? ""}</span>
-                    <span className="pill zm">自摸</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <p className="note">自摸只算 LINE 登入的玩家</p>
+          {/* 老闆 2026-11-02：不列第幾把誰自摸，改成每位玩家這場的胡牌、放槍、自摸次數；舊場次沒有每把紀錄＝「—」 */}
+          <table className="stats" data-record-stats={noHands ? "none" : "on"}>
+            <thead><tr><th scope="col">玩家</th><th scope="col">分數</th><th scope="col">胡牌</th><th scope="col">放槍</th><th scope="col">自摸</th></tr></thead>
+            <tbody>
+              {r.players.map((p) => (
+                <tr key={p.seat} className={p.isMe ? "me" : ""} data-record-stat-seat={p.seat}>
+                  <th scope="row">{p.playerName}</th>
+                  <td className={scoreClass(p.totalScore)}>{scoreText(p.totalScore)}</td>
+                  <td data-k="win">{n(p.wins)}</td><td data-k="dealIn">{n(p.dealIns)}</td><td data-k="selfDraw">{n(p.selfDraws)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {noHands && <p className="note">這場打的時候還沒有記錄胡牌、放槍</p>}
         </div>
       </div>
     </div>

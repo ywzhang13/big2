@@ -210,3 +210,22 @@
   .fxs-allclear { margin-top: 6vh; }
 }
 .fxs-m.live { opacity: .8; }
+
+/* ---- 未結清明細改成彈窗（老闆 2026-11-02）：列表留在後面；底部的勾選列／金額欄／提示黏在彈窗底部 ---- */
+.fxs-mask.sheet { padding: 16px; }
+.fxs-sheet { position: relative; width: min(820px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px 0;
+  border-radius: 18px; background: #0f2119; border: 1px solid rgba(215,181,84,.45); box-shadow: 0 24px 80px rgba(0,0,0,.55); color: #F8F2DF; }
+.fxs-sheet .fxs-settle { padding-bottom: 14px; }
+.fxs-sheet .fxs-shead { position: sticky; top: -14px; z-index: 2; margin: -14px -16px 10px; padding: 10px 12px 10px 16px; background: #0f2119; border-bottom: 1px solid rgba(255,255,255,.07); }
+.fxs-sheet .fxs-shead .sum, .fxs-sheet .fxs-shead .fxs-tag { margin-left: auto; }
+.fxs-x { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: #F8F2DF; font-size: 18px; cursor: pointer; }
+.fxs-x::before { content: ""; position: absolute; inset: -4px; }
+.fxs-sheet .fxs-act, .fxs-sheet .fxs-toast { position: sticky; bottom: 0; left: auto; transform: none; width: auto; margin: 12px -16px 0; border-radius: 0 0 16px 16px; box-shadow: 0 -8px 24px rgba(0,0,0,.35); }
+.fxs-sheet .fxs-toast { display: flex; align-items: center; justify-content: center; white-space: normal; padding: 12px 16px; }
+@media (max-width: 899px) {
+  .fxs-mask.sheet { padding: 6px; }
+  .fxs-sheet { max-height: calc(100dvh - 12px); padding: 10px 10px 0; border-radius: 14px; }
+  .fxs-sheet .fxs-shead { top: -10px; margin: -10px -10px 8px; padding: 6px 8px 6px 12px; min-height: 0; }
+  .fxs-sheet .fxs-act, .fxs-sheet .fxs-toast { margin: 10px -10px 0; border-radius: 0 0 12px 12px; }
+  .fxs-sheet .fxs-act.pay .k { flex-basis: 100%; }
+}

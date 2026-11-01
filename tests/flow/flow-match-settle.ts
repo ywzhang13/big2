@@ -92,6 +92,7 @@ const before = await counts();
 // ---- M1 套用 ----
 clock.now = T("2026-11-02T10:00:00");
 await d.exec(readFileSync(path.join(MIG, "20261104_mahjong_match_settle.sql"), "utf8"));
+await d.exec(readFileSync(path.join(MIG, "20261105_mahjong_hand_results.sql"), "utf8")); // 接著套 20261105（老闆帳號排除、每把結果）
 const mig = (await d.query<{ room_id: string; user_id: string; zimo_count: number; donation_id: string; source: string }>("select room_id, user_id, zimo_count, donation_id, source from mj_match_settlements order by user_id")).rows;
 const after = await counts();
 const cnt = async (u: string) => n("select public.mj_donate_count($1) n", [u]);
@@ -176,16 +177,17 @@ eq([s7.status, s7.body.amount, s7.body.rooms.length, !!don7.voided_at, don7.void
 const list = (await call(settleGet, "/")).body;
 const mine = (await call(settleGet, `/?userId=${A}`)).body;
 const recs = (await call(recordsGet, "/?limit=10", undefined, "a")).body.items;
-const rec = (code: string) => { const r = recs.find((x: { roomCode: string }) => x.roomCode === code); return [r.zimo, r.zimoHands.length, r.myDue, "roomId" in r || "seatUserIds" in r]; };
+type RecP = { seat: number; wins: number | null; selfDraws: number | null; dealIns: number | null };
+const rec = (code: string) => { const r = recs.find((x: { roomCode: string }) => x.roomCode === code); return [r.players.map((p: RecP) => [p.seat, p.wins, p.selfDraws, p.dealIns]), r.myDue, "roomId" in r || "seatUserIds" in r]; };
 eq([list.total, list.players.map((p: { name: string; matches: number; zimo: number; amount: number }) => [p.name, p.matches, p.zimo, p.amount]),
   mine.unpaid.map((m: { roomCode: string; due: number }) => [m.roomCode, m.due]), mine.totalDue, mine.paid.map((p: { roomCode: string; amount: number; tip: number }) => [p.roomCode, p.amount, p.tip])],
   [30, [["阿明", 2, 3, 30]], [["3029", 20], ["7416", 10]], 30, [["5881", 50, 40], ["1426", 20, 0]]],
   "S8 後台：只有阿明未結清（2 場 3 次 NT$30；還在打的 R5 不算）；他的場次 R3、R4 未結清，最近結清的 R2（實收 50、打賞 40）、R1（20）");
 eq([rec("1426"), rec("3029"), rec("1111")],
-  [[[{ seat: 0, count: 2 }, { seat: 1, count: 1 }], 3, { zimo: 2, due: 20, settled: true }, false],
-   [[{ seat: 0, count: 2 }], 2, { zimo: 2, due: 20, settled: false }, false],
-   [[{ seat: 0, count: 2 }], 2, null, false]],
-  "S8 對戰紀錄：R1 阿明（座位 0）自摸 2、阿華 1，每一把都列出，我的應給 20 已結清；R3 撤回後未結清；10/30 的 R0 照樣顯示自摸 2 但沒有應給；不回房間 id、座位帳號");
+  [[[[0, null, 2, null], [1, null, 1, null], [2, null, 0, null], [3, null, 0, null]], { zimo: 2, due: 20, settled: true }, false],
+   [[[0, null, 2, null], [1, null, 0, null], [2, null, 0, null], [3, null, 0, null]], { zimo: 2, due: 20, settled: false }, false],
+   [[[0, null, 2, null], [1, null, 0, null], [2, null, 0, null], [3, null, 0, null]], null, false]],
+  "S8 對戰紀錄：這些場次沒有每把紀錄 → 胡牌、放槍回 null；自摸照舊從自摸紀錄算（R1 阿明 2、阿華 1）；我的應給 20 已結清；R3 撤回後未結清；10/30 的 R0 沒有應給；不回房間 id、座位帳號");
 
 // ---- S9 權限、打賞、特效 ----
 const deny = [(await call(settlePost, "/", { userId: A, roomIds: [rid(3)] }, "a")).status, (await call(revokePost, "/", { batchId: s3.body.batchId }, "a")).status, (await call(settleGet, "/", undefined, "a")).status];

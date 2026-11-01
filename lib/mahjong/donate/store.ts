@@ -30,3 +30,13 @@ export async function markSeen(userId: string, count: number): Promise<{ count: 
   const r = (Array.isArray(data) ? data[0] : data) as { count: number; seen: number } | undefined;
   return { count: Math.max(0, Number(r?.count) || 0), seen: Math.max(0, Number(r?.seen) || 0) };
 }
+
+/** 一把的結果：胡牌的座位（-1＝流局）、放槍的座位（自摸、流局 null） */
+export interface HandResult { winnerSeat: number; fromSeat: number | null; selfDraw: boolean }
+/** 記下一把的胡牌者和放槍者（同一把重複呼叫不會多記） */
+export async function recordHandResults(roomId: string, handNo: number, rows: HandResult[]): Promise<void> {
+  const { error } = await getSupabaseAdmin().from("mj_hand_results").upsert(
+    rows.map((r) => ({ room_id: roomId, hand_no: handNo, winner_seat: r.winnerSeat, from_seat: r.fromSeat, self_draw: r.selfDraw })),
+    { onConflict: "room_id,hand_no,winner_seat", ignoreDuplicates: true });
+  if (error) throw new Error(`記錄胡牌／放槍失敗：${error.message}`);
+}

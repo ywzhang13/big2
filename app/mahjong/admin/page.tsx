@@ -227,7 +227,8 @@ function useToast() {
   return [msg ? <div className="fxs-toast" role="status" data-admin-toast>✓ {msg}</div> : null, show] as const;
 }
 
-/** 未結清（小宜〈斗內改版〉C1～C6，取代「自摸次數」）：依人列出 → 點進去一場一場「已收」、勾多場一起結清、可撤回 */
+/** 未結清（小宜〈斗內改版〉C1～C6，取代「自摸次數」）：依人列出 → 點一個人開彈窗，一場一場「已收」、勾多場一起結清、可撤回。
+ *  老闆 2026-11-02：明細改用彈窗，關掉就回到原本的列表（位置、搜尋字都還在） */
 function UnpaidTab() {
   const [rows, setRows] = useState<UnsettledPlayer[] | null>(null);
   const [q, setQ] = useState("");
@@ -244,7 +245,12 @@ function UnpaidTab() {
     });
     return () => { alive = false; };
   }, [reload]);
-  if (who) return <PlayerSettle p={who} onBack={() => { setWho(null); setReload((n) => n + 1); }} />;
+  const close = () => {
+    const name = who?.name;
+    setWho(null); setReload((n) => n + 1);
+    // 焦點回到剛剛點的那一列（列表重新整理後那個人可能已經全部結清、不在列表上）
+    setTimeout(() => (document.querySelector(`[data-admin-owe="${CSS.escape(name ?? "")}"]`) as HTMLElement | null)?.focus(), 0);
+  };
   const key = q.trim().toLowerCase();
   const shown = rows?.filter((r) => !key || r.name.toLowerCase().includes(key)) ?? [];
   const total = rows?.reduce((s, r) => s + r.amount, 0) ?? 0;
@@ -270,6 +276,13 @@ function UnpaidTab() {
           </button>
         ))}
       </div>
+      {who && (
+        <div className="fxs-mask sheet" onClick={close}>
+          <div className="fxs-sheet" role="dialog" aria-modal="true" aria-label={`${who.name} 的未結清場次`} onClick={(e) => e.stopPropagation()} data-admin-settle-sheet>
+            <PlayerSettle p={who} onBack={close} />
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -294,6 +307,7 @@ function PlayerSettle({ p, onBack }: { p: UnsettledPlayer; onBack: () => void })
   const [undo, setUndo] = useState<{ text: string; batchId: string } | null>(null);
   const [asking, setAsking] = useState<SettledMatch | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [reload, setReload] = useState(0);
   const load = () => setReload((n) => n + 1); // 重新抓（同一個檔案其他分頁的做法：effect 裡 then 再 setState，不在 effect 本體同步 setState）
   useEffect(() => {
@@ -347,14 +361,24 @@ function PlayerSettle({ p, onBack }: { p: UnsettledPlayer; onBack: () => void })
     setBusy(false);
   };
   const toggle = (id: string) => { setPaying(null); setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])); };
+  // 彈窗：打開時焦點在關閉鈕；Esc 先取消金額欄，再按一次才關彈窗（撤回確認框開著時由確認框自己處理）
+  useEffect(() => { closeRef.current?.focus(); }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || asking) return;
+      if (paying) setPaying(null); else onBack();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [asking, paying, onBack]);
   const batchOf = (m: SettledMatch) => done.filter((x) => x.batchId === m.batchId);
 
   return (
     <div className="fxs-settle" data-admin-settle={p.name}>
       <div className="fxs-shead">
-        <button type="button" className="fxs-btn sm" onClick={onBack} data-admin-settle-back>‹ 全部</button>
         <FxsAvatar url={p.avatarUrl} name={p.name} /><b>{p.name}</b>
         {data && (owed > 0 ? <span className="sum" data-admin-settle-owed={owed}>{nt(owed)}</span> : <span className="fxs-tag ok" data-admin-settle-owed={0}>全部結清</span>)}
+        <button ref={closeRef} type="button" className="fxs-x" onClick={onBack} aria-label="關閉" data-admin-settle-back>✕</button>
       </div>
       {err && <div className="fxs-err" data-admin-settle-err>{err}</div>}
       {!data && !err && <span className="fxs-muted">讀取中…</span>}

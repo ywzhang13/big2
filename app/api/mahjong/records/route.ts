@@ -1,36 +1,47 @@
 // 歷史紀錄：只回「我」（登入的 LINE 使用者）打過的麻將場次。前端不送任何 id，伺服器用登入身分查。
 // GET /api/mahjong/records?limit=20&cursor=<endedAt>|<id>&summary=1
-// 每場加上自摸（老闆 2026-11-02）：zimo＝[{ seat, count }]（只列有自摸的座位）、zimoHands＝[{ hand, seat }]（只有自摸的把）、
-//   myDue＝我這場 11/1 00:00 之後的自摸 { zimo, due, settled }，沒有就是 null。只有 LINE 帳號的自摸有紀錄（遊客不記）
+// 每場每位玩家加上胡牌、自摸、放槍數（老闆 2026-11-02）：players[].wins（含自摸）、selfDraws、dealIns。
+//   wins／dealIns：這場每一把都有紀錄（mj_hand_results，2026-11-02 上線後開局的場次）才有數字，否則 null（前端顯示「—」）
+//   selfDraws：有每把紀錄就用它（遊客也算）；沒有就照舊用自摸紀錄 mj_zimo_wins 算（只有 LINE 帳號，遊客 0）
+//   myDue＝我這場 11/1 00:00 之後的自摸 { zimo, due, settled }，沒有就是 null；老闆帳號不算斗內，一律 null
+//   （原本的 zimo、zimoHands 已拿掉）
 import { getAuthUser } from "@/lib/auth";
 import { notLoggedIn } from "@/lib/mahjong/access";
 import { listMyMahjongMatches, summarizeMyMahjong } from "@/lib/records/store";
-import { matchZimo, unsettledMatches } from "@/lib/mahjong/zimoFx/store";
-import { ZIMO_PRICE } from "@/lib/mahjong/zimoFx/rules";
+import { matchHandStats, matchZimo, unsettledMatches } from "@/lib/mahjong/zimoFx/store";
+import { isOwner, ZIMO_PRICE } from "@/lib/mahjong/zimoFx/rules";
 import type { MyMatch } from "@/lib/records/types";
 
 const CUTOFF = Date.parse("2026-11-01T00:00:00+08:00"); // 11/1 以前的自摸既往不究（老闆 2026-11-02）
 
-/** 每場加上自摸資料，拿掉伺服器內部欄位（房間 id、座位帳號）。自摸查詢失敗不影響列表：照樣回場次，自摸欄位留空 */
-async function withZimo(userId: string, items: MyMatch[]) {
-  let wins: Awaited<ReturnType<typeof matchZimo>> = [], unsettled: Awaited<ReturnType<typeof unsettledMatches>> = [];
+/** 每場加上胡牌／自摸／放槍和我的應給，拿掉伺服器內部欄位（房間 id、座位帳號）。查詢失敗不影響列表：照樣回場次，數字回 null */
+async function withHandStats(userId: string, items: MyMatch[]) {
+  const roomIds = items.map((m) => m.roomId);
+  let wins: Awaited<ReturnType<typeof matchZimo>> = [], unsettled: Awaited<ReturnType<typeof unsettledMatches>> = [], stats: Awaited<ReturnType<typeof matchHandStats>> = [];
+  let ok = true;
   try {
-    [wins, unsettled] = await Promise.all([matchZimo(items.map((m) => m.roomId)), unsettledMatches(userId)]);
+    [wins, unsettled, stats] = await Promise.all([matchZimo(roomIds), unsettledMatches(userId), matchHandStats(roomIds)]);
   } catch (err) {
-    console.error("[records] 自摸資料查詢失敗：", err instanceof Error ? err.message : err);
+    ok = false;
+    console.error("[records] 胡牌／自摸資料查詢失敗：", err instanceof Error ? err.message : err);
   }
   const open = new Set(unsettled.map((u) => u.roomId));
-  return items.map(({ roomId, seatUserIds, ...m }) => {
+  return items.map(({ roomId, seatUserIds, players, ...m }) => {
     const seatOf = new Map(Object.entries(seatUserIds).filter(([, u]) => u).map(([seat, u]) => [u as string, Number(seat)]));
     const mine = wins.filter((w) => w.roomId === roomId && seatOf.has(w.userId));
-    const counts = new Map<number, number>();
-    for (const w of mine) counts.set(seatOf.get(w.userId)!, (counts.get(seatOf.get(w.userId)!) ?? 0) + 1);
+    const st = stats.filter((x) => x.roomId === roomId);
+    const complete = st.length > 0 && m.handsPlayed != null && st[0].hands === m.handsPlayed; // 每一把都有紀錄
     const due = mine.filter((w) => w.userId === userId && w.wonAt > CUTOFF).length;
     return {
       ...m,
-      zimo: [...counts.entries()].sort(([a], [b]) => a - b).map(([seat, count]) => ({ seat, count })),
-      zimoHands: mine.map((w) => ({ hand: w.handNo, seat: seatOf.get(w.userId)! })),
-      myDue: due > 0 ? { zimo: due, due: due * ZIMO_PRICE, settled: !open.has(roomId) } : null,
+      players: players.map((p) => {
+        const s = complete ? st.find((x) => x.seat === p.seat) : undefined;
+        return { ...p,
+          wins: s ? s.wins : null,
+          selfDraws: s ? s.selfDraws : ok ? mine.filter((w) => seatOf.get(w.userId) === p.seat).length : null,
+          dealIns: s ? s.dealIns : null };
+      }),
+      myDue: due > 0 && !isOwner(userId) ? { zimo: due, due: due * ZIMO_PRICE, settled: !open.has(roomId) } : null,
     };
   });
 }
@@ -62,7 +73,7 @@ export async function GET(request: Request) {
   try {
     // 多拿一筆判斷還有沒有下一頁
     const rows = await listMyMahjongMatches(user.id, limit + 1, cursor);
-    const items = await withZimo(user.id, rows.slice(0, limit));
+    const items = await withHandStats(user.id, rows.slice(0, limit));
     const last = items[items.length - 1];
     const nextCursor = rows.length > limit && last ? `${last.endedAt}|${last.id}` : null;
     const summary = params.get("summary") === "1" ? await summarizeMyMahjong(user.id) : undefined;

@@ -58,6 +58,12 @@ export async function settleMatches(actor: string, d: { userId: string; name: st
 export async function unsettleBatch(actor: string, batchId: string, reason: string): Promise<UnsettleResult> {
   return toUnsettleResult(await rpc<Record<string, unknown>>("mj_match_unsettle", { p_actor: actor, p_donation: batchId, p_reason: reason }));
 }
+/** 對戰紀錄：每場每個座位的胡牌（含自摸）、自摸、放槍數，以及這場記了幾把（2026-11-02 起才有紀錄） */
+export async function matchHandStats(roomIds: string[]): Promise<{ roomId: string; hands: number; seat: number; wins: number; selfDraws: number; dealIns: number }[]> {
+  if (roomIds.length === 0) return [];
+  const rows = await rpc<{ room_id: string; hands: number; seat: number; wins: number; self_draws: number; deal_ins: number }[]>("mj_match_hand_stats", { p_rooms: roomIds });
+  return (rows ?? []).map((r) => ({ roomId: String(r.room_id), hands: Number(r.hands), seat: Number(r.seat), wins: Number(r.wins), selfDraws: Number(r.self_draws), dealIns: Number(r.deal_ins) }));
+}
 /** 對戰紀錄：這幾場每一把是誰自摸（只有 LINE 帳號有紀錄） */
 export async function matchZimo(roomIds: string[]): Promise<{ roomId: string; handNo: number; userId: string; wonAt: number }[]> {
   if (roomIds.length === 0) return [];

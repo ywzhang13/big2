@@ -834,8 +834,7 @@
 .mjl-seat .n { font-size: 12px; color: rgba(255,255,255,.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .mjl-seat.me .n { color: var(--gold-l); font-weight: 700; }
 .mjl-seat .s { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
-/* 斗內改版 A（小宜〈斗內改版〉A1～A3）：每個座位「摸N」、整列可點開明細 */
-.mjl-seat .zm { flex: 0 0 auto; padding: 0 5px; border-radius: 5px; font-size: 10px; font-weight: 800; line-height: 16px; background: #e9c96e; color: #142216; }
+/* 斗內改版 A（小宜〈斗內改版〉A1～A3）：整列可點開明細；明細是每位玩家的胡牌、放槍、自摸表（老闆 2026-11-02） */
 .mjl-row.tap { cursor: pointer; }
 .mjl-row.tap:active { transform: scale(.995); }
 .mjl-row.tap:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
@@ -853,15 +852,18 @@
 .mjl-detail .pill { margin-left: auto; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .mjl-detail .pill.no { background: rgba(248,113,113,.16); color: #fca5a5; }
 .mjl-detail .pill.ok { background: rgba(74,222,128,.16); color: #86efac; }
-.mjl-detail .mjl-seats.four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.mjl-detail .hands { display: flex; flex-direction: column; gap: 6px; }
-.mjl-detail .hand { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06); font-size: 14px; }
-.mjl-detail .hand .no { color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; min-width: 4.5em; }
-.mjl-detail .hand .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mjl-detail .hand .who.me { color: var(--gold-l); font-weight: 700; }
-.mjl-detail .pill.zm { margin-left: 0; background: #e9c96e; color: #142216; }
+.mjl-detail .stats { width: 100%; border-collapse: separate; border-spacing: 0 4px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.mjl-detail .stats th, .mjl-detail .stats td { padding: 7px 10px; text-align: center; white-space: nowrap; }
+.mjl-detail .stats thead th { padding: 0 10px 2px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.5); }
+.mjl-detail .stats thead th:first-child, .mjl-detail .stats tbody th { text-align: left; }
+.mjl-detail .stats tbody tr > * { background: rgba(255,255,255,.035); }
+.mjl-detail .stats tbody tr > :first-child { border-radius: 10px 0 0 10px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: rgba(255,255,255,.8); }
+.mjl-detail .stats tbody tr > :last-child { border-radius: 0 10px 10px 0; }
+.mjl-detail .stats tbody tr.me > * { background: rgba(201,169,110,.14); }
+.mjl-detail .stats tbody tr.me th { color: var(--gold-l); }
+.mjl-detail .stats td[data-k] { font-weight: 800; }
+@media (max-height: 500px) { .mjl-detail .stats th, .mjl-detail .stats td { padding: 5px 8px; } }
 .mjl-detail .note { font-size: 12px; color: rgba(255,255,255,.4); text-align: center; }
-.mjl-detail .none { text-align: center; padding: 18px 0; color: rgba(255,255,255,.55); }
 @media (max-height: 500px) { .mjl-detail { border-radius: 16px; } .mjl-detail .hd { padding: 10px 10px 8px 14px; } .mjl-detail .bd { padding: 10px 14px 12px; gap: 8px; } }
 .mjl .pos { color: var(--pos); }
 .mjl .neg { color: var(--neg); }
