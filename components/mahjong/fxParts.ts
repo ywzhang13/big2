@@ -57,6 +57,16 @@ export function runParts(parts: Part[], total: number, rm: boolean): Animation[]
   return anims;
 }
 
+/**
+ * 收掉一個 Web Animation（老闆 2026-11-04 查記憶體累積）：iOS Safari 只 cancel 不會放掉它，元素都回收了動畫物件還在（模擬器連播 48 次，1840 個全留著）。
+ * 要連 effect、timeline 一起切斷才回收得掉（同一測試 0/1840）。收掉後這個物件不能再用
+ */
+export function disposeAnim(a: Animation) {
+  a.cancel();
+  a.effect = null;
+  a.timeline = null;
+}
+
 /** 開局先下載素材：觸控裝置只放進 HTTP 快取（不解碼、不佔記憶體），真的要播才解碼 */
 export function prefetchArt(urls: string[]) {
   for (const u of urls) void fetch(u).then((r) => r.arrayBuffer()).catch(() => {});

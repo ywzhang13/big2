@@ -15,7 +15,7 @@ import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { playMeteorSound, preloadMeteorSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
-import { isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
+import { disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./meteorFx.css";
 
 const ART = "/mahjong-fx/meteor";
@@ -270,7 +270,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
         { offset: 1, opacity: 0, transform: at(1, d.pa + d.spin, 0) },
       ], { duration: SEG, delay: d.d, fill: "both" }));
     });
-    return () => { anims.forEach((a) => a.cancel()); release?.(); };
+    return () => { anims.forEach(disposeAnim); release?.(); };
   }, [seat, rel, mobile, rm, warm, embedded]);
 
   // 跳過：點畫面任一處、Enter、Space。手機點一下之後瀏覽器還會補一個 click，0.5 秒內的 click 吃掉，不會按到結算浮層的按鈕

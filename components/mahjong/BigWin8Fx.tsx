@@ -25,7 +25,7 @@
 // 音效：從大牌段的時間零點起播、音量 1、不另外位移；觸控裝置手機加強版、其他一般版；走互動音效的音量和靜音（lib/mahjong/fx/engine.ts）。
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import MjTile from "@/components/mahjong/MjTile";
-import { isTouchDevice } from "./fxParts";
+import { disposeAnim, isTouchDevice } from "./fxParts";
 import { playBigWin8Sound, preloadBigWin8Sound } from "@/lib/mahjong/fx/engine";
 import { BIG_WIN16_FONT_RANGE, BIG_WIN_LIGU_FONT_RANGE, BIG_WIN8, BIG_WIN8_DIR, bigWin8Files, type BigWin8Theme } from "@/lib/mahjong/bigWin";
 import type { Tile, TileSuit } from "@/lib/mahjong/tiles";
@@ -681,7 +681,7 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
       // 預熱：整段一格一格走一遍就結束（不出聲、不震真的牌桌）
       let alive = true;
       void stepPlay(root, T, { alive: () => alive, stageShadow: BIG8_STAGE_SHADOW }).then(() => { if (alive) doneRef.current(false); });
-      return () => { alive = false; anims.forEach((a) => a.cancel()); };
+      return () => { alive = false; anims.forEach(disposeAnim); };
     }
     let t: ReturnType<typeof setTimeout> | undefined;
     const finish = () => { if (!ended.current) { ended.current = true; root.classList.add("done"); doneRef.current(false); } };
@@ -691,7 +691,7 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
       root.classList.add("rm"); // 外層是 display: contents，淡入由各圖層自己做
       stopRef.current = playBigWin8Sound(sfxUrl(theme), null);
       t = setTimeout(finish, T);
-      return () => { clearTimeout(t); anims.forEach((a) => a.cancel()); };
+      return () => { clearTimeout(t); anims.forEach(disposeAnim); };
     }
     const stage = document.querySelector<HTMLElement>("[data-mt-stage]");
     // 牌桌外露那一圈的補色＋升成獨立合成層：一掛上就做，重擊震動那一刻不用整張牌桌重畫（components/mahjong/fxWarmUp.tsx 的 holdStage）
@@ -703,8 +703,8 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
     t = setTimeout(finish, T);
     return () => {
       clearTimeout(t);
-      anims.forEach((a) => a.cancel());
-      shakes.forEach((a) => a.cancel());
+      anims.forEach(disposeAnim);
+      shakes.forEach(disposeAnim);
       release?.();
       stopRef.current();
     };

@@ -24,7 +24,7 @@ import type { ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
-import { cellPos, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
+import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./zimoFx.css";
 
 const ART = "/mahjong-fx/zimo";
@@ -539,7 +539,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     // 黑洞：主擊前整個牌桌被往落點吸過去（縮到 0.94）
     if (stage && fx === "blackhole") stage.style.transformOrigin = `${Math.round(px)}px ${Math.round(py)}px`;
     if (stage && fx === "blackhole") anims.push(stage.animate([{ transform: "none" }, { transform: "scale(0.94)", offset: 0.9 }, { transform: "none" }], { duration: HIT, easing: "ease-in" }));
-    return () => { anims.forEach((a) => a.cancel()); release?.(); };
+    return () => { anims.forEach(disposeAnim); release?.(); };
   }, [fx, mobile, rm, warm, embedded, seat, rel]);
 
   // 跳過：點畫面任一處、Enter、Space（同隕石：0.5 秒內補上的 click 吃掉，不會按到結算浮層的按鈕）
