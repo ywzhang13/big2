@@ -1,7 +1,7 @@
 // 自摸特效庫＋斗內的資料庫存取（只在伺服器用 service role）。
 // 測試時整個檔案會被換成 tests/support/stub-zimofx-store.ts（在記憶體 PostgreSQL 跑真的 migration 和 SQL 函式）。
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { DonationRow } from "./rules";
+import { parseFxExpiry, type DonationRow } from "./rules";
 import { toSettled, toSettleResult, toUnsettled, toUnsettleResult, type SettledMatch, type SettleResult, type UnsettledMatch, type UnsettleResult } from "./settle";
 export type { SettledMatch, SettleResult, SettleRoom, UnsettledMatch, UnsettleResult } from "./settle";
 
@@ -20,7 +20,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 export async function zimoFxFor(userIds: string[]): Promise<Map<string, { fx: string; until: number | null }>> {
   if (userIds.length === 0) return new Map();
   const rows = await rpc<{ user_id: string; fx: string; until: string | null }[]>("mj_zimo_fx_for", { p_users: userIds });
-  return new Map((rows ?? []).map((r) => [r.user_id, { fx: r.fx, until: ms(r.until) }]));
+  return new Map((rows ?? []).map((r) => [r.user_id, { fx: r.fx, until: r.until ? parseFxExpiry(r.until) : null }]));
 }
 
 /** 記一筆斗內抵扣的結果：記帳前幾次、抵扣幾次、剩幾次（繼續欠）、打賞多少（超過應斗和零頭）、單價 */
@@ -105,8 +105,9 @@ export async function listDonations(range?: { from: number; to: number }): Promi
   }));
 }
 
-export async function grantFx(actor: string, userId: string, fx: string[], active: string | null, expiresAt: number): Promise<number> {
-  return Number(await rpc<number>("mj_fx_grant", { p_actor: actor, p_user: userId, p_fx: fx, p_active: active, p_expires: iso(expiresAt) }));
+/** 開通（永久，老闆 2026-11-04）：到期時間存 'infinity' */
+export async function grantFx(actor: string, userId: string, fx: string[], active: string | null): Promise<number> {
+  return Number(await rpc<number>("mj_fx_grant", { p_actor: actor, p_user: userId, p_fx: fx, p_active: active, p_expires: "infinity" }));
 }
 export async function revokeFx(actor: string, userId: string, fx: string[] | null): Promise<number> {
   return Number(await rpc<number>("mj_fx_revoke", { p_actor: actor, p_user: userId, p_fx: fx }));
@@ -115,6 +116,7 @@ export async function selectFx(userId: string, fx: string, permanent: boolean): 
   return (await rpc<boolean>("mj_fx_select", { p_user: userId, p_fx: fx, p_permanent: permanent })) === true;
 }
 
+/** expiresAt：Infinity＝永久（回傳給前端的 JSON 是 null） */
 export interface GrantRecord { id: string; fx: string; grantedAt: number; expiresAt: number; revokedAt: number | null }
 /** 一個帳號的所有開通紀錄（新的在前）和目前選用 */
 export async function playerFx(userId: string): Promise<{ grants: GrantRecord[]; selected: string | null }> {
@@ -125,7 +127,7 @@ export async function playerFx(userId: string): Promise<{ grants: GrantRecord[];
   ]);
   if (g.error || p.error) throw new Error(`讀取特效開通失敗：${(g.error ?? p.error)!.message}`);
   return {
-    grants: (g.data ?? []).map((r) => ({ id: String(r.id), fx: String(r.fx), grantedAt: Date.parse(r.granted_at), expiresAt: Date.parse(r.expires_at), revokedAt: ms(r.revoked_at) })),
+    grants: (g.data ?? []).map((r) => ({ id: String(r.id), fx: String(r.fx), grantedAt: Date.parse(r.granted_at), expiresAt: parseFxExpiry(r.expires_at), revokedAt: ms(r.revoked_at) })),
     selected: p.data?.fx ?? null,
   };
 }

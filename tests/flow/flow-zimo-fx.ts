@@ -189,9 +189,9 @@ let idA = "", idB = "";
   clock.now = T("2026-11-09T00:00:00");
   const mon = await zimo(A);
   const monMine = (await get(myFxGet, "/", "a")).body;
-  eq([g.status, g.body.granted, g.body.expiresAt === T("2026-11-09T00:00:00"), bad, [mon1.fx, mon1.overFx], [sun.fx, sun.overFx], [sunMine.selected, sunMine.available.storm === T("2026-11-09T00:00:00")], [mon.fx, mon.overFx], [monMine.selected, monMine.available]],
-    [200, 6, true, [400, 400, "owner_permanent"], ["storm", "storm"], ["storm", "storm"], ["storm", true], ["golden", "golden"], ["golden", { golden: null }]],
-    "Z4 週四（10/29）開通（舊格式送雷霆、風暴，一次全開後一律開 6 種）（套用風暴）到 11/9 週一 00:00 前：隔週一 11/2 照樣帶 storm；下週日 11/8 23:59:59 自摸帶 storm（廣播也有）、設定頁顯示風暴；11/9 00:00:00 自摸安全回退金色、設定頁也回金色只剩金色可選");
+  eq([g.status, g.body.granted, g.body.expiresAt === undefined, bad, [mon1.fx, mon1.overFx], [sun.fx, sun.overFx], [sunMine.selected, sunMine.available.storm === null], [mon.fx, mon.overFx], [monMine.selected, monMine.available]],
+    [200, 6, true, [400, 400, "owner_permanent"], ["storm", "storm"], ["storm", "storm"], ["storm", true], ["storm", "storm"], ["storm", { golden: null, meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null }]],
+    "Z4 週四（10/29）開通（舊格式送雷霆、風暴，一律開 6 種）（套用風暴）是永久的（老闆 2026-11-04）：回應沒有到期日；隔週一、下週日照樣帶 storm（廣播也有）；11/9 以後也不會到期，設定頁 6 種都是永久（null）。舊的有期限開通到期回金色見 flow-fx-permanent");
 }
 
 // ---- Z5 提前收回 ----
@@ -378,8 +378,8 @@ let idA = "", idB = "";
   eq([[deny.status, deny.body.error, deny.body.selected], [mine.selected, Object.keys(mine.available).sort()], admin.selected, z1.fx, after - before,
     [mine2.selected, mine2.available], [admin2.selected, admin2.active], [deny2.status, deny2.body.selected], [z2.fx, z2.overFx]],
     [[200, null, "blackhole"], ["blackhole", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"]], "blackhole", "blackhole", 1,
-      ["golden", { golden: null }], ["golden", {}], [403, "golden"], ["golden", "golden"]],
-    "Z14 阿華只開通冰封（一次全開 2026-11-02 → 6 種都能用）：選黑洞成功、寫一筆選用紀錄，自摸黑洞；冰封 11/30 到期後設定頁、後台都顯示金色、再選冰封 403 回金色，自摸金色");
+      ["blackhole", { golden: null, meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null }], ["blackhole", { meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null }], [200, "frost"], ["frost", "frost"]],
+    "Z14 阿華開通（舊格式只送冰封，一律 6 種、永久）：選黑洞成功、寫一筆選用紀錄，自摸黑洞；10 天後（11/30）不會到期，設定頁、後台照樣是黑洞、6 種永久，再選冰封成功，自摸冰封");
 }
 
 console.log(results.join("\n"));

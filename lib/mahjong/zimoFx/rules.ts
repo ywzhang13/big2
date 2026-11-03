@@ -29,10 +29,10 @@ export function weekOf(now: number): { start: number; end: number } {
 /** 自摸一次要斗 NT$10（老闆 2026-10-21 定、2026-10-31 確認固定）。資料庫 mj_donation_record 用同一個數字 */
 export const ZIMO_PRICE = 10;
 
-/** 開通的到期時間：開通當週的下一週結束（下下週一 00:00，不含）＝下週日 23:59:59 是最後一刻 */
-export const grantExpiresAt = (now: number): number => weekOf(now).end + 7 * DAY_MS;
 
-/** 胡牌時用的「這個座位目前的特效」：until＝null 表示永久（老闆） */
+/** 資料庫的到期時間轉成毫秒。永久開通（老闆 2026-11-04）存成 'infinity' → Infinity，到期判斷（expires > now）照常成立 */
+export const parseFxExpiry = (v: string): number => (v === "infinity" ? Infinity : Date.parse(v));
+/** 胡牌時用的「這個座位目前的特效」：until＝null 表示永久（老闆帳號、永久開通） */
 export interface ZimoFxNow { code: WinFx; until: number | null }
 /** 從資料庫查到的「選用＋有效到期」換成這一刻能不能播。
  *  金色自摸是安全回退：未設定、未開通、已到期、已收回及查詢失敗都回它。 */
@@ -41,7 +41,7 @@ export function resolveZimoFx(userId: string | null | undefined, pref: { fx: str
   if (pref?.fx === GOLDEN_ZIMO_FX) return { code: GOLDEN_ZIMO_FX, until: null };
   if (isOwner(userId) && isZimoFx(pref?.fx)) return { code: pref.fx, until: null };
   if (!pref || !isZimoFx(pref.fx) || pref.until === null) return { code: GOLDEN_ZIMO_FX, until: null };
-  return { code: pref.fx, until: pref.until };
+  return { code: pref.fx, until: pref.until }; // 永久是 Infinity，存進牌局 JSON 會變成 null，兩者 zimoFxValid 都算有效
 }
 /** 這一刻還有效嗎（永久或還沒到期） */
 export const zimoFxValid = (fx: ZimoFxNow | undefined, now: number): WinFx | undefined =>

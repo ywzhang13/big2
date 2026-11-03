@@ -31,14 +31,12 @@ async function call<T>(method: "GET" | "POST", path: string, body?: Record<strin
 }
 
 // ---- 玩家自己（設定頁）：第 4 節 ----
-export interface MyZimoFx { serverNow: number; displayName: string; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
+export interface MyZimoFx { serverNow: number; displayName: string; isOwner: boolean; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
 export const getMyFx = () => call<MyZimoFx>("GET", "/api/mahjong/zimo-fx");
 export const selectMyFx = (fx: ZimoFxChoice) => call<{ selected: ZimoFxChoice }>("POST", "/api/mahjong/zimo-fx", { fx });
 /** 選用被拒（403 not_granted：沒開通、過期、被收回）時，伺服器帶回目前實際套用的那一種（老柯 2026-10-31） */
 export const rejectedSelected = (r: Res<unknown>): ZimoFxChoice | null =>
   !r.ok && r.status === 403 && typeof r.body?.selected === "string" ? (r.body.selected as ZimoFxChoice) : null;
-/** 老闆帳號＝7 種都是永久（到期是 null，對接格式第 4 節）；只用來決定要不要顯示後台入口，真正的權限由後台 API 檢查 */
-export const isPermanentAll = (d: MyZimoFx) => ZIMO_FX_LIST.every((f) => f.code in d.available && d.available[f.code] === null);
 
 // ---- 公開排行榜：第 3 節（不用登入）；week＝本週榜，all＝總斗內（累計所有有效斗內） ----
 // 有登入就帶 token：伺服器判斷哪一列是自己（me），前端不比對名字（可能同名）。沒登入照樣能看
@@ -64,7 +62,8 @@ export interface DonationRecord {
   id: string; userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number;
   note: string; createdAt: number; voided: boolean; voidedAt: number | null; voidReason: string | null;
 }
-export interface PlayerFx { serverNow: number; permanent: boolean; active: Partial<Record<ZimoFxCode, number>>; selected: ZimoFxCode | null }
+/** active：代號→到期時間，null＝永久（老闆 2026-11-04 起新開通都是永久）；有列出＝有開通 */
+export interface PlayerFx { serverNow: number; permanent: boolean; active: Partial<Record<ZimoFxCode, number | null>>; selected: ZimoFxCode | null }
 export interface AuditRecord { id: number; at: number; actorId: string; action: string; targetUserId: string; recordId: string | null; detail: Record<string, unknown> }
 
 export const findPlayers = (q: string) => call<{ players: AdminPlayer[] }>("GET", `/api/mahjong/admin/players?q=${encodeURIComponent(q)}`);
@@ -88,19 +87,8 @@ export interface ZimoCountRow {
 export const getZimoCounts = () => call<{ price: number; players: ZimoCountRow[] }>("GET", "/api/mahjong/admin/zimo-counts");
 export const voidDonation = (id: string, reason: string) => call<{ voided: true }>("POST", "/api/mahjong/admin/donations/void", { id, reason });
 export const getPlayerFx = (userId: string) => call<PlayerFx>("GET", `/api/mahjong/admin/fx?userId=${encodeURIComponent(userId)}`);
-/** 開通：老闆 2026-11-02 起一律一次開全部 6 種（伺服器不管送哪幾種都寫 6 種）；active 選填，不送就不改玩家目前的選擇 */
+/** 開通：一律一次開全部 6 種（老闆 2026-11-02），永久、沒有到期日（2026-11-04）；active 選填，不送就不改玩家目前的選擇 */
 export const grantFx = (userId: string, fx: ZimoFxCode[], active?: ZimoFxCode) => call<{ granted: number }>("POST", "/api/mahjong/admin/fx", { userId, fx, ...(active ? { active } : {}) });
-/** 台灣時間的月/日 */
-export function mdTaipei(ms: number): string {
-  const d = new Date(ms + 8 * 3600_000);
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-}
-/** 現在開通會到哪天：這週（週一～週日，台灣時間）的下一個週日 */
-export function nextWeekSunday(nowMs: number): number {
-  const d = new Date(nowMs + 8 * 3600_000);
-  const dow = (d.getUTCDay() + 6) % 7; // 週一＝0
-  return nowMs + (6 - dow + 7) * 86_400_000;
-}
 export const revokeFx = (userId: string, fx?: ZimoFxCode[]) => call<{ revoked: number }>("POST", "/api/mahjong/admin/fx/revoke", { userId, ...(fx ? { fx } : {}) });
 export const getAudit = () => call<{ records: AuditRecord[] }>("GET", "/api/mahjong/admin/audit?limit=200");
 

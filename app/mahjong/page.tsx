@@ -28,7 +28,7 @@ import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
 import { SpectateManage, SpectateRequestCard, useSpectateManage } from "@/components/mahjong/spectate/SpectateHost";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
-import { getMyFx, isPermanentAll } from "@/lib/mahjong/zimoFxClient";
+import { getMyFx } from "@/lib/mahjong/zimoFxClient";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -268,12 +268,12 @@ export default function MahjongPage() {
     };
   }, [lobbyHome]);
 
-  // 斗內後台入口（老馬 2026-10-31）：只有老闆帳號看得到（7 種特效都是永久＝老闆）；真正的權限由後台 API 在伺服器檢查
+  // 斗內後台入口（老馬 2026-10-31）：只有老闆帳號看得到（伺服器回 isOwner；不能用「特效都是永久」判斷，一般玩家開通後也是永久）；真正的權限由後台 API 在伺服器檢查
   const [isOwner, setIsOwner] = useState(false);
   useEffect(() => {
     if (!lobbyHome) return;
     let alive = true;
-    void getMyFx().then((r) => { if (alive) setIsOwner(r.ok && isPermanentAll(r.data)); });
+    void getMyFx().then((r) => { if (alive) setIsOwner(r.ok && r.data.isOwner); });
     return () => { alive = false; };
   }, [lobbyHome]);
 

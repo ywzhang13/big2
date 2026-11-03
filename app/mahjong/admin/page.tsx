@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import {
-  addDonation, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, getPlayerMatches, getUnsettled, grantFx, mdTaipei, nextWeekSunday, nowTaipeiLocal,
+  addDonation, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, getPlayerMatches, getUnsettled, grantFx, nowTaipeiLocal,
   payCheck, revokeBatch, revokeFx, settleMatches, taipeiIso, voidDonation, ZIMO_FX_LIST,
   type AdminPlayer, type AuditRecord, type DonationRecord, type PlayerFx, type SettledMatch, type SettleMatch, type UnsettledPlayer,
 } from "@/lib/mahjong/zimoFxClient";
@@ -66,12 +66,12 @@ export default function MahjongAdminPage() {
   );
 }
 
-/** 找 LINE 玩家：至少 2 字，停手 300ms 才查；結果有頭像、名字、帳號後四碼（同名時分得出來） */
+/** 找 LINE 玩家：至少 1 個字（有些人的 LINE 名字只有一個字），停手 300ms 才查；結果有頭像、名字、帳號後四碼（同名時分得出來） */
 function PlayerSearch({ onPick }: { onPick: (p: AdminPlayer) => void }) {
   const [q, setQ] = useState("");
   const [list, setList] = useState<AdminPlayer[] | null>(null);
   const seq = useRef(0);
-  const long = Array.from(q.trim()).length >= 2;
+  const long = q.trim().length >= 1;
   useEffect(() => {
     const k = ++seq.current;
     if (!long) return;
@@ -484,7 +484,7 @@ function UnsettleDialog({ rows, name, busy, onCancel, onOk }: { rows: SettledMat
   );
 }
 
-/** 玩家特效：選玩家 → 一張狀態卡（小宜〈斗內改版〉D1；老闆 2026-11-02：開通一次全開 6 種，期限照舊到下週日） */
+/** 玩家特效：選玩家 → 一張狀態卡（小宜〈斗內改版〉D1）。開通一次全開 6 種（老闆 2026-11-02），永久、沒有到期日（2026-11-04），只有開通和收回；老闆帳號永久全開 */
 function FxTab() {
   const [p, setP] = useState<AdminPlayer | null>(null);
   return (
@@ -515,13 +515,8 @@ function PlayerFxEditor({ userId }: { userId: string }) {
   const ALL = ZIMO_FX_LIST.map((f) => f.code);
   const grant = () => run(async () => { const r = await grantFx(userId, ALL); return r.ok ? { ok: true } : { ok: false, error: r.error }; });
   const revoke = () => run(async () => { const r = await revokeFx(userId); return r.ok ? { ok: true } : { ok: false, error: r.error }; });
-  // 有任何一種有效開通＝全部開通（伺服器同規則）；到期取最晚的
-  const until = info ? Object.values(info.active).filter((v): v is number => typeof v === "number") : [];
-  const on = !!info && (info.permanent || until.length > 0);
-  const expires = until.length ? Math.max(...until) : null;
-  // 伺服器的到期是「下週一 00:00」（不含）：畫面上減 1 毫秒＝週日；延長＝再往後一週
-  const lastDay = (until: number) => mdTaipei(until - 1);
-  const next = expires !== null ? lastDay(expires + 7 * 86_400_000) : info ? mdTaipei(nextWeekSunday(info.serverNow)) : "";
+  // 有任何一種有效開通＝全部開通（伺服器同規則）；老闆 2026-11-04：開通是永久的，不顯示到期日
+  const on = !!info && (info.permanent || Object.keys(info.active).length > 0);
 
   return (
     <>
@@ -529,15 +524,13 @@ function PlayerFxEditor({ userId }: { userId: string }) {
         <div className={`fxs-grant${on ? " on" : ""}`} data-admin-grant-card={info.permanent ? "permanent" : on ? "on" : "off"}>
           <div className="st">
             {info.permanent ? <span className="fxs-tag gold" data-admin-permanent>永久全開</span>
-              : on ? <><b className="ok">已開通全部</b><span className="fxs-muted">到 {lastDay(expires ?? 0)}（週日）</span></>
+              : on ? <b className="ok">已開通全部</b>
               : <><b>未開通</b><span className="fxs-muted">6 種特效一次全開</span></>}
           </div>
           {!info.permanent && (
             <div className="acts">
-              {on ? <>
-                <button type="button" className="fxs-btn" disabled={busy} onClick={() => void grant()} data-admin-grant-extend>延長到 {next}</button>
-                <button type="button" className="fxs-btn danger" disabled={busy} onClick={() => void revoke()} data-admin-revoke-all>收回</button>
-              </> : <button type="button" className="fxs-btn gold" disabled={busy} onClick={() => void grant()} data-admin-grant>開通全部・到 {next}</button>}
+              {on ? <button type="button" className="fxs-btn danger" disabled={busy} onClick={() => void revoke()} data-admin-revoke-all>收回</button>
+                : <button type="button" className="fxs-btn gold" disabled={busy} onClick={() => void grant()} data-admin-grant>開通全部</button>}
             </div>
           )}
           <div className="chips">

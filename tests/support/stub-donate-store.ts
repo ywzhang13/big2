@@ -15,7 +15,7 @@ export function db(): Promise<PGlite> {
   dbp ??= (async () => {
     const d = new PGlite();
     await d.exec(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
-      create schema auth; create table auth.users (id uuid primary key, raw_app_meta_data jsonb not null default '{}');`);
+      create schema auth; create table auth.users (id uuid primary key, raw_app_meta_data jsonb not null default '{}', email text, raw_user_meta_data jsonb not null default '{}');`);
     const sql = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations/20261021_mahjong_donate.sql");
     await d.exec(readFileSync(sql, "utf8"));
     return d;

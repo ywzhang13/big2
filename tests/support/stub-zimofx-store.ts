@@ -9,11 +9,14 @@ import { fileURLToPath } from "node:url";
 import type { AuditRecord, Deduction, DonationRecord, GrantRecord, ZimoCountRow } from "../../lib/mahjong/zimoFx/store";
 import { toSettled, toSettleResult, toUnsettled, toUnsettleResult, type SettledMatch, type SettleResult, type UnsettledMatch, type UnsettleResult } from "../../lib/mahjong/zimoFx/settle";
 
+import { parseFxExpiry } from "../../lib/mahjong/zimoFx/rules";
 import { clock, db as donateDb } from "./stub-donate-store";
 export { clock };
 export const nowMs = () => clock.now;
 const iso = (ms: number) => new Date(ms).toISOString();
 const ms = (v: unknown) => (v ? new Date(v as string).getTime() : null);
+/** 到期時間：PGlite 把 'infinity' 轉成無效的 Date，先變回字串，再走和正式 store 同一個 parseFxExpiry */
+const expiry = (v: unknown): number => parseFxExpiry(v instanceof Date ? (Number.isNaN(v.getTime()) ? "infinity" : v.toISOString()) : String(v));
 export const users: Record<string, { name: string; avatarUrl: string | null; guest?: boolean }> = {};
 export const fail = { zimoFxFor: false }; // true：zimoFxFor 丟錯（測查不到時老闆照樣有隕石、其他人回一般浮層）
 
@@ -48,7 +51,7 @@ export async function zimoFxFor(userIds: string[]): Promise<Map<string, { fx: st
   if (fail.zimoFxFor) throw new Error("模擬資料庫錯誤");
   const r = await (await db()).query<{ user_id: string; fx: string; until: unknown }>("select * from mj_zimo_fx_for($1, $2)", [userIds, iso(clock.now)]);
   order.push("fx-done");
-  return new Map(r.rows.map((x) => [x.user_id, { fx: x.fx, until: ms(x.until) }]));
+  return new Map(r.rows.map((x) => [x.user_id, { fx: x.fx, until: x.until ? expiry(x.until) : null }]));
 }
 export async function addDonation(actor: string, d: { userId: string; name: string; avatarUrl: string | null; amount: number; donatedAt: number; note: string }): Promise<{ id: string; deduction: Deduction }> {
   const r = await one<{ id: string } & Deduction>("select mj_donation_record($1, $2, $3, $4, $5, $6, $7, $8) as r", [actor, d.userId, d.name, d.avatarUrl, d.amount, iso(d.donatedAt), d.note, iso(clock.now)]);
@@ -73,8 +76,8 @@ export async function listDonations(range?: { from: number; to: number }): Promi
     donatedAt: ms(x.donated_at)!, note: String(x.note ?? ""), createdAt: ms(x.created_at)!, voided: !!x.voided_at, voidedAt: ms(x.voided_at), voidReason: (x.void_reason as string) ?? null,
   }));
 }
-export async function grantFx(actor: string, userId: string, fx: string[], active: string | null, expiresAt: number): Promise<number> {
-  return Number(await one("select mj_fx_grant($1, $2, $3, $4, $5, $6) as r", [actor, userId, fx, active, iso(expiresAt), iso(clock.now)]));
+export async function grantFx(actor: string, userId: string, fx: string[], active: string | null): Promise<number> {
+  return Number(await one("select mj_fx_grant($1, $2, $3, $4, 'infinity'::timestamptz, $5) as r", [actor, userId, fx, active, iso(clock.now)]));
 }
 export async function revokeFx(actor: string, userId: string, fx: string[] | null): Promise<number> {
   return Number(await one("select mj_fx_revoke($1, $2, $3, $4) as r", [actor, userId, fx, iso(clock.now)]));
@@ -86,7 +89,7 @@ export async function playerFx(userId: string): Promise<{ grants: GrantRecord[];
   const d = await db();
   const g = await d.query<Record<string, unknown>>("select * from mj_fx_grants where user_id = $1 order by granted_at desc", [userId]);
   const p = await d.query<{ fx: string }>("select fx from mj_fx_prefs where user_id = $1", [userId]);
-  return { grants: g.rows.map((x) => ({ id: String(x.id), fx: String(x.fx), grantedAt: ms(x.granted_at)!, expiresAt: ms(x.expires_at)!, revokedAt: ms(x.revoked_at) })), selected: p.rows[0]?.fx ?? null };
+  return { grants: g.rows.map((x) => ({ id: String(x.id), fx: String(x.fx), grantedAt: ms(x.granted_at)!, expiresAt: expiry(x.expires_at), revokedAt: ms(x.revoked_at) })), selected: p.rows[0]?.fx ?? null };
 }
 export async function listAudit(limit: number): Promise<AuditRecord[]> {
   const r = await (await db()).query<Record<string, unknown>>("select * from mj_fx_audit order by id desc limit $1", [limit]);
