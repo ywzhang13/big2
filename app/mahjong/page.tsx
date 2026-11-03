@@ -17,8 +17,8 @@ import { closedFromResponse } from "@/hooks/roomClosed";
 import MjGameOver from "@/components/mahjong/MjGameOver";
 import MjFx from "@/components/mahjong/MjFx";
 import { bigWinPlayed } from "@/lib/mahjong/bigWin";
-import { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
-import { preloadZimoFx } from "@/components/mahjong/ZimoFx";
+import { prefetchMeteorFx } from "@/components/mahjong/MeteorFx";
+import { prefetchZimoFx } from "@/components/mahjong/ZimoFx";
 import { isZimoFxNew } from "@/lib/mahjong/winShow";
 import { setBgWarmPaused } from "@/components/mahjong/FxBgWarm";
 import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
@@ -802,10 +802,10 @@ function RoomView({
   useEffect(() => { setBgWarmPaused(bgWarmPause); }, [bgWarmPause]);
   useEffect(() => () => setBgWarmPaused(false), []);
   const meteorInRoom = state.players.some((p) => p.winFx === "meteor") || showWinner?.winFx === "meteor";
-  useEffect(() => { if (meteorInRoom) void preloadMeteorFx(); }, [meteorInRoom]);
+  useEffect(() => { if (meteorInRoom) prefetchMeteorFx(); }, [meteorInRoom]);
   // 自摸特效庫的新特效：房間裡有人選了哪一種，就先載那一種（和隕石一樣；一般牌局沒人有，不下載）
   const zfxInRoom = [...new Set([...state.players.map((p) => p.winFx), showWinner?.winFx].filter(isZimoFxNew))].sort().join();
-  useEffect(() => { for (const fx of zfxInRoom.split(",").filter(isZimoFxNew)) void preloadZimoFx(fx); }, [zfxInRoom]);
+  useEffect(() => { for (const fx of zfxInRoom.split(",").filter(isZimoFxNew)) prefetchZimoFx(fx); }, [zfxInRoom]);
 
 
   // Pass roomId (登入房另有玩家 id、座位頻道) from create/join to the hook

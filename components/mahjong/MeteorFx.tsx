@@ -15,7 +15,7 @@ import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { playMeteorSound, preloadMeteorSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
-import { runParts, type Part, type Pose } from "./fxParts";
+import { isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./meteorFx.css";
 
 const ART = "/mahjong-fx/meteor";
@@ -42,11 +42,12 @@ function useReducedMotion() {
 }
 
 /** 先載好、解碼好四張圖、「自摸」大字圖和音效（房間裡有這個帳號時就叫；第一次播也不會閃空白） */
-const artImgs: HTMLImageElement[] = []; // 留著參考，瀏覽器不會把解碼好的圖丟掉
+let artImgs: HTMLImageElement[] = []; // 留著參考，瀏覽器不會把解碼好的圖丟掉（觸控裝置播完就放掉，見 releaseMeteorFx）
 let artReady: Promise<boolean> | null = null;
+const artFiles = () => ["meteor.webp", "explosion.webp", "crater.webp", "debris.webp", "meteor-title.webp", ...DETAIL_ART];
 export function preloadMeteorFx(): Promise<boolean> {
   artReady ??= Promise.all([
-    ...["meteor.webp", "explosion.webp", "crater.webp", "debris.webp", "meteor-title.webp", ...DETAIL_ART].map((f) => {
+    ...artFiles().map((f) => {
       const i = new Image();
       i.src = `${ART}/${f}`;
       artImgs.push(i);
@@ -55,6 +56,16 @@ export function preloadMeteorFx(): Promise<boolean> {
     preloadMeteorSound().then((b) => !!b),
   ]).then((ok) => ok.every(Boolean));
   return artReady;
+}
+/** 房間裡有這個特效：觸控裝置只先下載不解碼（真的要播才由 preloadMeteorFx 解碼） */
+export function prefetchMeteorFx() {
+  if (!isTouchDevice()) return void preloadMeteorFx();
+  prefetchArt(artFiles().map((f) => `${ART}/${f}`));
+  void preloadMeteorSound();
+}
+function releaseMeteorFx() {
+  artImgs = [];
+  artReady = null;
 }
 
 /** 補細節層的素材（老闆 2026-10-31 補充特效2，照小宜〈隕石冰封雷霆-補細節素材清單 v1〉；只加層，原本的畫面、時間、音效對位不動） */
@@ -169,6 +180,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
   const ended = useRef(false);
   const stopRef = useRef(() => {});
   const rel = (((seat - mySeat) % 4) + 4) % 4; // 0 自己、1 下家、2 對家、3 上家
+  useEffect(() => () => { if (!warm && isTouchDevice()) releaseMeteorFx(); }, [warm]);
 
   // 畫面出來前量好落點、入場位置；同一刻排好牌桌震動（CSS 動畫和震動同一格開始）
   useLayoutEffect(() => {

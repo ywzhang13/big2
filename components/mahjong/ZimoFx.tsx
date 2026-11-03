@@ -24,7 +24,7 @@ import type { ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
-import { cellPos, runParts, type Part, type Pose } from "./fxParts";
+import { cellPos, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./zimoFx.css";
 
 const ART = "/mahjong-fx/zimo";
@@ -75,16 +75,18 @@ function useReducedMotion() {
 }
 
 /** 先載好、解碼好這一種的圖和佔位音效（房間裡有這個帳號、或這一手真的要播時才叫；一般牌局不下載） */
-const artImgs: HTMLImageElement[] = [];
+const artImgs = new Map<ZimoFxNew, HTMLImageElement[]>();
 const ready = new Map<ZimoFxNew, Promise<boolean>>();
 export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
   let p = ready.get(fx);
   if (!p) {
+    const imgs: HTMLImageElement[] = [];
+    artImgs.set(fx, imgs);
     p = Promise.all([
       ...ZFX_ART[fx].map((f) => {
         const i = new Image();
         i.src = `${ART}/${fx}/${f}.webp`;
-        artImgs.push(i);
+        imgs.push(i);
         return i.decode().then(() => true, () => false);
       }),
       preloadZimoFxSound(fx).then((b) => !!b),
@@ -92,6 +94,17 @@ export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
     ready.set(fx, p);
   }
   return p;
+}
+/** 房間裡有人選了這一種：觸控裝置只先下載不解碼（圖留在 HTTP 快取，真的要播才由 preloadZimoFx 解碼） */
+export function prefetchZimoFx(fx: ZimoFxNew) {
+  if (!isTouchDevice()) return void preloadZimoFx(fx);
+  prefetchArt(ZFX_ART[fx].map((f) => `${ART}/${fx}/${f}.webp`));
+  void preloadZimoFxSound(fx);
+}
+/** 觸控裝置播完就放掉解碼好的圖：不再留參考，瀏覽器需要記憶體時才丟得掉 */
+function releaseZimoFx(fx: ZimoFxNew) {
+  artImgs.delete(fx);
+  ready.delete(fx);
 }
 
 /**
@@ -260,7 +273,7 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
       [1120, { x: 0, y: 0, s: 0.04, o: 0.8 }], [1130, { x: 0, y: 0, s: 0.02, o: 0 }]] }));
     disk("disk-front", 0.494, 0.2, u * 0.04, 420, 1);
     // 1.12～1.19 近黑停頓：整個畫面壓暗，只剩中心一個白點
-    els("void").forEach(({ el }) => out.push({ el, w: W * 3, h: H * 3, keys: [
+    els("void").forEach(({ el }) => out.push({ el, w: W + 160, h: H + 160, keys: [ // 純色壓暗：蓋滿畫面（含震動）就好
       [0, { x: W / 2 - px, y: H / 2 - py, s: 1, o: 0 }], [1100, { x: W / 2 - px, y: H / 2 - py, s: 1, o: 0 }], [1125, { x: W / 2 - px, y: H / 2 - py, s: 1, o: 0.6 }],
       [1185, { x: W / 2 - px, y: H / 2 - py, s: 1, o: 0.6 }], [1260, { x: W / 2 - px, y: H / 2 - py, s: 1, o: 0 }]] }));
     els("pin").forEach(({ el }) => out.push({ el, w: u * 0.3, h: u * 0.3, keys: [
@@ -439,6 +452,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
   const ended = useRef(false);
   const stopRef = useRef(() => {});
   const rel = (((seat - mySeat) % 4) + 4) % 4; // 0 自己、1 下家、2 對家、3 上家
+  useEffect(() => () => { if (!warm && isTouchDevice()) releaseZimoFx(fx); }, [fx, warm]);
 
   // 畫面出來前量好主角位置和尺寸；碎片、花瓣的軌跡用 Web Animations 直接給算好的數字；同一刻排好牌桌震動
   useLayoutEffect(() => {

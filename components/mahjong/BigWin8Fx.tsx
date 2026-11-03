@@ -25,6 +25,7 @@
 // 音效：從大牌段的時間零點起播、音量 1、不另外位移；觸控裝置手機加強版、其他一般版；走互動音效的音量和靜音（lib/mahjong/fx/engine.ts）。
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import MjTile from "@/components/mahjong/MjTile";
+import { isTouchDevice } from "./fxParts";
 import { playBigWin8Sound, preloadBigWin8Sound } from "@/lib/mahjong/fx/engine";
 import { BIG_WIN16_FONT_RANGE, BIG_WIN_LIGU_FONT_RANGE, BIG_WIN8, BIG_WIN8_DIR, bigWin8Files, type BigWin8Theme } from "@/lib/mahjong/bigWin";
 import type { Tile, TileSuit } from "@/lib/mahjong/tiles";
@@ -36,7 +37,7 @@ const device = () => (typeof matchMedia === "function" && matchMedia("(pointer: 
 const sfxUrl = (theme: BigWin8Theme) => bigWin8Files(theme, device()).sfx;
 
 /** 先載好、解碼好這一種的圖、牌型名字型、專屬音效（八台約 0.3～0.6MB、16 台約 0.7～1.3MB）。只在這一手真的是這一種時才叫（頁面最多等 1.5 秒），一般牌局不下載 */
-const keep: HTMLImageElement[] = []; // 留著參考，瀏覽器不會把解碼好的圖丟掉
+const keep = new Map<BigWin8Theme, HTMLImageElement[]>(); // 留著參考，瀏覽器不會把解碼好的圖丟掉（觸控裝置播完就放掉）
 const ready = new Map<BigWin8Theme, Promise<boolean>>();
 let fontReady: Promise<boolean> | null = null;
 let font16Ready: Promise<boolean> | null = null; // 16 台多用到的「天胡字」：同一個字型家族，unicode-range 只管這三個字
@@ -44,9 +45,11 @@ let fontLiguReady: Promise<boolean> | null = null; // 嚦咕嚦咕多用到的�
 export function preloadBigWin8(theme: BigWin8Theme): Promise<boolean> {
   if (!ready.has(theme)) {
     const f = bigWin8Files(theme, device());
+    const imgs: HTMLImageElement[] = [];
+    keep.set(theme, imgs);
     fontReady ??= new FontFace("MjBigWin8", `url(${f.font})`, { weight: "900" }).load().then((ff) => { document.fonts.add(ff); return true; }, () => false);
     ready.set(theme, Promise.all([
-      ...f.art.map((src) => { const i = new Image(); i.src = src; keep.push(i); return i.decode().then(() => true, () => false); }),
+      ...f.art.map((src) => { const i = new Image(); i.src = src; imgs.push(i); return i.decode().then(() => true, () => false); }),
       fontReady,
       ...(f.fontLigu ? [fontLiguReady ??= new FontFace("MjBigWin8", `url(${f.fontLigu})`, { weight: "900", unicodeRange: BIG_WIN_LIGU_FONT_RANGE }).load().then((ff) => { document.fonts.add(ff); return true; }, () => false)] : []),
       ...(f.font16 ? [font16Ready ??= new FontFace("MjBigWin8", `url(${f.font16})`, { weight: "900", unicodeRange: BIG_WIN16_FONT_RANGE }).load().then((ff) => { document.fonts.add(ff); return true; }, () => false)] : []),
@@ -602,6 +605,8 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
 }) {
   const T = BIG_WIN8[theme].ms;
   const rm = useReducedMotion();
+  // 觸控裝置播完就放掉解碼好的圖（下次要播再解碼），不佔著記憶體
+  useEffect(() => () => { if (!warm && isTouchDevice()) { keep.delete(theme); ready.delete(theme); } }, [theme, warm]);
   // 預熱（warm）時圖換成同尺寸的內嵌占位圖：開局背景預熱不下載任何素材
   const art = (f: string) => (warm && !realArt ? warmImg(f) : `${ART}/${f}`);
   const ref = useRef<HTMLDivElement>(null);
