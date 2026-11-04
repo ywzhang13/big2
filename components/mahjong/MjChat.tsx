@@ -145,11 +145,15 @@ export default function MjChat({
     const vv = window.visualViewport;
     const vh = window.innerHeight;
     const kb = vv && vv.height < vh * 0.8 ? vh - (vv.offsetTop + vv.height) + 8 : 0;
-    const bottom = kb || vh - me.top + (desk ? 8 : 4);
+    // 吃碰槓胡按鈕列（底邊貼著自己資訊列上緣，z-index 70）出現時底板移到它上面，輸入框、麥克風才點得到
+    const bar = claiming ? rectOf("[data-claim-banner] .bar") : null;
+    const info = bar ? rectOf(desk ? "[data-my-info]" : ".mjm-me-info") : null;
+    const above = bar && info ? vh - info.top + (bar.bottom - bar.top) + 4 : 0;
+    const bottom = kb || Math.max(vh - me.top + (desk ? 8 : 4), above);
     panelPosRef.current = { left: desk ? 12 : 8, bottom };
     setPos(panelRef.current, panelPosRef.current);
     place();
-  }, [desk, place]);
+  }, [desk, place, claiming]);
   useLayoutEffect(() => {
     if (open) { placePanel(); return; }
     panelPosRef.current = null;

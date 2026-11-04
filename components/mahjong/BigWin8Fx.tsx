@@ -29,6 +29,7 @@ import { disposeAnim, isTouchDevice } from "./fxParts";
 import { playBigWin8Sound, preloadBigWin8Sound } from "@/lib/mahjong/fx/engine";
 import { BIG_WIN16_FONT_RANGE, BIG_WIN_LIGU_FONT_RANGE, BIG_WIN8, BIG_WIN8_DIR, bigWin8Files, type BigWin8Theme } from "@/lib/mahjong/bigWin";
 import type { Tile, TileSuit } from "@/lib/mahjong/tiles";
+import { isChatUiEvent } from "@/lib/mahjong/winShow";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import "./bigWin8.css";
 
@@ -620,7 +621,7 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
     if (warm) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
-      if (ended.current) return;
+      if (ended.current || isChatUiEvent(e)) return;
       ended.current = true;
       e.preventDefault();
       const swallow = (c: Event) => { c.stopPropagation(); c.preventDefault(); };

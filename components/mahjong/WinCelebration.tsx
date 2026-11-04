@@ -8,6 +8,7 @@ export default function WinCelebration({ mode: celebrationMode, flowerWinName, n
 }) {
   return (
     <div
+      data-win-cele
       className="absolute inset-0 z-[65] flex items-center justify-center overflow-hidden pointer-events-none"
       style={{
         background:

@@ -16,6 +16,9 @@ export const ZIMO_FX_NEW = ["thunder", "storm", "frost", "blackhole", "sakura"] 
 export type ZimoFxNew = (typeof ZIMO_FX_NEW)[number];
 export const isZimoFxNew = (x: unknown): x is ZimoFxNew => typeof x === "string" && (ZIMO_FX_NEW as readonly string[]).includes(x);
 
+/** 按到聊天（聊天鈕、底板、送出狀態、語音泡泡）的事件：不算「點畫面跳過特效」（老闆 2026-11-04：點聊天沒反應；打字的空白鍵、Enter 也一樣） */
+export const isChatUiEvent = (e: Event) => !!(e.target as Element | null)?.closest?.("[data-chat-btn], [data-chat-panel], [data-chat-status], [data-chat-bubble]");
+
 /** 現有自摸／胡慶祝浮層的長度（ms），和 page.tsx 的浮層動畫一樣 */
 export const CELE_MS = { zimo: 3500, ron: 2000 } as const;
 

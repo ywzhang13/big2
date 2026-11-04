@@ -11,7 +11,7 @@ import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
 import ZimoFx, { preloadZimoFx } from "@/components/mahjong/ZimoFx";
 import WinCelebration from "@/components/mahjong/WinCelebration";
 import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
-import { CELE_MS, isZimoFxNew, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
+import { CELE_MS, isChatUiEvent, isZimoFxNew, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
 
 const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
@@ -118,6 +118,7 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
     celeOffRef.current = setTimeout(() => setCelebrationMode((m) => (m === mode ? null : m)), CELE_MS[mode]);
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
+      if (isChatUiEvent(e)) return;
       e.preventDefault();
       const swallow = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
       document.addEventListener("click", swallow, true);

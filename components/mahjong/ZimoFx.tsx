@@ -20,7 +20,7 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
-import type { ZimoFxNew } from "@/lib/mahjong/winShow";
+import { isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
@@ -547,7 +547,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     if (warm || embedded) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
-      if (ended.current) return;
+      if (ended.current || isChatUiEvent(e)) return;
       ended.current = true;
       e.preventDefault();
       const swallow = (c: Event) => { c.stopPropagation(); c.preventDefault(); };

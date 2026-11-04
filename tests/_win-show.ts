@@ -7,7 +7,7 @@
 //   W7 自摸特效庫 5 種新特效（老闆 2026-10-31）：自摸＝特效 → 浮層；大牌自摸＝大牌段 → 特效 → 浮層；放槍胡不播；天胡只播大牌段；烈焰已移除＝不認得
 //      完整版（雷霆、冰封）比照隕石：自帶專屬「自摸」大字，不接浮層——自摸＝特效；大牌自摸＝大牌段 → 特效
 //   W6 10 種大牌逐一：用 pickBigWin 挑出來的結果排順序（自摸、放槍、隕石帳號自摸），大牌段永遠排第一
-import { planWinShow } from "../lib/mahjong/winShow";
+import { isChatUiEvent, planWinShow } from "../lib/mahjong/winShow";
 import { BIG_WIN_ORDER, pickBigWin } from "../lib/mahjong/bigWin";
 
 const results: string[] = [];
@@ -50,6 +50,13 @@ for (const def of BIG_WIN_ORDER) {
     noCele ? [["big"], ["big"], ["big"]] : [["big", "cele"], ["big", "cele"], ["big", "meteor"]],
     `W6 ${def.title}：自摸／放槍／隕石帳號自摸＝${noCele ? "只播大牌段" : "大牌段 → 浮層／浮層／隕石"}`);
 }
+
+// W8 老闆 2026-11-04「點聊天沒反應」：按到聊天介面不算點畫面跳過特效；其他地方照舊跳過
+const evt = (sel: string | null) => ({ target: { closest: (q: string) => (sel && q.split(", ").includes(sel) ? {} : null) } }) as unknown as Event;
+for (const sel of ["[data-chat-btn]", "[data-chat-panel]", "[data-chat-status]", "[data-chat-bubble]"]) eq(isChatUiEvent(evt(sel)), true, `W8 ${sel} 不跳過特效`);
+eq(isChatUiEvent(evt(null)), false, "W8 點牌桌其他地方照舊跳過");
+eq(isChatUiEvent({ target: null } as unknown as Event), false, "W8 沒有 target（鍵盤事件打在 document）照舊跳過");
+eq(isChatUiEvent({ target: {} } as unknown as Event), false, "W8 target 不是元素（document）照舊跳過");
 
 for (const r of results) console.log(r);
 const fail = results.filter((r) => r.startsWith("❌")).length;

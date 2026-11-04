@@ -13,6 +13,7 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
+import { isChatUiEvent } from "@/lib/mahjong/winShow";
 import { playMeteorSound, preloadMeteorSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import { disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -278,7 +279,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     if (warm || embedded) return;
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
-      if (ended.current) return;
+      if (ended.current || isChatUiEvent(e)) return;
       ended.current = true;
       e.preventDefault();
       const swallow = (c: Event) => { c.stopPropagation(); c.preventDefault(); };

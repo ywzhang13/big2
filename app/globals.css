@@ -1506,6 +1506,7 @@ body {
 
 .mjc-panel { position: fixed; z-index: 59; display: flex; gap: 10px; padding: 8px 10px; border-radius: 14px; color: #fff;
   background: rgba(8,27,47,.94); border: 1px solid rgba(201,169,110,.6); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+body:has(.zf-l, .mt, .b8L, [data-win-cele]) .mjc-panel { z-index: 66; } /* 胡牌特效（62、63）、慶祝浮層（65）期間開著的底板不能被蓋住；平常維持 59，不蓋牌桌上的對話框（60） */
 .mjc-panel .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .mjc-panel .phrases { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .mjc-panel .phrases button { flex: 0 0 auto; min-width: 52px; height: 34px; padding: 0 10px; border-radius: 10px; font-size: 14px; line-height: 20px; color: #f0d68a;
