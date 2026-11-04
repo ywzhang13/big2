@@ -61,7 +61,7 @@
 .fxs-bar .sum { font-size: 22px; font-weight: 800; color: #D7B554; font-variant-numeric: tabular-nums; }
 .fxs-seg { display: inline-flex; border-radius: 10px; overflow: hidden; border: 1px solid rgba(215,181,84,.4); }
 .fxs-seg button { min-height: 36px; padding: 0 14px; color: #AEBDB7; font-weight: 700; cursor: pointer; }
-.fxs-seg button.on { background: rgba(215,181,84,.2); color: #F8F2DF; }
+.fxs-seg button.on { background: #D7B554; color: #071411; }
 .fxs-list { display: flex; flex-direction: column; gap: 6px; }
 .fxs-rec { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 58px; padding: 8px 12px;
   border-radius: 12px; background: #11221E; border: 1px solid rgba(255,255,255,.06); }
@@ -69,6 +69,7 @@
 .fxs-rec .who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fxs-rec .who span { font-size: 13px; color: #AEBDB7; }
 .fxs-rec .amt { font-weight: 800; color: #D7B554; font-variant-numeric: tabular-nums; }
+.fxs-rec.just { border-color: #D7B554; background: rgba(215,181,84,.14); box-shadow: 0 0 0 2px rgba(215,181,84,.45); }
 .fxs-rec.void { opacity: .5; }
 .fxs-rec.void .amt { text-decoration: line-through; color: #AEBDB7; }
 .fxs-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }

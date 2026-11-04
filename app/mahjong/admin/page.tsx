@@ -16,6 +16,7 @@ import { FxsAvatar } from "@/components/mahjong/fxshop/FxsAvatar";
 import "@/components/mahjong/fxshop/fxshop.css";
 
 type Tab = "donations" | "unpaid" | "fx" | "audit";
+type Scope = "week" | "all";
 const ERR: Record<string, string> = {
   bad_request: "資料有誤", unknown_player: "找不到這位玩家", owner_permanent: "老闆帳號永久全開", not_voidable: "這筆已作廢", forbidden: "沒有權限", not_logged_in: "沒有權限",
 };
@@ -110,8 +111,10 @@ function Chosen({ p, onClear }: { p: AdminPlayer; onClear: () => void }) {
 }
 
 function DonationsTab() {
-  const [scope, setScope] = useState<"week" | "all">("week");
-  const [data, setData] = useState<{ weekTotal: number; records: DonationRecord[] } | null>(null);
+  const [scope, setScope] = useState<Scope>("week");
+  const [data, setData] = useState<{ scope: Scope; records: DonationRecord[] } | null>(null);
+  const [just, setJust] = useState<string | null>(null); // 剛記的那筆：標示到手動切頁籤或再記一筆為止
+  const pendingJust = useRef<string | null>(null); // 剛記好、還沒捲到的那筆
   const [adding, setAdding] = useState(false);
   const [voiding, setVoiding] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -123,11 +126,32 @@ function DonationsTab() {
     let alive = true;
     void getDonations(scope).then((r) => {
       if (!alive) return;
-      if (r.ok) { setData(r.data); r.data.records.forEach((d) => names.set(d.userId, d.name)); }
+      if (r.ok) {
+        const want = pendingJust.current; // 這次回應是記好之後才發的（更早的被 alive 擋掉）：本週找不到就是舊日期，清單依實收時間排，要到全部找
+        if (want && scope === "week" && !r.data.records.some((d) => d.id === want)) { setScope("all"); return; }
+        setErr(""); setData({ scope, records: r.data.records }); r.data.records.forEach((d) => names.set(d.userId, d.name));
+      }
       else setErr(errText(r.error));
     });
     return () => { alive = false; };
   }, [scope, reload]);
+  const shown = data?.scope === scope ? data : null; // 切頁籤後、新資料回來前不顯示另一個頁籤的金額和清單
+  const total = shown?.records.filter((d) => !d.voided).reduce((a, d) => a + d.amount, 0);
+  const pickScope = (id: Scope) => {
+    if (id === scope) return;
+    setScope(id); setJust(null); setErr(""); pendingJust.current = null;
+    window.scrollTo(0, 0);
+  };
+  /** 記好後：重抓清單，找到那筆就捲過去 */
+  const onAdded = (id: string, msg: string) => {
+    setAdding(false); setJust(id); pendingJust.current = id;
+    load(); showToast(msg);
+  };
+  const justRow = useCallback((el: HTMLDivElement | null) => {
+    if (!el || !pendingJust.current) return;
+    pendingJust.current = null;
+    el.scrollIntoView({ block: "center" });
+  }, []);
 
   const doVoid = async (id: string) => {
     if (!reason.trim()) return;
@@ -137,20 +161,20 @@ function DonationsTab() {
   return (
     <>
       <div className="fxs-bar">
-        <span className="fxs-muted">本週</span><span className="sum" data-admin-week-total>{data ? nt(data.weekTotal) : "…"}</span>
+        <span className="fxs-muted">{scope === "week" ? "本週" : "全部"}</span><span className="sum" data-admin-total>{total === undefined ? "…" : nt(total)}</span>
         <div className="fxs-seg" style={{ marginLeft: "auto" }}>
           {([["week", "本週"], ["all", "全部"]] as const).map(([id, label]) => (
-            <button key={id} type="button" className={scope === id ? "on" : ""} aria-pressed={scope === id} onClick={() => setScope(id)}>{label}</button>
+            <button key={id} type="button" className={scope === id ? "on" : ""} aria-pressed={scope === id} onClick={() => pickScope(id)}>{label}</button>
           ))}
         </div>
         <button type="button" className="fxs-btn gold" onClick={() => setAdding((v) => !v)} data-admin-add>{adding ? "取消" : "＋ 記一筆打賞"}</button>
       </div>
-      {adding && <AddTip onDone={(m) => { setAdding(false); load(); showToast(m); }} />}
+      {adding && <AddTip onDone={onAdded} />}
       {err && <div className="fxs-err">{err}</div>}
       <div className="fxs-list" style={{ marginTop: 12 }} data-admin-records>
-        {data?.records.length === 0 && <div className="fxs-empty">沒有紀錄</div>}
-        {data?.records.map((d) => (
-          <div key={d.id} className={`fxs-rec${d.voided ? " void" : ""}`} data-admin-record={d.id} data-voided={d.voided}>
+        {shown?.records.length === 0 && <div className="fxs-empty">沒有紀錄</div>}
+        {shown?.records.map((d) => (
+          <div key={d.id} ref={d.id === just ? justRow : undefined} className={`fxs-rec${d.voided ? " void" : ""}${d.id === just ? " just" : ""}`} data-admin-record={d.id} data-voided={d.voided} data-admin-just={d.id === just ? "" : undefined}>
             <FxsAvatar url={d.avatarUrl} name={d.name} />
             <div className="who"><b>{d.name}</b><span>{fmtTaipei(d.donatedAt)}{d.note ? `・${d.note}` : ""}</span></div>
             <span className="amt">{nt(d.amount)}</span>
@@ -171,7 +195,7 @@ function DonationsTab() {
 }
 
 /** 記一筆打賞（小宜〈斗內改版〉C7）：只記錢，不結清任何場次；選玩家、金額、實收時間、備註 → 確認 → 送出 */
-function AddTip({ onDone }: { onDone: (msg: string) => void }) {
+function AddTip({ onDone }: { onDone: (id: string, msg: string) => void }) {
   const [p, setP] = useState<AdminPlayer | null>(null);
   const [amount, setAmount] = useState("");
   const [at, setAt] = useState(nowTaipeiLocal);
@@ -179,14 +203,18 @@ function AddTip({ onDone }: { onDone: (msg: string) => void }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const sending = useRef(false); // 連點：state 要等重新渲染才更新，同一瞬間的第二下會漏掉
   const n = Number(amount);
   const valid = !!p && Number.isInteger(n) && n >= 1 && n <= 999999 && !!at;
   const submit = async () => {
-    if (!p || !valid || busy) return;
-    setBusy(true);
+    if (!p || !valid || sending.current) return;
+    sending.current = true;
+    setBusy(true); setErr("");
     const r = await addDonation(p.userId, n, taipeiIso(at), note.trim());
+    sending.current = false;
     setBusy(false);
-    if (r.ok) onDone(`已記打賞 ${p.name} ${nt(n)}`); else { setErr(errText(r.error)); setConfirm(false); }
+    if (r.ok) onDone(r.data.id, `已記打賞 ${p.name} ${nt(n)}・${fmtTaipei(Date.parse(taipeiIso(at))).slice(0, 5)}`);
+    else { setErr(errText(r.error)); setConfirm(false); }
   };
   return (
     <div className="fxs-card" data-admin-add-form>
@@ -213,10 +241,13 @@ function AddTip({ onDone }: { onDone: (msg: string) => void }) {
           <button type="button" className="fxs-btn gold" disabled={!valid} onClick={() => setConfirm(true)} data-admin-next>下一步</button>
         </div>
       )}
-      {err && <div className="fxs-err">{err}</div>}
+      {err && <div className="fxs-err" ref={revealErr} role="alert">{err}</div>}
     </div>
   );
 }
+
+/** 手機橫向表單比畫面高：錯誤訊息出現時捲進畫面 */
+const revealErr = (el: HTMLDivElement | null) => { el?.scrollIntoView({ block: "nearest" }); };
 
 /** 底部提示（預設 2.4 秒消失；結清可撤回的提示 5 秒） */
 function useToast() {
