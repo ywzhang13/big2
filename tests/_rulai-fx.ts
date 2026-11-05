@@ -70,6 +70,7 @@ ok(rulaiCam(0) === 1 && rulaiCam(T.total) >= 1 - 1e-9, "R3 鏡頭不會小於 1�
     const read = calls.findIndex((x) => x[0] === "getImageData"), need = Object.values(artUsed);
     ok(read >= 0 && read < zero && !calls.slice(read).some((x) => x[0] === "drawImage"), "R6 開播前試畫並讀一個像素，時間零點在這之後，畫面清乾淨才開始");
     ok(need.every((i) => cv.ctx.drawn.has(i)), `R6 試畫用到全部 ${need.length} 張素材：第一次解碼不會落在播放中`); }
+  { const l = loop(), bd = el(), r = runRulai({ cv: fakeCanvas(), dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el(), board: bd } as never, geo(0), art(), { dpr: 2, rm: false, zeroAt: () => 0, stageShadow: "S", raf: l.raf, caf: l.caf }); l.tick(800); const tilted = /rotateX/.test(bd.style.transform ?? ""); r.stop(); ok(tilted && bd.style.transform === "" && bd.style.transformOrigin === "", "R6 跳過：牌桌傾斜完全復原"); }
   const b = mk(); b.l.tick(T.hit + 40); ok(!!b.e.stage.style.transform && b.e.stage.style.boxShadow === "S", "R6 主擊時牌桌有震、有蓋邊陰影");
   const n0 = b.cv.ctx.calls.length; b.r.stop(); b.r.stop(); ok(!b.l.live && b.cv.width === 0 && b.inner.every((c) => c.width === 0) && b.e.stage.style.transform === "" && b.e.stage.style.boxShadow === "", "R6 跳過（stop 兩次）：迴圈停、畫布歸 0、舞台復位");
   b.l.tick(T.hit + 60); ok(b.cv.ctx.calls.length === n0, "R6 stop 之後晚到的一格不再畫");

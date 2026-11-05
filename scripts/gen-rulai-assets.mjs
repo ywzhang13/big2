@@ -57,6 +57,8 @@ const fisRaw = await raw(sharp(src("金色閃電裂痕爆發")));
 let cx = 0, cy = 0, cn = 0; for (let y = 0; y < fisRaw.h; y++) for (let x = 0; x < fisRaw.w; x++) { const i = (y * fisRaw.w + x) * 4; if (fisRaw.d[i + 2] > 235) { cx += x; cy += y; cn++; } } cx /= cn; cy /= cn;
 const fw0 = Math.floor(Math.min(cx, fisRaw.w - cx) * 2), fh0 = Math.floor(Math.min(fw0 * 9 / 16, Math.min(cy, fisRaw.h - cy) * 2)), fw1 = Math.round(fh0 * 16 / 9);
 const fisA = blackToAlpha(crop(fisRaw, Math.round(cx - fw1 / 2), Math.round(cy - fh0 / 2), fw1, fh0));
+// 橢圓羽化：v4 裂縫是從小長大的，圖的四邊不能露出方形邊界
+for (let y = 0; y < fisA.h; y++) for (let x = 0; x < fisA.w; x++) { const d = Math.hypot((x - fisA.w / 2) / (fisA.w / 2), (y - fisA.h / 2) / (fisA.h / 2)), k = Math.min(1, Math.max(0, (1 - d) / 0.3)), i = (y * fisA.w + x) * 4 + 3; fisA.d[i] = Math.round(fisA.d[i] * k * k * (3 - 2 * k)); }
 // 噴光點：沿放射方向取 40 個亮點，分散在各個距離（座標以畫布中心為 0，單位＝裂縫圖寬／高）
 const jetsPts = []; { const seen = []; const cand = []; for (let y = 8; y < fisA.h - 8; y += 6) for (let x = 8; x < fisA.w - 8; x += 6) { const i = (y * fisA.w + x) * 4; if (fisA.d[i + 3] > 215) cand.push([x, y]); }
   const R = (p) => Math.hypot(p[0] - fisA.w / 2, p[1] - fisA.h / 2); cand.sort((a, b) => R(a) - R(b));
