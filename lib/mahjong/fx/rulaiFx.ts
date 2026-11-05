@@ -179,9 +179,11 @@ export class RulaiCanvas {
   private pose(ms: number): Pose {
     const t = RULAI_TL, { hx, hy, base } = this, { px, py } = this.g;
     let k: number, a: number, sc: number;
-    if (ms < t.rush) { const f = sm(seg(ms, t.emerge, t.rush)); k = 0.08 + 0.3 * f; sc = lerp(0.6, 0.84, f); a = lerp(0.34, 0.46, f); }
-    else if (ms < t.hit) { const f = inC(seg(ms, t.rush, t.hit)); k = lerp(0.38, 1, f); sc = lerp(0.84, 1.26, f); a = lerp(0.46, 0.72, f); }
-    else { const f = outC(seg(ms, t.hit, t.hit + 70)); sc = lerp(1.26, 1, f); a = lerp(0.72, 0.34, f); k = 1; }
+    // B（指尖朝上）：手指在手掌上方，手掌要低一點手指才進得了畫面，遠端也不能壓太小
+    const k0 = this.up ? 0.3 : 0.08, k1 = this.up ? 0.62 : 0.38, a0 = this.up ? 0.26 : 0.34, a1 = this.up ? 0.36 : 0.46, a2 = this.up ? 0.6 : 0.72;
+    if (ms < t.rush) { const f = sm(seg(ms, t.emerge, t.rush)); k = lerp(k0, k1, f); sc = lerp(0.6, 0.84, f); a = lerp(a0, a1, f); }
+    else if (ms < t.hit) { const f = inC(seg(ms, t.rush, t.hit)); k = lerp(k1, 1, f); sc = lerp(0.84, 1.26, f); a = lerp(a1, a2, f); }
+    else { const f = outC(seg(ms, t.hit, t.hit + 70)); sc = lerp(1.26, 1, f); a = lerp(a2, 0.34, f); k = 1; }
     return { X: lerp(hx, px, k), Y: lerp(hy - base * sc * 0.1, py, k), sc, a };
   }
   /** 條帶透視：一張圖切成 N 條，越靠近鏡頭的條帶越寬越高。沒有 3D，只有 drawImage */
