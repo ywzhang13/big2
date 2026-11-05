@@ -114,10 +114,10 @@
 .zf-blackhole .zf-flash { animation-name: zb-flash; }
 @keyframes zb-flash { 0%, 65.6% { opacity: 0; } 66.11% { opacity: .5; } 72% { opacity: 0; } 100% { opacity: 0; } }
 
-/* ---------- 櫻花 v4（零件的位移在 ZimoFx.tsx v4Parts）：不震，白閃較淡 ---------- */
-.zf-sakura { --tile-glow: rgba(255,190,200,.9); --dim: radial-gradient(ellipse at 50% 40%, rgba(120,30,70,.35), transparent 70%), rgba(14,4,10,.58); --flash: radial-gradient(circle at 50% 50%, #fff8f2, rgba(255,200,215,.6) 45%, rgba(255,170,90,.15)); --glow: rgba(255,210,150,.95); }
-.zf-sakura .zf-flash { animation-name: zk-flash; }
-@keyframes zk-flash { 0%, 61% { opacity: 0; } 62.22% { opacity: .3; } 72% { opacity: 0; } 100% { opacity: 0; } }
+/* ---------- 櫻花紛飛（lib/mahjong/fx/canvasFx.ts）：單一畫布，暗幕透明度由畫布迴圈帶，不用 CSS 動畫、不震、不白閃 ---------- */
+.zf-sakura { --tile-glow: rgba(255,190,200,.9); --dim: radial-gradient(ellipse at 50% 40%, rgba(74,18,44,.7), rgba(10,3,8,1)); --flash: radial-gradient(circle at 50% 50%, #fff8f2, rgba(255,200,215,.6) 45%, rgba(255,170,90,.15)); --glow: rgba(255,210,150,.95); }
+.zfw.own.zf-sakura .zf-flash { display: none; }
+.zk-cv { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 /* ---------- 完整版共用（5 種；老闆 2026-10-31）：主擊時牌不在畫面上，--tt（雷霆 1.42、冰封 1.30、風暴 1.38、黑洞、櫻花 1.42 秒）從落點炸出來，停在那裡（同隕石：坑中央浮出後就不動）；
    之後畫面中央是這一種專屬的「自摸」大字＋名字（ZimoTitle），播完直接出結算。這幾個用自己的毫秒長度和起始時間（不是 1.8 秒的百分比） ---------- */
@@ -154,3 +154,7 @@
 .zfw.rm .zp[data-rmk] { display: block; animation: zf-in-only 240ms ease-out 180ms both; }
 @keyframes zf-rm-own { 0% { opacity: 0; } 11%, 100% { opacity: 1; } }
 @keyframes zf-in-only { from { opacity: 0; } to { opacity: 1; } }
+/* 櫻花紛飛：暗幕、牌都由畫布迴圈寫 inline，不用 CSS 動畫（放最後，蓋過上面共用的規則和減少動態） */
+.zfw.own.zf-sakura .zf-dim, .zfw.own.rm.zf-sakura .zf-dim { animation: none; opacity: 0; }
+.zfw.own.zf-sakura .zf-tile-in, .zfw.own.rm.zf-sakura .zf-tile-in { animation: none; opacity: 0; }
+.zfw.own.rm.zf-sakura .zf-tile { animation: none; opacity: 1; }

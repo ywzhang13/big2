@@ -42,27 +42,29 @@ const DUST = Array.from({ length: 10 }, (_, i) => ({ d: -i * 360, s: 0.6 + (i % 
  * fx：哪一種；name：名字（最多 10 個字）；t／n：大字、名字出現的毫秒數；wind：風暴的風往哪邊吹（1 往右、-1 往左）；
  * rm：減少動態；mobile：手機版名字字級較小；src：大字圖（預熱時傳占位圖，平常不用給）
  */
-export default function ZimoTitle({ fx, name, t, n, wind = 1, rm, mobile, src }: {
+export default function ZimoTitle({ fx, name, t, n, wind = 1, rm, mobile, src, driven }: {
   fx: ZimoFxNew; name: string; t: number; n: number; wind?: number; rm?: boolean; mobile: boolean; src?: string;
+  /** 櫻花紛飛：大字、名字的樣子由畫布迴圈寫 inline，不用 CSS 動畫，也不要掃光和小花瓣（滿天花瓣畫布畫了） */
+  driven?: boolean;
 }) {
   const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name;
   const url = `url("${src ?? zimoTitleArt(fx)}")`;
   const style = { "--zt": `${t}ms`, "--zn": `${n}ms`, "--wd": wind, "--ar": ZIMO_TITLE_AR[fx], "--src": url } as CSSProperties;
   return (
-    <div className={`zz zz-${fx} ${mobile ? "m" : "d"} ${rm ? "rm" : ""}`} style={style} data-zf-zimo={fx}>
+    <div className={`zz zz-${fx} ${mobile ? "m" : "d"} ${rm ? "rm" : ""} ${driven ? "driven" : ""}`} style={style} data-zf-zimo={fx}>
       <span className="zz-back" />
       <b className="zz-art" role="img" aria-label="自摸">
         {/* 雷霆：同一張圖提亮後疊上去一直閃（電弧閃爍） */}
         {fx === "thunder" && <span className="zz-glow" />}
         {/* 掃光（雷霆白光、冰封冰面反光、黑洞金邊、櫻花金邊）：只照在字的形狀上 */}
-        {fx !== "storm" && <span className="zz-hl"><span className="zz-band" /></span>}
+        {fx !== "storm" && !driven && <span className="zz-hl"><span className="zz-band" /></span>}
       </b>
       {fx === "storm" && <>
         <span className="zz-wind w1" /><span className="zz-wind w2" />
         {LEAVES.map((l, i) => <span key={i} className="zz-leaf" style={{ "--ly": `${l.y}em`, "--lx": `${l.x}em`, "--ld": `${l.d}ms`, "--ls": l.s } as CSSProperties} />)}
       </>}
       {fx === "blackhole" && DUST.map((p, i) => <span key={i} className={`zz-dust k${p.k}`} style={{ "--dd": `${p.d}ms`, "--ds": p.s } as CSSProperties} />)}
-      {fx === "sakura" && PETALS.map((p, i) => (
+      {fx === "sakura" && !driven && PETALS.map((p, i) => (
         <span key={i} className="zz-petal" style={{ "--x0": `${p.x}em`, "--y0": `${p.y}em`, "--dx": `${p.dx}em`, "--r0": `${p.r}deg`, "--pd": `${p.d}ms` } as CSSProperties} />
       ))}
       <p className="zz-name">{shown}</p>

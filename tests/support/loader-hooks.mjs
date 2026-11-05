@@ -61,6 +61,8 @@ export async function resolve(spec, ctx, next) {
 }
 
 export async function load(url, ctx, next) {
+  // 元件 import 的樣式表：測試不需要，當空模組（瀏覽器才看得到樣式）
+  if (url.startsWith("file:") && url.endsWith(".css")) return { format: "module", source: "", shortCircuit: true };
   if (url.startsWith("file:") && /\.tsx?$/.test(url) && !url.includes("/node_modules/")) {
     const file = fileURLToPath(url);
     const { outputText } = ts.transpileModule(readFileSync(file, "utf8"), {

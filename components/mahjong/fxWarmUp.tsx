@@ -33,8 +33,6 @@ const ART_SIZE: Record<string, [number, number]> = {
   "blackhole-core": [1200, 800], "blackhole-pinpoint": [768, 768], "blackhole-nova": [1024, 1024], "blackhole-stardust": [1024, 512],
   "blackhole-light-streams": [2040, 604], "blackhole-accretion-back": [1200, 556], "blackhole-accretion-front": [1200, 593], "blackhole-debris-single": [1056, 780],
   "blackhole-nova-filaments": [2048, 683],
-  "sakura-bud": [683, 1024], "sakura-halo": [900, 900], "sakura-petal-clusters": [1216, 924], "sakura-bud-opening": [1320, 880], "sakura-impact-petal-burst": [1392, 622],
-  "sakura-branch-growth": [2440, 393],
 };
 export function warmImg(file: string): string {
   const [w, h] = ART_SIZE[file.replace(/^.*\//, "").replace(/\.webp$/, "")] ?? [1, 1];

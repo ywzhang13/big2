@@ -8,7 +8,7 @@
 //   風暴、黑洞、櫻花（v4，照小宜〈局部運動實作規格 v4〉，老闆 2026-10-31 補細素材）：拆成很多零件各自動，不轉整張圖——
 //     風暴：8 條氣流帶從勝者那一側分三批吹進來 → 4 層漏斗帶各自不同速度擺動 → 風眼壓縮、主擊回彈、衝擊環 → 12 顆碎石各走拋物線、地面煙塵 4 幀
 //     黑洞：10 條光流＋碎片沿弧線被吸向落點 → 吸積盤前後兩層反向弧移、暗核不轉 → 縮成白點、近黑停頓 70ms → 超新星反爆、4 組能量絲錯開 → 碎片反爆
-//     櫻花：12 群花瓣分遠中近沿 S 曲線飄入、包住落下的花苞，上家、下家視角同時樹枝從畫面邊長到落點、花開在枝頭上（自己、對家視角不長樹枝，原地開花加金色光環、花瓣環繞）→ 花苞壓縮回彈 → 6 幀局部開花＋光陣 → 8 束花瓣噴流
+//     櫻花紛飛（老闆 2026-11-05，小宜規格）：手機 240、電腦 414 片單片花瓣鋪滿全畫面，起風 → 收束 → 花爆 → 滿天飄落；單一畫布（lib/mahjong/fx/canvasFx.ts），不走零件
 // 素材：/mahjong-fx/zimo/<代號>/*.webp（老闆生成，檔名照阿哲 v4、細素材照阿哲〈13 張細素材 GPT 指令〉）；黑底的（-flash、-blast、-pinpoint、-nova、-halo、-nova-filaments）用 screen 疊加去黑。
 // 視角（老闆 2026-10-31，比照隕石）：落點照勝者名牌（data-fx-seat，絕對座位）算，方向照「勝者在我的哪一邊」（rel＝(seat−mySeat)：0 自己、1 下家、2 對家、3 上家）——
 //   雷霆劈在勝者位置；風暴、櫻花從勝者那一側吹進來；冰封從勝者那一側刺進來；黑洞以勝者位置為中心吸入、反爆。四家各自看到不同的畫面。
@@ -20,8 +20,9 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
-import { isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
+import { artUsable, isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
+import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -43,7 +44,7 @@ export const ZFX_TL: Record<ZimoFxNew, { hit: number; tile: number; zimo: number
   frost: { hit: 1080, tile: 1300, zimo: 1560, name: 1760, total: 2900 },
   storm: { hit: 1120, tile: 1400, zimo: 1860, name: 2080, total: 2680 },
   blackhole: { hit: 1120, boom: 1190, tile: 1420, zimo: 1860, name: 2100, total: 2600 },
-  sakura: { hit: 1120, tile: 1420, zimo: 1880, name: 2120, total: 2640 },
+  sakura: SAKURA_TL,
 };
 export const isOwnTitleFx = (fx: string): fx is ZimoFxNew => fx in ZFX_TL;
 const hitOf = (fx: ZimoFxNew) => ZFX_TL[fx].hit;
@@ -62,8 +63,11 @@ export const ZFX_ART: Record<ZimoFxNew, string[]> = {
     "frost-crack-junctions", "frost-cold-mist-puffs"],
   blackhole: ["blackhole-title", "blackhole-core", "blackhole-pinpoint", "blackhole-nova", "blackhole-stardust", "blackhole-light-streams", "blackhole-accretion-back",
     "blackhole-accretion-front", "blackhole-debris-single", "blackhole-nova-filaments"],
-  sakura: ["sakura-title", "sakura-bud", "sakura-halo", "sakura-petal-clusters", "sakura-bud-opening", "sakura-impact-petal-burst", "sakura-branch-growth"],
+  sakura: ["sakura-title"], // 花瓣表依裝置選一張，見 zfxArt
 };
+/** 花瓣表：手機用小張（長期快取，換內容要改檔名） */
+const sakuraSheet = () => (isTouchDevice() ? "sakura-petals-v2-m" : "sakura-petals-v2-d");
+const zfxArt = (fx: ZimoFxNew) => (fx === "sakura" ? [...ZFX_ART.sakura, sakuraSheet()] : ZFX_ART[fx]);
 
 const RM_Q = "(prefers-reduced-motion: reduce)";
 function useReducedMotion() {
@@ -77,20 +81,26 @@ function useReducedMotion() {
 /** 先載好、解碼好這一種的圖和佔位音效（房間裡有這個帳號、或這一手真的要播時才叫；一般牌局不下載） */
 const artImgs = new Map<ZimoFxNew, HTMLImageElement[]>();
 const ready = new Map<ZimoFxNew, Promise<boolean>>();
+const artReady = new Map<ZimoFxNew, Promise<boolean>>();
+/** 圖片有沒有都載好（不看音效）；還沒 preloadZimoFx 就是 false */
+export const zimoFxArtOk = (fx: ZimoFxNew) => artReady.get(fx) ?? Promise.resolve(false);
+/** 等櫻花紛飛的圖最多這麼久（ms）：超過就退回金色自摸，不讓結算卡住 */
+export const SAKURA_ART_WAIT = 4000;
 export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
   let p = ready.get(fx);
   if (!p) {
     const imgs: HTMLImageElement[] = [];
     artImgs.set(fx, imgs);
-    p = Promise.all([
-      ...ZFX_ART[fx].map((f) => {
-        const i = new Image();
-        i.src = `${ART}/${fx}/${f}.webp`;
-        imgs.push(i);
-        return i.decode().then(() => true, () => false);
-      }),
-      preloadZimoFxSound(fx).then((b) => !!b),
-    ]).then((ok) => ok.every(Boolean));
+    const art = Promise.all(zfxArt(fx).map((f) => {
+      const i = new Image();
+      i.src = `${ART}/${fx}/${f}.webp`;
+      imgs.push(i);
+      return i.decode().then(() => true, () => false);
+    })).then((ok) => ok.every(Boolean));
+    artReady.set(fx, art);
+    // 這次載不到（網路一時不好）：不留結果，下一手重新下載
+    void art.then((ok) => { if (!ok && artReady.get(fx) === art) releaseZimoFx(fx); });
+    p = Promise.all([art, preloadZimoFxSound(fx).then((b) => !!b)]).then((ok) => ok.every(Boolean));
     ready.set(fx, p);
   }
   return p;
@@ -98,13 +108,14 @@ export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
 /** 房間裡有人選了這一種：觸控裝置只先下載不解碼（圖留在 HTTP 快取，真的要播才由 preloadZimoFx 解碼） */
 export function prefetchZimoFx(fx: ZimoFxNew) {
   if (!isTouchDevice()) return void preloadZimoFx(fx);
-  prefetchArt(ZFX_ART[fx].map((f) => `${ART}/${fx}/${f}.webp`));
+  prefetchArt(zfxArt(fx).map((f) => `${ART}/${fx}/${f}.webp`));
   void preloadZimoFxSound(fx);
 }
 /** 觸控裝置播完就放掉解碼好的圖：不再留參考，瀏覽器需要記憶體時才丟得掉 */
 function releaseZimoFx(fx: ZimoFxNew) {
   artImgs.delete(fx);
   ready.delete(fx);
+  artReady.delete(fx);
 }
 
 /**
@@ -120,6 +131,18 @@ const BITS = Array.from({ length: 12 }, (_, i) => {
   const a = (i / 12) * Math.PI * 2 + ((i * 7) % 5) * 0.21;
   return { a, r: 0.55 + ((i * 37) % 10) / 22, s: 0.65 + ((i * 53) % 10) / 22, spin: (i % 2 ? 1 : -1) * (90 + ((i * 71) % 5) * 40), f: i % 8 };
 });
+
+/** 櫻花紛飛：畫面交給 runSakura。圖要開播前就解碼好（useWinShow 等過）；這時才發現沒好就立刻回報 onFail（退回金色自摸），不邊播邊載：載不完或超過 3.4 秒才失敗會播一段空畫布 */
+function playSakura(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: boolean, stage: HTMLElement | null, zeroAt: number, onFail: () => void) {
+  const imgs = artImgs.get("sakura") ?? [];
+  const sheet = imgs.find((i) => i.src.includes("sakura-petals"));
+  if (!sheet || !artUsable(imgs)) return onFail();
+  const q = (sel: string) => root.querySelector<HTMLElement>(sel);
+  const run = runSakura({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage },
+    g, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW });
+  run.setSheet(sheet);
+  return run.stop;
+}
 
 /** 主擊時牌桌震一下（比隕石輕：手機最大 12px、電腦 16px，0.35 秒）；櫻花不震 */
 function shakeStage(stage: HTMLElement, mobile: boolean, strong: boolean, at: number) {
@@ -141,7 +164,6 @@ function shakeStage(stage: HTMLElement, mobile: boolean, strong: boolean, at: nu
  */
 function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u: number; px: number; py: number; rel: number; mobile: boolean }): Part[] {
   const { W, H, u, px, py, rel, mobile } = g;
-  const [sx, sy] = SIDE[rel], qx = -sy, qy = sx; // 勝者那一側（從桌心看）、和它垂直的方向
   const k = u / 390; // 規格的 px 數字以手機 390 高為準
   const els = (kind: string) => [...root.querySelectorAll<HTMLElement>(`[data-zp="${kind}"]`)].map((el) => ({ el, i: Number(el.dataset.i) }));
   const deg = (a: number) => (a * 180) / Math.PI;
@@ -289,69 +311,6 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
         [0, { x: 0, y: 0, s: 0.3, o: 0 }], [ts - 5, { x: 0, y: 0, s: 0.3, o: 0 }], [ts + 40, { x: 0, y: 0, s: 0.55, o: 1, e: "cubic-bezier(.15,.7,.35,1)" }],
         [ts + 450, { x: 0, y: 0, s: 1.15, o: 0.85 }], [ts + 700 + i * 120, { x: 0, y: 0, s: 1.25, o: 0 }]], rm: { x: 0, y: 0, s: 1, o: 0.8 } });
     });
-  } else if (fx === "sakura") {
-    const cy = -u * 0.12; // 花苞、花的中心（牌從花心浮出來）
-    // 花瓣群：遠中近三層（近景大、快；遠景小、慢、淡；不加模糊，手機才不掉幀），從勝者那一側（偏上、左右散開，自己那一家也看得到）沿 S 曲線飄進來，分三批包住花苞；主擊後往外散、各自飄落
-    const pet = els("petal");
-    pet.forEach(({ el, i }) => {
-      const d = i % 3, w = u * [0.17, 0.24, 0.33][d], o = [0.5, 0.8, 1][d], b = Math.floor(i / 3) % 3;
-      const sp = (((i * 53) % 9) / 8 - 0.5) * u * 0.9, a = (i / pet.length) * Math.PI * 2, r = u * (0.22 + 0.1 * d);
-      const S = { x: sx * u * 0.5 + qx * sp * 1.4, y: sy * u * 0.35 + qy * sp * 1.4 - u * 0.15 }, E = { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.7 + cy };
-      const ta = [700, 870, 1040][b], ts = Math.max(0, ta - [900, 750, 600][d]);
-      const mid = (f: number, side: number): Pose => ({ x: S.x + (E.x - S.x) * f + qx * side * u, y: S.y + (E.y - S.y) * f + qy * side * u, s: 1, o });
-      const fall = 1700 + ((i * 37) % 6) * 150, last = i < 4;
-      out.push({ el, w, h: w * 1.01, keys: [
-        [0, { ...S, s: 1, o: 0 }], [ts, { ...S, s: 1, o: 0 }], [ts + (ta - ts) * 0.35, mid(0.35, 0.15)], [ts + (ta - ts) * 0.7, mid(0.7, -0.15)], [ta, { ...E, s: 1, o }],
-        [1120, { ...E, s: 0.95, o }], [1300, { x: E.x * 1.6, y: E.y * 1.3, s: 1.05, o, e: "ease-out" }],
-        [fall, { x: E.x * 1.8 + Math.sin(i) * u * 0.05, y: E.y * 1.3 + u * 0.3, s: 1, o: last ? o * 0.6 : 0 }],
-        [2640, { x: E.x * 1.85 - Math.sin(i) * u * 0.05, y: E.y * 1.3 + u * 0.45, s: 1, o: 0 }]] });
-    });
-    // 花苞（老闆的璀璨鎏金魔法花苞）：從勝者那一側上方落下（只有位移、縮放），1.04～1.12 壓縮，主擊回彈 1.08 後換成開花序列
-    els("bud").forEach(({ el }) => {
-      const w = u * 0.36, s0 = { x: sx * u * 0.6, y: cy - u * 0.75 + sy * u * 0.15 };
-      out.push({ el, w, h: w * 1.5, keys: [[0, { ...s0, s: 0.6, o: 0 }], [480, { ...s0, s: 0.6, o: 0 }], [560, { ...s0, s: 0.7, o: 1, e: "cubic-bezier(.5,0,.9,.6)" }],
-        [1040, { x: 0, y: cy, s: 1, o: 1 }], [1120, { x: 0, y: cy, s: 1.04, sy: 0.92, o: 1 }], [1150, { x: 0, y: cy, s: 1.08, o: 1 }], [1175, { x: 0, y: cy, s: 1.06, o: 0 }]] });
-    });
-    // 開花 6 幀（一個元素一格一格換）：1.15 起由下層到上層一層層打開，1.425 開滿，留著當牌的底
-    const cell = cellPos;
-    els("bloom").forEach(({ el }) => {
-      const w = u * 0.62, at = (k: number, o: number, s: number, ms: number): [number, Pose] => [ms, { x: 0, y: cy, s, o, bp: cell(k, 3, 2), e: "steps(1, end)" }];
-      out.push({ el, w, h: w, keys: [at(0, 0, 1.08, 0), at(0, 0, 1.08, 1140), at(0, 1, 1.08, 1150), at(1, 1, 1, 1205), at(2, 1, 1, 1260), at(3, 1, 1, 1315),
-        at(4, 1, 1, 1370), at(5, 1, 1, 1425), at(5, 1, 1, 1880), [2640, { x: 0, y: cy, s: 1.02, o: 0.8, bp: cell(5, 3, 2) }]], rm: { x: 0, y: cy, s: 1, o: 1, bp: cell(5, 3, 2) } });
-    });
-    // 撞擊光陣：俯視壓扁，只縮放、淡入淡出
-    els("halo").forEach(({ el }) => out.push({ el, w: u, h: u, keys: [[0, { x: 0, y: 0, s: 0.4, sy: 0.17, o: 0 }], [1110, { x: 0, y: 0, s: 0.4, sy: 0.17, o: 0 }],
-      [1200, { x: 0, y: 0, s: 1, sy: 0.42, o: 1 }], [1900, { x: 0, y: 0, s: 1.05, sy: 0.44, o: 0.9 }], [2640, { x: 0, y: 0, s: 1.1, sy: 0.46, o: 0 }]] }));
-    // 花瓣噴流 8 束：各自朝一個方向（依視角固定轉一次）往外噴，分兩批
-    els("burst").forEach(({ el, i }) => {
-      const a = ((i * 45 + 22.5 + rel * 10) * Math.PI) / 180, w = u * 0.32, ts = 1260 + (i % 2) * 80;
-      const at = (r: number, s: number, o: number): Pose => ({ x: Math.cos(a) * r * u, y: Math.sin(a) * r * u * 0.8 + cy, s, o });
-      out.push({ el, w, h: w * 0.894, rot: deg(a) + 40, keys: [[0, at(0.06, 0.4, 0)], [ts - 10, at(0.06, 0.4, 0)], [ts + 60, { ...at(0.15, 0.8, 1), e: "ease-out" }],
-        [ts + 420, at(0.5, 1.1, 0.85)], [ts + 620, at(0.6, 1.15, 0)]] });
-    });
-    // 自己、對家視角（老闆 2026-10-31：不要從畫面邊長樹枝）：花苞落地後原地開花，花後面立一圈金色光環（只縮放、呼吸），8 片花瓣沿橢圓繞著花轉（只有位移）
-    els("ring").forEach(({ el }) => {
-      const w = u * 0.95, at = (s: number, o: number): Pose => ({ x: 0, y: cy, s, o });
-      out.push({ el, w, h: w, keys: [[0, at(0.3, 0)], [1140, at(0.3, 0)], [1320, { ...at(1, 0.9), e: "cubic-bezier(.2,.8,.3,1.1)" }], [1700, at(1.04, 0.8)], [2100, at(0.98, 0.9)],
-        [2640, at(1.03, 0.75)]] });
-    });
-    const orb = els("orbit");
-    orb.forEach(({ el, i }) => {
-      const w = u * 0.12, rx = u * 0.44, ry = u * 0.15, ph = (i / orb.length) * Math.PI * 2, P = 1800, keys: [number, Pose][] = [];
-      const at = (t: number, o: number): Pose => { const a = ph + ((t - 1250) / P) * Math.PI * 2; return { x: Math.cos(a) * rx, y: cy + u * 0.06 + Math.sin(a) * ry, s: 1, o: o * (Math.sin(a) > 0 ? 1 : 0.45) }; };
-      keys.push([0, at(1250, 0)], [1250, at(1250, 0)]);
-      for (let t = 1350; t <= 2640; t += 75) keys.push([t, at(t, t < 1450 ? (t - 1250) / 200 : 0.95)]);
-      out.push({ el, w, h: w * 1.01, keys });
-    });
-    // 上家、下家視角：樹枝 5 幀（一個元素一格一格換）：花苞落下的同時（0.50～0.98）從畫面邊長出來，枝頭＝花苞落地、開花的位置（花的底座），花開在枝頭上。
-    // 圖裡樹幹在左下、往右上長，枝頭取開滿那一幀樹冠中間（寬 66%、高 30%）；勝者在畫面右半邊就左右翻面，樹幹從右邊進來
-    els("branch").forEach(({ el }) => {
-      const w = u * 1.15, h = w * 0.805, flip = px > W / 2, ax = 0.66, ay = 0.3, baseY = cy + u * 0.62 * 0.42;
-      const x = (flip ? -1 : 1) * (0.5 - ax) * w, y = baseY + (0.5 - ay) * h;
-      const at = (k: number, o: number, ms: number): [number, Pose] => [ms, { x, y, s: 1, o, bp: cell(k, 5, 1), e: "steps(1, end)" }];
-      out.push({ el, w, h, flip, keys: [at(0, 0, 0), at(0, 0, 470), [500, { x, y, s: 1, o: 0.95, bp: cell(0, 5, 1), e: "steps(1, end)" }], at(1, 0.95, 620),
-        at(2, 0.95, 740), at(3, 0.95, 860), at(4, 0.95, 980), [2640, { x, y, s: 1, o: 0.95, bp: cell(4, 5, 1) }]] });
-    });
   } else if (fx === "thunder") {
     // 雷霆補細節層（小宜〈隕石冰封雷霆-補細節素材清單 v1〉，老闆 2026-10-31 補充特效2）：主擊 1.12、牌 1.42、時間軸不動，只加層（全部黑底，screen）
     // 雲內爬電：雷雲那一帶（畫面上方）各處先後閃兩下（0.38～1.4 秒）
@@ -438,19 +397,25 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
  * tile：自摸的那張牌（完整版：主擊後才從落點炸出來，停在那裡）。
  * warm：預熱（components/mahjong/fxWarmUp.tsx）：不出聲、不震、不攔點擊，看不見的狀態把整條時間軸一格一格走一遍，走完 onDone(false)
  */
-export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDone, warm, embedded = false, sound = true }: {
+export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDone, warm, embedded = false, sound = true, onArtFail }: {
   fx: ZimoFxNew; seat: number; mySeat: number; mobile: boolean; tile: Tile | null | undefined; name?: string; onDone: (skipped: boolean) => void; warm?: WarmMode;
   /** 設定頁預覽用：限制在自己的手機牌桌容器，不能影響正式牌桌。 */
   embedded?: boolean; sound?: boolean;
+  /** 櫻花紛飛開播時才發現圖沒好（平常開播前就擋掉了）：頁面退回金色自摸 */
+  onArtFail?: () => void;
 }) {
   const rm = useReducedMotion();
   const art = (f: string) => (warm ? warmImg(f) : `${ART}/${fx}/${f}.webp`);
   const bg = (f: string) => ({ backgroundImage: `url("${art(f)}")` });
   const ref = useRef<HTMLDivElement>(null);
   const doneRef = useRef(onDone);
-  useLayoutEffect(() => { doneRef.current = onDone; });
+  const artFailRef = useRef(onArtFail);
+  useLayoutEffect(() => { doneRef.current = onDone; artFailRef.current = onArtFail; });
   const ended = useRef(false);
   const stopRef = useRef(() => {});
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  /** 櫻花畫布的時間零點（聲音對齊用） */
+  const zeroRef = useRef(0);
   const rel = (((seat - mySeat) % 4) + 4) % 4; // 0 自己、1 下家、2 對家、3 上家
   useEffect(() => () => { if (!warm && isTouchDevice()) releaseZimoFx(fx); }, [fx, warm]);
 
@@ -509,7 +474,12 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       const back = Math.min(tx > 0 ? px / tx : tx < 0 ? (W - px) / -tx : Infinity, ty > 0 ? py / ty : ty < 0 ? (H - py) / -ty : Infinity);
       set("--sd", back + sl * 1.05);
     }
-    // 零件（風暴、黑洞、櫻花 v4；雷霆、冰封的補細節層）：先給尺寸；減少動態只留標 data-rmk 的那一個定格
+    if (fx === "sakura") {
+      if (!cvRef.current) return;
+      zeroRef.current = performance.now();
+      return playSakura(root, cvRef.current, { W, H, u, px, py, rel, mobile }, rm, embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]"), zeroRef.current, () => { if (artFailRef.current) { ended.current = true; artFailRef.current(); } });
+    }
+    // 零件（風暴、黑洞；雷霆、冰封的補細節層）：先給尺寸；減少動態只留標 data-rmk 的那一個定格
     const total = zfxTotal(fx);
     const parts = v4Parts(fx, root, { W, H, u, px, py, rel, mobile });
     if (rm) { runParts(parts, total, true); return; }
@@ -535,7 +505,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     const wd = stormWind(rel);
     if (stage && fx === "storm") anims.push(stage.animate([{ transform: "none" }, { transform: `translate(${(wd.x * 6).toFixed(1)}px, ${(wd.y * 6).toFixed(1)}px)` },
       { transform: `translate(${(-wd.x * 4).toFixed(1)}px, ${(-wd.y * 4).toFixed(1)}px)` }, { transform: "none" }], { duration: 120, delay: boomOf(fx), easing: "linear" }));
-    else if (stage && fx !== "sakura") anims.push(...shakeStage(stage, mobile, true, boomOf(fx)));
+    else if (stage) anims.push(...shakeStage(stage, mobile, true, boomOf(fx)));
     // 黑洞：主擊前整個牌桌被往落點吸過去（縮到 0.94）
     if (stage && fx === "blackhole") stage.style.transformOrigin = `${Math.round(px)}px ${Math.round(py)}px`;
     if (stage && fx === "blackhole") anims.push(stage.animate([{ transform: "none" }, { transform: "scale(0.94)", offset: 0.9 }, { transform: "none" }], { duration: HIT, easing: "ease-in" }));
@@ -579,7 +549,8 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       stopRef.current = playZimoFxSound(fx, z, hit);
     };
     if (sound) {
-      if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
+      if (fx === "sakura" && !rm) go(zeroRef.current);
+      else if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
       else go(null);
     }
     ts.push(setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? OWN_RM : zfxTotal(fx)));
@@ -670,22 +641,8 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       {[0, 1, 2, 3].map((i) => part("fila", "blackhole-nova-filaments", 4, 1, i, i, i === 0))}
     </>;
   } else {
-    // 樹枝 → 遠、中景花瓣 → 花苞、開花、噴流 → 近景花瓣；光陣用 screen
-    const pet = Array.from({ length: mobile ? 8 : 12 }, (_, i) => i);
-    base = <>
-      {/* 上家、下家：樹枝從畫面邊長到落點；自己、對家：不長樹枝，原地開花加金色光環、花瓣環繞 */}
-      {rel % 2 === 1 && part("branch", "sakura-branch-growth", 5, 1, 0, 0)}
-      {pet.filter((i) => i % 3 < 2).map((i) => part("petal", "sakura-petal-clusters", 4, 3, i, i % 12))}
-      <i className="zp" data-zp="bud" data-i={0} style={bg("sakura-bud")} />
-      {part("bloom", "sakura-bud-opening", 3, 2, 0, 0, true)}
-      {Array.from({ length: 8 }, (_, i) => part("burst", "sakura-impact-petal-burst", 4, 2, i, i))}
-      {pet.filter((i) => i % 3 === 2).map((i) => part("petal", "sakura-petal-clusters", 4, 3, i, i % 12))}
-      {rel % 2 === 0 && Array.from({ length: 8 }, (_, i) => part("orbit", "sakura-petal-clusters", 4, 3, i, (i * 5) % 12))}
-    </>;
-    blend = <>
-      <i className="zp" data-zp="halo" data-i={0} style={bg("sakura-halo")} />
-      {rel % 2 === 0 && <i className="zp" data-zp="ring" data-i={0} style={bg("sakura-halo")} />}
-    </>;
+    // 櫻花紛飛：一個畫布畫完全部（lib/mahjong/fx/canvasFx.ts）
+    base = <canvas ref={cvRef} className="zk-cv" />;
   }
 
   return (
@@ -701,13 +658,13 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
         {tile && (
           <div className="zf-tile" data-zf-tile>
             <div className="zf-tile-in">
-              <i className="zf-aura" />
+              {fx !== "sakura" && <i className="zf-aura" />}
               <MjTile tile={tile} width="var(--tw)" height="var(--th)" />
             </div>
           </div>
         )}
         {/* 這一種專屬的「自摸」大字＋名字，取代金色自摸浮層 */}
-        <ZimoTitle fx={fx} name={name} t={ZFX_TL[fx].zimo} n={ZFX_TL[fx].name} rm={rm} mobile={mobile} wind={fx === "storm" ? Math.sign(stormWind(rel).x) : SIDE[rel][0] > 0 ? -1 : 1} src={art(`${fx}-title`)} />
+        <ZimoTitle driven={fx === "sakura"} fx={fx} name={name} t={ZFX_TL[fx].zimo} n={ZFX_TL[fx].name} rm={rm} mobile={mobile} wind={fx === "storm" ? Math.sign(stormWind(rel).x) : SIDE[rel][0] > 0 ? -1 : 1} src={art(`${fx}-title`)} />
         <div className="zf-flash" />
       </div>
     </div>

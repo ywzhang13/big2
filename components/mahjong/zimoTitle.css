@@ -91,3 +91,5 @@
 .zz.rm .zz-back { animation: none; opacity: 1; }
 .zz.rm .zz-name { animation: zz-in 220ms ease-out 380ms both; }
 .zz.rm .zz-glow, .zz.rm .zz-hl, .zz.rm .zz-wind, .zz.rm .zz-leaf, .zz.rm .zz-dust, .zz.rm .zz-petal { display: none; }
+/* 櫻花紛飛：樣子由畫布迴圈寫 inline（lib/mahjong/fx/canvasFx.ts），這裡只關掉 CSS 動畫 */
+.zz.driven .zz-back, .zz.driven .zz-art, .zz.driven .zz-name { animation: none; }

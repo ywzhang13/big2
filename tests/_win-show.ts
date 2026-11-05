@@ -6,8 +6,9 @@
 //   W5 不認得的代號當作沒有
 //   W7 自摸特效庫 5 種新特效（老闆 2026-10-31）：自摸＝特效 → 浮層；大牌自摸＝大牌段 → 特效 → 浮層；放槍胡不播；天胡只播大牌段；烈焰已移除＝不認得
 //      完整版（雷霆、冰封）比照隕石：自帶專屬「自摸」大字，不接浮層——自摸＝特效；大牌自摸＝大牌段 → 特效
+//   W9 櫻花素材任何時序失敗都退回金色（審伯 2026-11-05）：立刻失敗、等待中才失敗、一直載不完、超時後才載好都算沒好；只有等待內載好才播；開播時圖沒好也不能播
 //   W6 10 種大牌逐一：用 pickBigWin 挑出來的結果排順序（自摸、放槍、隕石帳號自摸），大牌段永遠排第一
-import { isChatUiEvent, planWinShow } from "../lib/mahjong/winShow";
+import { artOkWithin, artUsable, isChatUiEvent, planWinShow, zfxPlanToCele } from "../lib/mahjong/winShow";
 import { BIG_WIN_ORDER, pickBigWin } from "../lib/mahjong/bigWin";
 
 const results: string[] = [];
@@ -57,6 +58,28 @@ for (const sel of ["[data-chat-btn]", "[data-chat-panel]", "[data-chat-status]",
 eq(isChatUiEvent(evt(null)), false, "W8 點牌桌其他地方照舊跳過");
 eq(isChatUiEvent({ target: null } as unknown as Event), false, "W8 沒有 target（鍵盤事件打在 document）照舊跳過");
 eq(isChatUiEvent({ target: {} } as unknown as Event), false, "W8 target 不是元素（document）照舊跳過");
+
+// W9
+eq([zfxPlanToCele(["zfx"]), zfxPlanToCele(["big", "zfx"]), zfxPlanToCele(["big"])], [["cele"], ["big", "cele"], ["big"]], "W9 退回金色：特效那段換成浮層，大牌段不動");
+{
+  const later = (ms: number, v: boolean) => new Promise<boolean>((r) => setTimeout(() => r(v), ms));
+  const WAIT = 60;
+  const [now, late, never, tooLate, good] = await Promise.all([
+    artOkWithin(Promise.resolve(false), WAIT), artOkWithin(later(20, false), WAIT), artOkWithin(new Promise<boolean>(() => {}), WAIT), artOkWithin(later(120, true), WAIT), artOkWithin(later(20, true), WAIT),
+  ]);
+  eq(now, false, "W9 立刻失敗：退回");
+  eq(late, false, "W9 等待中才失敗：退回");
+  eq(never, false, "W9 一直載不完：時間到退回，不會卡住結算");
+  eq(tooLate, false, "W9 超時後才載好：已經退回，不算");
+  eq(good, true, "W9 等待內載好：播");
+}
+{
+  const img = (complete: boolean, naturalWidth: number) => ({ complete, naturalWidth });
+  eq(artUsable([]), false, "W9 開播時圖已被放掉：不能播");
+  eq(artUsable([img(true, 512), img(false, 0)]), false, "W9 開播時還沒載完：不能播");
+  eq(artUsable([img(true, 512), img(true, 0)]), false, "W9 開播時載壞了：不能播");
+  eq(artUsable([img(true, 512), img(true, 384)]), true, "W9 全部解碼好：播");
+}
 
 for (const r of results) console.log(r);
 const fail = results.filter((r) => r.startsWith("❌")).length;

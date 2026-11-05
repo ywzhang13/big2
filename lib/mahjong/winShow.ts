@@ -19,6 +19,13 @@ export const isZimoFxNew = (x: unknown): x is ZimoFxNew => typeof x === "string"
 /** 按到聊天（聊天鈕、底板、送出狀態、語音泡泡）的事件：不算「點畫面跳過特效」（老闆 2026-11-04：點聊天沒反應；打字的空白鍵、Enter 也一樣） */
 export const isChatUiEvent = (e: Event) => !!(e.target as Element | null)?.closest?.("[data-chat-btn], [data-chat-panel], [data-chat-status], [data-chat-bubble]");
 
+/** 特效的圖載不到：這一段換成金色自摸浮層（其他段不動） */
+export const zfxPlanToCele = (plan: WinShowStage[]): WinShowStage[] => plan.map((s) => (s === "zfx" ? "cele" : s));
+/** 等圖載好最多 ms 毫秒：載好才 true；失敗、超時都是 false（超時後才載好也不算，已經決定退回了） */
+export const artOkWithin = (art: Promise<boolean>, ms: number) => Promise.race([art, new Promise<boolean>((r) => setTimeout(() => r(false), ms))]);
+/** 這些圖現在能不能直接畫：一張都沒有、還沒載完、載壞了都不行 */
+export const artUsable = (imgs: readonly { complete: boolean; naturalWidth: number }[]) => imgs.length > 0 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+
 /** 現有自摸／胡慶祝浮層的長度（ms），和 page.tsx 的浮層動畫一樣 */
 export const CELE_MS = { zimo: 3500, ron: 2000 } as const;
 

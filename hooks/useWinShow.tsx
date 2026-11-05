@@ -8,10 +8,10 @@ import type { RoundInfo } from "@/lib/mahjong/gameState";
 import type { Tile } from "@/lib/mahjong/tiles";
 import BigWin8Fx, { preloadBigWin8 } from "@/components/mahjong/BigWin8Fx";
 import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
-import ZimoFx, { preloadZimoFx } from "@/components/mahjong/ZimoFx";
+import ZimoFx, { preloadZimoFx, SAKURA_ART_WAIT, zimoFxArtOk } from "@/components/mahjong/ZimoFx";
 import WinCelebration from "@/components/mahjong/WinCelebration";
 import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
-import { CELE_MS, isChatUiEvent, isZimoFxNew, planWinShow, type WinShowStage } from "@/lib/mahjong/winShow";
+import { artOkWithin, CELE_MS, isChatUiEvent, isZimoFxNew, planWinShow, zfxPlanToCele, type WinShowStage } from "@/lib/mahjong/winShow";
 
 const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
@@ -89,10 +89,14 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
     if (showPlan.includes("meteor")) loads.push(preloadMeteorFx());
     // 自摸特效庫的新特效（雷霆、風暴、冰封、黑洞、櫻花）：只有這一手真的要播那一種才下載那一種（約 0.8～1.3MB）
     if (showPlan.includes("zfx") && isZimoFxNew(showWinner.winFx)) loads.push(preloadZimoFx(showWinner.winFx));
+    // 櫻花紛飛要等花瓣表和大字解碼好才開播（載好才開始算時間），不然會空播；載不到、或等超過 SAKURA_ART_WAIT：退回金色自摸浮層（小宜規格第 5、10 節；審伯 2026-11-05）
+    const sakuraGate = showPlan.includes("zfx") && showWinner.winFx === "sakura"
+      ? artOkWithin(zimoFxArtOk("sakura"), SAKURA_ART_WAIT).then((ok) => { if (!ok) show.plan = zfxPlanToCele(show.plan); })
+      : Promise.resolve();
     if (showPick) loads.push(preloadBigWin8(showPick.theme));
     const ready = loads.length ? Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
     // 不在這裡預熱（老闆 2026-10-25：來不及預熱就直接播，不能讓玩家多等）
-    void ready.then(() => setTimeout(() => {
+    void Promise.all([ready, sakuraGate]).then(() => setTimeout(() => {
       if (cancelled || bigWinPlayed(key)) return;
       markBigWinPlayed(key);
       setWinShow(show);
@@ -106,6 +110,8 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
   // 這一手的演出還沒播（剛結束、下一個畫面才掛上）或正在播：先不出結算浮層
   const winShowHoldResult = !!winShowKey && (!!winShowLive || !bigWinPlayed(winShowKey));
   const nextWinStage = () => setWinShow((w) => (w && w.i + 1 < w.plan.length ? { ...w, i: w.i + 1 } : null));
+  /** 自摸特效開播時才發現圖沒好：這一段換成金色自摸浮層 */
+  const zfxToCele = () => setWinShow((w) => (w ? { ...w, plan: zfxPlanToCele(w.plan) } : w));
   const endWinShow = () => { setCelebrationMode(null); setWinShow(null); };
   // 浮層那一段（排在大牌段後面，是最後一段）：照原本長度播完才出結算；底下墊著大牌段留下的暗幕，浮層淡入時牌桌不會先亮一下。
   // 點畫面、Enter、Space 直接進結算（跳過那一下不會按到結算的按鈕）
@@ -134,14 +140,14 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
   // 換局、離開房間：浮層的收尾計時器也收掉
   useEffect(() => () => { if (celeOffRef.current) clearTimeout(celeOffRef.current); }, [winShowKey]);
 
-  return { isZimoWin, isRonWin, flowerWinName, celebrationMode, showWinner, winShowKey, winShowLive, winStage, winShowHoldResult, endWinShow, nextWinStage };
+  return { isZimoWin, isRonWin, flowerWinName, celebrationMode, showWinner, winShowKey, winShowLive, winStage, winShowHoldResult, endWinShow, nextWinStage, zfxToCele };
 }
 
 export type WinShowState = ReturnType<typeof useWinShow>;
 
 /** 浮層（一般胡牌，或大牌後面那一段）、隕石、大牌段；mySeat：隕石鏡頭朝誰（觀戰者傳目前視角的座位） */
 export function WinShowLayer({ ws, winner, mySeat, mobile }: { ws: WinShowState; winner: Winner | undefined; mySeat: number; mobile: boolean }) {
-  const { celebrationMode, flowerWinName, winShowLive, winStage, endWinShow, nextWinStage } = ws;
+  const { celebrationMode, flowerWinName, winShowLive, winStage, endWinShow, nextWinStage, zfxToCele } = ws;
   return (
     <>
       {/* Celebration overlay — shown briefly on all 4 screens before settlement */}
@@ -157,7 +163,7 @@ export function WinShowLayer({ ws, winner, mySeat, mobile }: { ws: WinShowState;
       {/* 自摸特效庫的新特效（雷霆、風暴、冰封、黑洞、櫻花）：播完接自摸浮層；播完不卸下（只留暗幕墊在浮層底下），整串結束才收。點畫面任一處跳過整串 */}
       {winShowLive && isZimoFxNew(winShowLive.winFx) && winShowLive.plan.indexOf("zfx") >= 0 && winShowLive.plan.indexOf("zfx") <= winShowLive.i && (
         <ZimoFx key={`zf|${winShowLive.key}`} fx={winShowLive.winFx} seat={winShowLive.seat} mySeat={mySeat} mobile={mobile} tile={winShowLive.tile} name={winShowLive.name}
-          onDone={(skipped) => (skipped ? endWinShow() : winStage === "zfx" ? nextWinStage() : undefined)} />
+          onArtFail={zfxToCele} onDone={(skipped) => (skipped ? endWinShow() : winStage === "zfx" ? nextWinStage() : undefined)} />
       )}
       {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），排第一段；播完不卸下（只留暗幕），等後面的浮層／隕石播完一起收。點畫面任一處跳過整串。
           和隕石同時掛著，key 要和隕石分開（同一層兄弟用同一個 key，React 會多掛一個收不掉的隕石） */}
