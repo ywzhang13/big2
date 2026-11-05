@@ -222,8 +222,8 @@ let idA = "", idB = "";
   const z4 = await zimo(A);
   storeFail.zimoFxFor = false;
   eq([z1.fx, Object.keys(mine.body.available).sort(), Object.values(mine.body.available).every((v) => v === null), mine.body.selected, sel.status, z2.fx, z3.fx, z4.fx],
-    ["golden", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"], true, "golden", 200, "thunder", "golden", "golden"],
-    "Z6 老闆帳號到 2099 年還有效：沒選過＝金色自摸；6 種付費特效永久可選；選雷霆後自摸帶 thunder；資料庫查不到時所有帳號安全回退金色自摸");
+    ["golden", ["blackhole", "frost", "golden", "meteor", "rulai", "sakura", "storm", "thunder"], true, "golden", 200, "thunder", "golden", "golden"],
+    "Z6 老闆帳號到 2099 年還有效：沒選過＝金色自摸；6 種付費特效和專屬神掌永久可選；選雷霆後自摸帶 thunder；資料庫查不到時所有帳號安全回退金色自摸");
 }
 
 // ---- Z7 玩家自己選 ----
@@ -337,8 +337,8 @@ let idA = "", idB = "";
   }
   const mine = (await get(myFxGet, "/", "boss")).body.available;
   eq([[g1.status, g1.body.error], [g2.status, g2.body.error], [rv.status, rv.body.error], [s1.status, s1.body.error], [s2.status, s2.body.error], sqlTries, "flame" in mine, Object.keys(mine).length],
-    [[400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], ["擋下", "擋下"], false, 7],
-    "Z12 烈焰已移除：後台開通（單選、混在別種裡）、收回、玩家和老闆選用都 400；資料庫直接寫開通和選用都被檢查限制擋下；老闆帳號清單沒有烈焰，另含全帳號金色自摸預設共 7 種");
+    [[400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], ["擋下", "擋下"], false, 8],
+    "Z12 烈焰已移除：後台開通（單選、混在別種裡）、收回、玩家和老闆選用都 400；資料庫直接寫開通和選用都被檢查限制擋下；老闆帳號清單沒有烈焰，另含全帳號金色自摸和專屬神掌預設共 7 種");
 }
 
 // ---- Z13 金色自摸永久回退 ----

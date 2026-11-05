@@ -47,7 +47,7 @@ export interface WinnerEntry {
 }
 
 /** 自摸特效代號（老闆 2026-10-31 定案 6 種付費特效，加上全帳號永久的金色預設）；前端照代號播放，還沒做好的代號前端當作一般浮層 */
-export type WinFx = "golden" | "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
+export type WinFx = "golden" | "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura" | "rulai";
 
 /** 整場統計：每家這場胡牌、放槍、自摸各幾次（座位 0～3） */
 export interface HandStats {

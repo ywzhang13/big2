@@ -9,7 +9,10 @@ export const ZIMO_FX: readonly WinFx[] = ["meteor", "thunder", "storm", "frost",
 export const isZimoFx = (x: unknown): x is WinFx => typeof x === "string" && (ZIMO_FX as readonly string[]).includes(x);
 /** 金色自摸是所有 LINE 帳號永久可選的預設，不屬於後台可開通／收回的特效。 */
 export const GOLDEN_ZIMO_FX: WinFx = "golden";
-export const isSelectableZimoFx = (x: unknown): x is WinFx => x === GOLDEN_ZIMO_FX || isZimoFx(x);
+/** 老闆專屬特效（如來神掌，老闆 2026-11-05）：只有老闆帳號能選，不在 ZIMO_FX 裡，所以後台不能開通、「開通全部」也不包含；同桌和觀戰者照代號播 */
+export const OWNER_FX: readonly WinFx[] = ["rulai"];
+export const isOwnerFx = (x: unknown): x is WinFx => typeof x === "string" && (OWNER_FX as readonly string[]).includes(x);
+export const isSelectableZimoFx = (x: unknown): x is WinFx => x === GOLDEN_ZIMO_FX || isZimoFx(x) || isOwnerFx(x);
 
 /** 老闆帳號（原本綁隕石的那個 LINE 帳號）：後台只有他能用；6 種特效永久全開，沒選過就是隕石 */
 export const OWNER_USER_ID = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";
@@ -39,7 +42,7 @@ export interface ZimoFxNow { code: WinFx; until: number | null }
 export function resolveZimoFx(userId: string | null | undefined, pref: { fx: string; until: number | null } | undefined): ZimoFxNow | undefined {
   if (!userId) return undefined;
   if (pref?.fx === GOLDEN_ZIMO_FX) return { code: GOLDEN_ZIMO_FX, until: null };
-  if (isOwner(userId) && isZimoFx(pref?.fx)) return { code: pref.fx, until: null };
+  if (isOwner(userId) && (isZimoFx(pref?.fx) || isOwnerFx(pref?.fx))) return { code: pref.fx, until: null };
   if (!pref || !isZimoFx(pref.fx) || pref.until === null) return { code: GOLDEN_ZIMO_FX, until: null };
   return { code: pref.fx, until: pref.until }; // 永久是 Infinity，存進牌局 JSON 會變成 null，兩者 zimoFxValid 都算有效
 }

@@ -22,7 +22,7 @@ export const fail = { zimoFxFor: false }; // true：zimoFxFor 丟錯（測查不
 
 let dbp: Promise<PGlite> | null = null;
 /** 建資料庫時接在後面套用的 migration（預設套以場結清；要先建舊資料再套用的測試，在第一次呼叫 db() 前清空，自己 exec） */
-export const extraMigrations: string[] = ["20261104_mahjong_match_settle.sql", "20261105_mahjong_hand_results.sql"];
+export const extraMigrations: string[] = ["20261104_mahjong_match_settle.sql", "20261105_mahjong_hand_results.sql", "20261107_mahjong_fx_rulai.sql"];
 /** 測試用：記一場打完的對戰紀錄（ended＝null 就不記，代表還在打） */
 export async function addMatch(roomId: string, code: string, started: number, ended: number | null): Promise<void> {
   if (ended === null) return;
