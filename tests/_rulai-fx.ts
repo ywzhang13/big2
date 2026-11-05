@@ -1,7 +1,7 @@
 // 如來神掌畫布引擎（lib/mahjong/fx/rulaiFx.ts；小宜〈如來神掌 v3 金光裂紋〉；老闆 2026-11-05）：用假的 canvas 記下每一次畫圖
 //   R1 手機粒子上限 110；倍率手機 ≤1.5、電腦 ≤2
 //   R2 畫面只由時間決定：同一個 ms 畫兩次，畫圖指令完全一樣
-//   R3 手的倍率：抬高變大、砸下變小（1.75 → 1.14 → 2.45 → 1.03 → 1 → 1.7），砸下只有 120ms
+//   R3 手的倍率照 RULAI_HAND：抬高變大、砸下變小，砸下只有 120ms；整隻手都在畫面內
 //   R4 播放中不用 filter、shadowBlur
 //   R5 全畫面閃光只在主擊後 90ms 內
 //   R6 runRulai：全程一個 rAF、沒有 element.animate；播完、跳過都放掉畫布（含烘的小圖）、圖片參照，舞台復位，stop 可重複呼叫
@@ -14,7 +14,8 @@ import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { ZFX_TL } from "../components/mahjong/ZimoFx";
-import { RULAI_ART, RULAI_LIMIT, RULAI_TL, RulaiCanvas, rulaiCam, rulaiDim, rulaiFadeOut, rulaiHandScale, rulaiTilePose, rulaiTitlePose, runRulai, type RulaiArt } from "../lib/mahjong/fx/rulaiFx";
+import { RULAI_META } from "../lib/mahjong/fx/rulaiMeta";
+import { RULAI_ART, RULAI_LIMIT, RULAI_TL, RulaiCanvas, rulaiCam, rulaiDim, rulaiFadeOut, rulaiHandFit, RULAI_HAND, rulaiHandScale, rulaiTilePose, rulaiTitlePose, runRulai, type RulaiArt } from "../lib/mahjong/fx/rulaiFx";
 import { isCanvasFx, isZimoFxNew } from "../lib/mahjong/winShow";
 import { fxName, ZIMO_FX_LIST } from "../lib/mahjong/zimoFxClient";
 
@@ -24,12 +25,13 @@ const ok = (c: boolean, msg: string) => results.push(`${c ? "✅" : "❌"} ${msg
 type Call = [string, ...unknown[]];
 function fakeCtx() {
   const calls: Call[] = [], props: Record<string, unknown> = {};
-  const rec = (name: string) => (...a: unknown[]) => { calls.push([name, ...a.map((v) => (typeof v === "object" ? "obj" : v))]); };
-  const base: Record<string, unknown> = { calls, props, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
+  const drawn = new Set<unknown>();
+  const rec = (name: string) => (...a: unknown[]) => { if (name === "drawImage") drawn.add(a[0]); calls.push([name, ...a.map((v) => (typeof v === "object" ? "obj" : v))]); };
+  const base: Record<string, unknown> = { calls, props, drawn, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
   return new Proxy(base, {
     get: (t, k: string) => (k in t ? t[k] : rec(k)),
     set: (t, k: string, v) => { props[k] = v; calls.push([`set:${k}`, typeof v === "object" ? "obj" : v]); return true; },
-  }) as unknown as CanvasRenderingContext2D & { calls: Call[]; props: Record<string, unknown> };
+  }) as unknown as CanvasRenderingContext2D & { calls: Call[]; props: Record<string, unknown>; drawn: Set<unknown> };
 }
 function fakeCanvas() { const ctx = fakeCtx(); return { width: 0, height: 0, style: {}, getContext: () => ctx, ctx } as unknown as HTMLCanvasElement & { ctx: ReturnType<typeof fakeCtx> }; }
 const baked: HTMLCanvasElement[] = [];
@@ -46,8 +48,14 @@ const T = RULAI_TL;
 // R2
 { const { f, x } = make(); for (const ms of [800, 1600, 2500]) { x.calls.length = 0; f.draw(ms); const a = JSON.stringify(x.calls); x.calls.length = 0; f.draw(ms); ok(a === JSON.stringify(x.calls), `R2 ${ms}ms 畫兩次完全一樣`); } }
 // R3
-ok(rulaiHandScale(0) === 1.75 && Math.abs(rulaiHandScale(T.lift) - 1.14) < 1e-9 && Math.abs(rulaiHandScale(T.slam - 0.001) - 2.45) < 1e-3, "R3 蓄力：1.75 → 1.14 → 2.45（抬高變大）");
-ok(rulaiHandScale(T.hit) === 1.03 && rulaiHandScale(T.reveal) < 1.0001 && Math.abs(rulaiHandScale(T.reveal + 430) - 1.7) < 1e-9, "R3 砸中 1.03、定格後 1、抬手 1.7");
+{ const h = RULAI_HAND; ok(rulaiHandScale(0) === h.enter && Math.abs(rulaiHandScale(T.lift) - h.press) < 1e-9 && Math.abs(rulaiHandScale(T.slam - 0.001) - h.lift) < 1e-3 && h.lift > h.press, "R3 蓄力：抬高變大");
+  ok(h.hitH === 0.85 && h.lift * h.hitH < 1.4, "R3 砸中手長是畫面高度的 85%；抬到最高也不遮滿（寬不超過畫面高度）");
+  for (const [W, H] of [[844, 390], [1440, 900], [402, 714]]) for (const rel of [0, 1, 2, 3]) for (const [px, py] of [[W / 2, H / 2], [W * 0.5, H * 0.75], [W * 0.5, H * 0.2], [W * 0.15, H / 2], [W * 0.85, H / 2]]) {
+    const f = rulaiHandFit({ W, H, px, py, rel }), z = f.ph * h.hit, w = z * RULAI_META.handAR, A = RULAI_META.handAnchor, x = px + f.dx, y = py + f.dy;
+    const b = [[w * A.x, w * (1 - A.x), z * A.y, z * (1 - A.y)], [z * A.y, z * (1 - A.y), w * (1 - A.x), w * A.x], [w * (1 - A.x), w * A.x, z * (1 - A.y), z * A.y], [z * (1 - A.y), z * A.y, w * A.x, w * (1 - A.x)]][rel];
+    ok(x - b[0] >= -0.01 && x + b[1] <= W + 0.01 && y - b[2] >= -0.01 && y + b[3] <= H + 0.01, `R3 ${W}x${H} 視角${rel} 落點${Math.round(px)},${Math.round(py)}：整隻手在畫面內`);
+  } }
+ok(rulaiHandScale(T.hit) === RULAI_HAND.hit && rulaiHandScale(T.reveal) < 1.0001 && Math.abs(rulaiHandScale(T.reveal + 430) - RULAI_HAND.leave) < 1e-9, "R3 砸中、定格、抬手的倍率");
 ok(T.hit - T.slam === 120, "R3 砸下只有 120ms");
 ok(rulaiCam(0) === 1 && rulaiCam(T.total) >= 1 - 1e-9, "R3 鏡頭不會小於 1（不露出牌桌外）");
 // R4
@@ -58,13 +66,17 @@ ok(rulaiCam(0) === 1 && rulaiCam(T.total) >= 1 - 1e-9, "R3 鏡頭不會小於 1�
 {
   const loop = () => { let next: ((n: number) => void) | null = null, id = 0, pending = 0; return { raf: (f: (n: number) => void) => { next = f; pending++; return ++id; }, caf: () => { next = null; pending = 0; }, tick(n: number) { const f = next; next = null; pending = 0; f?.(n); }, get live() { return !!next; }, get pending() { return pending; } }; };
   const el = () => ({ style: {} as Record<string, string> }); // 沒有 animate 方法：程式一叫就丟例外
-  const mk = (rm = false) => { baked.length = 0; const l = loop(), cv = fakeCanvas(), e = { dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el() }; const r = runRulai({ cv, ...e } as never, geo(0), art(), { dpr: 2, rm, zeroAt: 0, stageShadow: "S", raf: l.raf, caf: l.caf }); return { l, cv, e, r, inner: [...baked] }; };
+  const mk = (rm = false) => { baked.length = 0; const l = loop(), cv = fakeCanvas(), e = { dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el() }; const r = runRulai({ cv, ...e } as never, geo(0), art(), { dpr: 2, rm, zeroAt: () => 0, stageShadow: "S", raf: l.raf, caf: l.caf }); return { l, cv, e, r, inner: [...baked] }; };
   const a = mk(); ok(a.l.pending === 1 && a.cv.width > 0 && a.inner.length === 5, "R6 開始後只排一格、烘 5 張小圖");
   let threw = false; try { for (let t = 16; t < T.total; t += 16) { a.l.tick(t); if (a.l.pending > 1) throw new Error("多排"); } } catch { threw = true; }
   ok(!threw, "R6 整段播放沒有 element.animate、一次只排一格");
   a.l.tick(T.total); ok(!a.l.live && a.cv.width === 0 && a.cv.height === 0 && a.inner.every((c) => c.width === 0), "R6 播完：迴圈停、畫布和小圖歸 0");
   ok(a.e.tile.style.opacity === "0.000" && a.e.title.style.opacity === "0.000" && a.e.dim.style.opacity === "0.800", "R6 播完：牌和大字透明、暗幕留著");
   ok(a.e.stage.style.transform === "" && a.e.stage.style.transformOrigin === "", "R6 播完：舞台復位");
+  { const artUsed = art(), cv = fakeCanvas(), l = loop(), calls = cv.ctx.calls; let zero = -1; runRulai({ cv, dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el() } as never, geo(0), artUsed, { dpr: 2, rm: false, zeroAt: () => (zero = calls.length, 0), stageShadow: "S", raf: l.raf, caf: l.caf });
+    const read = calls.findIndex((x) => x[0] === "getImageData"), need = Object.values(artUsed);
+    ok(read >= 0 && read < zero && !calls.slice(read).some((x) => x[0] === "drawImage"), "R6 開播前試畫並讀一個像素，時間零點在這之後，畫面清乾淨才開始");
+    ok(need.every((i) => cv.ctx.drawn.has(i)), `R6 試畫用到全部 ${need.length} 張素材：第一次解碼不會落在播放中`); }
   const b = mk(); b.l.tick(T.hit + 40); ok(!!b.e.stage.style.transform && b.e.stage.style.boxShadow === "S", "R6 主擊時牌桌有震、有蓋邊陰影");
   const n0 = b.cv.ctx.calls.length; b.r.stop(); b.r.stop(); ok(!b.l.live && b.cv.width === 0 && b.inner.every((c) => c.width === 0) && b.e.stage.style.transform === "" && b.e.stage.style.boxShadow === "", "R6 跳過（stop 兩次）：迴圈停、畫布歸 0、舞台復位");
   b.l.tick(T.hit + 60); ok(b.cv.ctx.calls.length === n0, "R6 stop 之後晚到的一格不再畫");
@@ -76,6 +88,10 @@ ok(rulaiDim(0) === 0 && Math.abs(rulaiDim(T.total) - 0.8) < 1e-9, "R8 暗幕 0 �
 ok(rulaiTilePose(T.tile - 1).opacity === 0 && rulaiTilePose(T.tile + 200).opacity === 1 && rulaiTilePose(T.tile + 200).transform === "none", "R8 牌 2.30 秒才出現、定位後沒有 transform");
 { const a = rulaiTitlePose(T.zimo - 1), b = rulaiTitlePose(T.zimo + 60), c = rulaiTitlePose(T.zimo + 130); ok(a.art.opacity === 0 && /scale\(1\.[1-7]/.test(b.art.transform) && c.art.opacity === 1 && c.art.transform === "none", `R8 大字 2.62 秒蓋章（${b.art.transform}）`); ok(rulaiTitlePose(T.name - 1).name === 0 && rulaiTitlePose(T.name + 260).name === 1, "R8 名字 2.86 秒"); }
 ok(rulaiFadeOut(T.total - 361) === 1 && rulaiFadeOut(T.total) === 0, "R8 牌和大字 3.84 秒起才淡出");
+// R13 飛牌用牌桌同一套牌面；牌面沒好、載壞都還是畫得出來，不擋
+{ const face = (ok_: boolean) => ({ complete: ok_, naturalWidth: ok_ ? 180 : 0, naturalHeight: ok_ ? 245 : 0, id: "face" }) as unknown as HTMLImageElement;
+  const n = (faces: HTMLImageElement[]) => { baked.length = 0; const cv = fakeCanvas(); new RulaiCanvas(cv, geo(0), art(), 2, faces); return faces.filter((f) => (baked[1] as unknown as { ctx: { drawn: Set<unknown> } }).ctx.drawn.has(f)).length; };
+  ok(n([face(true), face(true), face(true)]) === 3, "R13 飛牌烘進 3 張牌面素材"); ok(n([face(false), face(true)]) === 1 && n([]) === 0, "R13 牌面載壞或還沒好：不畫那張、不丟例外"); }
 // R9
 { const manifest = JSON.parse(readFileSync(new URL("../scripts/immutable-assets.json", import.meta.url), "utf8")) as Record<string, string>;
   const files = [...RULAI_ART.map((n) => `rulai-${n}-m.webp`), "rulai-title.webp"];
@@ -89,8 +105,9 @@ ok(rulaiFadeOut(T.total - 361) === 1 && rulaiFadeOut(T.total) === 0, "R8 牌和�
 ok(!ZIMO_FX_LIST.some((f) => (f.code as string) === "rulai"), "R10 如來神掌不在開通清單（開通全部不含）");
 ok(isZimoFxNew("rulai") && isCanvasFx("rulai") && isCanvasFx("sakura") && !isCanvasFx("storm") && fxName("rulai") === "如來神掌", "R10 走新特效、單一畫布路線，名稱如來神掌");
 // R11
+ok(ZFX_TL.blackhole.total - ZFX_TL.blackhole.zimo === 1300, `R11 黑洞大字出現到結束 ${ZFX_TL.blackhole.total - ZFX_TL.blackhole.zimo}ms`);
 ok(ZFX_TL.storm.total - ZFX_TL.storm.zimo === 1300, `R11 風暴大字出現到結束 ${ZFX_TL.storm.total - ZFX_TL.storm.zimo}ms`);
-ok(ZFX_TL.thunder.total === 3220 && ZFX_TL.frost.total === 2900 && ZFX_TL.blackhole.total === 2600 && ZFX_TL.sakura.total === 3400, "R11 其他特效長度沒動");
+ok(ZFX_TL.thunder.total === 3220 && ZFX_TL.frost.total === 2900 && ZFX_TL.sakura.total === 3400, "R11 其他特效長度沒動");
 ok(ZFX_TL.rulai.total === 4200 && ZFX_TL.rulai.hit === 1500, "R11 神掌 4.20 秒、主擊 1.50");
 
 for (const r of results) console.log(r);

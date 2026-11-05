@@ -23,7 +23,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import { artUsable, isCanvasFx, isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
-import { RULAI_ART, RULAI_TL, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
+import { RULAI_ART, RULAI_FACES, RULAI_TL, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -86,6 +86,8 @@ function useReducedMotion() {
 const artImgs = new Map<ZimoFxNew, HTMLImageElement[]>();
 const ready = new Map<ZimoFxNew, Promise<boolean>>();
 const artReady = new Map<ZimoFxNew, Promise<boolean>>();
+/** 神掌飛牌的牌面：跟著素材一起載，但不算進「圖有沒有好」：載壞、慢了就是白牌，不擋特效 */
+let rulaiFaces: HTMLImageElement[] = [];
 /** 圖片有沒有都載好（不看音效）；還沒 preloadZimoFx 就是 false */
 export const zimoFxArtOk = (fx: ZimoFxNew) => artReady.get(fx) ?? Promise.resolve(false);
 /** 等單一畫布特效的圖最多這麼久（ms）：超過就退回金色自摸，不讓結算卡住 */
@@ -95,6 +97,7 @@ export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
   if (!p) {
     const imgs: HTMLImageElement[] = [];
     artImgs.set(fx, imgs);
+    if (fx === "rulai") rulaiFaces = RULAI_FACES.map((n) => { const i = new Image(); i.src = `/tiles/faces/${n}.webp`; void i.decode().catch(() => {}); return i; });
     const art = Promise.all(zfxArt(fx).map((f) => {
       const i = new Image();
       i.src = `${ART}/${fx}/${f}.webp`;
@@ -118,6 +121,7 @@ export function prefetchZimoFx(fx: ZimoFxNew) {
 /** 觸控裝置播完就放掉解碼好的圖：不再留參考，瀏覽器需要記憶體時才丟得掉 */
 function releaseZimoFx(fx: ZimoFxNew) {
   artImgs.delete(fx);
+  if (fx === "rulai") rulaiFaces = [];
   ready.delete(fx);
   artReady.delete(fx);
 }
@@ -147,15 +151,17 @@ function playSakura(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: 
   run.setSheet(sheet);
   return run.stop;
 }
+/** 牌背顏色跟著偏好設定（同 MjTile） */
+const backColors = (el: HTMLElement): [string, string, string] => { const c = getComputedStyle(el), v = (n: number, d: string) => c.getPropertyValue(`--mj-back-${n}`).trim() || d; return [v(1, "#4a8a5a"), v(2, "#2a6038"), v(3, "#1a4828")]; };
 /** 如來神掌：同櫻花紛飛，圖開播前就要全部解碼好，沒好就立刻退回金色（不邊播邊載） */
-function playRulai(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: boolean, stage: HTMLElement | null, zeroAt: number, onFail: () => void) {
+function playRulai(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: boolean, stage: HTMLElement | null, zeroAt: () => number, onFail: () => void) {
   const imgs = artImgs.get("rulai") ?? [];
   if (!artUsable(imgs) || imgs.length !== zfxArt("rulai").length) return onFail();
   // 順序和 zfxArt 一樣：第一張是大字，後面照 RULAI_ART
   const art = Object.fromEntries(RULAI_ART.map((n, i) => [n, imgs[i + 1]])) as Record<RulaiArt, HTMLImageElement>;
   const q = (sel: string) => root.querySelector<HTMLElement>(sel);
   return runRulai({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage },
-    g, art, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW }).stop;
+    g, art, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW, faces: rulaiFaces, back: backColors(root) }).stop;
 }
 
 /** 主擊時牌桌震一下（比隕石輕：手機最大 12px、電腦 16px，0.35 秒）；櫻花不震 */
@@ -490,8 +496,10 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     }
     if (isCanvasFx(fx)) {
       if (!cvRef.current) return;
+      const st = embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]"), geo = { W, H, u, px, py, rel, mobile }, fail = () => { if (artFailRef.current) { ended.current = true; artFailRef.current(); } };
+      if (fx === "rulai") return playRulai(root, cvRef.current, geo, rm, st, () => (zeroRef.current = performance.now()), fail);
       zeroRef.current = performance.now();
-      return (fx === "sakura" ? playSakura : playRulai)(root, cvRef.current, { W, H, u, px, py, rel, mobile }, rm, embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]"), zeroRef.current, () => { if (artFailRef.current) { ended.current = true; artFailRef.current(); } });
+      return playSakura(root, cvRef.current, geo, rm, st, zeroRef.current, fail);
     }
     // 零件（風暴、黑洞；雷霆、冰封的補細節層）：先給尺寸；減少動態只留標 data-rmk 的那一個定格
     const total = zfxTotal(fx);

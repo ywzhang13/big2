@@ -21,17 +21,34 @@ const SQ = 0.84; // 俯視壓扁
 const { x: AX, y: AY } = RULAI_META.handAnchor;
 const AR = RULAI_META.handAR;
 const BEAM = 3; // 光束格子長寬比（照原圖，不拉伸）
+/**
+ * 手的大小都在這裡調（老闆 2026-11-05：手太大）。hitH＝砸中時手長佔畫面短邊的比例；其他是相對砸中時手長的倍率：
+ * 進場 → 壓下 → 抬到最高 → 砸中 → 定格後 → 抬手離開。lift 決定蓄力時多大：不能大到遮滿畫面。
+ */
+export const RULAI_HAND = { hitH: 0.85, enter: 1.3, press: 1.08, lift: 1.5, hit: 1.03, rest: 1, leave: 1.35 } as const;
+const LIFT_OFFSET = 0.16; // 抬到最高時，手往桌心反方向偏多少（u）
 
 /** 手的高度倍率：抬高變大、砸下變小 */
 export function rulaiHandScale(ms: number) {
-  const t = RULAI_TL;
-  if (ms < t.press) return 1.75;
-  if (ms < t.lift) return lerp(1.75, 1.14, sm(seg(ms, t.press, t.lift)));
-  if (ms < t.slam) return lerp(1.14, 2.45, sm(seg(ms, t.lift, t.slam)));
-  if (ms < t.hit) return lerp(2.45, 1.03, inC(seg(ms, t.slam, t.hit)));
-  if (ms < t.hit + 90) return 1.03;
-  if (ms < t.reveal) return lerp(1.03, 1, seg(ms, t.hit + 90, t.reveal));
-  return lerp(1, 1.7, sm(seg(ms, t.reveal, t.reveal + 430)));
+  const t = RULAI_TL, h = RULAI_HAND;
+  if (ms < t.press) return h.enter;
+  if (ms < t.lift) return lerp(h.enter, h.press, sm(seg(ms, t.press, t.lift)));
+  if (ms < t.slam) return lerp(h.press, h.lift, sm(seg(ms, t.lift, t.slam)));
+  if (ms < t.hit) return lerp(h.lift, h.hit, inC(seg(ms, t.slam, t.hit)));
+  if (ms < t.hit + 90) return h.hit;
+  if (ms < t.reveal) return lerp(h.hit, h.rest, seg(ms, t.hit + 90, t.reveal));
+  return lerp(h.rest, h.leave, sm(seg(ms, t.reveal, t.reveal + 430)));
+}
+/** 抬高的程度：0＝砸中時的大小、1＝抬到最高 */
+const liftOf = (s: number) => (s - RULAI_HAND.hit) / (RULAI_HAND.lift - RULAI_HAND.hit);
+/** 砸中時手長（px）和手要偏移多少，整隻手才在畫面內（落點靠邊時掌心會偏離落點一點） */
+export function rulaiHandFit(g: Pick<SakuraGeo, "W" | "H" | "px" | "py" | "rel">) {
+  const { W, H, px, py, rel } = g, ph = Math.min(W, H) * RULAI_HAND.hitH, z = ph * RULAI_HAND.hit, w = z * AR;
+  // 手長方形相對掌心的範圍：手指往上（y−）；依視角轉 90° 的倍數
+  const [l, r, t, b] = [w * AX, w * (1 - AX), z * AY, z * (1 - AY)];
+  const box = rel === 0 ? [l, r, t, b] : rel === 2 ? [r, l, b, t] : rel === 1 ? [t, b, r, l] : [b, t, l, r];
+  const fit = (lo: number, hi: number, c: number, size: number) => (c - lo < 0 ? lo - c : c + hi > size ? size - hi - c : 0);
+  return { ph, dx: fit(box[0], box[1], px, W), dy: fit(box[2], box[3], py, H) };
 }
 /** 暗幕（播到結束都留著，結算才不會先亮一下） */
 export const rulaiDim = (ms: number) => 0.46 * sm(seg(ms, 0, 500)) + 0.34 * sm(seg(ms, 500, RULAI_TL.slam));
@@ -65,15 +82,21 @@ function bakeGlow(size: number, stops: readonly (readonly [number, string])[]) {
   x.fillStyle = g; x.fillRect(0, 0, size, size);
   return c;
 }
-/** 被震飛的牌：4 種（中、發、萬、牌背），開播時烘一次 */
-function bakeFly() {
-  const c = mk(256, 88), x = c.getContext("2d")!;
-  const one = (X: number, f1: string, f2: string, label: string, col: string) => {
-    const g = x.createLinearGradient(0, 0, 0, 88); g.addColorStop(0, f1); g.addColorStop(1, f2); x.fillStyle = g;
-    x.beginPath(); x.roundRect(X + 1, 1, 62, 86, 7); x.fill();
-    if (label) { x.fillStyle = col; x.font = "900 34px 'PingFang TC',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(label, X + 32, 45); }
+const FLY_W = 96, FLY_H = 132; // 一格飛牌（比例同牌）
+/** 被震飛的牌：牌桌同一套牌面（牌面在 ZimoFx 跟著素材載；還沒好或載壞就是白牌，不等）＋牌背，開播時烘一次 */
+export const RULAI_FACES = ["Chun", "Hatsu", "Man1"] as const;
+function bakeFly(faces: readonly HTMLImageElement[], back: readonly [string, string, string]) {
+  const c = mk(FLY_W * 4, FLY_H), x = c.getContext("2d")!;
+  const r = FLY_H * 0.08, card = (X: number, stops: readonly string[]) => {
+    const g = x.createLinearGradient(0, 0, 0, FLY_H); stops.forEach((col, i) => g.addColorStop(i / (stops.length - 1), col)); x.fillStyle = g;
+    x.beginPath(); x.roundRect(X + 1, 1, FLY_W - 2, FLY_H - 2, r); x.fill();
   };
-  one(0, "#fff", "#e6dcc4", "中", "#b02a2a"); one(64, "#fff", "#e6dcc4", "發", "#1e6b45"); one(128, "#fff", "#e6dcc4", "萬", "#1f2a24"); one(192, "#2f7051", "#14402c", "", "");
+  for (let i = 0; i < 3; i++) {
+    card(i * FLY_W, ["#fff", "#f3efe4"]);
+    const f = faces[i];
+    if (f?.complete && f.naturalWidth > 0) { const k = Math.min((FLY_W - 8) / f.naturalWidth, (FLY_H - 8) / f.naturalHeight), w = f.naturalWidth * k, h = f.naturalHeight * k; x.drawImage(f, i * FLY_W + (FLY_W - w) / 2, (FLY_H - h) / 2, w, h); }
+  }
+  card(3 * FLY_W, back);
   return c;
 }
 /** 手影：手的輪廓變黑，只烘一次（播放中不用 shadowBlur） */
@@ -89,6 +112,8 @@ export class RulaiCanvas {
   private dpr: number;
   private rot: number;
   private ph: number;
+  private dx: number;
+  private dy: number;
   private out: [number, number];
   private fw: number;
   private fh: number;
@@ -106,13 +131,13 @@ export class RulaiCanvas {
   scale = 1;
   /** 這一格畫了幾個粒子（驗收用） */
   lastCount = 0;
-  constructor(private cv: HTMLCanvasElement, private g: SakuraGeo, art: Record<RulaiArt, HTMLImageElement>, devicePixelRatio: number) {
+  constructor(private cv: HTMLCanvasElement, private g: SakuraGeo, art: Record<RulaiArt, HTMLImageElement>, devicePixelRatio: number, faces: readonly HTMLImageElement[] = [], back: readonly [string, string, string] = ["#4a8a5a", "#2a6038", "#1a4828"]) {
     const L = g.mobile ? RULAI_LIMIT.mobile : RULAI_LIMIT.desktop, { u, W, H, px, py, rel } = g;
     this.dpr = Math.min(devicePixelRatio || 1, L.dpr);
     cv.width = Math.round(W * this.dpr); cv.height = Math.round(H * this.dpr);
     this.x = cv.getContext("2d")!;
     this.art = art;
-    this.shadow = bakeShadow(art.hand); this.fly = bakeFly();
+    this.shadow = bakeShadow(art.hand); this.fly = bakeFly(faces, back);
     this.spark = bakeGlow(48, [[0, "rgba(255,255,235,1)"], [0.2, "rgba(255,226,130,.95)"], [0.55, "rgba(255,170,50,.3)"], [1, "rgba(255,150,30,0)"]]);
     this.wave = bakeGlow(256, [[0, "rgba(255,230,160,0)"], [0.62, "rgba(255,226,150,0)"], [0.84, "rgba(255,240,195,.85)"], [0.93, "rgba(255,200,100,.25)"], [1, "rgba(255,180,60,0)"]]);
     this.gl = bakeGlow(256, [[0, "rgba(255,250,225,1)"], [0.25, "rgba(255,212,110,.7)"], [0.6, "rgba(255,160,40,.16)"], [1, "rgba(255,140,20,0)"]]);
@@ -129,7 +154,7 @@ export class RulaiCanvas {
     this.jetsU = Array.from({ length: L.jets }, (_, i) => ({ ...pts[Math.floor((i / L.jets) * pts.length * 0.8)], ph: r(), k: i % 4, sz: 0.2 + r() * 0.16 }));
     this.press = Array.from({ length: 20 }, (_, i) => ({ a: (i / 20) * TAU + r() * 0.25, sp: 0.8 + r() * 0.9, o: r(), l: 0.1 + r() * 0.16 }));
     this.rot = [0, -Math.PI / 2, Math.PI, Math.PI / 2][rel];
-    this.ph = u * (g.mobile ? 1.2 : 1.1); // 砸中時手長：比牌桌還大，手指和掌根都超出畫面
+    const fit = rulaiHandFit(g); this.ph = fit.ph; this.dx = fit.dx; this.dy = fit.dy;
     const cx = W / 2, cy = H / 2, dl = Math.hypot(px - cx, py - cy) || 1;
     this.out = [(px - cx) / dl, (py - cy) / dl];
     this.fw = Math.max(u * 3.3, Math.max(px, W - px) * 2.04); this.fh = this.fw / RULAI_META.fisAR; // 落點靠邊時，另一側也要鋪滿，裂縫不會在畫面中斷掉
@@ -141,6 +166,17 @@ export class RulaiCanvas {
     this.art = {};
     this.gold = []; this.flys = []; this.rubs = []; this.dusts = []; this.jetsU = []; this.beams = []; this.press = [];
   }
+  /**
+   * 開播前把所有圖先畫一次（老闆 2026-11-05：第一次會卡）：瀏覽器第一次畫一張圖才真的解碼、上傳，不先做就會落在砸中那一刻。
+   * 這幾個時間點用到全部圖層；讀一個像素逼它做完，畫完清掉，這時畫面還沒開始動，也不多留任何記憶體
+   */
+  prime() {
+    const t = RULAI_TL;
+    for (const ms of [t.press + 300, t.slam + 60, t.hit + 60, t.reveal + 300, t.zimo + 100]) this.draw(ms);
+    this.x.getImageData(0, 0, 1, 1);
+    this.x.setTransform(1, 0, 0, 1, 0, 0); this.x.clearRect(0, 0, this.cv.width, this.cv.height);
+    this.lastCount = 0;
+  }
   draw(ms: number) {
     const { x, dpr, ph, gl, spark, wave, fly, shadow, art, rot } = this, { W, H, u, px, py } = this.g, tl = RULAI_TL, t = ms / 1000, hit = tl.hit, S = this.scale;
     const hand = art.hand, cracks = art["hand-cracks"], print = art.print, fis = art.fissures, fisG = art["fis-glow"], jets = art["light-jets"], rays = art["light-rays"], rubble = art.rubble, dust = art.dust;
@@ -149,8 +185,8 @@ export class RulaiCanvas {
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
     x.clearRect(0, 0, W, H);
     const fade = 1 - sm(seg(ms, tl.total - 600, tl.total));
-    const s = rulaiHandScale(ms), oK = (u * 0.28 * Math.max(0, s - 1.03)) / 1.32;
-    const hx = px + this.out[0] * oK, hy = py + this.out[1] * oK;
+    const s = rulaiHandScale(ms), oK = u * LIFT_OFFSET * Math.max(0, liftOf(s));
+    const palmX = px + this.dx, palmY = py + this.dy, hx = palmX + this.out[0] * oK, hy = palmY + this.out[1] * oK;
     const C = Math.cos(rot), Sn = Math.sin(rot);
     const place = (cx: number, cy: number) => x.setTransform(C * dpr, Sn * dpr, -Sn * dpr, C * dpr, cx * dpr, cy * dpr);
     const reset = () => { x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; };
@@ -158,8 +194,8 @@ export class RulaiCanvas {
     const handAt = (img: CanvasImageSource, z: number) => { const w = z * AR; x.drawImage(img, -w * AX, -z * AY, w, z); };
     const handIn = sm(seg(ms, tl.press - 60, tl.press + 240)), handOut = 1 - sm(seg(ms, tl.reveal + 60, tl.reveal + 430));
     // 手影：大到蓋住整張牌桌，手越低越實
-    const shA = ms < hit ? sm(seg(ms, 60, 420)) * lerp(0.92, 0.45, clamp((s - 1.03) / 1.32)) : (1 - seg(ms, tl.reveal, tl.reveal + 240)) * 0.9;
-    if (shA > 0) { const k = lerp(1.04, 1.5, clamp((s - 1.03) / 1.32)) * (ms < tl.press ? lerp(0.6, 1, seg(ms, 60, tl.press)) : 1), z = ph * k * 1.06; place(px + this.out[0] * oK * 0.35, py + this.out[1] * oK * 0.35); x.globalAlpha = shA; handAt(shadow, z); reset(); }
+    const shA = ms < hit ? sm(seg(ms, 60, 420)) * lerp(0.92, 0.45, clamp(liftOf(s))) : (1 - seg(ms, tl.reveal, tl.reveal + 240)) * 0.9;
+    if (shA > 0) { const k = lerp(1.04, 1.5, clamp(liftOf(s))) * (ms < tl.press ? lerp(0.6, 1, seg(ms, 60, tl.press)) : 1), z = ph * k * 1.06; place(palmX + this.out[0] * oK * 0.35, palmY + this.out[1] * oK * 0.35); x.globalAlpha = shA; handAt(shadow, z); reset(); }
     // 金光束：照原圖比例（3:1），只等比例放大
     const beamCellW = rays.naturalWidth / 2, beamCellH = rays.naturalHeight / 2;
     const drawBeams = (cx: number, cy: number, al: number, scaleL: number) => {
@@ -212,7 +248,7 @@ export class RulaiCanvas {
       // 掌印：手抬起才看得到，裡面的光就是手背那張裂紋
       if (ms >= tl.reveal - 20) {
         const lit = sm(seg(ms, tl.reveal + 60, tl.reveal + 560)), br = 0.86 + 0.14 * Math.sin((ms - tl.reveal) / 240), dimmed = ms > tl.zimo ? 0.6 : 1;
-        place(px, py); x.globalAlpha = lit * dimmed * fade * 0.8; handAt(shadow, ph * 1.04); // 底下壓暗，發光手形才看得出來
+        place(palmX, palmY); x.globalAlpha = lit * dimmed * fade * 0.8; handAt(shadow, ph * 1.04); // 底下壓暗，發光手形才看得出來
         x.globalCompositeOperation = "lighter"; x.globalAlpha = lit * br * dimmed * fade; handAt(print, ph); x.globalAlpha = lit * br * dimmed * fade * 0.4; handAt(cracks, ph); reset();
         const ra = sm(seg(ms, tl.reveal + 180, tl.reveal + 420)) * (1 - sm(seg(ms, tl.reveal + 500, tl.zimo + 420))) * fade;
         if (ra > 0) drawBeams(px, py, ra * 0.38, 0.9 + 0.5 * seg(ms, tl.reveal + 180, tl.zimo + 400));
@@ -222,7 +258,7 @@ export class RulaiCanvas {
         const dl = f.ph * 70, p = seg(A, dl, dl + 640 + f.h * 260), op = fade * (1 - seg(ms, tl.zimo + 500, tl.total - 500));
         if (A < dl || op <= 0 || (S < 1 && Math.floor(f.ph * 10) >= 10 * S)) continue;
         const R = f.r0 + f.R * outC(p), jump = Math.sin(p * Math.PI), sc = u * 0.078 * (1 + f.h * 0.95 * jump), flipv = p < 1 ? Math.cos(p * f.flip * Math.PI) : 1;
-        spin(f.rot + f.spin * outC(p), 0.3 + 0.7 * Math.abs(flipv), px + Math.cos(f.a) * R, py + Math.sin(f.a) * R * SQ); x.globalAlpha = op; x.drawImage(fly, f.face === flipv > 0 ? Math.floor(f.ph * 3) * 64 : 192, 0, 64, 88, -sc * 0.36, -sc / 2, sc * 0.72, sc); count++;
+        spin(f.rot + f.spin * outC(p), 0.3 + 0.7 * Math.abs(flipv), px + Math.cos(f.a) * R, py + Math.sin(f.a) * R * SQ); x.globalAlpha = op; x.drawImage(fly, (f.face === flipv > 0 ? Math.floor(f.ph * 3) : 3) * FLY_W, 0, FLY_W, FLY_H, -sc * 0.36, -sc / 2, sc * 0.72, sc); count++;
       }
       // 碎石：桌面崩出來的碎片（格子是正方形，比例照原圖）
       const rc = rubble.naturalWidth / 4;
@@ -248,14 +284,14 @@ export class RulaiCanvas {
     const al = handIn * handOut;
     if (al > 0) {
       // 砸下的殘影 3 張
-      if (ms >= tl.slam && ms < hit) { const f0 = seg(ms, tl.slam, hit); for (const [lag, a] of [[0.5, 0.22], [0.3, 0.3], [0.14, 0.42]] as const) { const sc = lerp(2.45, 1.03, inC(clamp(f0 - lag * 0.5))), o2 = (u * 0.28 * Math.max(0, sc - 1.03)) / 1.32; drawHand(sc, px + this.out[0] * o2, py + this.out[1] * o2, a, true); } }
+      if (ms >= tl.slam && ms < hit) { const f0 = seg(ms, tl.slam, hit); for (const [lag, a] of [[0.5, 0.22], [0.3, 0.3], [0.14, 0.42]] as const) { const sc = lerp(RULAI_HAND.lift, RULAI_HAND.hit, inC(clamp(f0 - lag * 0.5))), o2 = u * LIFT_OFFSET * Math.max(0, liftOf(sc)); drawHand(sc, palmX + this.out[0] * o2, palmY + this.out[1] * o2, a, true); } }
       drawHand(s, hx, hy, al, false);
       // 老闆的手背本身就有發光裂紋和雲紋，疊加不能蓋掉它們：壓下時很淡，抬到最高才接近白熱
       const crA = (ms < tl.lift ? 0.1 + 0.16 * seg(ms, tl.press, tl.lift) : ms < hit ? 0.26 + 0.5 * sm(seg(ms, tl.lift, tl.slam)) + 0.12 * Math.sin(t * 34) * seg(ms, tl.lift, tl.slam) : 0.7 - 0.45 * seg(ms, hit, tl.reveal)) * al;
       if (crA > 0) { place(hx, hy); x.globalCompositeOperation = "lighter"; x.globalAlpha = Math.min(1, crA); handAt(cracks, ph * s); if (crA > 1) { x.globalAlpha = Math.min(1, crA - 1); handAt(cracks, ph * s); } reset(); }
       if (ms >= hit && ms < hit + 340) drawHand(s, hx, hy, (1 - seg(ms, hit, hit + 300)) * 0.28 * al, true);
       // 砸中後指縫透光
-      if (ms >= hit && ms < tl.reveal + 200) drawBeams(px, py, (1 - seg(ms, hit + 40, tl.reveal + 200)) * 0.3, 1.45);
+      if (ms >= hit && ms < tl.reveal + 200) drawBeams(palmX, palmY, (1 - seg(ms, hit + 40, tl.reveal + 200)) * 0.3, 1.45);
     }
     if (ms >= hit) {
       const A = ms - hit; x.globalCompositeOperation = "lighter";
@@ -284,30 +320,33 @@ export class RulaiCanvas {
 /**
  * 播一次如來神掌：回傳 stop（跳過、卸載時呼叫，可重複呼叫）。全程只有一個 requestAnimationFrame 迴圈，播完或 stop 就放掉畫布、圖片。
  */
-export function runRulai(els: SakuraEls, g: SakuraGeo, art: Record<RulaiArt, HTMLImageElement>, o: { dpr: number; rm: boolean; zeroAt: number; stageShadow: string; raf?: (f: (now: number) => void) => number; caf?: (id: number) => void }) {
+export function runRulai(els: SakuraEls, g: SakuraGeo, art: Record<RulaiArt, HTMLImageElement>, o: { dpr: number; rm: boolean; zeroAt: () => number; stageShadow: string; faces?: readonly HTMLImageElement[]; back?: readonly [string, string, string]; raf?: (f: (now: number) => void) => number; caf?: (id: number) => void }) {
   const raf = o.raf ?? requestAnimationFrame, caf = o.caf ?? cancelAnimationFrame;
   const { dim, tile, tileIn, title, art: artEl, back, name, stage, cv } = els;
-  const fx = new RulaiCanvas(cv, g, art, o.dpr);
+  const fx = new RulaiCanvas(cv, g, art, o.dpr, o.faces, o.back);
   let id = 0, stopped = false, moved = false;
   const setOp = (e: { style: Partial<CSSStyleDeclaration> } | null | undefined, v: number) => { if (e) e.style.opacity = v.toFixed(3); };
   const clearStage = () => { if (stage && moved) { stage.style.transform = ""; stage.style.boxShadow = ""; stage.style.transformOrigin = ""; moved = false; } };
   const stop = () => { if (stopped) return; stopped = true; caf(id); clearStage(); fx.destroy(); };
+  if (!o.rm) fx.prime();
+  // 時間零點在試畫之後：試畫花的時間不算進特效，聲音也從這裡對齊
+  const zeroAt = o.zeroAt();
   if (o.rm) {
     fx.draw(RULAI_STILL_MS);
     const step = (now: number) => {
       if (stopped) return;
-      const ms = now - o.zeroAt, p = sakuraStillPose(ms);
+      const ms = now - zeroAt, p = sakuraStillPose(ms);
       setOp(cv as unknown as { style: Partial<CSSStyleDeclaration> }, p.base); setOp(dim, 0.8 * p.base); setOp(tileIn, p.main); setOp(artEl, p.main); setOp(back, p.main); setOp(name, p.name);
       if (ms < STILL_END) id = raf(step);
     };
     id = raf(step);
   } else {
     const gov = frameGovernor();
-    let last = o.zeroAt;
+    let last = zeroAt;
     if (stage) stage.style.transformOrigin = `${Math.round(g.px)}px ${Math.round(g.py)}px`;
     const step = (now: number) => {
       if (stopped) return;
-      const ms = now - o.zeroAt;
+      const ms = now - zeroAt;
       fx.scale = gov(now - last);
       last = now;
       if (ms >= RULAI_TL.total) { setOp(tile, 0); setOp(title, 0); clearStage(); fx.destroy(); return; }
