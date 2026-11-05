@@ -23,7 +23,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import { artUsable, isCanvasFx, isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
-import { RULAI_ART, RULAI_FACES, RULAI_TL, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
+import { RULAI_ART, RULAI_FACES, RULAI_SOUND_DELAY, RULAI_TL, rulaiProject, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -160,7 +160,9 @@ function playRulai(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: b
   // 順序和 zfxArt 一樣：第一張是大字，後面照 RULAI_ART
   const art = Object.fromEntries(RULAI_ART.map((n, i) => [n, imgs[i + 1]])) as Record<RulaiArt, HTMLImageElement>;
   const q = (sel: string) => root.querySelector<HTMLElement>(sel);
-  return runRulai({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage },
+  // 只傾斜牌桌本體：聊天面板、特效層和牌桌是兄弟，不跟著斜
+  const board = stage ? Array.from(stage.children).find((c): c is HTMLElement => c instanceof HTMLElement && !!c.querySelector("[data-fx-seat]")) ?? null : null;
+  return runRulai({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage, board },
     g, art, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW, faces: rulaiFaces, back: backColors(root) }).stop;
 }
 
@@ -464,6 +466,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       [px, py] = [W / 2 + SIDE[rel][0] * W * 0.22, H / 2 + SIDE[rel][1] * H * 0.2];
     }
     px = Math.min(Math.max(px, W * 0.12), W * 0.88); py = Math.min(Math.max(py, H * 0.22), H * 0.82);
+    if (fx === "rulai" && !embedded) [px, py] = rulaiProject(px, py, W, H); // 牌桌會傾斜：落點、牌、大字都用傾斜後的位置
     const set = (k: string, v: number) => root.style.setProperty(k, `${Math.round(v)}px`);
     set("--W", W); set("--H", H); set("--u", u); set("--px", px); set("--py", py);
     const tileW = mobile ? 46 : 76, tileH = tileW * 1.36;
@@ -571,7 +574,8 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       stopRef.current = playZimoFxSound(fx, z, hit);
     };
     if (sound) {
-      if (isCanvasFx(fx) && !rm) go(zeroRef.current);
+      if (fx === "rulai" && !rm) ts.push(setTimeout(() => go(zeroRef.current + RULAI_SOUND_DELAY), RULAI_SOUND_DELAY));
+      else if (isCanvasFx(fx) && !rm) go(zeroRef.current);
       else if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
       else go(null);
     }
