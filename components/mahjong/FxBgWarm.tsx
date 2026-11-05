@@ -11,7 +11,7 @@ import { BIG_WIN_ORDER, type BigWinTheme } from "@/lib/mahjong/bigWin";
 import BigWin8Fx, { preloadBigWin8 } from "./BigWin8Fx";
 import MeteorFx from "./MeteorFx";
 import ZimoFx from "./ZimoFx";
-import { ZIMO_FX_NEW } from "@/lib/mahjong/winShow";
+import { isCanvasFx, ZIMO_FX_NEW } from "@/lib/mahjong/winShow";
 import { WinCelebrationWarm } from "./WinCelebration";
 import { isWarmed, setWarmPausedFn, useFxWarmUp } from "./fxWarmUp";
 
@@ -68,7 +68,7 @@ export function FxBgWarm({ mobile }: { mobile: boolean }) {
       big("tianhu"), big("migi"),
       { key: "meteor", ready: () => true, run: () => ref.current.warmUp("meteor", (done, mode) => <MeteorFx warm={mode} seat={0} mySeat={0} mobile={ref.current.mobile} tile={null} name="" onDone={done} />, { layered: true }) },
       // 自摸特效庫的新特效（老闆 2026-10-31）：比照隕石，排在隕石後面
-      ...ZIMO_FX_NEW.filter((fx) => fx !== "sakura").map((fx) => ({ key: `zfx|${fx}`, // 櫻花紛飛是單一畫布，不用預熱圖層
+      ...ZIMO_FX_NEW.filter((fx) => !isCanvasFx(fx)).map((fx) => ({ key: `zfx|${fx}`, // 櫻花紛飛、如來神掌是單一畫布，不用預熱圖層
  ready: () => true, run: () => ref.current.warmUp(`zfx|${fx}`, (done, mode) => <ZimoFx warm={mode} fx={fx} seat={0} mySeat={0} mobile={ref.current.mobile} tile={null} onDone={done} />, { layered: true }) })),
       big("qiqiang1"), big("baxian"),
       ...BIG_WIN_ORDER.filter((d) => !FIRST.includes(d.theme)).map((d) => big(d.theme)),

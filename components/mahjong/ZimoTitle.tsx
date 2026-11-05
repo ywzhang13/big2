@@ -9,10 +9,11 @@
 // 減少動態：大字直接定格顯示，名字淡入；沒有登場動作、閃爍、掃光、粒子
 import type { CSSProperties } from "react";
 import type { ZimoFxNew } from "@/lib/mahjong/winShow";
+import { RULAI_META } from "@/lib/mahjong/fx/rulaiMeta";
 import "./zimoTitle.css";
 
 /** 每款大字圖的長寬比（寬÷高，切圖時量的原尺寸：雷霆 656×346、風暴 725×363、冰封 647×352、黑洞 696×343、櫻花 646×345） */
-export const ZIMO_TITLE_AR: Record<ZimoFxNew, number> = { thunder: 1.896, storm: 1.997, frost: 1.838, blackhole: 2.029, sakura: 1.872 };
+export const ZIMO_TITLE_AR: Record<ZimoFxNew, number> = { thunder: 1.896, storm: 1.997, frost: 1.838, blackhole: 2.029, sakura: 1.872, rulai: RULAI_META.titleAR };
 /** 大字高度相對字級（em） */
 export const ZIMO_TITLE_EM = 1.2;
 export const zimoTitleArt = (fx: ZimoFxNew) => `/mahjong-fx/zimo/${fx}/${fx}-title.webp`;
@@ -44,7 +45,7 @@ const DUST = Array.from({ length: 10 }, (_, i) => ({ d: -i * 360, s: 0.6 + (i % 
  */
 export default function ZimoTitle({ fx, name, t, n, wind = 1, rm, mobile, src, driven }: {
   fx: ZimoFxNew; name: string; t: number; n: number; wind?: number; rm?: boolean; mobile: boolean; src?: string;
-  /** 櫻花紛飛：大字、名字的樣子由畫布迴圈寫 inline，不用 CSS 動畫，也不要掃光和小花瓣（滿天花瓣畫布畫了） */
+  /** 櫻花紛飛、如來神掌：大字、名字的樣子由畫布迴圈寫 inline，不用 CSS 動畫，也不要掃光和小花瓣（滿天花瓣畫布畫了） */
   driven?: boolean;
 }) {
   const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name;

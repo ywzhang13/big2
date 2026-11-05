@@ -271,7 +271,7 @@ export function playMeteorSound(zeroAt: number | null, impactMs: number, url = m
 // 主擊、牌、「自摸」字的點都做在檔案裡，從頭放就對準（和隕石不同：隕石是從撞擊點往回推）。
 // 和隕石、大牌音效同一條路（互動音效的音量、靜音、壓縮器）。觸控裝置（手機）放手機加強版、其他放一般版。只有這一手真的要播那一種、或房間裡有人選了那一種才載
 const zimoFxBufs = new Map<string, Promise<AudioBuffer | null>>();
-// 櫻花紛飛（老闆 2026-11-05）換了 3.40 秒的新音效：長期快取素材不能同檔名換內容，所以用新檔名
+// 櫻花紛飛（老闆 2026-11-05）換了 3.40 秒的新音效：長期快取素材不能同檔名換內容，所以用新檔名。如來神掌 zimo-rulai-*（4.20 秒，主擊 1.50）
 const zimoFxFile = (fx: string) => (fx === "sakura" ? "sakura-v2" : fx);
 const zimoFxUrl = (fx: string) => `${BASE}s/zimo-${zimoFxFile(fx)}-${typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? "mobile" : "pc"}.mp3`;
 /** 先載好、解碼好（要等特效引擎的音訊建好；載不到就回 null，特效照播、不出聲） */

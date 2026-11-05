@@ -20,9 +20,10 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import MjTile from "@/components/mahjong/MjTile";
 import type { Tile } from "@/lib/mahjong/tiles";
-import { artUsable, isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
+import { artUsable, isCanvasFx, isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
+import { RULAI_ART, RULAI_TL, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -45,6 +46,7 @@ export const ZFX_TL: Record<ZimoFxNew, { hit: number; tile: number; zimo: number
   storm: { hit: 1120, tile: 1400, zimo: 1860, name: 2080, total: 3160 }, // 老闆 2026-11-05：大字太短（原本 2.68 秒結束、只留 0.82 秒），延到 1.3 秒；風和雨照舊 2.68 秒收完，大字留到結束
   blackhole: { hit: 1120, boom: 1190, tile: 1420, zimo: 1860, name: 2100, total: 3160 }, // 老闆 2026-11-05：大字太短（原本 2.60 秒結束、只留 0.74 秒），延到 1.3 秒；其他零件照舊 2.60 秒收完，大字留到結束
   sakura: SAKURA_TL,
+  rulai: RULAI_TL,
 };
 export const isOwnTitleFx = (fx: string): fx is ZimoFxNew => fx in ZFX_TL;
 const hitOf = (fx: ZimoFxNew) => ZFX_TL[fx].hit;
@@ -64,10 +66,12 @@ export const ZFX_ART: Record<ZimoFxNew, string[]> = {
   blackhole: ["blackhole-title", "blackhole-core", "blackhole-pinpoint", "blackhole-nova", "blackhole-stardust", "blackhole-light-streams", "blackhole-accretion-back",
     "blackhole-accretion-front", "blackhole-debris-single", "blackhole-nova-filaments"],
   sakura: ["sakura-title"], // 花瓣表依裝置選一張，見 zfxArt
+  rulai: ["rulai-title"], // 其他 9 張依裝置選一組，見 zfxArt（scripts/gen-rulai-assets.mjs 產生）
 };
 /** 花瓣表：手機用小張（長期快取，換內容要改檔名） */
 const sakuraSheet = () => (isTouchDevice() ? "sakura-petals-v2-m" : "sakura-petals-v2-d");
-const zfxArt = (fx: ZimoFxNew) => (fx === "sakura" ? [...ZFX_ART.sakura, sakuraSheet()] : ZFX_ART[fx]);
+const rulaiFile = (n: RulaiArt) => `rulai-${n}-${isTouchDevice() ? "m" : "d"}`;
+const zfxArt = (fx: ZimoFxNew) => (fx === "sakura" ? [...ZFX_ART.sakura, sakuraSheet()] : fx === "rulai" ? [...ZFX_ART.rulai, ...RULAI_ART.map(rulaiFile)] : ZFX_ART[fx]);
 
 const RM_Q = "(prefers-reduced-motion: reduce)";
 function useReducedMotion() {
@@ -84,8 +88,8 @@ const ready = new Map<ZimoFxNew, Promise<boolean>>();
 const artReady = new Map<ZimoFxNew, Promise<boolean>>();
 /** 圖片有沒有都載好（不看音效）；還沒 preloadZimoFx 就是 false */
 export const zimoFxArtOk = (fx: ZimoFxNew) => artReady.get(fx) ?? Promise.resolve(false);
-/** 等櫻花紛飛的圖最多這麼久（ms）：超過就退回金色自摸，不讓結算卡住 */
-export const SAKURA_ART_WAIT = 4000;
+/** 等單一畫布特效的圖最多這麼久（ms）：超過就退回金色自摸，不讓結算卡住 */
+export const CANVAS_ART_WAIT = 4000;
 export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
   let p = ready.get(fx);
   if (!p) {
@@ -142,6 +146,16 @@ function playSakura(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: 
     g, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW });
   run.setSheet(sheet);
   return run.stop;
+}
+/** 如來神掌：同櫻花紛飛，圖開播前就要全部解碼好，沒好就立刻退回金色（不邊播邊載） */
+function playRulai(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: boolean, stage: HTMLElement | null, zeroAt: number, onFail: () => void) {
+  const imgs = artImgs.get("rulai") ?? [];
+  if (!artUsable(imgs) || imgs.length !== zfxArt("rulai").length) return onFail();
+  // 順序和 zfxArt 一樣：第一張是大字，後面照 RULAI_ART
+  const art = Object.fromEntries(RULAI_ART.map((n, i) => [n, imgs[i + 1]])) as Record<RulaiArt, HTMLImageElement>;
+  const q = (sel: string) => root.querySelector<HTMLElement>(sel);
+  return runRulai({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage },
+    g, art, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW }).stop;
 }
 
 /** 主擊時牌桌震一下（比隕石輕：手機最大 12px、電腦 16px，0.35 秒）；櫻花不震 */
@@ -417,7 +431,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
   /** 櫻花畫布的時間零點（聲音對齊用） */
   const zeroRef = useRef(0);
   const rel = (((seat - mySeat) % 4) + 4) % 4; // 0 自己、1 下家、2 對家、3 上家
-  useEffect(() => () => { if (!warm && isTouchDevice()) releaseZimoFx(fx); }, [fx, warm]);
+  useEffect(() => () => { if (!warm && (isTouchDevice() || fx === "rulai")) releaseZimoFx(fx); }, [fx, warm]); // 神掌的圖最大：電腦也不留
 
   // 畫面出來前量好主角位置和尺寸；碎片、花瓣的軌跡用 Web Animations 直接給算好的數字；同一刻排好牌桌震動
   useLayoutEffect(() => {
@@ -474,10 +488,10 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       const back = Math.min(tx > 0 ? px / tx : tx < 0 ? (W - px) / -tx : Infinity, ty > 0 ? py / ty : ty < 0 ? (H - py) / -ty : Infinity);
       set("--sd", back + sl * 1.05);
     }
-    if (fx === "sakura") {
+    if (isCanvasFx(fx)) {
       if (!cvRef.current) return;
       zeroRef.current = performance.now();
-      return playSakura(root, cvRef.current, { W, H, u, px, py, rel, mobile }, rm, embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]"), zeroRef.current, () => { if (artFailRef.current) { ended.current = true; artFailRef.current(); } });
+      return (fx === "sakura" ? playSakura : playRulai)(root, cvRef.current, { W, H, u, px, py, rel, mobile }, rm, embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]"), zeroRef.current, () => { if (artFailRef.current) { ended.current = true; artFailRef.current(); } });
     }
     // 零件（風暴、黑洞；雷霆、冰封的補細節層）：先給尺寸；減少動態只留標 data-rmk 的那一個定格
     const total = zfxTotal(fx);
@@ -549,7 +563,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       stopRef.current = playZimoFxSound(fx, z, hit);
     };
     if (sound) {
-      if (fx === "sakura" && !rm) go(zeroRef.current);
+      if (isCanvasFx(fx) && !rm) go(zeroRef.current);
       else if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
       else go(null);
     }
@@ -641,7 +655,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       {[0, 1, 2, 3].map((i) => part("fila", "blackhole-nova-filaments", 4, 1, i, i, i === 0))}
     </>;
   } else {
-    // 櫻花紛飛：一個畫布畫完全部（lib/mahjong/fx/canvasFx.ts）
+    // 櫻花紛飛、如來神掌：一個畫布畫完全部（lib/mahjong/fx/canvasFx.ts、rulaiFx.ts）
     base = <canvas ref={cvRef} className="zk-cv" />;
   }
 
@@ -658,13 +672,13 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
         {tile && (
           <div className="zf-tile" data-zf-tile>
             <div className="zf-tile-in">
-              {fx !== "sakura" && <i className="zf-aura" />}
+              {!isCanvasFx(fx) && <i className="zf-aura" />}
               <MjTile tile={tile} width="var(--tw)" height="var(--th)" />
             </div>
           </div>
         )}
         {/* 這一種專屬的「自摸」大字＋名字，取代金色自摸浮層 */}
-        <ZimoTitle driven={fx === "sakura"} fx={fx} name={name} t={ZFX_TL[fx].zimo} n={ZFX_TL[fx].name} rm={rm} mobile={mobile} wind={fx === "storm" ? Math.sign(stormWind(rel).x) : SIDE[rel][0] > 0 ? -1 : 1} src={art(`${fx}-title`)} />
+        <ZimoTitle driven={isCanvasFx(fx)} fx={fx} name={name} t={ZFX_TL[fx].zimo} n={ZFX_TL[fx].name} rm={rm} mobile={mobile} wind={fx === "storm" ? Math.sign(stormWind(rel).x) : SIDE[rel][0] > 0 ? -1 : 1} src={art(`${fx}-title`)} />
         <div className="zf-flash" />
       </div>
     </div>

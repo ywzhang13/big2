@@ -8,10 +8,10 @@ import type { RoundInfo } from "@/lib/mahjong/gameState";
 import type { Tile } from "@/lib/mahjong/tiles";
 import BigWin8Fx, { preloadBigWin8 } from "@/components/mahjong/BigWin8Fx";
 import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
-import ZimoFx, { preloadZimoFx, SAKURA_ART_WAIT, zimoFxArtOk } from "@/components/mahjong/ZimoFx";
+import ZimoFx, { preloadZimoFx, CANVAS_ART_WAIT, zimoFxArtOk } from "@/components/mahjong/ZimoFx";
 import WinCelebration from "@/components/mahjong/WinCelebration";
 import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
-import { artOkWithin, CELE_MS, isChatUiEvent, isZimoFxNew, planWinShow, zfxPlanToCele, type WinShowStage } from "@/lib/mahjong/winShow";
+import { artOkWithin, CELE_MS, isCanvasFx, isChatUiEvent, isZimoFxNew, planWinShow, zfxPlanToCele, type WinShowStage } from "@/lib/mahjong/winShow";
 
 const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
 
@@ -89,14 +89,15 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
     if (showPlan.includes("meteor")) loads.push(preloadMeteorFx());
     // 自摸特效庫的新特效（雷霆、風暴、冰封、黑洞、櫻花）：只有這一手真的要播那一種才下載那一種（約 0.8～1.3MB）
     if (showPlan.includes("zfx") && isZimoFxNew(showWinner.winFx)) loads.push(preloadZimoFx(showWinner.winFx));
-    // 櫻花紛飛要等花瓣表和大字解碼好才開播（載好才開始算時間），不然會空播；載不到、或等超過 SAKURA_ART_WAIT：退回金色自摸浮層（小宜規格第 5、10 節；審伯 2026-11-05）
-    const sakuraGate = showPlan.includes("zfx") && showWinner.winFx === "sakura"
-      ? artOkWithin(zimoFxArtOk("sakura"), SAKURA_ART_WAIT).then((ok) => { if (!ok) show.plan = zfxPlanToCele(show.plan); })
+    // 單一畫布的特效（櫻花紛飛、如來神掌）要等圖解碼好才開播（載好才開始算時間），不然會空播；載不到、或等超過 CANVAS_ART_WAIT：退回金色自摸浮層（小宜規格第 5、10 節；審伯 2026-11-05）
+    const fxWin = showWinner.winFx;
+    const artGate = showPlan.includes("zfx") && isCanvasFx(fxWin)
+      ? artOkWithin(zimoFxArtOk(fxWin), CANVAS_ART_WAIT).then((ok) => { if (!ok) show.plan = zfxPlanToCele(show.plan); })
       : Promise.resolve();
     if (showPick) loads.push(preloadBigWin8(showPick.theme));
     const ready = loads.length ? Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]) : Promise.resolve();
     // 不在這裡預熱（老闆 2026-10-25：來不及預熱就直接播，不能讓玩家多等）
-    void Promise.all([ready, sakuraGate]).then(() => setTimeout(() => {
+    void Promise.all([ready, artGate]).then(() => setTimeout(() => {
       if (cancelled || bigWinPlayed(key)) return;
       markBigWinPlayed(key);
       setWinShow(show);

@@ -20,6 +20,11 @@ const FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
   { code: "sakura", name: "櫻花", art: "/mahjong-fx/zimo/sakura/sakura-title.webp" },
 ];
 
+/** 老闆專屬的卡片：只有 GET 回 ownerFx 才顯示（不寫死帳號） */
+const OWNER_FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
+  { code: "rulai", name: "如來神掌", art: "/mahjong-fx/zimo/rulai/rulai-title.webp" },
+];
+
 const PREVIEW_TILES: Tile[] = [
   { id: -11, suit: "m", rank: 5, display: "五萬" },
   { id: -12, suit: "p", rank: 7, display: "七筒" },
@@ -116,7 +121,7 @@ export default function MjPrefsPanel() {
         <div className="mjp-body" id="mjp-body" role="tabpanel" aria-labelledby={`mjp-tab-${tab}`} data-prefs-body={tab}>
           {tab === "fx" && fx ? (
           <div className="mjp-fxs" data-prefs-fx-list>
-            {FX_CARDS.map(({ code, name, art }) => {
+            {[...FX_CARDS, ...OWNER_FX_CARDS.filter((c) => fx.ownerFx?.some((o) => o === c.code))].map(({ code, name, art }) => {
               const granted = isGranted(code);
               const current = selectedChoice === code;
               return <button key={code} type="button" data-prefs-fx={code} aria-pressed={pick === code}

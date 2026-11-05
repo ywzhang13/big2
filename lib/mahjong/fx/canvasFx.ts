@@ -15,13 +15,13 @@ export const SAKURA_STILL_MS = 2400;
 const WIND = [[0.92, -0.38], [-0.97, 0.1], [0.46, 0.88], [0.97, 0.1]] as const;
 const WIND_LINES = 14;
 
-const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
-const seg = (t: number, a: number, b: number) => clamp((t - a) / (b - a));
-const sm = (x: number) => x * x * (3 - 2 * x);
-const outC = (x: number) => 1 - Math.pow(1 - x, 3);
-const inC = (x: number) => x * x * x;
-const lerp = (a: number, b: number, f: number) => a + (b - a) * f;
-function rng(seed: number) {
+export const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+export const seg = (t: number, a: number, b: number) => clamp((t - a) / (b - a));
+export const sm = (x: number) => x * x * (3 - 2 * x);
+export const outC = (x: number) => 1 - Math.pow(1 - x, 3);
+export const inC = (x: number) => x * x * x;
+export const lerp = (a: number, b: number, f: number) => a + (b - a) * f;
+export function rng(seed: number) {
   let s = seed >>> 0;
   return () => {
     s = (s + 0x6d2b79f5) >>> 0;

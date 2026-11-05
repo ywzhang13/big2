@@ -35,7 +35,7 @@ eq(planWinShow({ pick: BAXIAN, zimo: false }), ["big"], "W4 八仙過海：只�
 eq(planWinShow({ pick: QQ1, zimo: false }), ["big"], "W4 七搶一：只播大牌段");
 eq(planWinShow({ pick: null, zimo: true, winFx: "rainbow" }), ["cele"], "W5 不認得的代號：當作沒有");
 
-for (const fx of ["thunder", "storm", "frost", "blackhole", "sakura"]) {
+for (const fx of ["thunder", "storm", "frost", "blackhole", "sakura", "rulai"]) {
   eq([planWinShow({ pick: null, zimo: true, winFx: fx }), planWinShow({ pick: DSY, zimo: true, winFx: fx }), planWinShow({ pick: null, zimo: false, winFx: fx }),
     planWinShow({ pick: DSY, zimo: false, winFx: fx }), planWinShow({ pick: TIAN, zimo: true, winFx: fx })],
     [["zfx"], ["big", "zfx"], ["cele"], ["big", "cele"], ["big"]], `W7 ${fx} 完整版：自摸＝特效（自帶大字、不接浮層）／大三元自摸＝大牌段 → 特效／放槍照一般／天胡只播大牌段`);
