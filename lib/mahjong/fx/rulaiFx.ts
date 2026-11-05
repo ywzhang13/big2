@@ -11,6 +11,12 @@ export const RULAI_ART = ["hand", "hand-cracks", "fissures", "fis-glow", "light-
 export type RulaiArt = (typeof RULAI_ART)[number];
 /** 手的大小只調這個：砸中時手長＝u × 這個數字（u＝min(畫面高, 畫面寬×0.62)），老闆看了再調 */
 export const RULAI_HAND_SCALE = 1.02;
+/**
+ * 手的方向（老闆 2026-11-06 實機比較中，定案後拿掉另一邊）。false＝A 指尖朝下、朝鏡頭；true＝B 指尖朝上，手掌正面壓向桌面，靠近鏡頭的是掌根。
+ * 兩邊都是「畫面下方的那一端近、放得大」，只有手的哪一端在下方不同
+ */
+export const RULAI_HAND_UP: boolean = false;
+const handUp = () => RULAI_HAND_UP;
 /** 手機／電腦上限：畫布倍率、金屑、飛牌、碎石、塵雲、噴光（手機合計 110）、手的條帶數、暫代雲和凹陷的尺寸 */
 export const RULAI_LIMIT = {
   mobile: { dpr: 1.5, gold: 64, fly: 14, rubble: 12, dust: 10, jets: 10, strips: 40, cloud: [768, 432], crater: 640 },
@@ -117,6 +123,7 @@ export class RulaiCanvas {
   private art: Partial<Record<RulaiArt, HTMLImageElement>>;
   private baked: HTMLCanvasElement[];
   private cloud: HTMLCanvasElement; private crater: HTMLCanvasElement; private fly: HTMLCanvasElement; private spark: HTMLCanvasElement; private gl: HTMLCanvasElement; private wave: HTMLCanvasElement; private shadow: HTMLCanvasElement;
+  private up = handUp();
   private hx: number; private hy: number; private rot: number; private base: number; private D: number; private strips: number;
   private gold: { i: number; a: number; sp: number; s: number; ph: number; fx: number; fy: number; sway: number }[];
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
@@ -180,15 +187,18 @@ export class RulaiCanvas {
   /** 條帶透視：一張圖切成 N 條，越靠近鏡頭的條帶越寬越高。沒有 3D，只有 drawImage */
   private warp(img: Src, P: Pose, opt: WarpOpt = {}) {
     const { x, dpr } = this, N = opt.n ?? this.strips, a = P.a, base = this.base * P.sc, iw = widthOf(img), ih = heightOf(img), W0 = (base * iw) / ih;
-    const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), sMid = sAt(0.38), palm = lenF(0.38) / total, c = Math.cos(this.rot), s = Math.sin(this.rot);
-    x.setTransform(-c * dpr, -s * dpr, s * dpr, -c * dpr, P.X * dpr, P.Y * dpr); // 轉 180°：原圖指尖朝上，這裡要朝下、朝鏡頭
+    const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), up = this.up, palmAt = up ? 0.62 : 0.38, sMid = sAt(palmAt), palm = lenF(palmAt) / total, c = Math.cos(this.rot), s = Math.sin(this.rot);
+    // y＝0 遠端（畫面上方）、y＝1 近端（畫面下方）。A：轉 180°，近端是原圖上方的指尖；B：不轉，近端是原圖下方的掌根
+    if (up) x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, P.X * dpr, P.Y * dpr);
+    else x.setTransform(-c * dpr, -s * dpr, s * dpr, -c * dpr, P.X * dpr, P.Y * dpr);
     if (opt.lighter) x.globalCompositeOperation = "lighter";
     for (let i = 0; i < N; i++) {
       const y0 = i / N, y1 = (i + 1) / N, m = (y0 + y1) / 2, sc = sAt(m) / sMid, Y0 = (lenF(y0) / total - palm) * base, Y1 = (lenF(y1) / total - palm) * base, w = W0 * sc;
-      const al = (opt.alpha ?? 1) * (opt.fadeFar === false ? 1 : sm(clamp(m / 0.3))) * (opt.strip ? opt.strip(m) : 1);
+      const al = (opt.alpha ?? 1) * (opt.fadeFar === false ? 1 : sm(clamp((up ? 1 - m : m) / 0.3))) * (opt.strip ? opt.strip(m) : 1);
       if (al <= 0.004) continue;
       x.globalAlpha = al;
-      x.drawImage(img, 0, (1 - y1) * ih, iw, (y1 - y0) * ih, -w / 2, -Y1, w, Y1 - Y0 + 0.7);
+      if (up) x.drawImage(img, 0, y0 * ih, iw, (y1 - y0) * ih, -w / 2, Y0, w, Y1 - Y0 + 0.7);
+      else x.drawImage(img, 0, (1 - y1) * ih, iw, (y1 - y0) * ih, -w / 2, -Y1, w, Y1 - Y0 + 0.7);
     }
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
@@ -230,7 +240,7 @@ export class RulaiCanvas {
       if (shaftA > 0) for (let i = 0; i < 7; i++) { const an = Math.PI / 2 + (i - 3) * 0.24 + 0.03 * Math.sin(t * 1.7 + i), Ls = u * (1.05 + 0.25 * Math.sin(i * 3.1)) * (0.6 + 0.4 * open), wd = u * (0.13 + 0.03 * (i % 3)), c2 = Math.cos(an), s2 = Math.sin(an); x.setTransform(c2 * dpr, s2 * dpr, -s2 * dpr, c2 * dpr, hx * dpr, hy * dpr); x.globalAlpha = shaftA * 0.55; x.drawImage(rays, (i % 2) * rw, (i % 4 >> 1) * rh, rw, rh, 0, -wd / 2, Ls, wd); }
       reset();
     }
-    // ---- 手（暫代：手背轉 180°）：不抬手，砸中後從手腕往指尖化成金光 ----
+    // ---- 手（暫代手背）：不抬手，砸中後從近端往遠端化成金光 ----
     if (ms >= tl.emerge - 80 && ms < hit + 560) {
       const emergeA = sm(seg(ms, tl.emerge - 80, tl.emerge + 220)), P = this.pose(ms);
       if (ms >= tl.rush && ms < hit) { const f0 = seg(ms, tl.rush, hit); for (const [lag, al] of [[0.42, 0.2], [0.26, 0.3], [0.12, 0.42]] as const) this.warp(hand, this.pose(tl.rush + (hit - tl.rush) * clamp(f0 - lag * 0.5)), { lighter: true, alpha: al, n: 10 }); }
