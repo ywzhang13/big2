@@ -1414,9 +1414,9 @@ body {
 .mjp-fxpv > span { position: absolute; right: 10px; bottom: 8px; padding: 3px 7px; border-radius: 999px; font-size: 11px; color: rgba(255,255,255,.72); background: rgba(0,0,0,.35); }
 @keyframes mjp-fxpv { 0% { opacity: 0; transform: scale(1.8); filter: blur(6px); } 55% { opacity: 1; transform: scale(.94); filter: none; } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .mjp-fxpv b { animation: none; } }
-.mjp-apply { min-height: 40px; padding: 8px 22px; border-radius: 10px; font-weight: 800; color: #f0d68a; border: 1px solid #c9a96e; background: rgba(201,169,110,.1); cursor: pointer; }
-.mjp-apply:hover:not(:disabled) { background: rgba(201,169,110,.2); } .mjp-apply:active:not(:disabled) { transform: scale(.96); }
-.mjp-apply:disabled { opacity: .55; cursor: default; }
+.mjp-card.fx .mjp-foot { justify-content: flex-end; gap: 12px; }
+.mjp-done:disabled { opacity: .55; cursor: default; filter: none; }
+.mjp-fx-err { margin-right: auto; font-size: 13px; font-weight: 700; color: #ff9d8a; }
 @media (max-height: 500px) {
   .mjp-card { width: min(720px, 96vw); height: min(332px, 94dvh);
     grid-template: "head head" 40px "body pv" minmax(0, 1fr) "foot foot" 44px / minmax(0, 1fr) 196px; }

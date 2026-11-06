@@ -42,8 +42,8 @@ const HIT = 1120;
 export const ZFX_TL: Record<ZimoFxNew, { hit: number; tile: number; zimo: number; name: number; total: number; boom?: number }> = {
   thunder: { hit: 1120, tile: 1420, zimo: 1660, name: 1860, total: 3220 },
   frost: { hit: 1080, tile: 1300, zimo: 1560, name: 1760, total: 2900 },
-  storm: { hit: 1120, tile: 1400, zimo: 1860, name: 2080, total: 2680 },
-  blackhole: { hit: 1120, boom: 1190, tile: 1420, zimo: 1860, name: 2100, total: 2600 },
+  storm: { hit: 1120, tile: 1400, zimo: 1860, name: 2080, total: 3160 }, // 老闆 2026-11-05：大字太短（原本 2.68 秒結束、只留 0.82 秒），延到 1.3 秒；風和雨照舊 2.68 秒收完，大字留到結束
+  blackhole: { hit: 1120, boom: 1190, tile: 1420, zimo: 1860, name: 2100, total: 3160 }, // 老闆 2026-11-05：大字太短（原本 2.60 秒結束、只留 0.74 秒），延到 1.3 秒；其他零件照舊 2.60 秒收完，大字留到結束
   sakura: SAKURA_TL,
 };
 export const isOwnTitleFx = (fx: string): fx is ZimoFxNew => fx in ZFX_TL;

@@ -33,7 +33,7 @@ const PREVIEW_TILES: Tile[] = [
  *  聲音：語音、互動音效各一條 0～100 拉霸＋靜音鈕（靜音時拉霸停用、數值保留），加「收到語音時自動播放」。
  *  改了立刻生效；點遮罩、關閉鈕、「完成」或 Esc 關閉。
  *  「自摸特效」分頁（老馬 2026-10-31，小宜〈自摸特效庫與斗內系統〉5）：打開面板時問一次伺服器，有開通的特效才出現；
- *  點卡片＝預覽（先顯示特效名稱，新特效素材到了再換成真的動畫），按「套用」才改設定。老闆：不顯示到期、說明文字 */
+ *  點卡片＝預覽（先顯示特效名稱，新特效素材到了再換成真的動畫），按「確定」才存好並關閉（老闆 2026-11-05：拿掉「套用」）；沒按確定就關閉不改設定。老闆：不顯示到期、說明文字 */
 /** 特效開通狀態（小宜〈斗內改版〉D2、D3；老闆 2026-11-02：一次開通全部 6 種，頁首不顯示到期日）：有任何一種開通＝全部開通；老闆帳號永久 */
 function FxGrantPill({ fx }: { fx: MyZimoFx }) {
   const until = ZIMO_FX_LIST.map((f) => fx.available[f.code]).filter((v): v is number | null => v !== undefined);
@@ -81,21 +81,22 @@ export default function MjPrefsPanel() {
   const themeOn = THEMES.find((t) => t.back === prefs.back && t.felt === prefs.felt)?.id;
   const isGranted = (choice: FxChoice) => !!fx && choice in fx.available;
   const selectedChoice: FxChoice = fx?.selected ?? "golden";
-  const apply = async () => {
+  /** 確定：已是目前選用的直接關閉；存好才關閉，存失敗留在頁面顯示錯誤 */
+  const confirm = async () => {
     if (!pick || !isGranted(pick) || fxBusy) return;
+    if (pick === selectedChoice) { setFxErr(false); close(); return; }
     setFxBusy(true); setFxErr(false);
     const r = await selectMyFx(pick);
     setFxBusy(false);
-    if (r.ok) { setFx((cur) => (cur ? { ...cur, selected: r.data.selected } : cur)); return; }
+    if (r.ok) { setFx((cur) => (cur ? { ...cur, selected: r.data.selected } : cur)); close(); return; }
+    setFxErr(true);
     // 被拒（這段時間剛好過期、被收回）：照伺服器說的改回目前實際套用的那一種，畫面不停在被拒的那張；再重抓一次開通清單
     const now = rejectedSelected(r);
     if (now) {
       setFx((cur) => (cur ? { ...cur, selected: now } : cur));
       setPick(now);
       void getMyFx().then((g) => { if (g.ok) setFx(g.data); });
-      return;
     }
-    setFxErr(true);
   };
 
   return (
@@ -190,16 +191,19 @@ export default function MjPrefsPanel() {
         </div>}
         <div className="mjp-foot">
           {tab === "fx" ? (
-            <button type="button" className="mjp-apply" data-prefs-fx-apply disabled={!pick || !isGranted(pick) || fxBusy || selectedChoice === pick} onClick={apply}>
-              {fxErr ? "套用失敗，再試一次" : selectedChoice === pick ? "使用中" : pick && isGranted(pick) ? "套用" : "尚未開通"}
-            </button>
+            <>
+              {fxErr && <span className="mjp-fx-err" role="alert" data-prefs-fx-err>儲存失敗，請再試一次</span>}
+              <button type="button" className="mjp-done" data-prefs-fx-apply disabled={!pick || !isGranted(pick) || fxBusy} onClick={confirm}>
+                {pick && !isGranted(pick) ? "尚未開通" : fxBusy ? "儲存中…" : "確定"}
+              </button>
+            </>
           ) : (
           /* 回復預設：只回復目前這個分頁的設定 */
           <button type="button" className="mjp-reset" data-prefs-reset onClick={() => setPrefs(tab === "look"
             ? { back: DEFAULT_PREFS.back, felt: DEFAULT_PREFS.felt }
             : { voiceVol: DEFAULT_PREFS.voiceVol, voiceMuted: DEFAULT_PREFS.voiceMuted, fxVol: DEFAULT_PREFS.fxVol, fxMuted: DEFAULT_PREFS.fxMuted, autoVoice: DEFAULT_PREFS.autoVoice })}>回復預設</button>
           )}
-          <button type="button" className="mjp-done" onClick={close}>完成</button>
+          {tab !== "fx" && <button type="button" className="mjp-done" onClick={close}>完成</button>}
         </div>
       </div>
     </div>
