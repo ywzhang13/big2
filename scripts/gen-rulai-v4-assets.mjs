@@ -42,6 +42,8 @@ const crater = async (S) => {
 // ---- 雲：高彩度的黃綠光暈轉成暖金；灰雲不動 ----
 const cl = await raw(sharp(CLOUD));
 for (let i = 0; i < cl.d.length; i += 4) { const r = cl.d[i], g = cl.d[i + 1], b = cl.d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx > 40 && (mx - mn) / mx > 0.35 && g > r * 0.82) cl.d[i + 1] = Math.round(r * 0.8); }
+// 雲圖左邊 30% 慢慢淡到 0：左右家的雲會轉角度放在畫面內，左邊不能有直切邊（自己、對家看時這段本來就在畫面外）
+for (let y = 0; y < cl.h; y++) for (let x = 0; x < cl.w * 0.3; x++) { const t = x / (cl.w * 0.3), k = t * t * (3 - 2 * t), i = (y * cl.w + x) * 4 + 3; cl.d[i] = Math.round(cl.d[i] * k); }
 const report = [];
 for (const [dev, hh, cw, cs, q] of [["m", 840, 768, 640, 72], ["d", 1120, 1152, 1024, 80]]) {
   const hw = Math.round((hh * W0) / H0);
