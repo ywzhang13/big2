@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const [HAND, CLOUD] = process.argv.slice(2);
 if (!HAND || !CLOUD) throw new Error("用法：node scripts/gen-rulai-v4-assets.mjs <手.png> <雲.png>");
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/mahjong-fx/zimo/rulai");
-const V = "v4";
+const V = "v5"; // 換內容要改這個版本（長期快取同名不能換內容）
 const raw = async (s) => { const { data, info } = await s.ensureAlpha().raw().toBuffer({ resolveWithObject: true }); return { d: data, w: info.width, h: info.height }; };
 const toSharp = (r) => sharp(r.d, { raw: { width: r.w, height: r.h, channels: 4 } });
 const webp = (s, q, f) => s.webp({ quality: q, alphaQuality: 90, effort: 6 }).toFile(path.join(OUT, f));

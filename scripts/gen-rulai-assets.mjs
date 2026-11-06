@@ -94,11 +94,11 @@ for (const dev of ["m", "d"]) {
   for (let i = 0; i < cW * cH; i++) { const inner = solidB[i] / 255, soft = blurA[i] / 255, edge = soft * (1 - inner * 0.82); pr[i * 4] = 255; pr[i * 4 + 1] = 196 + Math.round(40 * edge); pr[i * 4 + 2] = 92 + Math.round(90 * edge); const pa = Math.min(255, Math.round(255 * (edge * 1.5 + inner * 0.2))); pr[i * 4 + 3] = pa < 4 ? 0 : pa; }
   await webp(toSharp(feather({ d: pr, w: cW, h: cH }, 0.05)), q.print, `rulai-print-${dev}.webp`);
   const [fw, fh] = S.fis;
-  await webp(fit(fisA, fw, fh), q.fis, `rulai-fissures-${dev}.webp`);
+  await webp(fit(fisA, fw, fh), q.fis, `rulai-fissures-v5-${dev}.webp`);
   // 裂縫光暈：同一張縮小再模糊、染金（程式畫時放大，本來就是軟的）
   const [gw, gh] = S.glow, gl = await raw(fit(fisA, gw, gh).blur(gh * 0.012));
   for (let i = 0; i < gl.d.length; i += 4) { gl.d[i] = 255; gl.d[i + 1] = 190; gl.d[i + 2] = 70; }
-  await webp(toSharp(gl), q.glow, `rulai-fis-glow-${dev}.webp`);
+  await webp(toSharp(gl), q.glow, `rulai-fis-glow-v5-${dev}.webp`);
   // 噴光：每格 3:2（原圖比例），不是正方形；底部爆點對準格子中央偏下（S.jet＝格高）
   const jh = S.jet, jw = Math.round(jh * 1.5), jetCells = [];
   for (let n = 0; n < 4; n++) { const cell = { w: Math.floor(jetsA.w / 2), h: Math.floor(jetsA.h / 2) }, b = jetB[n], base = jetBase[n], x0 = Math.round(base.x - cell.w / 2), y0 = Math.round(base.y - cell.h * 0.88); jetCells.push(toSharp(feather(crop(jetsA, x0, y0, cell.w, cell.h))).resize(jw, jh, { fit: "fill" })); void b; }

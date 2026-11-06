@@ -5,7 +5,7 @@ import { clamp, frameGovernor, inC, lerp, outC, rng, seg, sm, type SakuraEls, ty
 
 export const RULAI_TL = { clouds: 350, part: 850, emerge: 700, rush: 1500, hit: 1700, tile: 2320, zimo: 2660, name: 2900, total: 4200 };
 /** 這幾張依裝置選一組（順序固定，ZimoFx 照這個順序載） */
-export const RULAI_ART = ["hand-v4", "clouds-v4", "crater-v4", "fissures", "fis-glow", "light-jets", "light-rays", "rubble", "dust"] as const;
+export const RULAI_ART = ["hand-v5", "clouds-v5", "crater-v5", "fissures-v5", "fis-glow-v5", "light-jets", "light-rays", "rubble", "dust"] as const; // 長期快取：換內容就換檔名（v5＝2026-11-06 統一換名，之前同名換過內容）
 export type RulaiArt = (typeof RULAI_ART)[number];
 /** 手的大小只調這個：砸中時手長＝u × 這個數字（u＝min(畫面高, 畫面寬×0.62)），老闆看了再調 */
 export const RULAI_HAND_SCALE = 1.02;
@@ -135,7 +135,7 @@ export class RulaiCanvas {
     this.gl = bakeGlow(256, [[0, "rgba(255,250,225,1)"], [0.25, "rgba(255,212,110,.7)"], [0.6, "rgba(255,160,40,.16)"], [1, "rgba(255,140,20,0)"]]);
     this.wave = bakeGlow(256, [[0, "rgba(255,230,160,0)"], [0.62, "rgba(255,226,150,0)"], [0.84, "rgba(255,240,195,.8)"], [0.93, "rgba(255,200,100,.22)"], [1, "rgba(255,180,60,0)"]]);
     this.shadow = bakeGlow(256, [[0, "rgba(0,0,0,.92)"], [0.6, "rgba(0,0,0,.6)"], [1, "rgba(0,0,0,0)"]]);
-    if (rel % 2 === 1) this.sideCloud = bakeSideCloud(art["clouds-v4"]);
+    if (rel % 2 === 1) this.sideCloud = bakeSideCloud(art["clouds-v5"]);
     this.baked = [...(this.sideCloud ? [this.sideCloud] : []), this.fly, this.spark, this.gl, this.wave, this.shadow];
     // 雲洞在畫面中央和落點的中間；手一律從雲洞往落點來，指尖朝畫面下方
     this.hx = lerp(W / 2, px, 0.55); this.hy = -H * 0.02;
@@ -236,7 +236,7 @@ export class RulaiCanvas {
   }
   draw(ms: number) {
     const { x, dpr, art, spark, gl, wave, fly, shadow, D } = this, { W, H, u, px, py } = this.g, tl = RULAI_TL, t = ms / 1000, hit = tl.hit, A = ms - hit, S = this.scale;
-    const hand = art["hand-v4"], cloud = art["clouds-v4"], crater = art["crater-v4"], fis = art.fissures, fisG = art["fis-glow"], jets = art["light-jets"], rays = art["light-rays"], rubble = art.rubble, dust = art.dust;
+    const hand = art["hand-v5"], cloud = art["clouds-v5"], crater = art["crater-v5"], fis = art["fissures-v5"], fisG = art["fis-glow-v5"], jets = art["light-jets"], rays = art["light-rays"], rubble = art.rubble, dust = art.dust;
     if (!hand || !cloud || !crater || !fis || !fisG || !jets || !rays || !rubble || !dust) return; // 已經收尾
     let count = 0;
     const reset = () => { x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; };
