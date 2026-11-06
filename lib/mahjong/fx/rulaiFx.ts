@@ -211,27 +211,25 @@ export class RulaiCanvas {
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
   /**
-   * 左右家的雲（老闆 2026-11-06）：雲的厚處在手腕那一側（畫面角落），撕裂口和雷光邊朝手指方向打開，手指從裂口最前端衝出；
-   * 雲以手的路徑為軸，左右對稱兩片，手衝出時往兩側推開，砸中後被衝散。用開播時烘的羽化小圖（上、左兩邊淡出），任何角度都不會露出雲圖的直邊。
+   * 左右家的雲（老闆 2026-11-06）：只在手進場的那一角放一團雲，另一角沒有雲；撕裂口和雷光邊朝手指方向打開，手腕藏在雲裡、手掌和手指衝出來看得清楚。
+   * 雲收在角落、順著手的斜線，不沿螢幕側邊往下拖（雲團不超過畫面高度約 40%）。兩片以手的路徑為軸對稱，手衝出時往兩側推開，砸中後退回角落淡掉。
+   * 用開播時烘的羽化小圖（上、左兩邊淡出），任何角度都不會露出雲圖的直邊。
    */
-  private drawSideCloud(cloud: Src, ms: number, cIn: number, open: number, blast: number, cFade: number) {
+  private drawSideCloud(ms: number, cIn: number, open: number, blast: number, cFade: number) {
     const { x, dpr, sideCloud } = this, { W, u, px, py } = this.g, t = RULAI_TL;
     if (!sideCloud) return;
     const iw = sideCloud.width, ih = sideCloud.height, fx = Math.sin(this.rot), fy = -Math.cos(this.rot), N = Math.atan2(0.9 * iw, 0.88 * ih); // N＝撕裂口朝外的方向（原圖朝右下）
-    const phi = -N, c = Math.cos(phi), s = Math.sin(phi), cw = W * 0.95 * (1 + 0.15 * blast), ch = (cw * ih) / iw, tx = 0.45 * cw, ty = 0.44 * ch;
-    const back = u * (0.35 + 0.5 * (1 - cIn) + 0.25 * blast), qx = px - fx * back, qy = py - fy * back; // 撕裂口中心在手的路徑上、手腕那一側
-    const g = u * (0.02 + 0.07 * open + 0.2 * inC(seg(ms, t.rush, t.hit)) + 0.3 * blast); // 往兩側推開
-    x.globalAlpha = cFade * (1 - blast * 0.5);
+    const phi = -N, c = Math.cos(phi), s = Math.sin(phi), cw = W * 0.64 * (1 + 0.1 * blast), ch = (cw * ih) / iw, tx = 0.45 * cw, ty = 0.44 * ch;
+    // 撕裂口中心：手的路徑上、離進場角落最近的那一點，再往手指方向推 d（雲從角落外滑進來，砸中後退回角落）
+    const Cx = fx < 0 ? W : 0, tc = (Cx - px) * fx + (0 - py) * fy, d = u * (0.2 - 0.25 * (1 - cIn) - 0.2 * blast);
+    const qx = px + fx * (tc + d), qy = py + fy * (tc + d);
+    const g = u * (0.01 + 0.03 * open + 0.05 * inC(seg(ms, t.rush, t.hit)) + 0.08 * blast); // 往兩側推開
+    x.globalAlpha = cFade * (1 - blast * 0.6);
     for (const side of [1, -1]) {
-      const a = fx * c - fy * s * side, b = fy * c + fx * s * side, cc = -fx * s - fy * c * side, d = -fy * s + fx * c * side;
-      x.setTransform(a * dpr, b * dpr, cc * dpr, d * dpr, (qx - fy * g * side) * dpr, (qy + fx * g * side) * dpr);
+      const a = fx * c - fy * s * side, b = fy * c + fx * s * side, cc = -fx * s - fy * c * side, dd = -fy * s + fx * c * side;
+      x.setTransform(a * dpr, b * dpr, cc * dpr, dd * dpr, (qx - fy * g * side) * dpr, (qy + fx * g * side) * dpr);
       x.drawImage(sideCloud, -tx, -ty, cw, ch);
     }
-    // 另一角：小、淡，只陪襯（原圖的上、左兩邊在畫面外）
-    const fw = W * 0.3, fh = (fw * heightOf(cloud)) / widthOf(cloud), mir = fx < 0; // 下家手往左下，陪襯的雲在左上角
-    x.globalAlpha = cFade * 0.42 * (1 - blast * 0.6);
-    if (mir) x.setTransform(dpr, 0, 0, dpr, 0, 0); else x.setTransform(-dpr, 0, 0, dpr, W * dpr, 0);
-    x.drawImage(cloud, -fw * (0.28 + 0.25 * blast), lerp(-fh, -fh * 0.2, cIn) - blast * fh * 0.4, fw, fh);
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1;
   }
   draw(ms: number) {
@@ -283,7 +281,7 @@ export class RulaiCanvas {
       if (ms >= hit) this.warp(hand, P, { lighter: true, alpha: (1 - seg(A, 30, 460)) * 0.32, strip, n: 12 });
     }
     // ---- 雲（蓋住手的遠端，手像是從雲裡伸出來）；雲只有半邊，鏡射畫另一半 ----
-    if (cFade > 0 && this.slant) this.drawSideCloud(cloud, ms, cIn, open, blast, cFade);
+    if (cFade > 0 && this.slant) this.drawSideCloud(ms, cIn, open, blast, cFade);
     else if (cFade > 0) {
       const cw = W * 0.68 * (1 + blast * 0.15), ch = (cw * heightOf(cloud)) / widthOf(cloud), // 照原圖比例，不拉伸
         ox = W * 0.01 + (W * 0.15 + W * 0.3 * blast) * open, oy = lerp(-ch, 0, cIn) - blast * H * 0.22, cx = this.slant ? W / 2 : this.hx; // 左右家：雲留在兩個上角，手從胡牌者那側的雲後面伸出來
