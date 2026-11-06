@@ -5,6 +5,7 @@
 //   → 觀戰（頂部「觀戰中・○○視角」、右側視角抽屜切換、離開觀戰）→ 被收回：先清掉手牌再顯示提示
 // 觀戰中牌桌用一般牌桌元件畫，但所有操作都不接（不出牌、不吃碰槓胡、不眼牌），聊天、語音、互動特效都不掛。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { Tile } from "@/lib/mahjong/tiles";
 import { getSupabase } from "@/lib/supabase";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
@@ -77,6 +78,11 @@ export default function MahjongWatchPage() {
   const [toast, setToast] = useState<{ text: string; assertive?: boolean } | null>(null);
   const [viewSeat, setViewSeat] = useState<number | null>(null);
   const [view, setView] = useState<SpectateView | null>(null);
+  // 觀戰者畫面也要看到別家補花亮正面（老闆 2026-11-07：和玩家自己、別家視角一致）：記每家已經看過的花牌 id，
+  // mj_draw 多出來的就是這次補到的，key 一樣用遞增序號（不用跟玩家那邊共用 flowerTrackerRef，觀戰是獨立的畫面）
+  const [flowerFx, setFlowerFx] = useState<{ key: number; seat: number; tiles: Tile[]; delay: number; holdMs: number }[]>([]);
+  const flowerSeenRef = useRef(new Map<number, Set<number>>());
+  const flowerFxKeyRef = useRef(0);
   const [revokedBy, setRevokedBy] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(true);
   const [slow, setSlow] = useState(false);
@@ -174,6 +180,8 @@ export default function MahjongWatchPage() {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
         viewRef.current = v;
+        // 第一次拿到這個視角：先記下現在各家的花牌 id 當基準，不要當成剛補到的（不然一進來就亮一輪）
+        for (const p of v.players) if (!flowerSeenRef.current.has(p.seat)) flowerSeenRef.current.set(p.seat, new Set(p.flowers.map((t) => t.id)));
         syncDeclareFx(v.eyeSeats, v.tingSeats);
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
@@ -210,7 +218,7 @@ export default function MahjongWatchPage() {
       if (msg.event === "mj_draw") {
         // 和玩家自己畫面上同一條公式（hooks/useMahjong.ts 的 mj_draw 處理）：那家正在眼牌、或剛好補到花，
         // 就晚一點才去拿最新狀態，觀戰者才不會比本人還早看到摸牌結果
-        const { seat, flowers } = (msg.payload ?? {}) as { seat?: number; flowers?: { id: number }[] };
+        const { seat, flowers } = (msg.payload ?? {}) as { seat?: number; flowers?: Tile[] };
         const cur = viewRef.current;
         const prevN = cur?.players.find((p) => p.seat === seat)?.flowers.length ?? 0;
         const newFlowerN = typeof seat === "number" ? Math.max(0, (flowers?.length ?? 0) - prevN) : 0;
@@ -218,6 +226,18 @@ export default function MahjongWatchPage() {
         const eyeMs = typeof seat === "number" && cur?.eyeSeats.includes(seat) ? EYE_DRAW_MS : 0;
         const ms = eyeMs + flowerMs;
         if (ms > 0) soonAfter(ms); else soon();
+        // 被觀戰的那家不用額外亮正面（本人畫面已經在手牌最右邊顯示）；別家補花的那格亮正面跟玩家自己畫面一樣（老闆 2026-11-07）
+        if (typeof seat === "number" && seat !== viewSeat && flowers) {
+          const seen = flowerSeenRef.current.get(seat) ?? new Set<number>();
+          flowerSeenRef.current.set(seat, new Set(flowers.map((t) => t.id)));
+          const added = flowers.filter((t) => !seen.has(t.id));
+          if (added.length > 0) {
+            const key = ++flowerFxKeyRef.current;
+            const holdMs = FLOWER_FX_MS + FLOWER_STAGGER_MS * Math.max(0, added.length - 1);
+            setFlowerFx((prev) => [...prev.filter((f) => f.seat !== seat), { key, seat, tiles: added, delay: 0, holdMs }]);
+            setTimeout(() => setFlowerFx((prev) => prev.filter((f) => f.key !== key)), holdMs);
+          }
+        }
       } else soon();
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
@@ -253,7 +273,7 @@ export default function MahjongWatchPage() {
     if (rr.ok) setRoom(rr.data);
   };
   /** 切換視角：先把畫面上的手牌清掉、標籤換成新玩家，等新視角的資料到了才顯示（不顯示上一位的手牌） */
-  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); };
+  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); };
   /** 離開觀戰：前端停止拿視角、回玩家清單；不撤銷其他玩家給的同意（對接格式 3.4、規格 5.6） */
   const leave = async () => { setView(null); setViewSeat(null); if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
 
@@ -270,6 +290,7 @@ export default function MahjongWatchPage() {
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
       drawnTileId: v.drawnTileId, slowDraw: null, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
+      flowerFx,
     } : null;
     const roundLabel = v?.roundInfo ? `${WIND[(v.roundInfo.currentRound - 1) % 4]}風圈 第${v.roundInfo.currentGame}局` : undefined;
     return (
