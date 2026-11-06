@@ -91,7 +91,7 @@ const bakedFlyIndex = () => baked.findIndex((c) => (c as unknown as { width: num
 { const manifest = JSON.parse(readFileSync(new URL("../scripts/immutable-assets.json", import.meta.url), "utf8")) as Record<string, string>;
   const files = [...RULAI_ART.map((n) => `rulai-${n}-m.webp`), "rulai-title.webp"];
   let bytes = 0, px = 0; for (const f of files) { const p = new URL(`../public/mahjong-fx/zimo/rulai/${f}`, import.meta.url); bytes += statSync(p).size; const m = await sharp(fileURLToPath(p)).metadata(); px += (m.width ?? 0) * (m.height ?? 0); }
-  const bakedMb = (256 * 256 * 3 + 48 * 48 + 384 * 132) * 4 / 1048576, mb = px * 4 / 1048576 + bakedMb, kb = bytes / 1024;
+  const bakedMb = (256 * 256 * 3 + 48 * 48 + 384 * 132 + 480 * 320) * 4 / 1048576, mb = px * 4 / 1048576 + bakedMb, kb = bytes / 1024;
   ok(mb <= 14, `R9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（含開播時烘的 ${bakedMb.toFixed(2)} MB）`);
   ok(bytes <= 1_000_000, `R9 手機下載 ${kb.toFixed(0)} KB ≤ 1 MB（1,000,000 位元組）`);
   const all = [...files, ...RULAI_ART.map((n) => `rulai-${n}-d.webp`)].map((f) => `/mahjong-fx/zimo/rulai/${f}`).concat(["/mahjong-fx/s/zimo-rulai-v4-pc.mp3", "/mahjong-fx/s/zimo-rulai-v4-mobile.mp3"]);
