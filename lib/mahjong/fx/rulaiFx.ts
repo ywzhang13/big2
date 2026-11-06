@@ -95,11 +95,11 @@ function bakeFly(faces: readonly HTMLImageElement[], back: readonly [string, str
 }
 
 /**
- * 白金聖雲（暫代）：把 dust 圖集（金色雲團）染成象牙白、淡金、暖灰，四格各一種色。480×320，約 0.6 MB，播完放掉。
- * 老闆的新聖雲圖到了，只要把傳進來的 src 換成新圖（同樣 2×2 格），不用烘。
+ * 白金聖雲（暫代，老闆 2026-11-06：改用老闆給的金色星塵雲霧原色，不再染白）：把 dust 圖集染色用，HOLY_TINT=false 時不呼叫，直接用原圖。
+ * 老闆的新聖雲圖到了，只要把傳進來的 src 換成新圖（同樣 2×2 格）。
  */
-/** 聖雲用哪一張圖：暫代＝dust（染色）。老闆的 4 朵聖雲拼成 2×2 圖集後：RULAI_ART 加一個新檔名（例如 "holy-v1"），這裡改成它、HOLY_TINT 改 false，其他不用動 */
-const HOLY_ART: RulaiArt = "dust", HOLY_TINT = true;
+/** 聖雲用哪一張圖：暫代＝dust 原色（四格裡只用右上、左上、右下三格，排除左下那團漩渦）。老闆的新聖雲圖到了，這裡改成新檔名，其他不用動 */
+const HOLY_ART: RulaiArt = "dust", HOLY_TINT = false;
 function bakeHolyCloud(src: Src) {
   const w = widthOf(src), h = heightOf(src), c = mk(w, h), x = c.getContext("2d")!;
   x.drawImage(src, 0, 0, w, h);
@@ -125,6 +125,7 @@ export class RulaiCanvas {
   private dusts: { a: number; R: number; s: number; ph: number; k: number }[];
   private holy: Src;
   private puffs: { tx: number; ty: number; ox: number; oy: number; s: number; k: number; rot: number; spin: number; d: number; low: boolean }[];
+  private mist: { k: number; side: number; sc: number; ph: number; rot: number }[];
   private jets: { X: number; Y: number; d: number; ph: number; k: number; sz: number }[];
   private press: { a: number; sp: number; o: number; l: number }[];
   /** 粒子比例（自動降級：只減金屑，其他突然少一半看得出來） */
@@ -158,12 +159,16 @@ export class RulaiCanvas {
     // 聖雲構圖四家相同：種子固定、和座位無關。雲只沿畫面四周排一圈（上緣一排、左右兩側上半段、下方兩角），中間留空；
     // 每團從畫面外沿「中心→位置」方向湧進來。左右兩側只到畫面一半高、尺寸受限，不會往下蓋到手牌那一排；下方兩角只短暫掠過（low）
     { const q = rng(4242), list: RulaiCanvas["puffs"] = [], j = () => (q() - 0.5),
-        add = (tx: number, ty: number, s: number, low = false) => { const dx = tx - W / 2, dy = ty - H / 2, dl = Math.hypot(dx, dy) || 1; list.push({ tx, ty, ox: dx / dl, oy: dy / dl, s, k: Math.floor(q() * 4), rot: q() * 6.28, spin: j() * 0.3, d: q(), low }); };
+        add = (tx: number, ty: number, s: number, low = false) => { const dx = tx - W / 2, dy = ty - H / 2, dl = Math.hypot(dx, dy) || 1; list.push({ tx, ty, ox: dx / dl, oy: dy / dl, s, k: [0, 1, 3][Math.floor(q() * 3)], rot: q() * 6.28, spin: j() * 0.3, d: q(), low }); }; // k=2 是左下那團漩渦，老闆說不要，排除
       const top = g.mobile ? 6 : 7;
       for (let i = 0; i < top; i++) add(((i + 0.5 + j() * 0.5) / top) * W, H * (0.06 + q() * 0.06), H * (0.46 + q() * 0.12));
       for (const sx of [0.05, 0.95]) for (const yy of [0.26, 0.46]) add(W * (sx + j() * 0.02), H * (yy + j() * 0.05), H * (0.4 + q() * 0.08));
       for (const sx of [0.03, 0.97]) add(W * sx, H * 0.96, H * 0.34, true);
       this.puffs = list; }
+    // 金色星塵霧（老闆 2026-11-06：原本 7 道直光扇形太硬，改用柔霧順著手衝出的方向流動）；同樣排除左下漩渦格
+    { const q = rng(7777 + rel), opts = [0, 1, 3], list: RulaiCanvas["mist"] = [], n = g.mobile ? 9 : 13;
+      for (let i = 0; i < n; i++) list.push({ k: opts[Math.floor(q() * 3)], side: (q() - 0.5) * 2, sc: 0.5 + q() * 0.6, ph: q(), rot: (q() - 0.5) });
+      this.mist = list; }
     const r = rng(1908 + rel), TAU = 6.283;
     // 順序不能改：四家、重播都一樣
     this.gold = Array.from({ length: L.gold }, (_, i) => ({ i, a: r() * TAU, sp: 0.35 + r() * 1.05, s: u * (0.008 + r() * 0.018), ph: r(), fx: r(), fy: r(), sway: r() * 6.28 }));
@@ -178,7 +183,7 @@ export class RulaiCanvas {
     this.cv.width = 0; this.cv.height = 0;
     for (const c of this.baked) { c.width = 0; c.height = 0; }
     this.art = {};
-    this.puffs = []; this.gold = []; this.flys = []; this.rubs = []; this.dusts = []; this.jets = []; this.press = [];
+    this.puffs = []; this.mist = []; this.gold = []; this.flys = []; this.rubs = []; this.dusts = []; this.jets = []; this.press = [];
   }
   /** 開播前把所有圖先畫一次（第一次畫才真的解碼、上傳）；畫完清掉，這時畫面還沒開始動 */
   prime() {
@@ -253,6 +258,34 @@ export class RulaiCanvas {
     if (lit > 0) { const R = u * (0.6 + 0.5 * lit) * (1 + blast); x.globalCompositeOperation = "lighter"; x.globalAlpha = lit * fade * (1 - blast) * 0.55; x.drawImage(gl, Lx - R, Ly - R, R * 2, R * 2); }
     x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
+  /**
+   * 金色星塵霧（老闆 2026-11-06：原本 7 道直光扇形太生硬，改成柔霧順著手衝出的方向流動，像手帶著金霧衝出來，邊緣柔、沒有硬直線）。
+   * 用 dust 圖集（排除左下漩渦格）沿手的實際路徑（取手較早的姿態當拖尾，不是直線）分布；只疊一條極淡、非放射狀的柔光拖尾（light-rays 左下那款）貼著手走。
+   */
+  private drawMist(ms: number, fade: number) {
+    const { x, dpr, art, mist } = this, { u } = this.g, t = RULAI_TL;
+    const dust = art.dust, rays = art["light-rays"];
+    if (!dust) return;
+    const emergeA = sm(seg(ms, t.emerge - 80, t.emerge + 260)), outA = 1 - sm(seg(ms, t.hit, t.hit + 280)), envel = emergeA * outA * fade;
+    if (envel > 0.004) {
+      const cw = widthOf(dust) / 2, ch = heightOf(dust) / 2, nx = -Math.cos(this.rot), ny = -Math.sin(this.rot); // 垂直於指尖方向，霧團左右散開用
+      x.globalCompositeOperation = "lighter";
+      for (const p of mist) {
+        const P = this.pose(ms - p.ph * 300); // 拖尾＝手較早的姿態，貼著手的實際路徑，不是直線
+        const X = P.X + nx * p.side * u * 0.18, Y = P.Y + ny * p.side * u * 0.18, sc = u * p.sc * 0.42, an = this.rot + p.rot * 0.25;
+        const c = Math.cos(an), s = Math.sin(an);
+        x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, X * dpr, Y * dpr);
+        x.globalAlpha = envel * (0.2 + 0.15 * p.ph);
+        x.drawImage(dust, (p.k % 2) * cw + 1, (p.k >> 1) * ch + 1, cw - 2, ch - 2, -sc, -sc * (ch / cw), sc * 2, sc * 2 * (ch / cw));
+      }
+      if (rays) {
+        const rw = widthOf(rays) / 2, rh = heightOf(rays) / 2, P = this.pose(ms), c = Math.cos(this.rot), s = Math.sin(this.rot), Ls = u * 0.8;
+        x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, P.X * dpr, P.Y * dpr);
+        x.globalAlpha = envel * 0.2; x.drawImage(rays, 0, rh, rw, rh, -Ls * 0.18, -u * 0.065, Ls, u * 0.13); // 左下那格＝柔的那款，貼手拖尾，不放射
+      }
+      x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+    }
+  }
   draw(ms: number) {
     const { x, dpr, art, spark, gl, wave, fly, shadow, D } = this, { W, H, u, px, py } = this.g, tl = RULAI_TL, t = ms / 1000, hit = tl.hit, A = ms - hit, S = this.scale;
     const hand = art["hand-v5"], crater = art["crater-v5"], fis = art["fissures-v5"], fisG = art["fis-glow-v5"], jets = art["light-jets"], rays = art["light-rays"], rubble = art.rubble, dust = art.dust;
@@ -287,11 +320,11 @@ export class RulaiCanvas {
     const open = sm(seg(ms, tl.clouds, tl.part)), blast = ms > hit ? outC(seg(A, 0, 700)) : 0, cFade = fade * (1 - 0.75 * seg(ms, hit + 300, tl.total - 800));
     this.drawHoly(ms, blast, fade); // 白金聖雲在手的下面：手從胡牌者那側的光裡衝出來
     if (open > 0) {
-      const R = u * (0.45 + 0.75 * open), hy = this.ly, hx = this.lx, rw = widthOf(rays) / 2, rh = heightOf(rays) / 2, shaftA = open * (1 - sm(seg(A, 0, 500))) * fade;
+      const R = u * (0.45 + 0.75 * open), hy = this.ly, hx = this.lx;
       x.globalCompositeOperation = "lighter"; x.globalAlpha = open * cFade * lerp(0.95, 0.5, sm(seg(A, 0, 400))); x.drawImage(gl, hx - R * 1.2, hy - R * 0.9, R * 2.4, R * 1.9);
-      if (shaftA > 0) for (let i = 0; i < 7; i++) { const an = this.la + (i - 3) * 0.24 + 0.03 * Math.sin(t * 1.7 + i), Ls = u * (1.05 + 0.25 * Math.sin(i * 3.1)) * (0.6 + 0.4 * open), wd = u * (0.13 + 0.03 * (i % 3)), c2 = Math.cos(an), s2 = Math.sin(an); x.setTransform(c2 * dpr, s2 * dpr, -s2 * dpr, c2 * dpr, hx * dpr, hy * dpr); x.globalAlpha = shaftA * 0.55; x.drawImage(rays, (i % 2) * rw, (i % 4 >> 1) * rh, rw, rh, 0, -wd / 2, Ls, wd); }
       reset();
     }
+    this.drawMist(ms, fade); // 金色星塵霧：取代原本 7 道直光扇形，順著手衝出的方向柔和流動
     // ---- 手：不抬手，砸中後從掌根往指尖化成金光 ----
     if (ms >= tl.emerge - 80 && ms < hit + 560) {
       const emergeA = sm(seg(ms, tl.emerge - 80, tl.emerge + 220)), P = this.pose(ms);
