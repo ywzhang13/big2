@@ -60,7 +60,7 @@ ok(rulaiCam(0) === 1 && rulaiCam(T.total) >= 1 - 1e-9, "R3 鏡頭不會小於 1�
   const loop = () => { let next: ((n: number) => void) | null = null, id = 0, pending = 0; return { raf: (f: (n: number) => void) => { next = f; pending++; return ++id; }, caf: () => { next = null; pending = 0; }, tick(n: number) { const f = next; next = null; pending = 0; f?.(n); }, get live() { return !!next; }, get pending() { return pending; } }; };
   const el = () => ({ style: {} as Record<string, string> }); // 沒有 animate 方法：程式一叫就丟例外
   const mk = (rm = false) => { baked.length = 0; const l = loop(), cv = fakeCanvas(), e = { dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el() }; const r = runRulai({ cv, ...e } as never, geo(0), art(), { dpr: 2, rm, zeroAt: () => 0, stageShadow: "S", raf: l.raf, caf: l.caf }); return { l, cv, e, r, inner: [...baked] }; };
-  const a = mk(); ok(a.l.pending === 1 && a.cv.width > 0 && a.inner.length >= 7, "R6 開始後只排一格、烘好小圖");
+  const a = mk(); ok(a.l.pending === 1 && a.cv.width > 0 && a.inner.length >= 5, "R6 開始後只排一格、烘好小圖");
   let threw = false; try { for (let t = 16; t < T.total; t += 16) { a.l.tick(t); if (a.l.pending > 1) throw new Error("多排"); } } catch { threw = true; }
   ok(!threw, "R6 整段播放沒有 element.animate、一次只排一格");
   a.l.tick(T.total); ok(!a.l.live && a.cv.width === 0 && a.cv.height === 0 && a.inner.every((c) => c.width === 0), "R6 播完：迴圈停、畫布和小圖歸 0");
@@ -91,10 +91,10 @@ const bakedFlyIndex = () => baked.findIndex((c) => (c as unknown as { width: num
 { const manifest = JSON.parse(readFileSync(new URL("../scripts/immutable-assets.json", import.meta.url), "utf8")) as Record<string, string>;
   const files = [...RULAI_ART.map((n) => `rulai-${n}-m.webp`), "rulai-title.webp"];
   let bytes = 0, px = 0; for (const f of files) { const p = new URL(`../public/mahjong-fx/zimo/rulai/${f}`, import.meta.url); bytes += statSync(p).size; const m = await sharp(fileURLToPath(p)).metadata(); px += (m.width ?? 0) * (m.height ?? 0); }
-  const bakedMb = (256 * 256 * 3 + 48 * 48 + 384 * 132 + 768 * 432 + 443 * 640) * 4 / 1048576, mb = px * 4 / 1048576 + bakedMb, kb = bytes / 1024;
+  const bakedMb = (256 * 256 * 3 + 48 * 48 + 384 * 132) * 4 / 1048576, mb = px * 4 / 1048576 + bakedMb, kb = bytes / 1024;
   ok(mb <= 14, `R9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（含開播時烘的 ${bakedMb.toFixed(2)} MB）`);
   ok(bytes <= 1_000_000, `R9 手機下載 ${kb.toFixed(0)} KB ≤ 1 MB（1,000,000 位元組）`);
-  const all = [...files, ...RULAI_ART.map((n) => `rulai-${n}-d.webp`)].map((f) => `/mahjong-fx/zimo/rulai/${f}`).concat(["/mahjong-fx/s/zimo-rulai-pc.mp3", "/mahjong-fx/s/zimo-rulai-mobile.mp3"]);
+  const all = [...files, ...RULAI_ART.map((n) => `rulai-${n}-d.webp`)].map((f) => `/mahjong-fx/zimo/rulai/${f}`).concat(["/mahjong-fx/s/zimo-rulai-v4-pc.mp3", "/mahjong-fx/s/zimo-rulai-v4-mobile.mp3"]);
   ok(all.every((u) => !!manifest[u]), `R9 ${all.length} 個素材、音效都在長期快取雜湊清單`); }
 // R10
 ok(!ZIMO_FX_LIST.some((f) => (f.code as string) === "rulai"), "R10 如來神掌不在開通清單（開通全部不含）");

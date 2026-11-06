@@ -23,7 +23,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import { artUsable, isCanvasFx, isChatUiEvent, type ZimoFxNew } from "@/lib/mahjong/winShow";
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
-import { RULAI_ART, RULAI_FACES, RULAI_SOUND_DELAY, RULAI_TL, rulaiProject, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
+import { RULAI_ART, RULAI_FACES, RULAI_TL, rulaiProject, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -574,8 +574,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       stopRef.current = playZimoFxSound(fx, z, hit);
     };
     if (sound) {
-      if (fx === "rulai" && !rm) ts.push(setTimeout(() => go(zeroRef.current + RULAI_SOUND_DELAY), RULAI_SOUND_DELAY));
-      else if (isCanvasFx(fx) && !rm) go(zeroRef.current);
+      if (isCanvasFx(fx) && !rm) go(zeroRef.current);
       else if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
       else go(null);
     }

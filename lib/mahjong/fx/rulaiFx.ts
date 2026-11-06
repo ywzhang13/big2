@@ -1,26 +1,18 @@
 // 如來神掌 v4 斜角（小宜〈如來神掌 v4 斜角〉；老闆 2026-11-06：要看得出手從天上壓下來）。單一畫布，畫面只由時間決定（draw(ms)），沒有 Web Animation、CSS filter、每格 shadowBlur。
-// 立體感都是 2D：手切成條帶，靠近鏡頭的條帶放得更大（warp）；牌桌只有一層 CSS 傾斜（特效本身不傾斜，落點用 rulaiProject 算）。手和雲目前是暫代（手背轉 180°、程式畫的雲），老闆生圖後替換。
+// 立體感都是 2D：手切成條帶，靠近鏡頭的條帶放得更大（warp）；牌桌只有一層 CSS 傾斜（特效本身不傾斜，落點用 rulaiProject 算）。手、雲是老闆 2026-11-06 生的圖，掌形凹陷由 scripts/gen-rulai-v4-assets.mjs 從手本體產生。
 // 圖層（下到上）：影子／氣壓 → 裂縫 → 掌形凹陷 → 凹陷光 → 天光 → 手（殘影、本體、裂紋光） → 雲 → 噴光 → 塵雲 → 光波 → 碎片 → 飛牌 → 金屑 → 閃光。
 import { clamp, frameGovernor, inC, lerp, outC, rng, seg, sm, type SakuraEls, type SakuraGeo, sakuraStillPose } from "./canvasFx";
 
 export const RULAI_TL = { clouds: 350, part: 850, emerge: 700, rush: 1500, hit: 1700, tile: 2320, zimo: 2660, name: 2900, total: 4200 };
-/** 音效檔的主擊還在 1.50 秒，要對 1.70 暫時整段延後（阿妍出新檔後改回 0） */
-export const RULAI_SOUND_DELAY = 200;
 /** 這幾張依裝置選一組（順序固定，ZimoFx 照這個順序載） */
-export const RULAI_ART = ["hand", "hand-cracks", "fissures", "fis-glow", "light-jets", "light-rays", "rubble", "dust"] as const;
+export const RULAI_ART = ["hand-v4", "clouds-v4", "crater-v4", "fissures", "fis-glow", "light-jets", "light-rays", "rubble", "dust"] as const;
 export type RulaiArt = (typeof RULAI_ART)[number];
 /** 手的大小只調這個：砸中時手長＝u × 這個數字（u＝min(畫面高, 畫面寬×0.62)），老闆看了再調 */
 export const RULAI_HAND_SCALE = 1.02;
-/**
- * 手的方向（老闆 2026-11-06 實機比較中，定案後拿掉另一邊）。false＝A 指尖朝下、朝鏡頭；true＝B 指尖朝上，手掌正面壓向桌面，靠近鏡頭的是掌根。
- * 兩邊都是「畫面下方的那一端近、放得大」，只有手的哪一端在下方不同
- */
-export const RULAI_HAND_UP: boolean = false;
-const handUp = () => RULAI_HAND_UP;
 /** 手機／電腦上限：畫布倍率、金屑、飛牌、碎石、塵雲、噴光（手機合計 110）、手的條帶數、暫代雲和凹陷的尺寸 */
 export const RULAI_LIMIT = {
-  mobile: { dpr: 1.5, gold: 64, fly: 14, rubble: 12, dust: 10, jets: 10, strips: 40, cloud: [768, 432], crater: 640 },
-  desktop: { dpr: 2, gold: 150, fly: 20, rubble: 20, dust: 14, jets: 16, strips: 70, cloud: [1152, 648], crater: 1024 },
+  mobile: { dpr: 1.5, gold: 64, fly: 14, rubble: 12, dust: 10, jets: 10, strips: 40 },
+  desktop: { dpr: 2, gold: 150, fly: 20, rubble: 20, dust: 14, jets: 16, strips: 70 },
 } as const;
 /** 減少動態：畫這一刻的靜止畫面（手已化開，凹陷、裂縫都亮著，沒有閃光） */
 export const RULAI_STILL_MS = 2600;
@@ -74,28 +66,6 @@ function bakeGlow(size: number, stops: readonly (readonly [number, string])[]) {
   x.fillStyle = g; x.fillRect(0, 0, size, size);
   return c;
 }
-/** 雲（暫代，老闆生圖後換）：左半邊，裡側被金光照亮；另一半鏡射，所以只有一張 */
-function bakeCloud(W: number, H: number) {
-  const c = mk(W, H), x = c.getContext("2d")!, r = rng(41);
-  const puff = (X: number, Y: number, R: number, stops: readonly (readonly [number, string])[]) => { const g = x.createRadialGradient(X, Y, 0, X, Y, R); stops.forEach(([o, col]) => g.addColorStop(o, col)); x.fillStyle = g; x.fillRect(X - R, Y - R, R * 2, R * 2); };
-  const edgeAt = (Y: number) => W * (0.74 + 0.1 * Math.sin((Y / H) * 9) + 0.05 * Math.sin((Y / H) * 23)) * (1 - 0.34 * (Y / H) ** 1.4); // 雲洞的邊，不是直線
-  const ptX = (Y: number) => r() ** 0.75 * edgeAt(Y);
-  for (let i = 0; i < 460; i++) { const Y = r() ** 1.1 * H * 0.88, X = ptX(Y), R = W * (0.05 + r() * 0.13), v = 10 + r() * 14; puff(X, Y, R, [[0, `rgba(${v + 10},${v + 4},${v + 20},1)`], [0.6, `rgba(${v},${v},${v + 12},.8)`], [1, "rgba(10,10,18,0)"]]); }
-  for (let i = 0; i < 120; i++) { const Y = r() * H * 0.9, e = edgeAt(Y), X = e - r() ** 2.4 * W * 0.13, R = W * (0.03 + r() * 0.07), lit = 0.5 + r() * 0.5; puff(X, Y, R, [[0, `rgba(255,${170 + 50 * r()},${90 + 40 * r()},${0.17 * lit})`], [0.55, `rgba(190,115,45,${0.08 * lit})`], [1, "rgba(120,70,30,0)"]]); }
-  for (let i = 0; i < 50; i++) { const Y = r() ** 0.7 * H, X = ptX(Y) * 0.92, R = W * (0.02 + r() * 0.05); puff(X, Y, R, [[0, "rgba(6,6,12,.5)"], [1, "rgba(6,6,12,0)"]]); }
-  const g = x.createLinearGradient(0, 0, 0, H * 0.5); g.addColorStop(0, "rgba(3,3,6,.9)"); g.addColorStop(1, "rgba(3,3,6,0)"); x.globalCompositeOperation = "source-atop"; x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.globalCompositeOperation = "destination-in"; const b = x.createLinearGradient(0, 0, 0, H); b.addColorStop(0, "#000"); b.addColorStop(0.62, "#000"); b.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = b; x.fillRect(0, 0, W, H);
-  return c;
-}
-/** 掌形凹陷：手的輪廓，深色內凹＋內側金邊（開播前烘，播放中不用 shadowBlur） */
-function bakeCrater(hand: Src, S: number) {
-  const w = Math.round((S * widthOf(hand)) / heightOf(hand)), c = mk(w, S), x = c.getContext("2d")!, m = mk(w, S), g = m.getContext("2d")!;
-  g.drawImage(hand, 0, 0, w, S); g.globalCompositeOperation = "source-in"; g.fillStyle = "#000"; g.fillRect(0, 0, w, S);
-  x.shadowColor = "rgba(255,180,60,1)"; x.shadowBlur = S * 0.035; x.drawImage(m, 0, 0); x.shadowBlur = S * 0.012; x.shadowColor = "rgba(255,244,190,1)"; x.drawImage(m, 0, 0); x.shadowBlur = 0;
-  const f = mk(w, S), h = f.getContext("2d")!; h.drawImage(m, 0, 0); h.globalCompositeOperation = "source-in"; const gr = h.createLinearGradient(0, 0, 0, S); gr.addColorStop(0, "rgba(6,3,0,.96)"); gr.addColorStop(1, "rgba(38,18,2,.9)"); h.fillStyle = gr; h.fillRect(0, 0, w, S); x.drawImage(f, 0, 0);
-  m.width = 0; f.width = 0;
-  return c;
-}
 const FLY_W = 96, FLY_H = 132; // 一格飛牌（比例同牌）
 /** 被震飛的牌：牌桌同一套牌面（牌面在 ZimoFx 跟著素材載；還沒好或載壞就是白牌，不等）＋牌背，開播時烘一次 */
 export const RULAI_FACES = ["Chun", "Hatsu", "Man1"] as const;
@@ -122,8 +92,7 @@ export class RulaiCanvas {
   private dpr: number;
   private art: Partial<Record<RulaiArt, HTMLImageElement>>;
   private baked: HTMLCanvasElement[];
-  private cloud: HTMLCanvasElement; private crater: HTMLCanvasElement; private fly: HTMLCanvasElement; private spark: HTMLCanvasElement; private gl: HTMLCanvasElement; private wave: HTMLCanvasElement; private shadow: HTMLCanvasElement;
-  private up = handUp();
+  private fly: HTMLCanvasElement; private spark: HTMLCanvasElement; private gl: HTMLCanvasElement; private wave: HTMLCanvasElement; private shadow: HTMLCanvasElement;
   private hx: number; private hy: number; private rot: number; private base: number; private D: number; private strips: number;
   private gold: { i: number; a: number; sp: number; s: number; ph: number; fx: number; fy: number; sway: number }[];
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
@@ -141,12 +110,12 @@ export class RulaiCanvas {
     cv.width = Math.round(W * this.dpr); cv.height = Math.round(H * this.dpr);
     this.x = cv.getContext("2d")!;
     this.art = art; this.D = D; this.strips = L.strips;
-    this.cloud = bakeCloud(L.cloud[0], L.cloud[1]); this.crater = bakeCrater(art.hand, L.crater); this.fly = bakeFly(faces, back);
+    this.fly = bakeFly(faces, back);
     this.spark = bakeGlow(48, [[0, "rgba(255,255,235,1)"], [0.2, "rgba(255,226,130,.95)"], [0.55, "rgba(255,170,50,.3)"], [1, "rgba(255,150,30,0)"]]);
     this.gl = bakeGlow(256, [[0, "rgba(255,250,225,1)"], [0.25, "rgba(255,212,110,.7)"], [0.6, "rgba(255,160,40,.16)"], [1, "rgba(255,140,20,0)"]]);
     this.wave = bakeGlow(256, [[0, "rgba(255,230,160,0)"], [0.62, "rgba(255,226,150,0)"], [0.84, "rgba(255,240,195,.8)"], [0.93, "rgba(255,200,100,.22)"], [1, "rgba(255,180,60,0)"]]);
     this.shadow = bakeGlow(256, [[0, "rgba(0,0,0,.92)"], [0.6, "rgba(0,0,0,.6)"], [1, "rgba(0,0,0,0)"]]);
-    this.baked = [this.cloud, this.crater, this.fly, this.spark, this.gl, this.wave, this.shadow];
+    this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow];
     // 雲洞在畫面中央和落點的中間；手一律從雲洞往落點來，指尖朝畫面下方
     this.hx = lerp(W / 2, px, 0.55); this.hy = -H * 0.02;
     this.rot = clamp(Math.atan2(this.hx - px, py - this.hy), -0.42, 0.42);
@@ -179,35 +148,33 @@ export class RulaiCanvas {
   private pose(ms: number): Pose {
     const t = RULAI_TL, { hx, hy, base } = this, { px, py } = this.g;
     let k: number, a: number, sc: number;
-    // B（指尖朝上）：手指在手掌上方，手掌要低一點手指才進得了畫面，遠端也不能壓太小
-    const k0 = this.up ? 0.3 : 0.08, k1 = this.up ? 0.62 : 0.38, a0 = this.up ? 0.26 : 0.34, a1 = this.up ? 0.36 : 0.46, a2 = this.up ? 0.6 : 0.72;
+    // 指尖朝上：手指在手掌上方，手掌要低一點手指才進得了畫面；新手圖本身已畫透視，條帶透視只補一點（太大會變形）
+    const k0 = 0.3, k1 = 0.62, a0 = 0.08, a1 = 0.12, a2 = 0.24;
     if (ms < t.rush) { const f = sm(seg(ms, t.emerge, t.rush)); k = lerp(k0, k1, f); sc = lerp(0.6, 0.84, f); a = lerp(a0, a1, f); }
     else if (ms < t.hit) { const f = inC(seg(ms, t.rush, t.hit)); k = lerp(k1, 1, f); sc = lerp(0.84, 1.26, f); a = lerp(a1, a2, f); }
-    else { const f = outC(seg(ms, t.hit, t.hit + 70)); sc = lerp(1.26, 1, f); a = lerp(a2, 0.34, f); k = 1; }
+    else { const f = outC(seg(ms, t.hit, t.hit + 70)); sc = lerp(1.26, 1, f); a = lerp(a2, 0.08, f); k = 1; }
     return { X: lerp(hx, px, k), Y: lerp(hy - base * sc * 0.1, py, k), sc, a };
   }
   /** 條帶透視：一張圖切成 N 條，越靠近鏡頭的條帶越寬越高。沒有 3D，只有 drawImage */
   private warp(img: Src, P: Pose, opt: WarpOpt = {}) {
     const { x, dpr } = this, N = opt.n ?? this.strips, a = P.a, base = this.base * P.sc, iw = widthOf(img), ih = heightOf(img), W0 = (base * iw) / ih;
-    const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), up = this.up, palmAt = up ? 0.62 : 0.38, sMid = sAt(palmAt), palm = lenF(palmAt) / total, c = Math.cos(this.rot), s = Math.sin(this.rot);
-    // y＝0 遠端（畫面上方）、y＝1 近端（畫面下方）。A：轉 180°，近端是原圖上方的指尖；B：不轉，近端是原圖下方的掌根
-    if (up) x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, P.X * dpr, P.Y * dpr);
-    else x.setTransform(-c * dpr, -s * dpr, s * dpr, -c * dpr, P.X * dpr, P.Y * dpr);
+    const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), palmAt = 0.62, sMid = sAt(palmAt), palm = lenF(palmAt) / total, c = Math.cos(this.rot), s = Math.sin(this.rot);
+    // y＝0 遠端（畫面上方的指尖）、y＝1 近端（畫面下方的掌根）；老闆 2026-11-06 定案指尖朝上
+    x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, P.X * dpr, P.Y * dpr);
     if (opt.lighter) x.globalCompositeOperation = "lighter";
     for (let i = 0; i < N; i++) {
       const y0 = i / N, y1 = (i + 1) / N, m = (y0 + y1) / 2, sc = sAt(m) / sMid, Y0 = (lenF(y0) / total - palm) * base, Y1 = (lenF(y1) / total - palm) * base, w = W0 * sc;
-      const al = (opt.alpha ?? 1) * (opt.fadeFar === false ? 1 : sm(clamp((up ? 1 - m : m) / 0.3))) * (opt.strip ? opt.strip(m) : 1);
+      const al = (opt.alpha ?? 1) * (opt.fadeFar === false ? 1 : sm(clamp((1 - m) / 0.3))) * (opt.strip ? opt.strip(m) : 1);
       if (al <= 0.004) continue;
       x.globalAlpha = al;
-      if (up) x.drawImage(img, 0, y0 * ih, iw, (y1 - y0) * ih, -w / 2, Y0, w, Y1 - Y0 + 0.7);
-      else x.drawImage(img, 0, (1 - y1) * ih, iw, (y1 - y0) * ih, -w / 2, -Y1, w, Y1 - Y0 + 0.7);
+      x.drawImage(img, 0, y0 * ih, iw, (y1 - y0) * ih, -w / 2, Y0, w, Y1 - Y0 + 0.7);
     }
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
   draw(ms: number) {
     const { x, dpr, art, spark, gl, wave, fly, shadow, D } = this, { W, H, u, px, py } = this.g, tl = RULAI_TL, t = ms / 1000, hit = tl.hit, A = ms - hit, S = this.scale;
-    const hand = art.hand, cracks = art["hand-cracks"], fis = art.fissures, fisG = art["fis-glow"], jets = art["light-jets"], rays = art["light-rays"], rubble = art.rubble, dust = art.dust;
-    if (!hand || !cracks || !fis || !fisG || !jets || !rays || !rubble || !dust) return; // 已經收尾
+    const hand = art["hand-v4"], cloud = art["clouds-v4"], crater = art["crater-v4"], fis = art.fissures, fisG = art["fis-glow"], jets = art["light-jets"], rays = art["light-rays"], rubble = art.rubble, dust = art.dust;
+    if (!hand || !cloud || !crater || !fis || !fisG || !jets || !rays || !rubble || !dust) return; // 已經收尾
     let count = 0;
     const reset = () => { x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; };
     reset(); x.clearRect(0, 0, W, H);
@@ -229,10 +196,10 @@ export class RulaiCanvas {
       x.globalCompositeOperation = "lighter";
       x.globalAlpha = Math.min(1, a0 * 0.6 * pulse * (1 - 0.62 * cSink)); x.drawImage(fis, px - gw / 2, py - gh / 2, gw, gh);
       const peak = sm(seg(A, 300, 760)) * (1 - 0.75 * cSink); x.globalAlpha = a0 * (0.05 + 0.16 * peak) * (0.85 + 0.15 * Math.sin(t * 7)); x.drawImage(fisG, px - gw / 2, py - gh / 2, gw, gh); reset();
-      const stamp: Pose = { X: px, Y: py, sc: 1, a: 0.34 };
-      this.warp(this.crater, stamp, { alpha: sm(seg(A, 20, 240)) * fade * 0.94, fadeFar: false, n: 16 });
+      const stamp: Pose = { X: px, Y: py, sc: 1, a: 0.08 };
+      this.warp(crater, stamp, { alpha: sm(seg(A, 20, 240)) * fade * 0.94, fadeFar: false, n: 16 });
       const lit = sm(seg(A, 280, 720));
-      if (lit > 0) this.warp(cracks, stamp, { lighter: true, fadeFar: false, alpha: lit * 0.62 * fade * (1 - 0.3 * cSink) * (0.86 + 0.14 * Math.sin(ms / 240)), n: 12 });
+      if (lit > 0) this.warp(crater, stamp, { lighter: true, fadeFar: false, alpha: lit * 0.5 * fade * (1 - 0.3 * cSink) * (0.86 + 0.14 * Math.sin(ms / 240)), n: 12 });
     }
     // ---- 天光（在雲的後面） ----
     const cIn = sm(seg(ms, 0, tl.clouds)), open = sm(seg(ms, tl.clouds, tl.part)), blast = ms > hit ? outC(seg(A, 0, 700)) : 0, cFade = fade * (1 - 0.75 * seg(ms, hit + 300, tl.total - 800));
@@ -242,21 +209,22 @@ export class RulaiCanvas {
       if (shaftA > 0) for (let i = 0; i < 7; i++) { const an = Math.PI / 2 + (i - 3) * 0.24 + 0.03 * Math.sin(t * 1.7 + i), Ls = u * (1.05 + 0.25 * Math.sin(i * 3.1)) * (0.6 + 0.4 * open), wd = u * (0.13 + 0.03 * (i % 3)), c2 = Math.cos(an), s2 = Math.sin(an); x.setTransform(c2 * dpr, s2 * dpr, -s2 * dpr, c2 * dpr, hx * dpr, hy * dpr); x.globalAlpha = shaftA * 0.55; x.drawImage(rays, (i % 2) * rw, (i % 4 >> 1) * rh, rw, rh, 0, -wd / 2, Ls, wd); }
       reset();
     }
-    // ---- 手（暫代手背）：不抬手，砸中後從近端往遠端化成金光 ----
+    // ---- 手：不抬手，砸中後從掌根往指尖化成金光 ----
     if (ms >= tl.emerge - 80 && ms < hit + 560) {
       const emergeA = sm(seg(ms, tl.emerge - 80, tl.emerge + 220)), P = this.pose(ms);
       if (ms >= tl.rush && ms < hit) { const f0 = seg(ms, tl.rush, hit); for (const [lag, al] of [[0.42, 0.2], [0.26, 0.3], [0.12, 0.42]] as const) this.warp(hand, this.pose(tl.rush + (hit - tl.rush) * clamp(f0 - lag * 0.5)), { lighter: true, alpha: al, n: 10 }); }
       const dis = seg(A, 110, 540), strip = ms >= hit + 110 ? (m: number) => 1 - sm(clamp(dis * 1.7 - (1 - m) * 0.7)) : null;
       this.warp(hand, P, { alpha: emergeA, strip });
       const crL = ms < tl.rush ? 0.12 + 0.2 * seg(ms, tl.emerge, tl.rush) : ms < hit ? 0.32 + 0.4 * seg(ms, tl.rush, hit) : 0.72;
-      this.warp(cracks, P, { lighter: true, alpha: Math.min(1, crL) * emergeA, strip, n: 12 });
+      this.warp(hand, P, { lighter: true, alpha: Math.min(1, crL) * 0.45 * emergeA, strip, n: 12 }); // 老闆的手本身就有透光裂紋，疊一層讓它越衝越亮
       if (ms >= hit) this.warp(hand, P, { lighter: true, alpha: (1 - seg(A, 30, 460)) * 0.32, strip, n: 12 });
     }
     // ---- 雲（蓋住手的遠端，手像是從雲裡伸出來）；雲只有半邊，鏡射畫另一半 ----
     if (cFade > 0) {
-      const ch = H * 0.62 * (1 + blast * 0.15), cw = W * 0.68, ox = W * 0.01 + (W * 0.15 + W * 0.3 * blast) * open, oy = lerp(-ch, 0, cIn) - blast * H * 0.22, cx = this.hx;
-      x.globalAlpha = cFade * (1 - blast * 0.55); x.drawImage(this.cloud, cx - ox - cw, oy, cw, ch);
-      x.setTransform(-dpr, 0, 0, dpr, (cx + ox) * dpr, 0); x.drawImage(this.cloud, -cw, oy, cw, ch); reset();
+      const cw = W * 0.68 * (1 + blast * 0.15), ch = (cw * heightOf(cloud)) / widthOf(cloud), // 照原圖比例，不拉伸
+        ox = W * 0.01 + (W * 0.15 + W * 0.3 * blast) * open, oy = lerp(-ch, 0, cIn) - blast * H * 0.22, cx = this.hx;
+      x.globalAlpha = cFade * (1 - blast * 0.55); x.drawImage(cloud, cx - ox - cw, oy, cw, ch);
+      x.setTransform(-dpr, 0, 0, dpr, (cx + ox) * dpr, 0); x.drawImage(cloud, -cw, oy, cw, ch); reset();
     }
     // ---- 砸中後的立體層：噴光往上、塵雲、光波、碎片、飛牌、金屑、閃光 ----
     if (ms >= hit) {
