@@ -82,11 +82,11 @@ for (const [label, wallLen, expect] of [["H1 牌牆 17 張摸最後一張（摸�
   eq(one, 1, "H5b 河底撈魚是 1 台");
 }
 
-// H6：最後一張摸到花 → 從牌尾補花（剩 15）再自摸 p5 → 海底撈月
+// H6：最後一張（17→16）摸到花，沒湊成七搶一／八仙過海 → 不再補牌，直接流局，牌牆停在 16（老闆 2026-11-07）
 {
-  const s = drawTile(game(17, { turn: 1, wallFront: "f1", wallBack: "p5" }));
-  const w = declareWin(s, 1, true).winners![0];
-  eq([s.wall.length, s.players[1].flowers.length, names(w).includes("海底撈月")], [15, 1, true], "H6 最後一張是花、補花後自摸：照樣海底撈月");
+  const s = drawTile(game(17, { turn: 1, wallFront: "f1" }));
+  eq([s.status, s.wall.length, s.players[1].flowers.length, s.players[1].hand.length, s.winners?.length ?? 0],
+    ["finished", 16, 1, 16, 0], "H6 最後一張是花、沒湊成花胡：直接流局，牌牆不會補到 15 張以下");
 }
 
 console.log(results.join("\n"));

@@ -344,11 +344,13 @@ export function handleFlowers(
         player.flowers.push(f);
         player.hand = player.hand.filter((t) => t.id !== f.id);
       }
-      // Draw replacements from end of wall
-      if (s.wall.length >= flowersInHand.length) {
+      // Draw replacements from end of wall，最多補到剩 16 張（海底）就不能再補
+      // （老闆 2026-11-07：最後一張可摸／補到的牌是花，沒湊成七搶一／八仙過海就直接流局，牌牆不能少於 16 張）
+      const replaceable = Math.min(flowersInHand.length, Math.max(0, s.wall.length - 16));
+      if (replaceable > 0) {
         const replacements = s.wall.splice(
-          s.wall.length - flowersInHand.length,
-          flowersInHand.length
+          s.wall.length - replaceable,
+          replaceable
         );
         player.hand.push(...replacements);
       }
@@ -438,6 +440,27 @@ export function checkFlowerWin(
   if (mine.length === before) return s;
   if (mine.length === 8) return finishFlowerWin(s, seat, "八仙過海", mine[mine.length - 1], null);
   return checkQiangyi(s);
+}
+
+/**
+ * 摸花／補花（handleFlowers）跑完之後的收尾：先看有沒有湊成七搶一／八仙過海（checkFlowerWin），
+ * 沒有的話，若牌牆已經補到底（剩 16 張）導致這次有花沒補到牌，直接流局，不再繼續這一手
+ * （老闆 2026-11-07：最後一張可摸的牌是花，除非湊成七搶一／八仙過海，否則直接流局；牌牆不能少於 16 張）。
+ * handLenBeforeFlowers：這次摸到／補到的牌加進手牌、尚未呼叫 handleFlowers 前的手牌張數，
+ * 用來判斷有沒有補滿（牌牆到底時手牌會比這個數字少）。
+ */
+function finishFlowerPull(
+  prev: MahjongGameState,
+  s: MahjongGameState,
+  seat: number,
+  handLenBeforeFlowers: number
+): MahjongGameState {
+  const result = checkFlowerWin(prev, s, seat);
+  if (result.status === "finished") return result; // 湊成七搶一／八仙過海，立刻胡
+  if (s.players[seat].hand.length < handLenBeforeFlowers) {
+    return { ...result, status: "finished" }; // 牌牆到底沒補到牌，沒湊成花胡就流局
+  }
+  return result;
 }
 
 /** 舊版七搶一（要選搶不搶）：2026-10-22 起不會再產生 pendingFlowerRob；留著給上線時還在等待中的牌局用 */
@@ -620,6 +643,9 @@ export function drawTile(state: MahjongGameState): MahjongGameState {
   player.hand.push(tile);
   s.hasDrawn = true;
   s.lastDiscard = null;
+  // 補花補到的牌也算槓上自摸（老闆 2026-11-07）：摸到花就先標上，連續補花也保持 true，直到打牌才清掉
+  s.isAfterKong = isFlower(tile);
+  const handLenBeforeFlowers = player.hand.length;
 
   // Handle flowers drawn
   if (isFlower(tile)) {
@@ -627,7 +653,7 @@ export function drawTile(state: MahjongGameState): MahjongGameState {
   }
   markDrawn(s, s.currentTurn);
 
-  return checkFlowerWin(state, s, s.currentTurn);
+  return finishFlowerPull(state, s, s.currentTurn, handLenBeforeFlowers);
 }
 
 // ---------------------------------------------------------------------------
@@ -905,6 +931,7 @@ export function executeAction(
       const replacement = s.wall.splice(s.wall.length - 1, 1)[0];
       player.hand.push(replacement);
       s.hasDrawn = true;
+      const handLenBeforeFlowers = player.hand.length;
 
       // Handle flower in replacement
       if (isFlower(replacement)) {
@@ -916,7 +943,7 @@ export function executeAction(
       // 下一輪摸牌也不能胡，要打出不是聽的牌才解除
       const kp = s.players[action.playerSeat];
       if (isWinningHand(kp.hand, kp.revealed.length)) setGuoShui(s, action.playerSeat, true);
-      return checkFlowerWin(state, s, action.playerSeat);
+      return finishFlowerPull(state, s, action.playerSeat, handLenBeforeFlowers);
     } else {
       s.status = "finished"; // wall exhausted
       s.hasDrawn = false;
@@ -994,12 +1021,13 @@ export function executeConcealedKong(
     const replacement = s.wall.splice(s.wall.length - 1, 1)[0];
     player.hand.push(replacement);
     s.hasDrawn = true;
+    const handLenBeforeFlowers = player.hand.length;
 
     if (isFlower(replacement)) {
       s = handleFlowers(s, s.currentTurn);
     }
     markDrawn(s, s.currentTurn);
-    return checkFlowerWin(state, s, s.currentTurn);
+    return finishFlowerPull(state, s, s.currentTurn, handLenBeforeFlowers);
   } else {
     s.status = "finished";
     s.hasDrawn = false;
@@ -1042,12 +1070,13 @@ export function executeAddKong(
     const replacement = s.wall.splice(s.wall.length - 1, 1)[0];
     player.hand.push(replacement);
     s.hasDrawn = true;
+    const handLenBeforeFlowers = player.hand.length;
 
     if (isFlower(replacement)) {
       s = handleFlowers(s, s.currentTurn);
     }
     markDrawn(s, s.currentTurn);
-    return checkFlowerWin(state, s, s.currentTurn);
+    return finishFlowerPull(state, s, s.currentTurn, handLenBeforeFlowers);
   } else {
     s.status = "finished";
     s.hasDrawn = false;
