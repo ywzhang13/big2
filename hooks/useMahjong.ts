@@ -354,7 +354,8 @@ export function useMahjong(
   /** 廣播事件帶來某家的花牌：有新補的花就播。這家還沒記過（剛重新整理）就只記不播 */
   const noteFlowers = useCallback((seat: number, flowers: Tile[]) => {
     const added = flowerTrackerRef.current.onEvent(seat, flowers);
-    if (added.length > 0) playFlowerFx(seat, added, 0);
+    // 自己摸花已經在手牌最右邊顯示，不用再另外冒一個膠囊收進花牌堆（老闆 2026-11-07 更正：不要額外的收起動畫）
+    if (added.length > 0 && seat !== stateRef.current.mySeat) playFlowerFx(seat, added, 0);
     return added; // 自己摸到花時 mj_draw_tile 要用這個順序，在手牌最右邊一張一張顯示（老闆 2026-11-07）
   }, [playFlowerFx]);
   useEffect(() => clearFlowerFx, [clearFlowerFx]);
