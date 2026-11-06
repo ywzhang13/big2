@@ -218,7 +218,7 @@ export class RulaiCanvas {
     const { x, dpr, sideCloud } = this, { W, u, px, py } = this.g, t = RULAI_TL;
     if (!sideCloud) return;
     const iw = sideCloud.width, ih = sideCloud.height, fx = Math.sin(this.rot), fy = -Math.cos(this.rot), N = Math.atan2(0.9 * iw, 0.88 * ih); // N＝撕裂口朝外的方向（原圖朝右下）
-    const phi = -N, c = Math.cos(phi), s = Math.sin(phi), cw = W * 0.7 * (1 + 0.15 * blast), ch = (cw * ih) / iw, tx = 0.45 * cw, ty = 0.44 * ch;
+    const phi = -N, c = Math.cos(phi), s = Math.sin(phi), cw = W * 0.95 * (1 + 0.15 * blast), ch = (cw * ih) / iw, tx = 0.45 * cw, ty = 0.44 * ch;
     const back = u * (0.35 + 0.5 * (1 - cIn) + 0.25 * blast), qx = px - fx * back, qy = py - fy * back; // 撕裂口中心在手的路徑上、手腕那一側
     const g = u * (0.02 + 0.07 * open + 0.2 * inC(seg(ms, t.rush, t.hit)) + 0.3 * blast); // 往兩側推開
     x.globalAlpha = cFade * (1 - blast * 0.5);
