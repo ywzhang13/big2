@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
-import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
+import type { MjPlayer, MjOpponentHand, MjFlowerFx as MjFlowerFxT } from "@/hooks/useMahjong";
 import MjTile, { TileMatchContext } from "./MjTile";
 import MjHand from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
@@ -60,6 +60,8 @@ export interface MjBoardProps {
   dealerConsecutive?: number;
   /** 自己資訊列右側的「聊天」鈕（MjChatButton；聊天與語音訊息規格的入口） */
   chatButton?: React.ReactNode;
+  /** 別家補花：手機版摸牌格亮正面用（MjBoardMobile 的 TopBacks／SideHand） */
+  flowerFx?: MjFlowerFxT[];
 }
 
 /** 已宣告地聽的標示（小宜規格的聽牌標）；pop＝宣告特效期間彈入 */

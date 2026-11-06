@@ -1079,6 +1079,7 @@ function RoomView({
     doorSeat: state.doorSeat,
     playerScores: state.playerScores,
     dealerConsecutive: state.roundInfo?.dealerConsecutive,
+    flowerFx: state.flowerFx,
   };
 
   return (
@@ -1144,8 +1145,8 @@ function RoomView({
       </>
       )}
 
-      {/* 補花特效：掛在 body，貼著補花那一家的名牌（桌機、手機共用） */}
-      <MjFlowerFx fx={state.flowerFx} mySeat={state.mySeat} desk={!isMobileLandscape} />
+      {/* 補花特效：手機版別家補花改走手牌摸牌格亮正面（MjBoardMobile 的 TopBacks／SideHand），這裡只留給桌機版 */}
+      {!isMobileLandscape && <MjFlowerFx fx={state.flowerFx} mySeat={state.mySeat} desk />}
 
       {/* Leave confirmation modal (requester side) */}
       {showLeaveConfirm && !state.leaveRequest && (
