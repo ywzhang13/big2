@@ -24,6 +24,8 @@ interface MjHandProps {
   // 吃牌限制：剛吃完這輪不能打的牌型（變暗、點了不選取，改呼叫 onForbidden 顯示提示）
   chiForbidden?: string[];
   onForbidden?: () => void;
+  /** 補花（老闆 2026-11-07 第三次更正）：花先跟平常摸到的牌一樣出現在摸牌格，停一下才在那張牌上冒出「補花」字樣，再停一下才補下一張 */
+  flowerLabel?: boolean;
 }
 
 /** 慢慢摸牌的翻牌（小宜 2026-10-16）：牌背浮起＋金光 → 翻面 → 落定；能胡時翻開那面閃金框。桌機、手機共用 */
@@ -38,7 +40,7 @@ export function SlowDrawTile({ tile, win, width, height }: { tile: Tile; win: bo
   );
 }
 
-export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, onEyePreview, slowDraw, onPickKind, turnStage = 0, chiForbidden = [], onForbidden }: MjHandProps) {
+export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeArmed, eyeOptionIds, onEyePreview, slowDraw, onPickKind, turnStage = 0, chiForbidden = [], onForbidden, flowerLabel }: MjHandProps) {
   const [rawSelectedId, setSelectedId] = useState<number | null>(null);
   const eyePick = (id: number) => !!eyeArmed && (eyeOptionIds ?? []).includes(id);
   const eyeBlocked = (id: number) => !!eyeArmed && !eyePick(id);
@@ -125,7 +127,8 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
         </div>
         {/* Drawn tile separated */}
         {drawnTile && (
-          <div className="ml-3 pl-3 border-l border-white/10" style={dim(drawnTile)} data-chi-forbidden={chiBlocked(drawnTile) ? "1" : undefined}>
+          <div className="relative ml-3 pl-3 border-l border-white/10" style={dim(drawnTile)} data-chi-forbidden={chiBlocked(drawnTile) ? "1" : undefined}>
+            {flowerLabel && <span className="mj-flower-label" data-flower-label>補花</span>}
             {slowDraw?.tileId === drawnTile.id ? (
               <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} />
             ) : (

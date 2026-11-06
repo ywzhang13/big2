@@ -3,8 +3,12 @@
 // 吃碰槓胡、pass 都在伺服器等到這個時間才處理（不拒絕，所以前端不用重送；斷線、重新整理也不會卡住，時間到就照常）。
 import type { MahjongGameState } from "./gameState";
 
-export const FLOWER_FX_MS = 500;      // 補花停留時間（老闆 2026-11-07 更正：花跟平常摸到的牌一樣停一下就好，約 0.5 秒，不要像上一版拉到 1.5 秒
-export const FLOWER_STAGGER_MS = 500; // 連續補花：一張接著一張來，不要同時疊在一起，所以和上面停留時間一樣長，剛好接力
+// 補花一張的總時間（老闆 2026-11-07 第三次更正）：花先跟平常摸到的牌一樣停在摸牌格約 0.5 秒，
+// 才在那張牌上冒出「補花」字樣再停約 0.5 秒，才補下一張——FLOWER_FX_MS 是這一整段的總時間（兩段各半），
+// 自己視角（useMahjong）、別家補花膠囊（MjFlowerFx）、觀戰者節奏（watch/page.tsx）都共用這個數字，
+// 三邊看到的「補這一張花」總時間才會對齊
+export const FLOWER_FX_MS = 1000;
+export const FLOWER_STAGGER_MS = 1000; // 連續補花：一張接著一張來，不要同時疊在一起，所以和上面一樣長，剛好接力
 export const EYE_DRAW_MS = 1800;      // 眼牌摸牌：翻牌 0.8 秒＋停 1 秒
 export const PACE_MAX_WAIT_MS = 4000; // 保險：最多等這麼久（時鐘異常也不會卡住）
 

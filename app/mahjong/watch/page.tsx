@@ -12,6 +12,7 @@ import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace
 import { useMjAuth } from "@/hooks/useMjAuth";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
+import MjFlowerFx from "@/components/mahjong/MjFlowerFx";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
@@ -290,7 +291,6 @@ export default function MahjongWatchPage() {
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
       drawnTileId: v.drawnTileId, slowDraw: null, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
-      flowerFx,
     } : null;
     const roundLabel = v?.roundInfo ? `${WIND[(v.roundInfo.currentRound - 1) % 4]}風圈 第${v.roundInfo.currentGame}局` : undefined;
     return (
@@ -311,6 +311,8 @@ export default function MahjongWatchPage() {
           </>
         ))}
         {!props && slow && <div className="spx-skel" role="status">正在載入{nameOf(viewSeat)}的視角…</div>}
+        {/* 別家補花：觀戰畫面照玩家本人視角一樣用補花膠囊（老闆 2026-11-07 第三次更正：拿掉上一輪的摸牌格亮正面） */}
+        <MjFlowerFx fx={flowerFx} mySeat={viewSeat ?? -1} desk={!mobile} />
         {/* 胡牌演出（一般胡的浮層、大牌段、隕石）：和玩家本人看到的一樣 */}
         {v && <WinShowLayer ws={ws} winner={v.winner} mySeat={v.mySeat} mobile={mobile} />}
         {/* 結算：演出播完才出；觀戰者不能按下一局，伺服器開下一局後畫面自己接續 */}

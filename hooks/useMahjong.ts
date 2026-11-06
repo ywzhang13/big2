@@ -167,8 +167,10 @@ export interface MjClientState {
   opponentHands: MjOpponentHand[] | null;
   // 正在播宣告特效的座位（播完自動移除）；both＝第一輪眼牌同時地聽（MIGI）
   declareFx: { seat: number; both: boolean }[];
-  // 正在播補花特效的膠囊（播完自動移除）
+  // 正在播補花特效的膠囊（別家補花用，播完自動移除）
   flowerFx: MjFlowerFx[];
+  // 自己補花（老闆 2026-11-07 第三次更正）：摸牌格那張花上面要不要冒出「補花」字樣
+  flowerLabel: boolean;
   // 眼牌後慢慢摸牌：只有眼牌的人自己看得到；tileId＝正在翻的那張，win＝翻開是胡牌（閃金框）
   slowDraw: { tileId: number; win: boolean } | null;
   winner?: MjWinner & { allHands?: MjHandReveal[] };
@@ -260,6 +262,7 @@ export function useMahjong(
     opponentHands: null,
     declareFx: [],
     flowerFx: [],
+    flowerLabel: false,
     slowDraw: null,
     wallRemaining: 0,
     hostId: "",
@@ -772,6 +775,7 @@ export function useMahjong(
             robKong: false,
             hasDrawn: true,
             drawnTileId: drawnTile?.id ?? null,
+            flowerLabel: false,
             // Update flowers if provided (補花)
             players: flowers
               ? prev.players.map((p) =>
@@ -781,15 +785,19 @@ export function useMahjong(
           }));
         };
         if (addedFlowers.length > 0) {
-          // 老闆 2026-11-07：摸到花跟平常摸牌一樣，放在手牌最右邊空一格的位置，停一下再收進花牌那堆，
-          // 接著補牌，補到的牌也出現在同一個位置；補到好幾張花就一張一張來，不要一次全部跳出來。
+          // 老闆 2026-11-07 第三次更正：花先跟平常摸到的牌一樣出現在摸牌格，停約一半時間（FLOWER_PACE_MS / 2）
+          // 才在那張牌上冒出「補花」字樣，再停另一半時間才補下一張；連續補花、槓後補花一樣一張一張來。
           // 伺服器已經把整串補花都結清，這裡用「前一手的手牌＋這張花」在前端重演一次給大家看
           holdFor(addedFlowers.length * FLOWER_PACE_MS + (slow ? SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS : 0));
           const base = stateRef.current.myHand;
+          const half = FLOWER_PACE_MS / 2;
           const showFlower = (i: number) => {
             const tile = addedFlowers[i];
-            setState((prev) => ({ ...prev, myHand: safeHand([...base, tile]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null }));
-            setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), FLOWER_PACE_MS);
+            setState((prev) => ({ ...prev, myHand: safeHand([...base, tile]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false }));
+            setTimeout(() => {
+              setState((prev) => ({ ...prev, flowerLabel: true }));
+              setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), half);
+            }, half);
           };
           showFlower(0);
         } else {
@@ -1008,6 +1016,7 @@ export function useMahjong(
         eyeSeats: [],
         declareFx: [],
         flowerFx: [],
+        flowerLabel: false,
         opponentHands: null,
         // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
         eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],

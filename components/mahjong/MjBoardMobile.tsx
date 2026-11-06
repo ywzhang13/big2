@@ -10,9 +10,8 @@ import type { Meld } from "@/lib/mahjong/gameState";
 import { MjMeldArrow } from "./MjMeldArrow";
 import MjTableMenu from "./MjTableMenu";
 import { CHI_FORBID_HINT, isChiForbidden, useChiHint } from "@/lib/mahjong/chiForbid";
-import type { MjPlayer, MjOpponentHand, MjFlowerFx as MjFlowerFxT } from "@/hooks/useMahjong";
+import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
-import { FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
 import { paceText } from "./paceText";
 import MjTile, { TileMatchContext, tileKind } from "./MjTile";
 import { SlowDrawTile } from "./MjHand";
@@ -87,31 +86,13 @@ function Melds({ revealed, w, h, mine, reveal, rot, seat, mySeat }: { revealed: 
 // 牌背只用到 faceDown，牌面內容不會顯示
 const BACK_TILE: Tile = { id: -1, suit: "z", rank: 7, display: "" };
 
-/** 別家補花（老闆 2026-11-07）：摸牌格先亮出花牌正面約 0.5 秒（花是公開資訊），再換回牌背；
- *  連續補花一張一張來，接力播放，不是同時疊出來。蓋在牌背上面（position: relative 的外層見呼叫端） */
-function GapFlash({ fx, w, h }: { fx?: MjFlowerFxT; w: number; h: number }) {
-  if (!fx) return null;
-  return (
-    <>
-      {fx.tiles.map((t, i) => (
-        <span
-          key={t.id}
-          className="gapflash"
-          style={{ "--gf-delay": `${i * (FLOWER_STAGGER_MS / 1000)}s`, "--gf-dur": `${FLOWER_FX_MS / 1000}s` } as React.CSSProperties}
-        >
-          <MjTile tile={t} width={w} height={h} />
-        </span>
-      ))}
-    </>
-  );
-}
-
 /** 左右家的手牌欄：金框外、朝向主人；16 張那一列靠金框，摸進的第 17 張放外側那一列（像自己的手牌一樣分開）。
  *  沒眼牌＝牌背（張數＝tileCount）；我眼牌＝同一個位置翻成牌面，摸進的那張加金框。
  *  沒眼牌時「摸進的那格」用張數 % 3 === 2 判斷（老闆 2026-11-07）：沒摸牌排緊、摸牌後空一格放牌背，打牌後收回；
- *  那格摸到的是花就先亮正面再換牌背（GapFlash）。上家（left，col 正常順序）摸牌格排在陣列最後＝畫面最下面；
- *  下家（right，col 用 column-reverse）同樣排在陣列最後，CSS 反過來＝畫面最上面，兩家共用同一段邏輯 */
-function SideHand({ count, h, flowerFx }: { count: number; h?: MjOpponentHand; flowerFx?: MjFlowerFxT }) {
+ *  別家摸到花照舊用補花膠囊（MjFlowerFx）提示，這一格不用另外亮正面（老闆 2026-11-07 第三次更正，拿掉上一輪的 GapFlash）。
+ *  上家（left，col 正常順序）摸牌格排在陣列最後＝畫面最下面；下家（right，col 用 column-reverse）同樣排在陣列最後，
+ *  CSS 反過來＝畫面最上面，兩家共用同一段邏輯 */
+function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
   type Cell = { key: string; tile: Tile; drew: boolean; back: boolean };
   let cells: Cell[];
   if (h) {
@@ -125,10 +106,7 @@ function SideHand({ count, h, flowerFx }: { count: number; h?: MjOpponentHand; f
   const cell = (c: Cell) => (
     <span key={c.key} className="cell">
       <div className={c.drew ? "drew" : undefined}>
-        <span className="gapcell">
-          <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
-          {c.drew && c.back && <GapFlash fx={flowerFx} w={12} h={16} />}
-        </span>
+        <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
       </div>
     </span>
   );
@@ -222,21 +200,13 @@ function EyeHand({ h, w, ht }: { h: MjOpponentHand; w: number; ht: number }) {
 
 /** 對家沒眼牌時的手牌：一張一張的牌背（和左右家一樣，顏色跟著偏好設定的牌背）。
  *  張數是 3n＋2（16 張＋剛摸進一張）時，摸進來的那張和其他牌隔開一點，放在整排最左端——
- *  對家的右手在你畫面的最左邊（老闆 2026-11-07 更正：原本放在最右邊，不是對家右手的位置）；
- *  摸到的是花就先亮正面再換牌背（GapFlash） */
-function TopBacks({ count, flowerFx }: { count: number; flowerFx?: MjFlowerFxT }) {
+ *  對家的右手在你畫面的最左邊；摸到花照舊用補花膠囊提示，不在這格亮正面（老闆 2026-11-07 第三次更正） */
+function TopBacks({ count }: { count: number }) {
   const drew = count % 3 === 2;
   const tile = (i: number) => <MjTile key={i} tile={BACK_TILE} width={12} height={16} faceDown />;
   return (
     <div className="mjm-topbacks" data-top-backs={count}>
-      {drew && (
-        <span className="drew" data-top-drew>
-          <span className="gapcell">
-            {tile(-1)}
-            <GapFlash fx={flowerFx} w={12} h={16} />
-          </span>
-        </span>
-      )}
+      {drew && <span className="drew" data-top-drew>{tile(-1)}</span>}
       {Array.from({ length: drew ? count - 1 : count }, (_, i) => tile(i))}
     </div>
   );
@@ -257,7 +227,6 @@ function SidePanel({
   side,
   busy,
   mySeat,
-  flowerFx,
 }: {
   side: "left" | "right";
   player: MjPlayer | undefined;
@@ -272,7 +241,6 @@ function SidePanel({
   opponent?: MjOpponentHand;
   busy?: boolean;
   mySeat: number;
-  flowerFx?: MjFlowerFxT;
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
@@ -299,7 +267,7 @@ function SidePanel({
         <SpectateBadge count={player.viewerCount} />
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
-      <SideHand count={player.tileCount} h={opponent} flowerFx={flowerFx} />
+      <SideHand count={player.tileCount} h={opponent} />
       <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot seat={player.seat} mySeat={mySeat} />
     </div>
   );
@@ -417,7 +385,7 @@ export default function MjBoardMobile({
   chatButton,
   leaveLabel,
   spectateMenu,
-  flowerFx,
+  flowerLabel,
 }: MjBoardMobileProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // 眼牌：記住是對哪一組選項按下的，換回合自動失效
@@ -457,7 +425,6 @@ export default function MjBoardMobile({
   const migiFx = declareFx.find((f) => f.both);
   const eyeFx = declareFx.find((f) => !f.both);
   const oppOf = (seat?: number) => opponentHands?.find((h) => h.seat === seat);
-  const flowerFxOf = (seat?: number) => flowerFx?.find((f) => f.seat === seat);
   // 輪到我打牌或有吃碰槓胡按鈕時，花的展開面板收起來，不擋操作
   const flowerBusy = needsDiscard || availableActions.length > 0;
 
@@ -558,7 +525,7 @@ export default function MjBoardMobile({
               </>
             ) : (
               <>
-                <TopBacks count={top.tileCount} flowerFx={flowerFxOf(top.seat)} />
+                <TopBacks count={top.tileCount} />
                 <Melds revealed={top.revealed} w={12} h={16} seat={top.seat} mySeat={mySeat} />
               </>
             )}
@@ -582,7 +549,6 @@ export default function MjBoardMobile({
           opponent={oppOf(left?.seat)}
           busy={flowerBusy}
           windChar={left ? windOf(left.seat) : ""}
-          flowerFx={flowerFxOf(left?.seat)}
         />
 
         <div className="mjm-table" data-mj-table>
@@ -660,7 +626,6 @@ export default function MjBoardMobile({
           opponent={oppOf(right?.seat)}
           busy={flowerBusy}
           windChar={right ? windOf(right.seat) : ""}
-          flowerFx={flowerFxOf(right?.seat)}
         />
       </div>
 
@@ -727,6 +692,7 @@ export default function MjBoardMobile({
           <div className="main">{mainTiles.map(handTile)}</div>
           {drawnTile && (
             <div className="drawn">
+              {flowerLabel && <span className="mj-flower-label" data-flower-label>補花</span>}
               {slowDraw?.tileId === drawnTile.id ? (
                 <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} width="var(--tile-hand-w)" height="var(--tile-hand-h)" />
               ) : (
