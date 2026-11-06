@@ -94,21 +94,9 @@ function bakeFly(faces: readonly HTMLImageElement[], back: readonly [string, str
   return c;
 }
 
-/**
- * 白金聖雲（暫代，老闆 2026-11-06：改用老闆給的金色星塵雲霧原色，不再染白）：把 dust 圖集染色用，HOLY_TINT=false 時不呼叫，直接用原圖。
- * 老闆的新聖雲圖到了，只要把傳進來的 src 換成新圖（同樣 2×2 格）。
- */
-/** 聖雲用哪一張圖：暫代＝dust 原色（四格裡只用右上、左上、右下三格，排除左下那團漩渦）。老闆的新聖雲圖到了，這裡改成新檔名，其他不用動 */
-const HOLY_ART: RulaiArt = "dust", HOLY_TINT = false;
-function bakeHolyCloud(src: Src) {
-  const w = widthOf(src), h = heightOf(src), c = mk(w, h), x = c.getContext("2d")!;
-  x.drawImage(src, 0, 0, w, h);
-  x.globalCompositeOperation = "source-atop"; // 只染有雲的地方，透明處維持透明（不會出現方形邊）
-  const tint = ["rgba(255,252,242,.82)", "rgba(255,240,205,.7)", "rgba(242,234,220,.78)", "rgba(255,248,230,.78)"]; // 象牙白、淡金、暖灰、米白
-  for (let k = 0; k < 4; k++) { x.fillStyle = tint[k]; x.fillRect((k % 2) * (w / 2), (k >> 1) * (h / 2), w / 2, h / 2); }
-  x.globalCompositeOperation = "source-over";
-  return c;
-}
+/** 聖雲用哪一張圖：目前用 dust 原色（四格裡只用右上、左上、右下三格，排除左下那團漩渦，老闆 2026-11-06 定案：不染色、用金色原圖）。
+ * 老闆的新聖雲圖到了，這裡改成新檔名（同樣 2×2 格），其他不用動 */
+const HOLY_ART: RulaiArt = "dust";
 type Pose = { X: number; Y: number; sc: number; a: number };
 type WarpOpt = { n?: number; lighter?: boolean; alpha?: number; strip?: ((m: number) => number) | null };
 
@@ -123,7 +111,7 @@ export class RulaiCanvas {
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
   private rubs: { a: number; R: number; up: number; s: number; spin: number; rot: number; ph: number; k: number }[];
   private dusts: { a: number; R: number; s: number; ph: number; k: number }[];
-  private holy: Src;
+  private holy: HTMLImageElement;
   private puffs: { tx: number; ty: number; ox: number; oy: number; s: number; k: number; rot: number; spin: number; d: number; low: boolean }[];
   private mist: { k: number; side: number; sc: number; ph: number; rot: number }[];
   private jets: { X: number; Y: number; d: number; ph: number; k: number; sz: number }[];
@@ -143,9 +131,8 @@ export class RulaiCanvas {
     this.gl = bakeGlow(256, [[0, "rgba(255,250,225,1)"], [0.25, "rgba(255,212,110,.7)"], [0.6, "rgba(255,160,40,.16)"], [1, "rgba(255,140,20,0)"]]);
     this.wave = bakeGlow(256, [[0, "rgba(255,230,160,0)"], [0.62, "rgba(255,226,150,0)"], [0.84, "rgba(255,240,195,.8)"], [0.93, "rgba(255,200,100,.22)"], [1, "rgba(255,180,60,0)"]]);
     this.shadow = bakeGlow(256, [[0, "rgba(0,0,0,.92)"], [0.6, "rgba(0,0,0,.6)"], [1, "rgba(0,0,0,0)"]]);
-    const holy = HOLY_TINT ? bakeHolyCloud(art[HOLY_ART]) : null; // 新圖不用烘，直接畫原圖
-    this.holy = holy ?? art[HOLY_ART];
-    this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow, ...(holy ? [holy] : [])];
+    this.holy = art[HOLY_ART];
+    this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow];
     // 四家同一條規則（老闆 2026-11-06）：手腕在胡牌者那一側，手沿指尖方向衝向落點。
     // 光源＝從落點往手腕方向（指尖的反方向）走到螢幕邊的那一點；自己胡在下緣、對家在上緣、左右家在胡牌者那側的上角附近
     this.rot = HAND_ROT[rel]; this.pk = PERSP[rel];
