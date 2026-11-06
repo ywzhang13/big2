@@ -6,8 +6,9 @@
 export const SAKURA_TL = { hit: 1120, tile: 1420, zimo: 1880, name: 2120, total: 3400 };
 /** 手機／電腦上限：畫布倍率、遠中近花瓣數 */
 export const SAKURA_LIMIT = {
-  mobile: { dpr: 1.5, petals: [130, 96, 14] },
-  desktop: { dpr: 2, petals: [220, 170, 24] },
+  // 2026-11-07 老闆試做版：花瓣表換成花瓣叢照片素材，一片的視覺份量比原本單片花瓣大很多，片數降到約 6 成，避免畫面被塞滿、牌桌和手牌被蓋住
+  mobile: { dpr: 1.5, petals: [78, 58, 8] },
+  desktop: { dpr: 2, petals: [132, 102, 14] },
 } as const;
 /** 減少動態：畫這一刻的靜止畫面（紛飛段，沒有閃光、風線） */
 export const SAKURA_STILL_MS = 2400;

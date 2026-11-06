@@ -40,10 +40,10 @@ const geo = (rel: number, mobile = true) => ({ W: mobile ? 844 : 1440, H: mobile
 const make = (rel = 0, mobile = true, dpr = 3) => { const cv = fakeCanvas(); const f = new SakuraCanvas(cv, geo(rel, mobile), dpr); f.setSheet(sheet); return { cv, f, x: cv.ctx }; };
 
 // C1
-ok(makePetals(390, 0, SAKURA_LIMIT.mobile.petals).length === 240, "C1 手機 240 片");
-ok(makePetals(892, 0, SAKURA_LIMIT.desktop.petals).length === 414, "C1 電腦 414 片");
+ok(makePetals(390, 0, SAKURA_LIMIT.mobile.petals).length === 144, "C1 手機 144 片（2026-11-07 老闆試做版：花瓣叢照片比單片花瓣大，片數降到約 6 成）");
+ok(makePetals(892, 0, SAKURA_LIMIT.desktop.petals).length === 248, "C1 電腦 248 片");
 { const m = make(0, true, 3), d = make(0, false, 3); ok(m.cv.width === Math.round(844 * 1.5), "C1 手機倍率上限 1.5"); ok(d.cv.width === 1440 * 2, "C1 電腦倍率上限 2"); }
-{ const { f, x } = make(); f.draw(2400); const n = x.calls.filter((c) => c[0] === "drawImage").length; ok(f.lastCount <= 240 && f.lastCount >= 200 && n <= 245, `C1 一格的花瓣數在上限內（${f.lastCount} 片）`); }
+{ const { f, x } = make(); f.draw(2400); const n = x.calls.filter((c) => c[0] === "drawImage").length; ok(f.lastCount <= 144 && f.lastCount >= 120 && n <= 149, `C1 一格的花瓣數在上限內（${f.lastCount} 片）`); }
 // C2
 { const { f, x } = make(); f.draw(1700); const a = JSON.stringify(x.calls); x.calls.length = 0; f.draw(1700); ok(a === JSON.stringify(x.calls), "C2 同一個時間畫兩次完全一樣"); }
 // C3、C4

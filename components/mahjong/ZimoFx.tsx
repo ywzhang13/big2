@@ -68,8 +68,8 @@ export const ZFX_ART: Record<ZimoFxNew, string[]> = {
   sakura: ["sakura-title"], // 花瓣表依裝置選一張，見 zfxArt
   rulai: ["rulai-title"], // 其他 9 張依裝置選一組，見 zfxArt（scripts/gen-rulai-assets.mjs 產生）
 };
-/** 花瓣表：手機用小張（長期快取，換內容要改檔名） */
-const sakuraSheet = () => (isTouchDevice() ? "sakura-petals-v2-m" : "sakura-petals-v2-d");
+/** 花瓣表：手機用小張（長期快取，換內容要改檔名）。v3＝老闆的花瓣叢照片素材（2026-11-07 試做，只給測試房看，未上線） */
+const sakuraSheet = () => (isTouchDevice() ? "sakura-petals-v3-m" : "sakura-petals-v3-d");
 const rulaiFile = (n: RulaiArt) => `rulai-${n}-${isTouchDevice() ? "m" : "d"}`;
 const zfxArt = (fx: ZimoFxNew) => (fx === "sakura" ? [...ZFX_ART.sakura, sakuraSheet()] : fx === "rulai" ? [...ZFX_ART.rulai, ...RULAI_ART.map(rulaiFile)] : ZFX_ART[fx]);
 
