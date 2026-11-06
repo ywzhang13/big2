@@ -94,6 +94,16 @@ function bakeFly(faces: readonly HTMLImageElement[], back: readonly [string, str
   return c;
 }
 
+/** 左右家用的雲：縮小烘一張，上、左兩邊（原圖有雲碰到圖邊）淡到 0，斜放也不會露出直邊。480×320，約 0.6 MB，播完放掉 */
+function bakeSideCloud(cloud: Src) {
+  const w = 480, h = 320, c = mk(w, h), x = c.getContext("2d")!;
+  x.drawImage(cloud, 0, 0, w, h);
+  x.globalCompositeOperation = "destination-out";
+  const gl = x.createLinearGradient(0, 0, w * 0.32, 0); gl.addColorStop(0, "rgba(0,0,0,1)"); gl.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gl; x.fillRect(0, 0, w * 0.32, h);
+  const gt = x.createLinearGradient(0, 0, 0, h * 0.2); gt.addColorStop(0, "rgba(0,0,0,1)"); gt.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gt; x.fillRect(0, 0, w, h * 0.2);
+  x.globalCompositeOperation = "source-over";
+  return c;
+}
 type Pose = { X: number; Y: number; sc: number; a: number };
 type WarpOpt = { n?: number; lighter?: boolean; alpha?: number; strip?: ((m: number) => number) | null };
 
@@ -103,7 +113,7 @@ export class RulaiCanvas {
   private art: Partial<Record<RulaiArt, HTMLImageElement>>;
   private baked: HTMLCanvasElement[];
   private fly: HTMLCanvasElement; private spark: HTMLCanvasElement; private gl: HTMLCanvasElement; private wave: HTMLCanvasElement; private shadow: HTMLCanvasElement;
-  private hx: number; private hy: number; private pk = 1; private slant = false; private lx = 0; private ly = 0; private la = Math.PI / 2; private sx = 0; private sy = 0; private rot: number; private base: number; private D: number; private strips: number;
+  private sideCloud: HTMLCanvasElement | null = null; private hx: number; private hy: number; private pk = 1; private slant = false; private lx = 0; private ly = 0; private la = Math.PI / 2; private sx = 0; private sy = 0; private rot: number; private base: number; private D: number; private strips: number;
   private gold: { i: number; a: number; sp: number; s: number; ph: number; fx: number; fy: number; sway: number }[];
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
   private rubs: { a: number; R: number; up: number; s: number; spin: number; rot: number; ph: number; k: number }[];
@@ -125,7 +135,8 @@ export class RulaiCanvas {
     this.gl = bakeGlow(256, [[0, "rgba(255,250,225,1)"], [0.25, "rgba(255,212,110,.7)"], [0.6, "rgba(255,160,40,.16)"], [1, "rgba(255,140,20,0)"]]);
     this.wave = bakeGlow(256, [[0, "rgba(255,230,160,0)"], [0.62, "rgba(255,226,150,0)"], [0.84, "rgba(255,240,195,.8)"], [0.93, "rgba(255,200,100,.22)"], [1, "rgba(255,180,60,0)"]]);
     this.shadow = bakeGlow(256, [[0, "rgba(0,0,0,.92)"], [0.6, "rgba(0,0,0,.6)"], [1, "rgba(0,0,0,0)"]]);
-    this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow];
+    if (rel % 2 === 1) this.sideCloud = bakeSideCloud(art["clouds-v4"]);
+    this.baked = [...(this.sideCloud ? [this.sideCloud] : []), this.fly, this.spark, this.gl, this.wave, this.shadow];
     // 雲洞在畫面中央和落點的中間；手一律從雲洞往落點來，指尖朝畫面下方
     this.hx = lerp(W / 2, px, 0.55); this.hy = -H * 0.02;
     this.rot = HAND_ROT[rel]; this.pk = PERSP[rel];
@@ -200,21 +211,27 @@ export class RulaiCanvas {
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
   /**
-   * 左右家的雲（老闆 2026-11-06：雲要跟著手展開）：手進場那一角一大片雲，雲的撕裂邊順著手衝下來的斜線，手衝出時沿法線往外推開（像破雲而出）；
-   * 另一角只留一小片淡雲陪襯。雲圖的上、左兩邊（有雲碰到圖邊）一律放在畫面外，畫面上看不到直切邊。上家是下家的左右鏡像
+   * 左右家的雲（老闆 2026-11-06）：雲的厚處在手腕那一側（畫面角落），撕裂口和雷光邊朝手指方向打開，手指從裂口最前端衝出；
+   * 雲以手的路徑為軸，左右對稱兩片，手衝出時往兩側推開，砸中後被衝散。用開播時烘的羽化小圖（上、左兩邊淡出），任何角度都不會露出雲圖的直邊。
    */
   private drawSideCloud(cloud: Src, ms: number, cIn: number, open: number, blast: number, cFade: number) {
-    const { x, dpr } = this, { W, H, u, px, py, rel } = this.g, t = RULAI_TL, mir = rel === 3;
-    const iw = widthOf(cloud), ih = heightOf(cloud), TEAR = Math.atan2(0.88 * ih, -0.9 * iw); // 原圖撕裂邊從右上斜到左下
-    // 以下用「下家」的座標算（上家左右鏡像）
-    const PX = mir ? W - px : px, fx = -Math.sin(SIDE + Math.PI / 2) * 1, fy = Math.cos(SIDE + Math.PI / 2) * -1; // 下家指尖方向（往左下）
-    const ty = 0.14 * H, tq = (py - ty) / fy, qx = Math.min(W * 1.02, PX - fx * tq), nx = -fy, ny = fx; // 撕裂邊經過 (qx, ty)；雲在撕裂邊的左上側
-    const gap = u * (0.02 + 0.1 * open + 0.16 * inC(seg(ms, t.rush, t.hit)) + 0.22 * blast), slide = (1 - cIn) * u * 0.6;
-    const X = qx + nx * gap - fx * slide, Y = ty + ny * gap - fy * slide, th = Math.atan2(fy, fx) - TEAR, cw = W * 0.75 * (1 + blast * 0.12), ch = (cw * ih) / iw;
-    const place = (cxp: number, cyp: number, ang: number) => { const c = Math.cos(ang), sn = Math.sin(ang); if (mir) x.setTransform(-c * dpr, sn * dpr, sn * dpr, c * dpr, (W - cxp) * dpr, cyp * dpr); else x.setTransform(c * dpr, sn * dpr, -sn * dpr, c * dpr, cxp * dpr, cyp * dpr); };
-    x.globalAlpha = cFade * (1 - blast * 0.5); place(X, Y, th); x.drawImage(cloud, -0.45 * cw, -0.44 * ch, cw, ch);
-    // 另一角：小、淡，只陪襯（上、左兩邊在畫面外）
-    const fw = W * 0.3, fh = (fw * ih) / iw; x.globalAlpha = cFade * 0.42 * (1 - blast * 0.6); place(0, 0, 0); x.drawImage(cloud, -fw * (0.28 + 0.25 * blast), lerp(-fh, -fh * 0.2, cIn) - blast * fh * 0.4, fw, fh);
+    const { x, dpr, sideCloud } = this, { W, u, px, py } = this.g, t = RULAI_TL;
+    if (!sideCloud) return;
+    const iw = sideCloud.width, ih = sideCloud.height, fx = Math.sin(this.rot), fy = -Math.cos(this.rot), N = Math.atan2(0.9 * iw, 0.88 * ih); // N＝撕裂口朝外的方向（原圖朝右下）
+    const phi = -N, c = Math.cos(phi), s = Math.sin(phi), cw = W * 0.7 * (1 + 0.15 * blast), ch = (cw * ih) / iw, tx = 0.45 * cw, ty = 0.44 * ch;
+    const back = u * (0.35 + 0.5 * (1 - cIn) + 0.25 * blast), qx = px - fx * back, qy = py - fy * back; // 撕裂口中心在手的路徑上、手腕那一側
+    const g = u * (0.02 + 0.07 * open + 0.2 * inC(seg(ms, t.rush, t.hit)) + 0.3 * blast); // 往兩側推開
+    x.globalAlpha = cFade * (1 - blast * 0.5);
+    for (const side of [1, -1]) {
+      const a = fx * c - fy * s * side, b = fy * c + fx * s * side, cc = -fx * s - fy * c * side, d = -fy * s + fx * c * side;
+      x.setTransform(a * dpr, b * dpr, cc * dpr, d * dpr, (qx - fy * g * side) * dpr, (qy + fx * g * side) * dpr);
+      x.drawImage(sideCloud, -tx, -ty, cw, ch);
+    }
+    // 另一角：小、淡，只陪襯（原圖的上、左兩邊在畫面外）
+    const fw = W * 0.3, fh = (fw * heightOf(cloud)) / widthOf(cloud), mir = fx < 0; // 下家手往左下，陪襯的雲在左上角
+    x.globalAlpha = cFade * 0.42 * (1 - blast * 0.6);
+    if (mir) x.setTransform(dpr, 0, 0, dpr, 0, 0); else x.setTransform(-dpr, 0, 0, dpr, W * dpr, 0);
+    x.drawImage(cloud, -fw * (0.28 + 0.25 * blast), lerp(-fh, -fh * 0.2, cIn) - blast * fh * 0.4, fw, fh);
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1;
   }
   draw(ms: number) {
