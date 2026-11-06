@@ -18,7 +18,13 @@ export const RULAI_LIMIT = {
 export const RULAI_STILL_MS = 2600;
 const STILL_END = 620;
 const SQ = 0.54; // 地面效果壓扁，和牌桌傾斜一致
-const DEPTH = [1, 0.88, 0.74, 0.88]; // 座位越遠，手和地面效果都越小（自己、下家、對家、上家）
+const DEPTH = [1, 0.88, 0.74, 0.88];
+/**
+ * 手照實際方向（老闆 2026-11-06）：胡牌的人往前拍下去，自己看指尖朝上；對家看指尖朝下；上家、下家看手是橫的、指尖指向畫面中間。
+ * 角度只用 90° 的倍數：條帶邊界才能對齊像素，不會留下接縫。PERSP＝條帶透視的方向（自己看掌根近、對家看指尖近、左右家幾乎沒有）
+ */
+const HAND_ROT = [0, -Math.PI / 2, Math.PI, Math.PI / 2];
+const PERSP = [1, 0.05, -0.7, 0.05]; // 座位越遠，手和地面效果都越小（自己、下家、對家、上家）
 const TILT_DEG = 15;
 const perspOf = (W: number) => (W > 1000 ? 2200 : 1200);
 
@@ -85,7 +91,7 @@ function bakeFly(faces: readonly HTMLImageElement[], back: readonly [string, str
 }
 
 type Pose = { X: number; Y: number; sc: number; a: number };
-type WarpOpt = { n?: number; lighter?: boolean; alpha?: number; fadeFar?: boolean; strip?: ((m: number) => number) | null };
+type WarpOpt = { n?: number; lighter?: boolean; alpha?: number; strip?: ((m: number) => number) | null };
 
 export class RulaiCanvas {
   private x: CanvasRenderingContext2D;
@@ -93,7 +99,7 @@ export class RulaiCanvas {
   private art: Partial<Record<RulaiArt, HTMLImageElement>>;
   private baked: HTMLCanvasElement[];
   private fly: HTMLCanvasElement; private spark: HTMLCanvasElement; private gl: HTMLCanvasElement; private wave: HTMLCanvasElement; private shadow: HTMLCanvasElement;
-  private hx: number; private hy: number; private rot: number; private base: number; private D: number; private strips: number;
+  private hx: number; private hy: number; private pk = 1; private rot: number; private base: number; private D: number; private strips: number;
   private gold: { i: number; a: number; sp: number; s: number; ph: number; fx: number; fy: number; sway: number }[];
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
   private rubs: { a: number; R: number; up: number; s: number; spin: number; rot: number; ph: number; k: number }[];
@@ -118,7 +124,7 @@ export class RulaiCanvas {
     this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow];
     // 雲洞在畫面中央和落點的中間；手一律從雲洞往落點來，指尖朝畫面下方
     this.hx = lerp(W / 2, px, 0.55); this.hy = -H * 0.02;
-    this.rot = clamp(Math.atan2(this.hx - px, py - this.hy), -0.42, 0.42);
+    this.rot = HAND_ROT[rel]; this.pk = PERSP[rel];
     this.base = u * RULAI_HAND_SCALE * D;
     const r = rng(1908 + rel), TAU = 6.283;
     // 順序不能改：四家、重播都一樣
@@ -157,17 +163,20 @@ export class RulaiCanvas {
   }
   /** 條帶透視：一張圖切成 N 條，越靠近鏡頭的條帶越寬越高。沒有 3D，只有 drawImage */
   private warp(img: Src, P: Pose, opt: WarpOpt = {}) {
-    const { x, dpr } = this, N = opt.n ?? this.strips, a = P.a, base = this.base * P.sc, iw = widthOf(img), ih = heightOf(img), W0 = (base * iw) / ih;
-    const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), palmAt = 0.62, sMid = sAt(palmAt), palm = lenF(palmAt) / total, c = Math.cos(this.rot), s = Math.sin(this.rot);
-    // y＝0 遠端（畫面上方的指尖）、y＝1 近端（畫面下方的掌根）；老闆 2026-11-06 定案指尖朝上
-    x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, P.X * dpr, P.Y * dpr);
+    const { x, dpr } = this, N = opt.n ?? this.strips, a = P.a * this.pk || 1e-4, base = this.base * P.sc, iw = widthOf(img), ih = heightOf(img), W0 = (base * iw) / ih;
+    const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), palmAt = 0.62, sMid = sAt(palmAt), palm = lenF(palmAt) / total;
+    const c = Math.round(Math.cos(this.rot)), s = Math.round(Math.sin(this.rot));
+    // y＝0 指尖、y＝1 掌根。條帶的上下邊都落在整數像素、不重疊、同一個透明度：中間不會出現細橫紋
+    x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, Math.round(P.X * dpr), Math.round(P.Y * dpr));
     if (opt.lighter) x.globalCompositeOperation = "lighter";
+    const edge = (y: number) => Math.round((lenF(y) / total - palm) * base * dpr) / dpr;
     for (let i = 0; i < N; i++) {
-      const y0 = i / N, y1 = (i + 1) / N, m = (y0 + y1) / 2, sc = sAt(m) / sMid, Y0 = (lenF(y0) / total - palm) * base, Y1 = (lenF(y1) / total - palm) * base, w = W0 * sc;
-      const al = (opt.alpha ?? 1) * (opt.fadeFar === false ? 1 : sm(clamp((1 - m) / 0.3))) * (opt.strip ? opt.strip(m) : 1);
+      const y0 = i / N, y1 = (i + 1) / N, m = (y0 + y1) / 2, Y0 = edge(y0), Y1 = edge(y1), w = W0 * (sAt(m) / sMid);
+      if (Y1 <= Y0) continue;
+      const al = (opt.alpha ?? 1) * (opt.strip ? opt.strip(m) : 1);
       if (al <= 0.004) continue;
       x.globalAlpha = al;
-      x.drawImage(img, 0, y0 * ih, iw, (y1 - y0) * ih, -w / 2, Y0, w, Y1 - Y0 + 0.7);
+      x.drawImage(img, 0, y0 * ih, iw, (y1 - y0) * ih, -w / 2, Y0, w, Y1 - Y0);
     }
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
@@ -197,9 +206,9 @@ export class RulaiCanvas {
       x.globalAlpha = Math.min(1, a0 * 0.6 * pulse * (1 - 0.62 * cSink)); x.drawImage(fis, px - gw / 2, py - gh / 2, gw, gh);
       const peak = sm(seg(A, 300, 760)) * (1 - 0.75 * cSink); x.globalAlpha = a0 * (0.05 + 0.16 * peak) * (0.85 + 0.15 * Math.sin(t * 7)); x.drawImage(fisG, px - gw / 2, py - gh / 2, gw, gh); reset();
       const stamp: Pose = { X: px, Y: py, sc: 1, a: 0.08 };
-      this.warp(crater, stamp, { alpha: sm(seg(A, 20, 240)) * fade * 0.94, fadeFar: false, n: 16 });
+      this.warp(crater, stamp, { alpha: sm(seg(A, 20, 240)) * fade * 0.94, n: 16 });
       const lit = sm(seg(A, 280, 720));
-      if (lit > 0) this.warp(crater, stamp, { lighter: true, fadeFar: false, alpha: lit * 0.5 * fade * (1 - 0.3 * cSink) * (0.86 + 0.14 * Math.sin(ms / 240)), n: 12 });
+      if (lit > 0) this.warp(crater, stamp, { lighter: true, alpha: lit * 0.5 * fade * (1 - 0.3 * cSink) * (0.86 + 0.14 * Math.sin(ms / 240)), n: 12 });
     }
     // ---- 天光（在雲的後面） ----
     const cIn = sm(seg(ms, 0, tl.clouds)), open = sm(seg(ms, tl.clouds, tl.part)), blast = ms > hit ? outC(seg(A, 0, 700)) : 0, cFade = fade * (1 - 0.75 * seg(ms, hit + 300, tl.total - 800));
