@@ -98,11 +98,13 @@ function bakeFly(faces: readonly HTMLImageElement[], back: readonly [string, str
  * 白金聖雲（暫代）：把 dust 圖集（金色雲團）染成象牙白、淡金、暖灰，四格各一種色。480×320，約 0.6 MB，播完放掉。
  * 老闆的新聖雲圖到了，只要把傳進來的 src 換成新圖（同樣 2×2 格），不用烘。
  */
+/** 聖雲用哪一張圖：暫代＝dust（染色）。老闆的 4 朵聖雲拼成 2×2 圖集後：RULAI_ART 加一個新檔名（例如 "holy-v1"），這裡改成它、HOLY_TINT 改 false，其他不用動 */
+const HOLY_ART: RulaiArt = "dust", HOLY_TINT = true;
 function bakeHolyCloud(src: Src) {
   const w = widthOf(src), h = heightOf(src), c = mk(w, h), x = c.getContext("2d")!;
   x.drawImage(src, 0, 0, w, h);
   x.globalCompositeOperation = "source-atop"; // 只染有雲的地方，透明處維持透明（不會出現方形邊）
-  const tint = ["rgba(255,250,238,.72)", "rgba(255,238,200,.6)", "rgba(236,228,214,.7)", "rgba(255,246,226,.66)"]; // 象牙白、淡金、暖灰、米白
+  const tint = ["rgba(255,252,242,.82)", "rgba(255,240,205,.7)", "rgba(242,234,220,.78)", "rgba(255,248,230,.78)"]; // 象牙白、淡金、暖灰、米白
   for (let k = 0; k < 4; k++) { x.fillStyle = tint[k]; x.fillRect((k % 2) * (w / 2), (k >> 1) * (h / 2), w / 2, h / 2); }
   x.globalCompositeOperation = "source-over";
   return c;
@@ -121,7 +123,7 @@ export class RulaiCanvas {
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
   private rubs: { a: number; R: number; up: number; s: number; spin: number; rot: number; ph: number; k: number }[];
   private dusts: { a: number; R: number; s: number; ph: number; k: number }[];
-  private holy: HTMLCanvasElement;
+  private holy: Src;
   private puffs: { tx: number; ty: number; ox: number; oy: number; s: number; k: number; rot: number; spin: number; d: number; low: boolean }[];
   private jets: { X: number; Y: number; d: number; ph: number; k: number; sz: number }[];
   private press: { a: number; sp: number; o: number; l: number }[];
@@ -140,8 +142,9 @@ export class RulaiCanvas {
     this.gl = bakeGlow(256, [[0, "rgba(255,250,225,1)"], [0.25, "rgba(255,212,110,.7)"], [0.6, "rgba(255,160,40,.16)"], [1, "rgba(255,140,20,0)"]]);
     this.wave = bakeGlow(256, [[0, "rgba(255,230,160,0)"], [0.62, "rgba(255,226,150,0)"], [0.84, "rgba(255,240,195,.8)"], [0.93, "rgba(255,200,100,.22)"], [1, "rgba(255,180,60,0)"]]);
     this.shadow = bakeGlow(256, [[0, "rgba(0,0,0,.92)"], [0.6, "rgba(0,0,0,.6)"], [1, "rgba(0,0,0,0)"]]);
-    this.holy = bakeHolyCloud(art.dust);
-    this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow, this.holy];
+    const holy = HOLY_TINT ? bakeHolyCloud(art[HOLY_ART]) : null; // 新圖不用烘，直接畫原圖
+    this.holy = holy ?? art[HOLY_ART];
+    this.baked = [this.fly, this.spark, this.gl, this.wave, this.shadow, ...(holy ? [holy] : [])];
     // 四家同一條規則（老闆 2026-11-06）：手腕在胡牌者那一側，手沿指尖方向衝向落點。
     // 光源＝從落點往手腕方向（指尖的反方向）走到螢幕邊的那一點；自己胡在下緣、對家在上緣、左右家在胡牌者那側的上角附近
     this.rot = HAND_ROT[rel]; this.pk = PERSP[rel];
@@ -152,12 +155,14 @@ export class RulaiCanvas {
     // 手開始的位置：手掌中心在漩渦往指尖方向一點點，手腕藏在漩渦中心
     this.sx = this.lx + fx * u * 0.1; this.sy = this.ly + fy * u * 0.1;
     this.base = u * RULAI_HAND_SCALE * D;
-    // 聖雲構圖四家相同：種子固定、和座位無關。格點鋪滿全場（加抖動），每團從畫面外沿著「中心→格點」方向湧進來
-    { const q = rng(4242), cols = g.mobile ? 6 : 7, rows = 4, list: RulaiCanvas["puffs"] = [];
-      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-        const tx = ((i + 0.5 + (q() - 0.5) * 0.6) / cols) * W, ty = ((j + 0.5 + (q() - 0.5) * 0.5) / rows) * H, dx = tx - W / 2, dy = ty - H / 2, dl = Math.hypot(dx, dy) || 1;
-        list.push({ tx, ty, ox: dx / dl, oy: dy / dl, s: Math.max(W / cols, H / rows) * (1.6 + q() * 0.5), k: Math.floor(q() * 4), rot: q() * 6.28, spin: (q() - 0.5) * 0.3, d: q(), low: ty > H * 0.8 });
-      }
+    // 聖雲構圖四家相同：種子固定、和座位無關。雲只沿畫面四周排一圈（上緣一排、左右兩側上半段、下方兩角），中間留空；
+    // 每團從畫面外沿「中心→位置」方向湧進來。左右兩側只到畫面一半高、尺寸受限，不會往下蓋到手牌那一排；下方兩角只短暫掠過（low）
+    { const q = rng(4242), list: RulaiCanvas["puffs"] = [], j = () => (q() - 0.5),
+        add = (tx: number, ty: number, s: number, low = false) => { const dx = tx - W / 2, dy = ty - H / 2, dl = Math.hypot(dx, dy) || 1; list.push({ tx, ty, ox: dx / dl, oy: dy / dl, s, k: Math.floor(q() * 4), rot: q() * 6.28, spin: j() * 0.3, d: q(), low }); };
+      const top = g.mobile ? 6 : 7;
+      for (let i = 0; i < top; i++) add(((i + 0.5 + j() * 0.5) / top) * W, H * (0.06 + q() * 0.06), H * (0.46 + q() * 0.12));
+      for (const sx of [0.05, 0.95]) for (const yy of [0.26, 0.46]) add(W * (sx + j() * 0.02), H * (yy + j() * 0.05), H * (0.4 + q() * 0.08));
+      for (const sx of [0.03, 0.97]) add(W * sx, H * 0.96, H * 0.34, true);
       this.puffs = list; }
     const r = rng(1908 + rel), TAU = 6.283;
     // 順序不能改：四家、重播都一樣
@@ -229,22 +234,23 @@ export class RulaiCanvas {
    * 四家構圖相同，只有光的位置跟著胡牌者。手牌那一排（畫面下緣 20%）的雲較淡、較早散開，不會長時間蓋住。
    */
   private drawHoly(ms: number, blast: number, fade: number) {
-    const { x, dpr, holy, puffs, gl } = this, { W, H, u } = this.g, t = RULAI_TL, cw = holy.width / 2, ch = holy.height / 2, tt = ms / 1000;
+    const { x, dpr, holy, puffs, gl } = this, { W, H, u } = this.g, t = RULAI_TL, cw = widthOf(holy) / 2, ch = heightOf(holy) / 2, tt = ms / 1000;
     const lit = sm(seg(ms, 850, t.rush)), Lx = this.lx, Ly = this.ly, LR = Math.hypot(W, H) * 0.55;
     for (const p of puffs) {
-      const inF = outC(seg(ms, p.d * 280, 650 + p.d * 300)), lowOut = p.low ? sm(seg(ms, 1150, 1500)) : 0;
-      const away = (1 - inF) * W * 0.75 + blast * W * (0.55 + 0.3 * p.d), al = inF * fade * (1 - blast) * (p.low ? 0.55 * (1 - lowOut) : 0.9);
+      // 下方兩角：0.25～0.75 秒掠過一次（在手牌上最多 0.5 秒、濃度 0.28 看得出牌面）；其他：0～0.95 秒湧入後在原位輕輕湧動
+      const inF = p.low ? outC(seg(ms, 250, 450)) : outC(seg(ms, p.d * 280, 650 + p.d * 300)), lowOut = p.low ? sm(seg(ms, 600, 750)) : 0;
+      const sway = Math.sin(tt * 1.3 + p.d * 6) * u * 0.025, away = (1 - inF) * W * 0.6 + sway + blast * W * (0.55 + 0.3 * p.d), al = inF * fade * (1 - blast) * (p.low ? 0.28 * (1 - lowOut) : 0.72);
       if (al <= 0.004) continue;
       const X = p.tx + p.ox * away, Y = p.ty + p.oy * away + Math.sin(tt * 0.8 + p.d * 6) * u * 0.01, sc = p.s * (1 + 0.25 * blast), an = p.rot + p.spin * tt;
       const c = Math.cos(an), s = Math.sin(an), hw = sc / 2, hh = (sc * ch) / cw / 2;
       x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, X * dpr, Y * dpr);
       x.globalAlpha = al; x.drawImage(holy, (p.k % 2) * cw + 1, (p.k >> 1) * ch + 1, cw - 2, ch - 2, -hw, -hh, hw * 2, hh * 2);
       const near = lit * Math.max(0, 1 - Math.hypot(X - Lx, Y - Ly) / LR);
-      if (near > 0.01) { x.globalCompositeOperation = "lighter"; x.globalAlpha = al * near * 0.85; x.drawImage(holy, (p.k % 2) * cw + 1, (p.k >> 1) * ch + 1, cw - 2, ch - 2, -hw, -hh, hw * 2, hh * 2); x.globalCompositeOperation = "source-over"; }
+      if (near > 0.01) { x.globalCompositeOperation = "lighter"; x.globalAlpha = al * near * 0.9; x.drawImage(holy, (p.k % 2) * cw + 1, (p.k >> 1) * ch + 1, cw - 2, ch - 2, -hw, -hh, hw * 2, hh * 2); x.globalCompositeOperation = "source-over"; }
     }
     x.setTransform(dpr, 0, 0, dpr, 0, 0);
     // 胡牌者那側被金光照透：雲上方一團暖金光
-    if (lit > 0) { const R = u * (0.6 + 0.5 * lit) * (1 + blast); x.globalCompositeOperation = "lighter"; x.globalAlpha = lit * fade * (1 - blast) * 0.75; x.drawImage(gl, Lx - R, Ly - R, R * 2, R * 2); }
+    if (lit > 0) { const R = u * (0.6 + 0.5 * lit) * (1 + blast); x.globalCompositeOperation = "lighter"; x.globalAlpha = lit * fade * (1 - blast) * 0.55; x.drawImage(gl, Lx - R, Ly - R, R * 2, R * 2); }
     x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
   }
   draw(ms: number) {
