@@ -21,9 +21,13 @@ const SQ = 0.54; // 地面效果壓扁，和牌桌傾斜一致
 const DEPTH = [1, 0.88, 0.74, 0.88];
 /**
  * 手照實際方向（老闆 2026-11-06）：胡牌的人往前拍下去，自己看指尖朝上；對家看指尖朝下；上家、下家看手是橫的、指尖指向畫面中間。
- * 角度只用 90° 的倍數：條帶邊界才能對齊像素，不會留下接縫。PERSP＝條帶透視的方向（自己看掌根近、對家看指尖近、左右家幾乎沒有）
+ * 左右家（老闆 2026-11-06：太橫）改成約 45° 斜下：手從胡牌者那一側的上角進場，指尖斜指向桌心和落點。
+ * 自己、對家是 90° 的倍數，條帶邊界對齊像素；左右家斜放、透視幾乎為 0，所以整張手一次畫完，沒有條帶也就沒有接縫。
+ * PERSP＝條帶透視的方向（自己看掌根近、對家看指尖近、左右家幾乎沒有）
  */
-const HAND_ROT = [0, -Math.PI / 2, Math.PI, Math.PI / 2];
+export const RULAI_SIDE_DEG = 45; // 左右家手的斜度（指尖往下偏離水平幾度），35～50 之間微調
+const SIDE = (RULAI_SIDE_DEG * Math.PI) / 180;
+const HAND_ROT = [0, -Math.PI / 2 - SIDE, Math.PI, Math.PI / 2 + SIDE];
 const PERSP = [1, 0.05, -0.7, 0.05]; // 座位越遠，手和地面效果都越小（自己、下家、對家、上家）
 const TILT_DEG = 15;
 const perspOf = (W: number) => (W > 1000 ? 2200 : 1200);
@@ -99,7 +103,7 @@ export class RulaiCanvas {
   private art: Partial<Record<RulaiArt, HTMLImageElement>>;
   private baked: HTMLCanvasElement[];
   private fly: HTMLCanvasElement; private spark: HTMLCanvasElement; private gl: HTMLCanvasElement; private wave: HTMLCanvasElement; private shadow: HTMLCanvasElement;
-  private hx: number; private hy: number; private pk = 1; private rot: number; private base: number; private D: number; private strips: number;
+  private hx: number; private hy: number; private pk = 1; private slant = false; private lx = 0; private ly = 0; private la = Math.PI / 2; private sx = 0; private sy = 0; private rot: number; private base: number; private D: number; private strips: number;
   private gold: { i: number; a: number; sp: number; s: number; ph: number; fx: number; fy: number; sway: number }[];
   private flys: { a: number; r0: number; R: number; up: number; spin: number; rot: number; fl: number; ph: number; big: number; face: boolean }[];
   private rubs: { a: number; R: number; up: number; s: number; spin: number; rot: number; ph: number; k: number }[];
@@ -125,6 +129,11 @@ export class RulaiCanvas {
     // 雲洞在畫面中央和落點的中間；手一律從雲洞往落點來，指尖朝畫面下方
     this.hx = lerp(W / 2, px, 0.55); this.hy = -H * 0.02;
     this.rot = HAND_ROT[rel]; this.pk = PERSP[rel];
+    // 光從哪裡下來、往哪裡照：自己、對家從雲洞往下；左右家從胡牌者那一側的上角，沿著手下來的方向
+    const fx = Math.sin(this.rot), fy = -Math.cos(this.rot); // 指尖方向
+    this.slant = rel % 2 === 1;
+    if (this.slant) { this.lx = rel === 1 ? W * 0.94 : W * 0.06; this.ly = H * 0.02; this.la = Math.atan2(fy, fx); this.sx = px - fx * u * 1.1; this.sy = py - fy * u * 1.1; }
+    else { this.lx = this.hx; this.ly = H * 0.02; this.la = Math.PI / 2; this.sx = this.hx; this.sy = this.hy; }
     this.base = u * RULAI_HAND_SCALE * D;
     const r = rng(1908 + rel), TAU = 6.283;
     // 順序不能改：四家、重播都一樣
@@ -159,12 +168,22 @@ export class RulaiCanvas {
     if (ms < t.rush) { const f = sm(seg(ms, t.emerge, t.rush)); k = lerp(k0, k1, f); sc = lerp(0.6, 0.84, f); a = lerp(a0, a1, f); }
     else if (ms < t.hit) { const f = inC(seg(ms, t.rush, t.hit)); k = lerp(k1, 1, f); sc = lerp(0.84, 1.26, f); a = lerp(a1, a2, f); }
     else { const f = outC(seg(ms, t.hit, t.hit + 70)); sc = lerp(1.26, 1, f); a = lerp(a2, 0.08, f); k = 1; }
-    return { X: lerp(hx, px, k), Y: lerp(hy - base * sc * 0.1, py, k), sc, a };
+    return this.slant ? { X: lerp(this.sx, px, k), Y: lerp(this.sy, py, k), sc, a } : { X: lerp(hx, px, k), Y: lerp(hy - base * sc * 0.1, py, k), sc, a };
   }
   /** 條帶透視：一張圖切成 N 條，越靠近鏡頭的條帶越寬越高。沒有 3D，只有 drawImage */
   private warp(img: Src, P: Pose, opt: WarpOpt = {}) {
     const { x, dpr } = this, N = opt.n ?? this.strips, a = P.a * this.pk || 1e-4, base = this.base * P.sc, iw = widthOf(img), ih = heightOf(img), W0 = (base * iw) / ih;
     const lenF = (y: number) => -Math.log(1 - a * y) / a, total = lenF(1), sAt = (y: number) => 1 / (1 - a * y), palmAt = 0.62, sMid = sAt(palmAt), palm = lenF(palmAt) / total;
+    if (this.slant) {
+      // 斜放：透視幾乎為 0，整張一次畫完（沒有條帶就沒有接縫）；化光用平均透明度
+      const cs = Math.cos(this.rot), sn = Math.sin(this.rot), al = (opt.alpha ?? 1) * (opt.strip ? opt.strip(0.5) : 1);
+      if (al <= 0.004) return;
+      x.setTransform(cs * dpr, sn * dpr, -sn * dpr, cs * dpr, P.X * dpr, P.Y * dpr);
+      if (opt.lighter) x.globalCompositeOperation = "lighter";
+      x.globalAlpha = al; x.drawImage(img, -W0 / 2, -palm * base, W0, base);
+      x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+      return;
+    }
     const c = Math.round(Math.cos(this.rot)), s = Math.round(Math.sin(this.rot));
     // y＝0 指尖、y＝1 掌根。條帶的上下邊都落在整數像素、不重疊、同一個透明度：中間不會出現細橫紋
     x.setTransform(c * dpr, s * dpr, -s * dpr, c * dpr, Math.round(P.X * dpr), Math.round(P.Y * dpr));
@@ -213,9 +232,9 @@ export class RulaiCanvas {
     // ---- 天光（在雲的後面） ----
     const cIn = sm(seg(ms, 0, tl.clouds)), open = sm(seg(ms, tl.clouds, tl.part)), blast = ms > hit ? outC(seg(A, 0, 700)) : 0, cFade = fade * (1 - 0.75 * seg(ms, hit + 300, tl.total - 800));
     if (open > 0) {
-      const R = u * (0.45 + 0.75 * open), hy = H * 0.02, hx = this.hx, rw = widthOf(rays) / 2, rh = heightOf(rays) / 2, shaftA = open * (1 - sm(seg(A, 0, 500))) * fade;
+      const R = u * (0.45 + 0.75 * open), hy = this.ly, hx = this.lx, rw = widthOf(rays) / 2, rh = heightOf(rays) / 2, shaftA = open * (1 - sm(seg(A, 0, 500))) * fade;
       x.globalCompositeOperation = "lighter"; x.globalAlpha = open * cFade * lerp(0.95, 0.5, sm(seg(A, 0, 400))); x.drawImage(gl, hx - R * 1.2, hy - R * 0.9, R * 2.4, R * 1.9);
-      if (shaftA > 0) for (let i = 0; i < 7; i++) { const an = Math.PI / 2 + (i - 3) * 0.24 + 0.03 * Math.sin(t * 1.7 + i), Ls = u * (1.05 + 0.25 * Math.sin(i * 3.1)) * (0.6 + 0.4 * open), wd = u * (0.13 + 0.03 * (i % 3)), c2 = Math.cos(an), s2 = Math.sin(an); x.setTransform(c2 * dpr, s2 * dpr, -s2 * dpr, c2 * dpr, hx * dpr, hy * dpr); x.globalAlpha = shaftA * 0.55; x.drawImage(rays, (i % 2) * rw, (i % 4 >> 1) * rh, rw, rh, 0, -wd / 2, Ls, wd); }
+      if (shaftA > 0) for (let i = 0; i < 7; i++) { const an = this.la + (i - 3) * 0.24 + 0.03 * Math.sin(t * 1.7 + i), Ls = u * (1.05 + 0.25 * Math.sin(i * 3.1)) * (0.6 + 0.4 * open), wd = u * (0.13 + 0.03 * (i % 3)), c2 = Math.cos(an), s2 = Math.sin(an); x.setTransform(c2 * dpr, s2 * dpr, -s2 * dpr, c2 * dpr, hx * dpr, hy * dpr); x.globalAlpha = shaftA * 0.55; x.drawImage(rays, (i % 2) * rw, (i % 4 >> 1) * rh, rw, rh, 0, -wd / 2, Ls, wd); }
       reset();
     }
     // ---- 手：不抬手，砸中後從掌根往指尖化成金光 ----
