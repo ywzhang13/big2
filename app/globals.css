@@ -437,7 +437,7 @@
   background: rgba(32, 23, 8, .92);
   border: 1px solid rgba(201, 169, 110, .75);
   box-shadow: 0 0 14px rgba(201, 169, 110, .35), 0 3px 10px rgba(0, 0, 0, .5);
-  animation: mjm-ffx 1s cubic-bezier(.2, .9, .25, 1) var(--ffx-delay, 0s) both;
+  animation: mjm-ffx var(--ffx-dur, 1.5s) cubic-bezier(.2, .9, .25, 1) var(--ffx-delay, 0s) both;
 }
 .mjm-flowerfx .tiles { display: flex; gap: 2px; align-items: center; }
 .mjm-flowerfx .lb {
@@ -448,6 +448,13 @@
 .mjm-flowerfx.desk { gap: 8px; padding: 6px 14px 6px 8px; }
 .mjm-flowerfx.desk .lb { font-size: 15px; }
 .mjm-flowerfx.desk .more { font-size: 13px; }
+/* 膠囊裡每張花各自延遲進場（老闆 2026-11-07：連續補花要看得出一張一張補，不要一次全部出現） */
+.mjm-flowerfx .ffx-tile { display: inline-flex; animation: mjm-ffx-tile .4s ease-out var(--ffx-tile-delay, 0s) both; }
+@keyframes mjm-ffx-tile {
+  0%   { opacity: 0; transform: scale(.4) translateY(4px); }
+  60%  { opacity: 1; transform: scale(1.12) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
 @keyframes mjm-ffx {
   0%   { opacity: 0; transform: translate(-50%, calc(-50% + 7px)) scale(.6); }
   12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }

@@ -1,13 +1,13 @@
 // 牌局節奏（老闆 2026-10-17）：補花、眼牌摸牌的特效播完之前，下一家不能摸牌、別人不能吃碰胡搶先；以伺服器時間為準。
-//   G1～G4 補花：摸到花等 1 秒；連續補兩張還是 1 秒；等待期間自己打牌、下一家摸牌都等到時間到才處理
-//   G5～G9 眼牌摸牌：不能胡自動打出 → 等 1.8 秒；期間下一家摸牌、別家碰都要等；能胡自動胡；眼牌又補到花 2.8 秒
+//   G1～G4 補花：摸到花等 FLOWER_FX_MS；連續補兩張要照張數加長（老闆 2026-11-07：看得出一張一張補）；等待期間自己打牌、下一家摸牌都等到時間到才處理
+//   G5～G9 眼牌摸牌：不能胡自動打出 → 等 1.8 秒；期間下一家摸牌、別家碰都要等；能胡自動胡；眼牌又補到花則兩段等待相加
 //   G10～G12 不卡住：沒有特效不用等；伺服器時間異常最多等 4 秒；開局多家補花依序
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { rooms } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
-import { paceClock, dealPaceMs, FLOWER_FX_MS, EYE_DRAW_MS, PACE_MAX_WAIT_MS } from "../../lib/mahjong/pace";
+import { paceClock, dealPaceMs, FLOWER_FX_MS, FLOWER_STAGGER_MS, EYE_DRAW_MS, PACE_MAX_WAIT_MS } from "../../lib/mahjong/pace";
 import type { MahjongGameState, Meld } from "../../lib/mahjong/gameState";
 import type { Tile, TileSuit } from "../../lib/mahjong/tiles";
 import { asSeat } from "../support/stub-auth";
@@ -60,13 +60,13 @@ function eq(a: unknown, e: unknown, msg: string) {
   now += 300;
   const tile = st().players[1].hand.find((x) => x.id === st().drawnTileId)!;
   const dis = await call(discard, { playerId: "p1", tileId: tile.id });
-  eq([dis.status, sleeps, now - t0, st().lastDiscard?.tile.display], [200, [700], 1000, "m5"], "G2 補花特效播放中（0.3 秒）自己打牌：伺服器等剩下的 0.7 秒才處理，打出成功");
+  eq([dis.status, sleeps, now - t0, st().lastDiscard?.tile.display], [200, [FLOWER_FX_MS - 300], FLOWER_FX_MS, "m5"], "G2 補花特效播放中（0.3 秒）自己打牌：伺服器等剩下的時間才處理，打出成功");
 }
 {
   setup({ turn: 1, wallTop: ["f2"], wallEnd: ["m5", "f3"] }); // 摸到 f2 → 牌尾補到 f3 → 再補 m5
   const t0 = now;
   await call(draw, { playerId: "p1" });
-  eq([st().players[1].flowers.length, st().paceUntil! - t0], [2, FLOWER_FX_MS], "G3 一次連續補到兩張花：同一家合成一顆膠囊，還是等 1 秒");
+  eq([st().players[1].flowers.length, st().paceUntil! - t0], [2, FLOWER_FX_MS + FLOWER_STAGGER_MS], "G3 一次連續補到兩張花：張數也要照張數錯開時間，不是只算一家（老闆 2026-11-07：要看得出一張一張補）");
 }
 {
   // 下一家：seat1 補花後馬上打出（等完 1 秒），seat2 在補花期間就搶著摸 → 要等
@@ -79,7 +79,7 @@ function eq(a: unknown, e: unknown, msg: string) {
   s.currentTurn = 2; s.hasDrawn = false; s.drawnTileId = undefined; s.lastDiscard = null; s.pendingActions = undefined;
   now = t0 + 100;
   const d2 = await call(draw, { playerId: "p2" });
-  eq([d2.status, sleeps, now - t0], [200, [900], 1000], "G4 補花特效播放中下一家就來摸牌：伺服器等到 1 秒播完才讓他摸");
+  eq([d2.status, sleeps, now - t0], [200, [FLOWER_FX_MS - 100], FLOWER_FX_MS], "G4 補花特效播放中下一家就來摸牌：伺服器等到播完才讓他摸");
 }
 
 // ---------------- 眼牌摸牌 ----------------
@@ -119,7 +119,7 @@ function eq(a: unknown, e: unknown, msg: string) {
   st().players[1].hand = tiles(H16);
   const t0 = now;
   const d = await call(draw, { playerId: "p1" });
-  eq([d.body.autoDiscarded?.display, st().paceUntil! - t0], ["m2", FLOWER_FX_MS + EYE_DRAW_MS], "G9 眼牌的人先補到花再摸到不能胡的牌：補花 1 秒＋翻牌 1.8 秒＝2.8 秒");
+  eq([d.body.autoDiscarded?.display, st().paceUntil! - t0], ["m2", FLOWER_FX_MS + EYE_DRAW_MS], "G9 眼牌的人先補到花再摸到不能胡的牌：補花等待＋翻牌等待兩段相加");
 }
 
 // ---------------- 不卡住 ----------------
@@ -138,8 +138,8 @@ function eq(a: unknown, e: unknown, msg: string) {
 }
 {
   const s = { players: [0, 1, 2, 3].map((i) => ({ flowers: i === 2 ? [] : [t("f1")] })) } as unknown as MahjongGameState;
-  eq([dealPaceMs(s), dealPaceMs({ players: [{ flowers: [] }] } as unknown as MahjongGameState)], [1240, 0],
-    "G12 開局 3 家起手有花：依序錯開 0.12 秒，共 1.24 秒才能打第一張；沒人有花不用等");
+  eq([dealPaceMs(s), dealPaceMs({ players: [{ flowers: [] }] } as unknown as MahjongGameState)], [FLOWER_FX_MS + FLOWER_STAGGER_MS * 2, 0],
+    "G12 開局 3 家起手有花：依序錯開，才能打第一張；沒人有花不用等");
 }
 
 {

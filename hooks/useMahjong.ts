@@ -8,6 +8,7 @@ import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
 import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
 import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
+import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
 
 import type { HandStats, Meld, ScoreResult, RoomSettings, RoundInfo, Settlement, WaitTile, WinFx } from "@/lib/mahjong/gameState";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -63,6 +64,8 @@ export interface MjFlowerFx {
   seat: number;
   tiles: Tile[];
   delay: number;
+  /** 膠囊要停留多久（含一張一張跳出來的時間），ms */
+  holdMs: number;
 }
 
 /** 慢慢摸牌時也照常即時處理的事件：摸到的牌本身、剩餘張數和補花、眼牌者看到的三家手牌 */
@@ -70,9 +73,10 @@ const SLOW_DRAW_PASS = new Set(["mj_draw_tile", "mj_draw", "mj_opponent_hands"])
 const SLOW_DRAW_MS = 800;
 /** 眼牌者摸牌：翻到正面後一律再停 1 秒，才自動打出或進結算 */
 const SLOW_DRAW_PAUSE_MS = 1000;
-/** 牌局節奏（和伺服器 lib/mahjong/pace.ts 同一組數字）：眼牌摸牌 1.8 秒、補花 1 秒 */
-const EYE_PACE_MS = 1800;
-const FLOWER_PACE_MS = 1000;
+/** 牌局節奏：直接拿伺服器 lib/mahjong/pace.ts 的數字，不要在這裡另外寫一份常數（老闆 2026-11-07 調過一次節奏，兩邊曾經對不齊） */
+const EYE_PACE_MS = EYE_DRAW_MS;
+const FLOWER_PACE_MS = FLOWER_FX_MS;
+const FLOWER_STAGGER_PACE_MS = FLOWER_STAGGER_MS;
 /** 輪詢看到的剩餘等待最多顯示這麼久（伺服器最多也只等 4 秒） */
 const PACE_NOTE_MAX_MS = 4000;
 /** 吃碰槓提示（小宜 2026-10-17 方向 C）播放時間 */
@@ -327,11 +331,16 @@ export function useMahjong(
   const playFlowerFx = useCallback((seat: number, tiles: Tile[], delay: number) => {
     const prevFx = flowerFxRef.current.get(seat);
     const left = (declareEndRef.current.get(seat) ?? 0) - Date.now();
+    const allTiles = prevFx ? [...prevFx.tiles, ...tiles] : tiles;
+    // 膠囊顯示多久：和伺服器的節奏（lib/mahjong/pace.ts paceMs）同一條公式——張數越多、顯示越久，才看得出一張一張補
+    // （老闆 2026-11-07：連續補花要一張一張來，不要一次全部跳出來）
+    const holdMs = FLOWER_PACE_MS + FLOWER_STAGGER_PACE_MS * Math.max(0, allTiles.length - 1);
     const fx: MjFlowerFx = {
       key: ++flowerKeyRef.current,
       seat,
-      tiles: prevFx ? [...prevFx.tiles, ...tiles] : tiles,
+      tiles: allTiles,
       delay: Math.max(delay, left > 0 ? left / 1000 : 0),
+      holdMs,
     };
     flowerFxRef.current.set(seat, fx);
     setState((prev) => ({ ...prev, flowerFx: [...prev.flowerFx.filter((f) => f.seat !== seat), fx] }));
@@ -340,12 +349,13 @@ export function useMahjong(
       flowerTimersRef.current.delete(seat);
       flowerFxRef.current.delete(seat);
       setState((prev) => ({ ...prev, flowerFx: prev.flowerFx.filter((f) => f.seat !== seat) }));
-    }, (fx.delay + 1) * 1000));
+    }, fx.delay * 1000 + holdMs));
   }, []);
   /** 廣播事件帶來某家的花牌：有新補的花就播。這家還沒記過（剛重新整理）就只記不播 */
   const noteFlowers = useCallback((seat: number, flowers: Tile[]) => {
     const added = flowerTrackerRef.current.onEvent(seat, flowers);
     if (added.length > 0) playFlowerFx(seat, added, 0);
+    return added; // 自己摸到花時 mj_draw_tile 要用這個順序，在手牌最右邊一張一張顯示（老闆 2026-11-07）
   }, [playFlowerFx]);
   useEffect(() => clearFlowerFx, [clearFlowerFx]);
 
@@ -740,7 +750,8 @@ export function useMahjong(
         const drawnTile = payload.tile as Tile;
         // 這一次眼牌摸牌已經由 API 回應處理過（可能動畫已播完、打出已套用）：整個略過
         if (drawnTile && !eyeDrawRef.current.claimEvent(drawnTile.id)) return;
-        if (flowers) noteFlowers(stateRef.current.mySeat, flowers);
+        // 自己新補到的花（依序）：FlowerTracker 的基線只有這裡會動（mj_draw 那邊自己這家會跳過），不會被搶走
+        const addedFlowers = flowers ? noteFlowers(stateRef.current.mySeat, flowers) : [];
         // 眼牌的人自己送出的摸牌：開始翻牌，翻開（0.8 秒）後再停 1 秒，才套用排隊中的自動打出／自動胡
         const slow = holdRef.current.on && drawnTile ? { tileId: drawnTile.id, win: canWin } : null;
         // API 回應已經先開始翻同一張：不重新計時
@@ -749,23 +760,40 @@ export function useMahjong(
           holdRef.current.slowTile = drawnTile.id;
         }
         console.log("[mj] mj_draw_tile", { drawnTileId: drawnTile?.id, drawnDisplay: drawnTile?.display, handLen: hand.length });
-        setState((prev) => ({
-          ...prev,
-          myHand: safeHand(hand),
-          availableActions: slow ? [] : actions, // 眼牌的人不用按：伺服器已經自動胡或打出
-          slowDraw: slow,
-          eyeOptions: eyeOptions ?? [],
-          eyeWithTing: eyeWithTing === true,
-          robKong: false,
-          hasDrawn: true,
-          drawnTileId: drawnTile?.id ?? null,
-          // Update flowers if provided (補花)
-          players: flowers
-            ? prev.players.map((p) =>
-                p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
-              )
-            : prev.players,
-        }));
+        const applyFinal = () => {
+          setState((prev) => ({
+            ...prev,
+            myHand: safeHand(hand),
+            availableActions: slow ? [] : actions, // 眼牌的人不用按：伺服器已經自動胡或打出
+            slowDraw: slow,
+            eyeOptions: eyeOptions ?? [],
+            eyeWithTing: eyeWithTing === true,
+            robKong: false,
+            hasDrawn: true,
+            drawnTileId: drawnTile?.id ?? null,
+            // Update flowers if provided (補花)
+            players: flowers
+              ? prev.players.map((p) =>
+                  p.id === myId ? { ...p, flowers, tileCount: hand.length } : p
+                )
+              : prev.players,
+          }));
+        };
+        if (addedFlowers.length > 0) {
+          // 老闆 2026-11-07：摸到花跟平常摸牌一樣，放在手牌最右邊空一格的位置，停一下再收進花牌那堆，
+          // 接著補牌，補到的牌也出現在同一個位置；補到好幾張花就一張一張來，不要一次全部跳出來。
+          // 伺服器已經把整串補花都結清，這裡用「前一手的手牌＋這張花」在前端重演一次給大家看
+          holdFor(addedFlowers.length * FLOWER_PACE_MS + (slow ? SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS : 0));
+          const base = stateRef.current.myHand;
+          const showFlower = (i: number) => {
+            const tile = addedFlowers[i];
+            setState((prev) => ({ ...prev, myHand: safeHand([...base, tile]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null }));
+            setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), FLOWER_PACE_MS);
+          };
+          showFlower(0);
+        } else {
+          applyFinal();
+        }
       });
 
       // --- mj_available_actions (private) ---
@@ -1031,15 +1059,20 @@ export function useMahjong(
       // 其他三家也要等他翻牌＋停 1 秒（補到花再加 1 秒）才看到打出和輪到下一家，所以接下來的事件先排隊。
       // 別家補花（不是眼牌者）：伺服器會等膠囊播完才處理下一個動作，這裡只顯示「補花中」
       const cur = stateRef.current;
-      const gotFlower = !!flowers && flowers.length > (cur.players.find((p) => p.seat === seat)?.flowers.length ?? 0);
+      const newFlowerN = Math.max(0, (flowers?.length ?? 0) - (cur.players.find((p) => p.seat === seat)?.flowers.length ?? 0));
+      const gotFlower = newFlowerN > 0;
+      // 這次補了幾張花，停留時間就跟著張數拉長（和伺服器 paceMs 同一條公式），不然連補兩張看起來還是只等一張的時間
+      const flowerPaceMs = gotFlower ? FLOWER_PACE_MS + FLOWER_STAGGER_PACE_MS * (newFlowerN - 1) : 0;
       if (seat !== cur.mySeat && cur.eyeSeats.includes(seat) && !document.hidden) {
-        const ms = EYE_PACE_MS + (gotFlower ? FLOWER_PACE_MS : 0);
+        const ms = EYE_PACE_MS + flowerPaceMs;
         holdFor(ms);
         showPace({ seat, kind: "eye" }, ms);
       } else if (gotFlower && seat !== cur.mySeat) {
-        showPace({ seat, kind: "flower" }, FLOWER_PACE_MS);
+        showPace({ seat, kind: "flower" }, flowerPaceMs);
       }
-      if (flowers) noteFlowers(seat, flowers);
+      // 自己補到花交給 mj_draw_tile 處理（那邊才看得到完整手牌，可以把花牌放進手牌最右邊）；
+      // 這裡先叫過一次會把 FlowerTracker 的基線吃掉，mj_draw_tile 那邊就看不到新補的花了，所以跳過自己
+      if (flowers && seat !== cur.mySeat) noteFlowers(seat, flowers);
       setState((prev) => ({
         ...prev,
         wallRemaining: wallCount,

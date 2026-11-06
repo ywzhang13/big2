@@ -3,8 +3,8 @@
 // 吃碰槓胡、pass 都在伺服器等到這個時間才處理（不拒絕，所以前端不用重送；斷線、重新整理也不會卡住，時間到就照常）。
 import type { MahjongGameState } from "./gameState";
 
-export const FLOWER_FX_MS = 1000;     // 補花膠囊（小宜規格：1 秒）
-export const FLOWER_STAGGER_MS = 120; // 同時多家補花：一家錯開 0.12 秒
+export const FLOWER_FX_MS = 1500;     // 補花膠囊（老闆 2026-11-07：太快看不出「摸到花、補花」的感覺，1 秒拉到 1.5 秒）
+export const FLOWER_STAGGER_MS = 450; // 同時多家、或一家連續補花：錯開時間拉長，才看得出一張一張來
 export const EYE_DRAW_MS = 1800;      // 眼牌摸牌：翻牌 0.8 秒＋停 1 秒
 export const PACE_MAX_WAIT_MS = 4000; // 保險：最多等這麼久（時鐘異常也不會卡住）
 
@@ -16,8 +16,10 @@ export const paceClock = {
 
 /** 這次動作要讓大家等多久：哪幾家多了花（補花），以及眼牌的人是不是剛摸牌 */
 export function paceMs(before: MahjongGameState, after: MahjongGameState, eyeDrawSeat?: number): number {
-  const flowerSeats = after.players.filter((p, i) => p.flowers.length > (before.players[i]?.flowers.length ?? 0)).length;
-  const flower = flowerSeats > 0 ? FLOWER_FX_MS + FLOWER_STAGGER_MS * (flowerSeats - 1) : 0;
+  // 總共多了幾張花：同一家一次補多張（例如連續補花）也要照張數錯開，不是只看有幾家多了花，
+  // 不然連補兩張花只會算成「一家」，停留時間和補一張一樣，畫面會看起來擠成一團（老闆 2026-11-07）
+  const flowerUnits = after.players.reduce((n, p, i) => n + Math.max(0, p.flowers.length - (before.players[i]?.flowers.length ?? 0)), 0);
+  const flower = flowerUnits > 0 ? FLOWER_FX_MS + FLOWER_STAGGER_MS * (flowerUnits - 1) : 0;
   const eye = eyeDrawSeat !== undefined && before.eyeSeats?.includes(eyeDrawSeat) ? EYE_DRAW_MS : 0;
   return flower + eye;
 }

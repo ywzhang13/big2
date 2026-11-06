@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { MjFlowerFx as Fx } from "@/hooks/useMahjong";
+import { FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
 import MjTile from "./MjTile";
 
 const GAP = 8; // 和名牌的距離
@@ -56,20 +57,28 @@ function Pill({ fx, mySeat, desk }: { fx: Fx; mySeat: number; desk: boolean }) {
   }, [fx.seat, mySeat]);
 
   const [tw, th] = desk ? [26, 35] : [18, 24];
+  const shown = fx.tiles.slice(0, 3);
   const more = fx.tiles.length - 3;
   return (
     <div
       ref={ref}
       className={`mjm-flowerfx ${desk ? "desk" : ""}`}
-      style={{ "--ffx-delay": `${fx.delay}s` } as React.CSSProperties}
+      style={{ "--ffx-delay": `${fx.delay}s`, "--ffx-dur": `${fx.holdMs / 1000}s` } as React.CSSProperties}
       data-flower-fx-seat={fx.seat}
       aria-hidden
     >
       <span className="tiles">
-        {fx.tiles.slice(0, 3).map((t) => (
-          <MjTile key={t.id} tile={t} width={tw} height={th} />
+        {/* 補到好幾張花時一張一張跳出來，不要一次全部出現（老闆 2026-11-07）：每張各自延遲進場，順序跟補到的順序一樣 */}
+        {shown.map((t, i) => (
+          <span key={t.id} className="ffx-tile" style={{ "--ffx-tile-delay": `${i * (FLOWER_STAGGER_MS / 1000)}s` } as React.CSSProperties}>
+            <MjTile tile={t} width={tw} height={th} />
+          </span>
         ))}
-        {more > 0 && <span className="more">+{more}</span>}
+        {more > 0 && (
+          <span className="more ffx-tile" style={{ "--ffx-tile-delay": `${shown.length * (FLOWER_STAGGER_MS / 1000)}s` } as React.CSSProperties}>
+            +{more}
+          </span>
+        )}
       </span>
       <span className="lb">補花</span>
     </div>

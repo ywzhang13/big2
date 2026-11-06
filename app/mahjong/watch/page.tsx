@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
+import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
@@ -133,6 +134,7 @@ export default function MahjongWatchPage() {
   // 回前景、網路恢復、斷線重連後再訂閱上都馬上拿一次
   // 伺服器每次都重新驗權：被收回、沒同意＝403 not_approved → 先清掉手牌，再顯示提示（規格 5.9，順序不可相反）；房間結束＝404／410
   const focusRef = useRef<SpectateView["focusDiscard"]>(null);
+  const viewRef = useRef<SpectateView | null>(null); // 目前畫面上顯示的那份（不是剛拿到還沒套用的），算節奏延遲用
   // 宣告眼牌的特效（老闆 2026-10-31：觀戰者也要看到，和玩家本人畫面一樣；做法照 hooks/useMahjong.ts 的 playDeclareFx）：
   //   收到公開事件 mj_eye_declared 就播；漏接的保險＝拿到的視角裡 eyeSeats 多了新座位就補播（剛進來的第一次不播舊的）；同一局每個座位只播一次
   const [declareFx, setDeclareFx] = useState<{ seat: number; both: boolean }[]>([]);
@@ -171,6 +173,7 @@ export default function MahjongWatchPage() {
       if (r.ok) {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
+        viewRef.current = v;
         syncDeclareFx(v.eyeSeats, v.tingSeats);
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
@@ -193,6 +196,9 @@ export default function MahjongWatchPage() {
       if (again) { again = false; void pull(); }
     };
     const soon = () => { if (timer) return; timer = setTimeout(() => { timer = null; void pull(); }, 150); };
+    // 慢慢摸牌的節奏（老闆 2026-11-07：觀戰者看被觀戰的人摸牌，節奏要跟那位玩家自己畫面上的一樣，不能比較快）：
+    // 延後拿最新狀態的時間，而不是另外做一套動畫；拿到的還是同一個 pull()，只是晚一點拿，畫面停留的時間自然就對上了
+    const soonAfter = (ms: number) => { if (timer) clearTimeout(timer); timer = setTimeout(() => { timer = null; void pull(); }, ms); };
     void pull();
     const poll = setInterval(() => { if (sync.due(Date.now(), document.hidden)) void pull(); }, POLL_TICK_MS);
     const onBack = () => { if (!document.hidden) void pull(); };
@@ -201,7 +207,18 @@ export default function MahjongWatchPage() {
     const supabase = getSupabase();
     const ch = supabase.channel(`mj-${room.code}`);
     ch.on("broadcast", { event: "*" }, (msg) => {
-      soon();
+      if (msg.event === "mj_draw") {
+        // 和玩家自己畫面上同一條公式（hooks/useMahjong.ts 的 mj_draw 處理）：那家正在眼牌、或剛好補到花，
+        // 就晚一點才去拿最新狀態，觀戰者才不會比本人還早看到摸牌結果
+        const { seat, flowers } = (msg.payload ?? {}) as { seat?: number; flowers?: { id: number }[] };
+        const cur = viewRef.current;
+        const prevN = cur?.players.find((p) => p.seat === seat)?.flowers.length ?? 0;
+        const newFlowerN = typeof seat === "number" ? Math.max(0, (flowers?.length ?? 0) - prevN) : 0;
+        const flowerMs = newFlowerN > 0 ? FLOWER_FX_MS + FLOWER_STAGGER_MS * (newFlowerN - 1) : 0;
+        const eyeMs = typeof seat === "number" && cur?.eyeSeats.includes(seat) ? EYE_DRAW_MS : 0;
+        const ms = eyeMs + flowerMs;
+        if (ms > 0) soonAfter(ms); else soon();
+      } else soon();
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
         if (typeof seat === "number") playDeclareFx(seat, ting === true);
