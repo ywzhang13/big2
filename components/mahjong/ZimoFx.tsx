@@ -92,6 +92,10 @@ let rulaiFaces: HTMLImageElement[] = [];
 export const zimoFxArtOk = (fx: ZimoFxNew) => artReady.get(fx) ?? Promise.resolve(false);
 /** 等單一畫布特效的圖最多這麼久（ms）：超過就退回金色自摸，不讓結算卡住 */
 export const CANVAS_ART_WAIT = 4000;
+let warmCv: HTMLCanvasElement | null = null;
+/** 解碼後立刻畫一次 2×2 的小圖：把瀏覽器「第一次畫這張圖」的成本（上傳材質）挪到預載階段，播放時才不會卡住（老闆 2026-11-06：如來神掌第一次播會卡）。
+ *  canvas 2D 的這個成本是跟著圖片本身快取、不是跟著目的地畫布，所以用哪張小畫布畫都一樣，播放時的正式畫布只會是「已經上傳過」。 */
+const warmUpload = (img: HTMLImageElement) => { warmCv ??= document.createElement("canvas"); warmCv.width = warmCv.height = 2; warmCv.getContext("2d")?.drawImage(img, 0, 0, 2, 2); };
 export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
   let p = ready.get(fx);
   if (!p) {
@@ -102,7 +106,7 @@ export function preloadZimoFx(fx: ZimoFxNew): Promise<boolean> {
       const i = new Image();
       i.src = `${ART}/${fx}/${f}.webp`;
       imgs.push(i);
-      return i.decode().then(() => true, () => false);
+      return i.decode().then(() => { if (fx === "rulai") warmUpload(i); return true; }, () => false);
     })).then((ok) => ok.every(Boolean));
     artReady.set(fx, art);
     // 這次載不到（網路一時不好）：不留結果，下一手重新下載
