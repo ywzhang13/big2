@@ -250,7 +250,7 @@ export class RulaiCanvas {
     // ---- 雲（蓋住手的遠端，手像是從雲裡伸出來）；雲只有半邊，鏡射畫另一半 ----
     if (cFade > 0) {
       const cw = W * 0.68 * (1 + blast * 0.15), ch = (cw * heightOf(cloud)) / widthOf(cloud), // 照原圖比例，不拉伸
-        ox = W * 0.01 + (W * 0.15 + W * 0.3 * blast) * open, oy = lerp(-ch, 0, cIn) - blast * H * 0.22, cx = this.hx;
+        ox = W * 0.01 + (W * 0.15 + W * 0.3 * blast) * open, oy = lerp(-ch, 0, cIn) - blast * H * 0.22, cx = this.slant ? W / 2 : this.hx; // 左右家：雲留在兩個上角，手從胡牌者那側的雲後面伸出來
       x.globalAlpha = cFade * (1 - blast * 0.55); x.drawImage(cloud, cx - ox - cw, oy, cw, ch);
       x.setTransform(-dpr, 0, 0, dpr, (cx + ox) * dpr, 0); x.drawImage(cloud, -cw, oy, cw, ch); reset();
     }
