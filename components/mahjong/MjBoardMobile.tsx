@@ -691,7 +691,7 @@ export default function MjBoardMobile({
         <div className="mjm-hand" data-mj-myhand>
           <div className="main">{mainTiles.map(handTile)}</div>
           {drawnTile && (
-            <div className="drawn">
+            <div className="drawn" style={{ position: "relative" }}>
               {flowerLabel && <span className="mj-flower-label" data-flower-label>補花</span>}
               {slowDraw?.tileId === drawnTile.id ? (
                 <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} width="var(--tile-hand-w)" height="var(--tile-hand-h)" />

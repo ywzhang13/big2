@@ -127,7 +127,7 @@ export default function MjHand({ tiles, canDiscard, onDiscard, drawnTileId, eyeA
         </div>
         {/* Drawn tile separated */}
         {drawnTile && (
-          <div className="relative ml-3 pl-3 border-l border-white/10" style={dim(drawnTile)} data-chi-forbidden={chiBlocked(drawnTile) ? "1" : undefined}>
+          <div className="relative ml-3 pl-3 border-l border-white/10" style={{ position: "relative", ...dim(drawnTile) }} data-chi-forbidden={chiBlocked(drawnTile) ? "1" : undefined}>
             {flowerLabel && <span className="mj-flower-label" data-flower-label>補花</span>}
             {slowDraw?.tileId === drawnTile.id ? (
               <SlowDrawTile key={drawnTile.id} tile={drawnTile} win={slowDraw.win} />

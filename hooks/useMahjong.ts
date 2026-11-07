@@ -592,7 +592,10 @@ export function useMahjong(
       const pendingAddKong = gs.pendingAddKong ?? null;
       const pendingFlowerRob = gs.pendingFlowerRob ?? null;
 
-      flowerTrackerRef.current.onPoll(gs.players, (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined);
+      // 自己的花只靠 mj_draw_tile 這個即時事件來播（見下面 bindPrivateEvents 裡的註解）：
+      // 這裡的輪詢如果連自己也記，會在事件送達前就把新花記成「已知」，事件來了反而讀不到新花，動畫整個不會播
+      // （老闆 2026-11-08 查到：手牌裡完全看不到補花，根因就是這個輪詢和即時事件的賽跑，不是只有「補花」字樣沒做對）
+      flowerTrackerRef.current.onPoll(gs.players.filter((p) => p.seat !== mySeat), (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined);
       setState((prev) => ({
         ...prev,
         status: gs.status as MjClientState["status"],
