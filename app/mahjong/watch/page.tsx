@@ -291,7 +291,8 @@ export default function MahjongWatchPage() {
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
       drawnTileId: v.drawnTileId, slowDraw: null, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
-      spectating: true, // 老闆 2026-11-08：mySeat 是被觀戰的那家，暗槓顯示要比照別家全部面朝下，不能比照本人看到翻開那張
+      // 觀戰者看被觀戰的人（老闆 2026-11-08 定案）：暗槓要跟本人看到的一樣，最左邊一張翻開；
+      // mySeat 就是被觀戰的那家，自然走同一條 MjBoard／MjBoardMobile 的「自己」渲染邏輯，不用特別標記
     } : null;
     const roundLabel = v?.roundInfo ? `${WIND[(v.roundInfo.currentRound - 1) % 4]}風圈 第${v.roundInfo.currentGame}局` : undefined;
     return (

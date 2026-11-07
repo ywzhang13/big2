@@ -62,8 +62,6 @@ export interface MjBoardProps {
   chatButton?: React.ReactNode;
   /** 自己補花：花先出現在摸牌格，停一下再冒出「補花」字樣，才補下一張（老闆 2026-11-07 第三次更正） */
   flowerLabel?: boolean;
-  /** 觀戰者看別人（老闆 2026-11-08）：mySeat 其實是被觀戰的那家，不是真的自己，暗槓顯示要跟別家一樣全部面朝下，不能比照本人多看到最左邊那張 */
-  spectating?: boolean;
 }
 
 /** 已宣告地聽的標示（小宜規格的聽牌標）；pop＝宣告特效期間彈入 */
@@ -469,7 +467,6 @@ export default function MjBoard({
   dealerConsecutive,
   chatButton,
   flowerLabel,
-  spectating,
 }: MjBoardProps) {
   const getOpponent = (offset: number) => {
     const seat = (mySeat + offset) % 4;
@@ -871,11 +868,11 @@ export default function MjBoard({
             <div className="flex gap-2 items-center" data-claim-seat={mySeat}>
               {me.revealed.map((meld, mi) => (
                 <div key={mi} className="flex gap-[1px]">
-                  {/* 自己的暗槓（老闆 2026-11-08）：最左邊那張翻開，右邊三張蓋牌，一看就知道是暗槓；
+                  {/* 自己的暗槓（老闆 2026-11-08 定案）：最左邊那張翻開，右邊三張蓋牌，一看就知道是暗槓；
                       明槓、加槓不受影響，照舊全部面朝上。其他家 PlayerPanel 則全部面朝下（別家視角不變）；
-                      觀戰者看別人（spectating）維持原本全部面朝上，不要比照本人多看到翻開那張 */}
+                      觀戰者看被觀戰的人，要跟本人看到的一樣（mySeat 就是被觀戰的那家，走同一條渲染邏輯） */}
                   {meld.tiles.map((t, ti) => (
-                    <MjTile key={t.id} tile={t} width={20} height={28} faceDown={!spectating && meld.type === "concealed_kong" && ti > 0} matchable />
+                    <MjTile key={t.id} tile={t} width={20} height={28} faceDown={meld.type === "concealed_kong" && ti > 0} matchable />
                   ))}
                   <MjMeldArrow meld={meld} owner={mySeat} mySeat={mySeat} size={12} />
                 </div>

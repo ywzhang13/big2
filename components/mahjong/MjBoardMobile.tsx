@@ -62,7 +62,7 @@ function DealerTag({ player, consecutive, withLa, short }: { player: MjPlayer; c
 
 /** 吃碰槓（花改成 MjFlowerTag 收合）。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
  *  rot＝左右家：每張包一格、由 CSS 轉 ±90° 朝向主人，每一副自己一直列，放在靠海底那一欄（沒有吃碰槓也留著，當作和金框的間距） */
-function Melds({ revealed, w, h, mine, reveal, rot, seat, mySeat, spectating }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean; seat: number; mySeat: number; spectating?: boolean }) {
+function Melds({ revealed, w, h, mine, reveal, rot, seat, mySeat }: { revealed: Meld[]; w: number; h: number; mine?: boolean; reveal?: boolean; rot?: boolean; seat: number; mySeat: number }) {
   // data-claim-seat：吃碰槓提示（MjClaimFx）從這裡量剛吃碰的那一副在哪
   if (revealed.length === 0) return rot ? <div className="mjm-meldcol" data-claim-seat={seat} /> : null;
   const tile = (t: Tile, faceDown: boolean) =>
@@ -76,10 +76,10 @@ function Melds({ revealed, w, h, mine, reveal, rot, seat, mySeat, spectating }: 
       {revealed.map((meld, mi) => (
         <div key={mi} className="mjm-meld">
           {meld.tiles.map((t, ti) =>
-            // 自己的暗槓（老闆 2026-11-08）：最左邊那張翻開給自己看，右邊三張蓋牌，一看就知道是暗槓；
-            // 別家維持原本的「全部面朝下、眼牌才翻開」不變；觀戰者看自己（spectating）維持原本全部面朝上，
-            // 不要比照本人多看到翻開那張
-            tile(t, mine ? !spectating && meld.type === "concealed_kong" && ti > 0 : !reveal && meld.type === "concealed_kong")
+            // 自己的暗槓（老闆 2026-11-08 定案）：最左邊那張翻開、右邊三張蓋牌，一看就知道是暗槓；
+            // 別家維持原本的「全部面朝下、眼牌才翻開」不變；觀戰者看被觀戰的人，要跟本人看到的一樣
+            // （mySeat 就是被觀戰的那家，走同一條 mine 分支，不用另外判斷是不是觀戰）
+            tile(t, mine ? meld.type === "concealed_kong" && ti > 0 : !reveal && meld.type === "concealed_kong")
           )}
           <MjMeldArrow meld={meld} owner={seat} mySeat={mySeat} size={9} vertical={rot} />
         </div>
@@ -391,7 +391,6 @@ export default function MjBoardMobile({
   leaveLabel,
   spectateMenu,
   flowerLabel,
-  spectating,
 }: MjBoardMobileProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // 眼牌：記住是對哪一組選項按下的，換回合自動失效
@@ -688,7 +687,7 @@ export default function MjBoardMobile({
             <SpectateBadge count={me?.viewerCount} />
             {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
           </div>
-          {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} mySeat={mySeat} spectating={spectating} />}
+          {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} mySeat={mySeat} />}
           <div className="mjm-me-r">
             {chatButton}
             <span className="cnt">{myHand.length} 張</span>
