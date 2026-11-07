@@ -121,6 +121,9 @@ export const getUnsettled = () => call<{ price: number; total: number; players: 
 /** 一個人的場次：unpaid＝打完、未結清；playing＝還在打（不能結清）；paid＝最近 30 天結清的 */
 export const getPlayerMatches = (userId: string) =>
   call<{ price: number; unpaid: SettleMatch[]; playing: SettleMatch[]; paid: SettledMatch[]; totalDue: number }>("GET", `/api/mahjong/admin/settlements?userId=${encodeURIComponent(userId)}`);
+// ---- 玩家斗內總覽（老闆 2026-11-08，接續〈斗內次數調查報告〉建議②）：查單一帳號，不用自己比對對戰紀錄 ----
+export interface DonateOverview { totalHands: number; afterCutoffMatches: number; settledMatches: number; unsettledMatches: number; due: number; isOwner: boolean }
+export const getDonateOverview = (userId: string) => call<DonateOverview>("GET", `/api/mahjong/admin/donate-overview?userId=${encodeURIComponent(userId)}`);
 /** 結清：amount＝老闆實收（≥ 這幾場應給合計）；409 short 附 { due, amount, shortBy } */
 export const settleMatches = (userId: string, roomIds: string[], amount: number) =>
   call<{ batchId: string; due: number; amount: number; tip: number; rooms: SettleRoom[] }>("POST", "/api/mahjong/admin/settlements", { userId, roomIds, amount });

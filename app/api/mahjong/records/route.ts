@@ -5,6 +5,8 @@
 //   selfDraws：有每把紀錄就用它（遊客也算）；沒有就照舊用自摸紀錄 mj_zimo_wins 算（只有 LINE 帳號，遊客 0）
 //   myDue＝我這場 11/1 00:00 之後的自摸 { zimo, due, settled }，沒有就是 null；老闆帳號不算斗內，一律 null
 //   （原本的 zimo、zimoHands 已拿掉）
+// players[].settled（老闆 2026-11-08：斗內次數顯示得更清楚）：這場「他」11/1 後的自摸有沒有收過——
+//   true＝已結清、false＝未結清、null＝不適用（這場他沒有 11/1 後的自摸、是遊客沒綁帳號、或是老闆帳號本來就不算斗內）
 import { getAuthUser } from "@/lib/auth";
 import { notLoggedIn } from "@/lib/mahjong/access";
 import { listMyMahjongMatches, summarizeMyMahjong } from "@/lib/records/store";
@@ -20,12 +22,15 @@ async function withHandStats(userId: string, items: MyMatch[]) {
   let wins: Awaited<ReturnType<typeof matchZimo>> = [], unsettled: Awaited<ReturnType<typeof unsettledMatches>> = [], stats: Awaited<ReturnType<typeof matchHandStats>> = [];
   let ok = true;
   try {
-    [wins, unsettled, stats] = await Promise.all([matchZimo(roomIds), unsettledMatches(userId), matchHandStats(roomIds)]);
+    // unsettledMatches(null)＝所有人：這場每一位玩家（不只我）結清了沒，都要用這份判斷
+    [wins, unsettled, stats] = await Promise.all([matchZimo(roomIds), unsettledMatches(null), matchHandStats(roomIds)]);
   } catch (err) {
     ok = false;
     console.error("[records] 胡牌／自摸資料查詢失敗：", err instanceof Error ? err.message : err);
   }
-  const open = new Set(unsettled.map((u) => u.roomId));
+  const open = new Set(unsettled.filter((u) => u.userId === userId).map((u) => u.roomId)); // 我自己未結清的場（myDue 用）
+  const unsettledPair = new Set(unsettled.map((u) => `${u.roomId}|${u.userId}`)); // 任何人未結清的（房, 帳號）
+  const afterCutoffPair = new Set(wins.filter((w) => w.wonAt > CUTOFF).map((w) => `${w.roomId}|${w.userId}`)); // 任何人這場 11/1 後有自摸的（房, 帳號）
   return items.map(({ roomId, seatUserIds, players, ...m }) => {
     const seatOf = new Map(Object.entries(seatUserIds).filter(([, u]) => u).map(([seat, u]) => [u as string, Number(seat)]));
     const mine = wins.filter((w) => w.roomId === roomId && seatOf.has(w.userId));
@@ -36,10 +41,15 @@ async function withHandStats(userId: string, items: MyMatch[]) {
       ...m,
       players: players.map((p) => {
         const s = complete ? st.find((x) => x.seat === p.seat) : undefined;
+        const pUserId = seatUserIds[p.seat];
+        const settled = !ok || !pUserId || isOwner(pUserId) || !afterCutoffPair.has(`${roomId}|${pUserId}`)
+          ? null
+          : !unsettledPair.has(`${roomId}|${pUserId}`);
         return { ...p,
           wins: s ? s.wins : null,
           selfDraws: s ? s.selfDraws : ok ? mine.filter((w) => seatOf.get(w.userId) === p.seat).length : null,
-          dealIns: s ? s.dealIns : null };
+          dealIns: s ? s.dealIns : null,
+          settled };
       }),
       myDue: due > 0 && !isOwner(userId) ? { zimo: due, due: due * ZIMO_PRICE, settled: !open.has(roomId) } : null,
     };

@@ -213,8 +213,8 @@ let roomId = "", code = "";
     [200, [["1002", "dissolved", -50]], { matches: 2, totalScore: 250 }, "string"], "C2 只回我打過的麻將場次（新到舊），附場數和累計總輸贏；別人的場次、大老二都不算");
   const item = p1.body.items[0];
   eq([item.players.map((p: { seat: number; isMe: boolean }) => [p.seat, p.isMe]), Object.keys(item).sort(), Object.keys(item.players[0]).sort()],
-    [[[0, false], [1, true], [2, false], [3, false]], ["basePoints", "endReason", "endedAt", "fanPoints", "handsPlayed", "id", "myDue", "myScore", "players", "roomCode", "totalRounds"], ["dealIns", "isMe", "playerName", "seat", "selfDraws", "totalScore", "wins"]],
-    "C3 四家照座位排、用 isMe 標出自己；回應沒有玩家 id、帳號 id、房間 id 欄位（myDue、每人 wins／selfDraws／dealIns 2026-11-02 加）");
+    [[[0, false], [1, true], [2, false], [3, false]], ["basePoints", "endReason", "endedAt", "fanPoints", "handsPlayed", "id", "myDue", "myScore", "players", "roomCode", "totalRounds"], ["dealIns", "isMe", "playerName", "seat", "selfDraws", "settled", "totalScore", "wins"]],
+    "C3 四家照座位排、用 isMe 標出自己；回應沒有玩家 id、帳號 id、房間 id 欄位（myDue、每人 wins／selfDraws／dealIns 2026-11-02 加；settled 2026-11-08 加）");
   const raw = JSON.stringify(p1.body);
   eq([U.some((u) => raw.includes(u)), raw.includes("pid-")], [false, false], "C4 回應裡完全不會出現任何人的帳號 id 或玩家 id");
   const p2 = await get(recordsGet, `http://x/api/mahjong/records?limit=1&cursor=${encodeURIComponent(p1.body.nextCursor)}`, "tok0");

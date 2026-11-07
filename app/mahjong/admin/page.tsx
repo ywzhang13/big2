@@ -8,14 +8,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import {
-  addDonation, findPlayers, fmtTaipei, fxName, getAudit, getDonations, getPlayerFx, getPlayerMatches, getUnsettled, grantFx, nowTaipeiLocal,
+  addDonation, findPlayers, fmtTaipei, fxName, getAudit, getDonateOverview, getDonations, getPlayerFx, getPlayerMatches, getUnsettled, grantFx, nowTaipeiLocal,
   payCheck, revokeBatch, revokeFx, settleMatches, taipeiIso, voidDonation, ZIMO_FX_LIST,
-  type AdminPlayer, type AuditRecord, type DonationRecord, type PlayerFx, type SettledMatch, type SettleMatch, type UnsettledPlayer,
+  type AdminPlayer, type AuditRecord, type DonationRecord, type DonateOverview, type PlayerFx, type SettledMatch, type SettleMatch, type UnsettledPlayer,
 } from "@/lib/mahjong/zimoFxClient";
 import { FxsAvatar } from "@/components/mahjong/fxshop/FxsAvatar";
 import "@/components/mahjong/fxshop/fxshop.css";
 
-type Tab = "donations" | "unpaid" | "fx" | "audit";
+type Tab = "donations" | "unpaid" | "overview" | "fx" | "audit";
 type Scope = "week" | "all";
 const ERR: Record<string, string> = {
   bad_request: "資料有誤", unknown_player: "找不到這位玩家", owner_permanent: "老闆帳號永久全開", not_voidable: "這筆已作廢", forbidden: "沒有權限", not_logged_in: "沒有權限",
@@ -56,12 +56,12 @@ export default function MahjongAdminPage() {
           {back}
           <h1>斗內後台</h1>
           <div className="fxs-tabs" role="tablist">
-            {([["donations", "斗內紀錄"], ["unpaid", "未結清"], ["fx", "玩家特效"], ["audit", "操作紀錄"]] as const).map(([id, label]) => (
+            {([["donations", "斗內紀錄"], ["unpaid", "未結清"], ["overview", "斗內總覽"], ["fx", "玩家特效"], ["audit", "操作紀錄"]] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} data-admin-tab={id} onClick={() => setTab(id)}>{label}</button>
             ))}
           </div>
         </div>
-        {tab === "donations" ? <DonationsTab /> : tab === "unpaid" ? <UnpaidTab /> : tab === "fx" ? <FxTab /> : <AuditTab />}
+        {tab === "donations" ? <DonationsTab /> : tab === "unpaid" ? <UnpaidTab /> : tab === "overview" ? <OverviewTab /> : tab === "fx" ? <FxTab /> : <AuditTab />}
       </div>
     </main>
   );
@@ -315,6 +315,40 @@ function UnpaidTab() {
         </div>
       )}
     </>
+  );
+}
+
+/** 玩家斗內總覽（老闆 2026-11-08，接續〈斗內次數調查報告-2026-11-08〉建議②）：查一個人，不用自己對照對戰紀錄 */
+function OverviewTab() {
+  const [p, setP] = useState<AdminPlayer | null>(null);
+  const [data, setData] = useState<DonateOverview | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    if (!p) { setData(null); setErr(""); return; }
+    let alive = true;
+    setData(null); setErr("");
+    void getDonateOverview(p.userId).then((r) => {
+      if (!alive) return;
+      if (!r.ok) { setErr(errText(r.error)); return; }
+      setData(r.data);
+    });
+    return () => { alive = false; };
+  }, [p]);
+  return (
+    <div className="fxs-card" data-admin-overview>
+      <div className="full">{p ? <Chosen p={p} onClear={() => setP(null)} /> : <PlayerSearch onPick={setP} />}</div>
+      {p && !data && !err && <span className="fxs-muted">讀取中…</span>}
+      {err && <div className="fxs-err">{err}</div>}
+      {data && (
+        <div className="fxs-overview-grid" data-admin-overview-result>
+          <div className="cell"><span className="fxs-muted">自摸總次數</span><b data-k="totalHands">{data.totalHands}</b></div>
+          <div className="cell"><span className="fxs-muted">11/1 後打過</span><b data-k="afterCutoffMatches">{data.afterCutoffMatches} 場</b></div>
+          <div className="cell"><span className="fxs-muted">已結清</span><b data-k="settledMatches">{data.settledMatches} 場</b></div>
+          <div className="cell"><span className="fxs-muted">未結清</span><b data-k="unsettledMatches">{data.unsettledMatches} 場</b></div>
+          <div className="cell due"><span className="fxs-muted">還欠</span><b data-k="due">{data.isOwner ? "—" : nt(data.due)}</b></div>
+        </div>
+      )}
+    </div>
   );
 }
 
