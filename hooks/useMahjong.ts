@@ -658,6 +658,11 @@ export function useMahjong(
         robFlower: pendingFlowerRob != null && pendingFlowerRob.robberSeat === mySeat,
         // 輪到我且剛摸完牌：重新整理後把摸進的那張分開顯示
         drawnTileId: gs.myDrawnTileId ?? prev.drawnTileId,
+        // 審伯 2026-11-08 複審必修：這裡拿到的是權威快照，不是靠事件一路推出來的；漏收 mj_discard／mj_action
+        // 的話，別家手牌欄的摸牌空格可能停在錯的座位上。快照沒有「誰剛摸牌」這個欄位，沒辦法分辨，
+        // 所以一律歸零——之後只靠新的 mj_draw 把它設回真正摸牌的人，最多是正在等出牌的那家暫時貼緊，
+        // 不會把空格錯留在別人身上
+        drawnSeat: null,
         wallRemaining: gs.wallCount,
         hasDrawn: gs.hasDrawn,
         // 請求送出時我的動作還在路上，或送出後已經有新進展（例如我按了過、上家已經打牌）：這份的按鈕是舊的，保留畫面上的。

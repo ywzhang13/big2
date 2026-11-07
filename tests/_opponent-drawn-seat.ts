@@ -17,6 +17,9 @@ const onDiscard = (s: MiniState, seat: number): MiniState => ({ ...s, drawnSeat:
 const onAction = (s: MiniState, seat: number): MiniState => ({ ...s, drawnSeat: s.drawnSeat === seat ? null : s.drawnSeat });
 /** 對應 mj_game_start handler：新局開始，莊家的 17 張是發的不是摸的 */
 const onGameStart = (): MiniState => ({ drawnSeat: null });
+/** 對應 fetchState 套用權威快照那次 setState（審伯複審必修）：快照沒有「誰剛摸牌」這個欄位，
+ *  沒辦法分辨是不是漏接了 mj_discard／mj_action，一律歸零，之後只靠新的 mj_draw 設回來 */
+const onSnapshot = (s: MiniState): MiniState => ({ ...s, drawnSeat: null });
 
 const A = 0, B = 1, C = 2, D = 3; // 四個座位
 
@@ -86,6 +89,18 @@ const A = 0, B = 1, C = 2, D = 3; // 四個座位
   check(s.drawnSeat !== C && s.drawnSeat !== D, "補花完成後：沒摸牌的 C、D 不會被誤判成摸牌");
   s = onDiscard(s, A); // A 打出
   check(s.drawnSeat === null, "A 打出補花後補到的牌：drawnSeat 收回，貼緊");
+}
+
+// 情境 7：套用權威快照（重新整理、切回前景、中途進房、觀戰）——審伯複審必修：先讓某家處在
+// 「剛摸牌」狀態，套用快照後這個狀態一定要被清掉，不能殘留給錯的座位
+{
+  let s: MiniState = onGameStart();
+  s = onDraw(s, B); // B 摸牌，drawnSeat=B（故意先設成非空，確認快照真的會歸零，不是本來就是 null）
+  check(s.drawnSeat === B, "套用快照前：drawnSeat 先是 B（確保接下來不是巧合地剛好是 null）");
+  s = onSnapshot(s); // fetchState 拿到權威快照（可能漏收了 B 打牌或被吃碰的事件）
+  check(s.drawnSeat === null, "套用權威快照後：drawnSeat 一律歸零，不會把空格錯留在 B 身上");
+  s = onDraw(s, C); // 快照之後，真的收到 C 摸牌的事件
+  check(s.drawnSeat === C, "快照之後新的 mj_draw：drawnSeat 正確設回真正摸牌的 C");
 }
 
 if (failed) process.exit(1);
