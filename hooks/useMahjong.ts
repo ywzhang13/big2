@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { tileKey } from "@/lib/mahjong/tiles";
+import { tileKey, sortTiles } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
 import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
@@ -805,7 +805,11 @@ export function useMahjong(
             const shown = addedFlowers.slice(0, i + 1);
             const shownIds = new Set(shown.map((t) => t.id));
             const dedupedBase = base0.filter((t) => !shownIds.has(t.id));
-            setState((prev) => ({ ...prev, myHand: safeHand([...dedupedBase, ...shown]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false }));
+            // 老闆 2026-11-08 再查到：safeHand 本來是防呆用的，會把 suit "f" 的花整張濾掉——
+            // 這一步補花動畫就是故意要讓花暫時出現在手牌裡，用 safeHand 反而直接把剛塞進去的花
+            // 濾光了，摸牌格的 drawnTileId 找不到人、退回去顯示手牌最後一張（才會看到白板、西風這些
+            // 不相干的牌）。這裡改用 sortTiles（只排序、不濾花），applyFinal 那邊維持用 safeHand
+            setState((prev) => ({ ...prev, myHand: sortTiles([...dedupedBase, ...shown]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false }));
             setTimeout(() => {
               setState((prev) => ({ ...prev, flowerLabel: true }));
               setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), half);
