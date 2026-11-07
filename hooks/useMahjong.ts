@@ -171,6 +171,8 @@ export interface MjClientState {
   flowerFx: MjFlowerFx[];
   // 自己補花（老闆 2026-11-07 第三次更正）：摸牌格那張花上面要不要冒出「補花」字樣
   flowerLabel: boolean;
+  // 補花動畫播完前（老闆 2026-11-08 第三次更正）：true 期間花不能被點、不能打出，見 needsDiscard
+  flowerAnimating: boolean;
   // 眼牌後慢慢摸牌：只有眼牌的人自己看得到；tileId＝正在翻的那張，win＝翻開是胡牌（閃金框）
   slowDraw: { tileId: number; win: boolean } | null;
   winner?: MjWinner & { allHands?: MjHandReveal[] };
@@ -263,6 +265,7 @@ export function useMahjong(
     declareFx: [],
     flowerFx: [],
     flowerLabel: false,
+    flowerAnimating: false,
     slowDraw: null,
     wallRemaining: 0,
     hostId: "",
@@ -779,6 +782,7 @@ export function useMahjong(
             hasDrawn: true,
             drawnTileId: drawnTile?.id ?? null,
             flowerLabel: false,
+            flowerAnimating: false,
             // Update flowers if provided (補花)
             players: flowers
               ? prev.players.map((p) =>
@@ -797,19 +801,18 @@ export function useMahjong(
           const showFlower = (i: number) => {
             const tile = addedFlowers[i];
             // 老闆 2026-11-08 查到：牌 id 每局會重複使用，base0 原本的手牌裡可能剛好有張舊 id
-            // 跟這張新補的花撞號；之前固定用同一份 base0 疊上去，摸牌格的 drawnTileId 用 id 去
-            // 手牌裡找，找到的反而是撞號的那張舊牌（畫面看起來像白板之類的），不是真的花。
-            // 這裡先把「已經要顯示成花」的那幾個 id 從 base0 濾掉，保證陣列裡這個 id 只有一個、
-            // 指到的一定是這張花；同時用 shown（到目前這張為止的所有花）取代單一 tile，連續補花
-            // 才會一張一張疊上去，不會每張都蓋掉前一張
-            const shown = addedFlowers.slice(0, i + 1);
-            const shownIds = new Set(shown.map((t) => t.id));
-            const dedupedBase = base0.filter((t) => !shownIds.has(t.id));
+            // 跟這張新補的花撞號；用 id 去手牌裡找，找到的反而是撞號的那張舊牌（畫面看起來像白板之類的），
+            // 不是真的花。這裡把這張花的 id 從 base0 濾掉再疊上「只有這一張」花——上一張花這時候已經算進
+            // 花數、不留在手牌主列，張數才會跟正常摸一張牌一樣只多一張，不會連續補花時越疊越多（老闆 2026-11-08 第二次更正）
+            const dedupedBase = base0.filter((t) => t.id !== tile.id);
             // 老闆 2026-11-08 再查到：safeHand 本來是防呆用的，會把 suit "f" 的花整張濾掉——
             // 這一步補花動畫就是故意要讓花暫時出現在手牌裡，用 safeHand 反而直接把剛塞進去的花
             // 濾光了，摸牌格的 drawnTileId 找不到人、退回去顯示手牌最後一張（才會看到白板、西風這些
             // 不相干的牌）。這裡改用 sortTiles（只排序、不濾花），applyFinal 那邊維持用 safeHand
-            setState((prev) => ({ ...prev, myHand: sortTiles([...dedupedBase, ...shown]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false }));
+            // flowerAnimating：動畫播完前花不能被點、不能打出（見下面 needsDiscard），其他牌照舊
+            // 要等 applyFinal 真正定案才能打，節奏跟原本「補花完才可出牌」一樣，不會因為先設 hasDrawn
+            // 就被提早點開
+            setState((prev) => ({ ...prev, myHand: sortTiles([...dedupedBase, tile]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false, flowerAnimating: true }));
             setTimeout(() => {
               setState((prev) => ({ ...prev, flowerLabel: true }));
               setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), half);
@@ -1033,6 +1036,7 @@ export function useMahjong(
         declareFx: [],
         flowerFx: [],
         flowerLabel: false,
+        flowerAnimating: false,
         opponentHands: null,
         // 座位頻道的發牌（含莊家的眼牌選項）可能先到，先到就保留
         eyeOptions: dealtThisGameRef.current ? prev.eyeOptions : [],
@@ -1835,7 +1839,8 @@ export function useMahjong(
     state.status === "playing" &&
     !state.pendingAddKong &&
     !state.pendingFlowerRob &&
-    !state.slowDraw; // 慢慢摸牌中：伺服器已經處理完，不能再點牌
+    !state.slowDraw && // 慢慢摸牌中：伺服器已經處理完，不能再點牌
+    !state.flowerAnimating; // 補花動畫播完前（老闆 2026-11-08 第三次更正）：花不能被點、不能打出，其他牌也要等動畫播完、節奏跟原本「補花完才可出牌」一樣
 
   // Auto-draw: when it's my turn and I need to draw, do it automatically
   // BUT NOT if there are pending actions OR I just discarded (pending
