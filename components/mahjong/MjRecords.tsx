@@ -19,6 +19,8 @@ interface RecordPlayer {
   wins?: number | null;
   selfDraws?: number | null;
   dealIns?: number | null;
+  /** 他這場 11/1 後的自摸有沒有收過（老闆 2026-11-08）：true＝已結清、false＝未結清、null／undefined＝不適用（沒有 11/1 後自摸、或是老闆帳號） */
+  settled?: boolean | null;
 }
 
 interface RecordItem {
@@ -130,7 +132,13 @@ function RecordDetail({ r, onClose }: { r: RecordItem; onClose: () => void }) {
                 <tr key={p.seat} className={p.isMe ? "me" : ""} data-record-stat-seat={p.seat}>
                   <th scope="row">{p.playerName}</th>
                   <td className={scoreClass(p.totalScore)}>{scoreText(p.totalScore)}</td>
-                  <td data-k="win">{n(p.wins)}</td><td data-k="dealIn">{n(p.dealIns)}</td><td data-k="selfDraw">{n(p.selfDraws)}</td>
+                  <td data-k="win">{n(p.wins)}</td><td data-k="dealIn">{n(p.dealIns)}</td>
+                  <td data-k="selfDraw" data-record-settled={p.settled == null ? undefined : p.settled ? "settled" : "unsettled"}>
+                    <div className="selfdraw-cell">
+                      <span>{n(p.selfDraws)}</span>
+                      {!!p.selfDraws && p.settled != null && <span className={`tag ${p.settled ? "ok" : "no"}`}>{p.settled ? "已結清" : "未結清"}</span>}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

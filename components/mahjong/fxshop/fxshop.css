@@ -22,6 +22,13 @@
   background: #2b4a3c; color: #F8F2DF; font-weight: 800; }
 .fxs-av img { width: 100%; height: 100%; object-fit: cover; }
 
+/* 玩家斗內總覽（老闆 2026-11-08） */
+.fxs-overview-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
+.fxs-overview-grid .cell { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); }
+.fxs-overview-grid .cell b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.fxs-overview-grid .cell.due { grid-column: 1 / -1; }
+.fxs-overview-grid .cell.due b { color: #D7B554; }
+
 /* 排行榜 */
 .fxs-board { display: flex; flex-direction: column; gap: 8px; }
 .fxs-row { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 16px; border-radius: 14px; background: #11221E; border: 1px solid rgba(255,255,255,.06); }
