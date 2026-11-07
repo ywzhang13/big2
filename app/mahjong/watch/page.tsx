@@ -68,6 +68,14 @@ function statusOf(t: SpectateTarget, skew: number): { text: string; tone: "" | "
   }
 }
 
+/** pull() 拿到 403／404／410（房間不見了或被收回權限）時，要不要當成「房間關閉」自動退出（老闆 2026-11-08）：
+ * 整場打完伺服器會刪房，下一次一定會拿到 404／410——如果已經看過最後一把的結算（gameOver＋winner），
+ * 這次不是房間中途關閉，是預期中的事，結算畫面留著，觀戰者自己按「離開觀戰」才離開；
+ * 403（主動收回觀戰權限）不受影響，照舊立刻退出；還沒看過最後一把結算時，404／410 照舊視為房間關閉 */
+export function shouldExitOnRoomGone(status: 403 | 404 | 410, sawFinalSettlement: boolean): boolean {
+  return status === 403 || !sawFinalSettlement;
+}
+
 export default function MahjongWatchPage() {
   const auth = useMjAuth();
   const mobile = useMobileLandscape();
@@ -84,6 +92,11 @@ export default function MahjongWatchPage() {
   const [flowerFx, setFlowerFx] = useState<{ key: number; seat: number; tiles: Tile[]; delay: number; holdMs: number }[]>([]);
   const flowerSeenRef = useRef(new Map<number, Set<number>>());
   const flowerFxKeyRef = useRef(0);
+  // 最後一把的結算（老闆 2026-11-08）：整場打完伺服器會刪房，下一次 pull() 一定會拿到 404／410。
+  // 這個 ref 記下「已經拿到最後一把的結算（gameOver＋winner）」，404／410 到達時如果是這個情況，
+  // 就不要清掉畫面、不要跳錯誤頁，讓結算（誰胡、胡什麼、台數、輸贏）留在畫面上，觀戰者自己按「離開觀戰」才離開；
+  // 不是最後一把時房間還在，不會有這個 ref，404／410 仍然照舊視為房間關閉、自動退出
+  const finalSettlementRef = useRef(false);
   const [revokedBy, setRevokedBy] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(true);
   const [slow, setSlow] = useState(false);
@@ -181,11 +194,14 @@ export default function MahjongWatchPage() {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
         viewRef.current = v;
+        // 整場打完的最後一把：記下來，等一下房間被刪、拿到 404／410 時不要把結算清掉（老闆 2026-11-08）
+        if (v.status === "finished" && v.winner && v.gameOver) finalSettlementRef.current = true;
         // 第一次拿到這個視角：先記下現在各家的花牌 id 當基準，不要當成剛補到的（不然一進來就亮一輪）
         for (const p of v.players) if (!flowerSeenRef.current.has(p.seat)) flowerSeenRef.current.set(p.seat, new Set(p.flowers.map((t) => t.id)));
         syncDeclareFx(v.eyeSeats, v.tingSeats);
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
+        if (!shouldExitOnRoomGone(r.status, finalSettlementRef.current)) { alive = false; return; }
         alive = false;
         setView(null);
         setViewSeat(null);
@@ -274,9 +290,9 @@ export default function MahjongWatchPage() {
     if (rr.ok) setRoom(rr.data);
   };
   /** 切換視角：先把畫面上的手牌清掉、標籤換成新玩家，等新視角的資料到了才顯示（不顯示上一位的手牌） */
-  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); };
+  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); finalSettlementRef.current = false; };
   /** 離開觀戰：前端停止拿視角、回玩家清單；不撤銷其他玩家給的同意（對接格式 3.4、規格 5.6） */
-  const leave = async () => { setView(null); setViewSeat(null); if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
+  const leave = async () => { setView(null); setViewSeat(null); finalSettlementRef.current = false; if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
 
   const nameOf = (seat: number | null) => targets.find((t) => t.seat === seat)?.name ?? "";
   const approved = targets.filter((t) => t.status === "approved");
