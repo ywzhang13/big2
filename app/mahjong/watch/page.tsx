@@ -76,6 +76,33 @@ export function shouldExitOnRoomGone(status: 403 | 404 | 410, sawFinalSettlement
   return status === 403 || !sawFinalSettlement;
 }
 
+/** mj_game_over 廣播的內容（app/api/mahjong/action/route.ts 的 gameOverEvent()） */
+export interface GameOverPayload {
+  winnerSeat: number; winnerName: string | null; score: unknown;
+  winners: { seat: number; name: string; score: unknown }[];
+  settlement: unknown; playerScores?: number[]; roundInfo: unknown; gameOver: boolean;
+  remainingWall?: Tile[]; handStats?: unknown;
+}
+
+/** 把 mj_game_over 的內容套進目前畫面（老闆 2026-11-08）：伺服器在同一個請求裡「先廣播這個事件、才刪房」，
+ *  所以廣播一定會送到，但緊接著的 404／410（房間已經刪掉）不一定還拿得到資料——這個事件本身就夠蓋出結算畫面，
+ *  不用等那次注定會撲空的輪詢。view 是 null（還沒拿過任何一次視角）時不套，等正常的 pull() 建立基線 */
+export function applyGameOverEvent(view: SpectateView | null, p: GameOverPayload): SpectateView | null {
+  if (!view) return view;
+  return {
+    ...view,
+    status: "finished",
+    winner: { seat: p.winnerSeat, name: p.winnerName ?? "", score: p.score } as SpectateView["winner"],
+    winners: (p.winners ?? []) as SpectateView["winners"],
+    settlement: p.settlement as SpectateView["settlement"],
+    playerScores: p.playerScores ?? view.playerScores,
+    roundInfo: p.roundInfo as SpectateView["roundInfo"],
+    gameOver: p.gameOver,
+    remainingWall: p.remainingWall ?? view.remainingWall,
+    handStats: p.handStats as SpectateView["handStats"],
+  };
+}
+
 export default function MahjongWatchPage() {
   const auth = useMjAuth();
   const mobile = useMobileLandscape();
@@ -256,6 +283,10 @@ export default function MahjongWatchPage() {
           }
         }
       } else soon();
+      if (msg.event === "mj_game_over") {
+        finalSettlementRef.current = true;
+        setView((prev) => applyGameOverEvent(prev, (msg.payload ?? {}) as GameOverPayload));
+      }
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
         if (typeof seat === "number") playDeclareFx(seat, ting === true);
