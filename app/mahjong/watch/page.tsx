@@ -6,6 +6,7 @@
 // 觀戰中牌桌用一般牌桌元件畫，但所有操作都不接（不出牌、不吃碰槓胡、不眼牌），聊天、語音、互動特效都不掛。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
+import type { MjHandReveal } from "@/hooks/useMahjong";
 import { getSupabase } from "@/lib/supabase";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
@@ -68,6 +69,51 @@ function statusOf(t: SpectateTarget, skew: number): { text: string; tone: "" | "
   }
 }
 
+/** pull() 拿到 403／404／410（房間不見了或被收回權限）時，要不要當成「房間關閉」自動退出（老闆 2026-11-08）：
+ * 整場打完伺服器會刪房，下一次一定會拿到 404／410——如果已經看過最後一把的結算（gameOver＋winner），
+ * 這次不是房間中途關閉，是預期中的事，結算畫面留著，觀戰者自己按「離開觀戰」才離開；
+ * 403（主動收回觀戰權限）不受影響，照舊立刻退出；還沒看過最後一把結算時，404／410 照舊視為房間關閉 */
+export function shouldExitOnRoomGone(status: 403 | 404 | 410, sawFinalSettlement: boolean): boolean {
+  return status === 403 || !sawFinalSettlement;
+}
+
+/** mj_game_over 廣播的內容（app/api/mahjong/action/route.ts 的 gameOverEvent()）：每一局結束都會發一次，
+ *  不是只有整場最後一局才有；流局時 winnerSeat＝-1、winnerName／score 都是 null（審伯必修②） */
+export interface GameOverPayload {
+  winnerSeat: number; winnerName: string | null; score: unknown;
+  winners: { seat: number; name: string; score: unknown }[];
+  allHands?: MjHandReveal[];
+  settlement: unknown; playerScores?: number[]; roundInfo: unknown; gameOver: boolean;
+  remainingWall?: Tile[]; handStats?: unknown;
+}
+
+/** 把 mj_game_over 的內容套進目前畫面（老闆 2026-11-08）：伺服器在同一個請求裡「先廣播這個事件、才刪房」，
+ *  所以廣播一定會送到，但緊接著的 404／410（房間已經刪掉）不一定還拿得到資料——這個事件本身就夠蓋出結算畫面，
+ *  不用等那次注定會撲空的輪詢。view 是 null（還沒拿過任何一次視角，事件比第一次 view 早到）時不套，
+ *  等正常的 pull() 建立基線，不會卡在載入中以外的狀態。
+ *  胡牌和流局都要能正常顯示（審伯必修②）：流局（winnerSeat < 0）用跟玩家自己畫面同一套空值
+ *  {fans:[], totalFan:0}（照 hooks/useMahjong.ts 輪詢分支的流局寫法），不會因為 score 是 null 讓
+ *  MjResultMobile 讀 winner.score.fans 壞掉；局結束時帶入伺服器已經給的 allHands，四家攤牌才看得到 */
+export function applyGameOverEvent(view: SpectateView | null, p: GameOverPayload): SpectateView | null {
+  if (!view) return view;
+  const isDraw = p.winnerSeat == null || p.winnerSeat < 0;
+  const winner = (isDraw
+    ? { seat: -1, name: "", score: { fans: [], totalFan: 0 }, allHands: p.allHands }
+    : { seat: p.winnerSeat, name: p.winnerName ?? "", score: p.score, allHands: p.allHands }) as SpectateView["winner"];
+  return {
+    ...view,
+    status: "finished",
+    winner,
+    winners: (p.winners ?? []) as SpectateView["winners"],
+    settlement: p.settlement as SpectateView["settlement"],
+    playerScores: p.playerScores ?? view.playerScores,
+    roundInfo: p.roundInfo as SpectateView["roundInfo"],
+    gameOver: p.gameOver,
+    remainingWall: p.remainingWall ?? view.remainingWall,
+    handStats: p.handStats as SpectateView["handStats"],
+  };
+}
+
 export default function MahjongWatchPage() {
   const auth = useMjAuth();
   const mobile = useMobileLandscape();
@@ -84,6 +130,11 @@ export default function MahjongWatchPage() {
   const [flowerFx, setFlowerFx] = useState<{ key: number; seat: number; tiles: Tile[]; delay: number; holdMs: number }[]>([]);
   const flowerSeenRef = useRef(new Map<number, Set<number>>());
   const flowerFxKeyRef = useRef(0);
+  // 最後一把的結算（老闆 2026-11-08）：整場打完伺服器會刪房，下一次 pull() 一定會拿到 404／410。
+  // 這個 ref 記下「已經拿到最後一把的結算（gameOver＋winner）」，404／410 到達時如果是這個情況，
+  // 就不要清掉畫面、不要跳錯誤頁，讓結算（誰胡、胡什麼、台數、輸贏）留在畫面上，觀戰者自己按「離開觀戰」才離開；
+  // 不是最後一把時房間還在，不會有這個 ref，404／410 仍然照舊視為房間關閉、自動退出
+  const finalSettlementRef = useRef(false);
   const [revokedBy, setRevokedBy] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(true);
   const [slow, setSlow] = useState(false);
@@ -181,11 +232,14 @@ export default function MahjongWatchPage() {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
         viewRef.current = v;
+        // 整場打完的最後一把：記下來，等一下房間被刪、拿到 404／410 時不要把結算清掉（老闆 2026-11-08）
+        if (v.status === "finished" && v.winner && v.gameOver) finalSettlementRef.current = true;
         // 第一次拿到這個視角：先記下現在各家的花牌 id 當基準，不要當成剛補到的（不然一進來就亮一輪）
         for (const p of v.players) if (!flowerSeenRef.current.has(p.seat)) flowerSeenRef.current.set(p.seat, new Set(p.flowers.map((t) => t.id)));
         syncDeclareFx(v.eyeSeats, v.tingSeats);
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
+        if (!shouldExitOnRoomGone(r.status, finalSettlementRef.current)) { alive = false; return; }
         alive = false;
         setView(null);
         setViewSeat(null);
@@ -240,6 +294,14 @@ export default function MahjongWatchPage() {
           }
         }
       } else soon();
+      if (msg.event === "mj_game_over") {
+        // 審伯必修①：每一局結束都會發這個事件，不是只有整場最後一局；只有真的套用成功（view 不是 null，
+        // 不是事件比第一次 view 還早到）而且這局的 gameOver===true（整場最後一局）才設最終旗標，
+        // 不然中途一局結束後拿到的 404／410 會被誤判成「已經看過最後一局結算」而不自動退出
+        const p = (msg.payload ?? {}) as GameOverPayload;
+        const next = applyGameOverEvent(viewRef.current, p);
+        if (next) { viewRef.current = next; setView(next); if (p.gameOver === true) finalSettlementRef.current = true; }
+      }
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
         if (typeof seat === "number") playDeclareFx(seat, ting === true);
@@ -274,9 +336,9 @@ export default function MahjongWatchPage() {
     if (rr.ok) setRoom(rr.data);
   };
   /** 切換視角：先把畫面上的手牌清掉、標籤換成新玩家，等新視角的資料到了才顯示（不顯示上一位的手牌） */
-  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); };
+  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); finalSettlementRef.current = false; };
   /** 離開觀戰：前端停止拿視角、回玩家清單；不撤銷其他玩家給的同意（對接格式 3.4、規格 5.6） */
-  const leave = async () => { setView(null); setViewSeat(null); if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
+  const leave = async () => { setView(null); setViewSeat(null); finalSettlementRef.current = false; if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
 
   const nameOf = (seat: number | null) => targets.find((t) => t.seat === seat)?.name ?? "";
   const approved = targets.filter((t) => t.status === "approved");
