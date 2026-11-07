@@ -291,6 +291,9 @@ export function useMahjong(
     flowerAnimGuardRef.current.invalidate(); // 房間結束：補花動畫如果還沒播完，剩下的計時器都要失效，不能再寫 state（審伯 2026-11-08 必修②）
     // 已經有總分的就不要被沒有總分的蓋掉（例如先收到事件、之後輪詢回 404）
     setClosed((prev) => (prev && prev.players.length > 0 && info.players.length === 0 ? prev : info));
+    // 老闆 2026-11-08 必修②：跟上面的 invalidate() 一起歸零，房間關閉畫面雖然會取代整個牌桌，
+    // 但轉場那一瞬間也不該留著卡住的 flowerAnimating（一致性；不是卸載，可以寫 state）
+    setState((prev) => (prev.flowerAnimating || prev.flowerLabel ? { ...prev, flowerAnimating: false, flowerLabel: false } : prev));
   }, []);
   // 自己回合按「過」收起自摸胡／暗槓／加槓按鈕：記下是哪一張摸牌時收起的，輪詢就不再補回。
   // 只對「這一回合」有效：換局、別人出牌／吃碰槓、我重新摸牌都會清掉（牌 id 每局會重複使用）
@@ -630,6 +633,11 @@ export function useMahjong(
         })),
         myHand: hand,
         mySeat,
+        // 老闆 2026-11-08 必修②：上面剛呼叫 invalidate() 作廢了可能還在播的補花動畫，但那只擋得住「之後」的
+        // 回呼，已經寫進 state 的 flowerAnimating／flowerLabel 不會自己變回 false。這裡跟著快照一起歸零，
+        // 不然 needsDiscard 會一直被卡在 false，玩家收到快照後反而不能打牌
+        flowerAnimating: false,
+        flowerLabel: false,
         currentTurn: gs.currentTurn,
         dealerSeat: gs.dealerSeat,
         // 搶槓窗口期間 lastDiscard 是加槓的牌，不是打出去的牌，不當棄牌顯示
@@ -883,6 +891,12 @@ export function useMahjong(
         };
         if (playerId !== myId) return;
         if (myRevealed) myRevealedRef.current = myRevealed;
+        // 老闆 2026-11-08 必修①：這份是吃／碰／槓後的權威手牌（不是補花動畫自己發出的那次）。槓的話，伺服器
+        // 的廣播批次一定是先送這個 mj_hand_update，補牌（含槓後補花）的 mj_draw_tile 才接在後面送（見
+        // app/api/mahjong/action/route.ts 的 mjBroadcastBatch 呼叫順序：mj_action → mj_hand_update →
+        // drawEvents）。所以這裡作廢的一定是「比這次更新更早開始」的動畫——槓後補花要用的那段動畫這時候
+        // 根本還沒開始（start() 要等一下 mj_draw_tile 到才會呼叫），不會被這裡誤傷
+        flowerAnimGuardRef.current.invalidate();
         setState((prev) => ({
           ...prev,
           // 自己暗槓：自己座位的吃碰槓整份換成有牌面的版本（公開的 mj_action 只有蓋著的牌）
@@ -892,6 +906,10 @@ export function useMahjong(
           drawnTileId: drawnTileId ?? null,
           ...(eyeOptions ? { eyeOptions, eyeWithTing: eyeWithTing === true } : {}),
           chiForbidden: chiKinds(chiForbidden),
+          // 跟上面的 invalidate() 一起：萬一真的作廢了一段還沒播完的動畫，flowerAnimating／flowerLabel
+          // 要跟著歸零，不然 needsDiscard 會卡在 false，玩家收到這份權威手牌後反而不能打牌
+          flowerAnimating: false,
+          flowerLabel: false,
         }));
       });
 
