@@ -1070,6 +1070,7 @@ function RoomView({
     isMyTurn,
     playerName,
     drawnTileId: state.drawnTileId,
+    drawnSeat: state.drawnSeat,
     slowDraw: state.slowDraw,
     actionNotice: state.actionNotice,
     onDraw: drawTile,

@@ -93,20 +93,20 @@ const BACK_TILE: Tile = { id: -1, suit: "z", rank: 7, display: "" };
 
 /** 左右家的手牌欄：貼緊排列、朝向主人；16 張貼緊，摸進的第 17 張跟對家一樣空一格、不用金框（老闆 2026-11-08）。
  *  沒眼牌＝牌背（張數＝tileCount）；我眼牌＝同一個位置翻成牌面，摸進的那張一樣空一格。
- *  沒眼牌時「摸進的那格」用張數 % 3 === 2 判斷（老闆 2026-11-07）：沒摸牌排緊、摸牌後空一格放牌背，打牌後收回；
+ *  沒眼牌時「摸進的那格」看 drew 這個 prop（真的摸進一張才算，吃碰槓來的不算；老闆 2026-11-08 第二次更正，
+ *  不再用張數 % 3 猜）：沒摸牌排緊、摸牌後空一格放牌背，打牌後收回；
  *  別家摸到花照舊用補花膠囊（MjFlowerFx）提示，這一格不用另外亮正面（老闆 2026-11-07 第三次更正，拿掉上一輪的 GapFlash）。
  *  上家（left，col 正常順序）摸牌格排在陣列最後＝畫面最下面；下家（right，col 用 column-reverse）同樣排在陣列最後，
  *  CSS 反過來＝畫面最上面，兩家共用同一段邏輯 */
-function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
+function SideHand({ count, h, drew: justDrew }: { count: number; h?: MjOpponentHand; drew: boolean }) {
   type Cell = { key: string; tile: Tile; drew: boolean; back: boolean };
   let cells: Cell[];
   if (h) {
     const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
     cells = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])].map((t) => ({ key: String(t.id), tile: t, drew: t === drew, back: false }));
   } else {
-    const drew = count % 3 === 2;
-    cells = Array.from({ length: drew ? count - 1 : count }, (_, i) => ({ key: `b${i}`, tile: BACK_TILE, drew: false, back: true }));
-    if (drew) cells.push({ key: "drew", tile: BACK_TILE, drew: true, back: true });
+    cells = Array.from({ length: justDrew ? count - 1 : count }, (_, i) => ({ key: `b${i}`, tile: BACK_TILE, drew: false, back: true }));
+    if (justDrew) cells.push({ key: "drew", tile: BACK_TILE, drew: true, back: true });
   }
   const cell = (c: Cell) => (
     <span key={c.key} className={c.drew ? "cell drew" : "cell"}>
@@ -203,10 +203,10 @@ function EyeHand({ h, w, ht }: { h: MjOpponentHand; w: number; ht: number }) {
 }
 
 /** 對家沒眼牌時的手牌：一張一張的牌背（和左右家一樣，顏色跟著偏好設定的牌背）。
- *  張數是 3n＋2（16 張＋剛摸進一張）時，摸進來的那張和其他牌隔開一點，放在整排最左端——
- *  對家的右手在你畫面的最左邊；摸到花照舊用補花膠囊提示，不在這格亮正面（老闆 2026-11-07 第三次更正） */
-function TopBacks({ count }: { count: number }) {
-  const drew = count % 3 === 2;
+ *  這家真的摸進一張牌時（看 drew 這個 prop，不是張數 % 3 猜；老闆 2026-11-08 第二次更正），
+ *  摸進來的那張和其他牌隔開一點，放在整排最左端——對家的右手在你畫面的最左邊；
+ *  摸到花照舊用補花膠囊提示，不在這格亮正面（老闆 2026-11-07 第三次更正） */
+function TopBacks({ count, drew }: { count: number; drew: boolean }) {
   const tile = (i: number) => <MjTile key={i} tile={BACK_TILE} width={12} height={16} faceDown />;
   return (
     <div className="mjm-topbacks" data-top-backs={count}>
@@ -231,6 +231,7 @@ function SidePanel({
   side,
   busy,
   mySeat,
+  drew,
 }: {
   side: "left" | "right";
   player: MjPlayer | undefined;
@@ -245,6 +246,7 @@ function SidePanel({
   opponent?: MjOpponentHand;
   busy?: boolean;
   mySeat: number;
+  drew: boolean;
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
   const plate = (
@@ -271,7 +273,7 @@ function SidePanel({
         <SpectateBadge count={player.viewerCount} />
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
-      <SideHand count={player.tileCount} h={opponent} />
+      <SideHand count={player.tileCount} h={opponent} drew={drew} />
       <Melds revealed={opponent?.revealed ?? player.revealed} w={opponent ? 10 : 17} h={opponent ? 14 : 23} reveal={!!opponent} rot seat={player.seat} mySeat={mySeat} />
     </div>
   );
@@ -371,6 +373,7 @@ export default function MjBoardMobile({
   isMyTurn,
   playerName,
   drawnTileId,
+  drawnSeat,
   slowDraw,
   actionNotice,
   focusDiscard,
@@ -529,7 +532,7 @@ export default function MjBoardMobile({
               </>
             ) : (
               <>
-                <TopBacks count={top.tileCount} />
+                <TopBacks count={top.tileCount} drew={top.seat === drawnSeat} />
                 <Melds revealed={top.revealed} w={12} h={16} seat={top.seat} mySeat={mySeat} />
               </>
             )}
@@ -553,6 +556,7 @@ export default function MjBoardMobile({
           opponent={oppOf(left?.seat)}
           busy={flowerBusy}
           windChar={left ? windOf(left.seat) : ""}
+          drew={left != null && left.seat === drawnSeat}
         />
 
         <div className="mjm-table" data-mj-table>
@@ -630,6 +634,7 @@ export default function MjBoardMobile({
           opponent={oppOf(right?.seat)}
           busy={flowerBusy}
           windChar={right ? windOf(right.seat) : ""}
+          drew={right != null && right.seat === drawnSeat}
         />
       </div>
 
