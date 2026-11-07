@@ -6,6 +6,7 @@
 // 觀戰中牌桌用一般牌桌元件畫，但所有操作都不接（不出牌、不吃碰槓胡、不眼牌），聊天、語音、互動特效都不掛。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
+import type { MjHandReveal } from "@/hooks/useMahjong";
 import { getSupabase } from "@/lib/supabase";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
@@ -76,23 +77,33 @@ export function shouldExitOnRoomGone(status: 403 | 404 | 410, sawFinalSettlement
   return status === 403 || !sawFinalSettlement;
 }
 
-/** mj_game_over 廣播的內容（app/api/mahjong/action/route.ts 的 gameOverEvent()） */
+/** mj_game_over 廣播的內容（app/api/mahjong/action/route.ts 的 gameOverEvent()）：每一局結束都會發一次，
+ *  不是只有整場最後一局才有；流局時 winnerSeat＝-1、winnerName／score 都是 null（審伯必修②） */
 export interface GameOverPayload {
   winnerSeat: number; winnerName: string | null; score: unknown;
   winners: { seat: number; name: string; score: unknown }[];
+  allHands?: MjHandReveal[];
   settlement: unknown; playerScores?: number[]; roundInfo: unknown; gameOver: boolean;
   remainingWall?: Tile[]; handStats?: unknown;
 }
 
 /** 把 mj_game_over 的內容套進目前畫面（老闆 2026-11-08）：伺服器在同一個請求裡「先廣播這個事件、才刪房」，
  *  所以廣播一定會送到，但緊接著的 404／410（房間已經刪掉）不一定還拿得到資料——這個事件本身就夠蓋出結算畫面，
- *  不用等那次注定會撲空的輪詢。view 是 null（還沒拿過任何一次視角）時不套，等正常的 pull() 建立基線 */
+ *  不用等那次注定會撲空的輪詢。view 是 null（還沒拿過任何一次視角，事件比第一次 view 早到）時不套，
+ *  等正常的 pull() 建立基線，不會卡在載入中以外的狀態。
+ *  胡牌和流局都要能正常顯示（審伯必修②）：流局（winnerSeat < 0）用跟玩家自己畫面同一套空值
+ *  {fans:[], totalFan:0}（照 hooks/useMahjong.ts 輪詢分支的流局寫法），不會因為 score 是 null 讓
+ *  MjResultMobile 讀 winner.score.fans 壞掉；局結束時帶入伺服器已經給的 allHands，四家攤牌才看得到 */
 export function applyGameOverEvent(view: SpectateView | null, p: GameOverPayload): SpectateView | null {
   if (!view) return view;
+  const isDraw = p.winnerSeat == null || p.winnerSeat < 0;
+  const winner = (isDraw
+    ? { seat: -1, name: "", score: { fans: [], totalFan: 0 }, allHands: p.allHands }
+    : { seat: p.winnerSeat, name: p.winnerName ?? "", score: p.score, allHands: p.allHands }) as SpectateView["winner"];
   return {
     ...view,
     status: "finished",
-    winner: { seat: p.winnerSeat, name: p.winnerName ?? "", score: p.score } as SpectateView["winner"],
+    winner,
     winners: (p.winners ?? []) as SpectateView["winners"],
     settlement: p.settlement as SpectateView["settlement"],
     playerScores: p.playerScores ?? view.playerScores,
@@ -284,8 +295,12 @@ export default function MahjongWatchPage() {
         }
       } else soon();
       if (msg.event === "mj_game_over") {
-        finalSettlementRef.current = true;
-        setView((prev) => applyGameOverEvent(prev, (msg.payload ?? {}) as GameOverPayload));
+        // 審伯必修①：每一局結束都會發這個事件，不是只有整場最後一局；只有真的套用成功（view 不是 null，
+        // 不是事件比第一次 view 還早到）而且這局的 gameOver===true（整場最後一局）才設最終旗標，
+        // 不然中途一局結束後拿到的 404／410 會被誤判成「已經看過最後一局結算」而不自動退出
+        const p = (msg.payload ?? {}) as GameOverPayload;
+        const next = applyGameOverEvent(viewRef.current, p);
+        if (next) { viewRef.current = next; setView(next); if (p.gameOver === true) finalSettlementRef.current = true; }
       }
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
