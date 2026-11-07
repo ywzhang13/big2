@@ -91,8 +91,8 @@ function Melds({ revealed, w, h, mine, reveal, rot, seat, mySeat }: { revealed: 
 // 牌背只用到 faceDown，牌面內容不會顯示
 const BACK_TILE: Tile = { id: -1, suit: "z", rank: 7, display: "" };
 
-/** 左右家的手牌欄：金框外、朝向主人；16 張那一列靠金框，摸進的第 17 張放外側那一列（像自己的手牌一樣分開）。
- *  沒眼牌＝牌背（張數＝tileCount）；我眼牌＝同一個位置翻成牌面，摸進的那張加金框。
+/** 左右家的手牌欄：貼緊排列、朝向主人；16 張貼緊，摸進的第 17 張跟對家一樣空一格、不用金框（老闆 2026-11-08）。
+ *  沒眼牌＝牌背（張數＝tileCount）；我眼牌＝同一個位置翻成牌面，摸進的那張一樣空一格。
  *  沒眼牌時「摸進的那格」用張數 % 3 === 2 判斷（老闆 2026-11-07）：沒摸牌排緊、摸牌後空一格放牌背，打牌後收回；
  *  別家摸到花照舊用補花膠囊（MjFlowerFx）提示，這一格不用另外亮正面（老闆 2026-11-07 第三次更正，拿掉上一輪的 GapFlash）。
  *  上家（left，col 正常順序）摸牌格排在陣列最後＝畫面最下面；下家（right，col 用 column-reverse）同樣排在陣列最後，
@@ -109,10 +109,8 @@ function SideHand({ count, h }: { count: number; h?: MjOpponentHand }) {
     if (drew) cells.push({ key: "drew", tile: BACK_TILE, drew: true, back: true });
   }
   const cell = (c: Cell) => (
-    <span key={c.key} className="cell">
-      <div className={c.drew ? "drew" : undefined}>
-        <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
-      </div>
+    <span key={c.key} className={c.drew ? "cell drew" : "cell"}>
+      <MjTile tile={c.tile} width={12} height={16} faceDown={c.back} />
     </span>
   );
   return (

@@ -134,8 +134,6 @@ function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
   return [...h.hand.filter((t) => t !== drew).map((tile) => ({ tile, drew: false })), ...(drew ? [{ tile: drew, drew: true }] : [])];
 }
 
-const DREW_RING = { borderRadius: 3, boxShadow: "0 0 0 2px #fbbf24, 0 0 10px rgba(251,191,36,.45)" };
-
 /** Player info panel for table edges */
 function PlayerPanel({
   player,
@@ -249,17 +247,17 @@ function PlayerPanel({
       <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
       </div>
 
-      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，摸進的那張最後＋金框） */}
+      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最後＋空一格，不用金框，老闆 2026-11-08） */}
       {opponent ? (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}>
           {eyeHandTiles(opponent).map(({ tile, drew }) =>
             isHorizontal ? (
-              <div key={tile.id} style={drew ? { marginLeft: 6, ...DREW_RING } : undefined}>
+              <div key={tile.id} data-drew={drew || undefined} style={drew ? { marginLeft: 6 } : undefined}>
                 <MjTile tile={tile} width={26} height={35} />
               </div>
             ) : (
-              <div key={tile.id} style={{ width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
-                <div style={{ transform: rotStyle, ...(drew ? DREW_RING : {}) }}>
+              <div key={tile.id} data-drew={drew || undefined} style={{ width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginTop: drew ? 6 : 0 }}>
+                <div style={{ transform: rotStyle }}>
                   <MjTile tile={tile} width={tileSize} height={tileH} />
                 </div>
               </div>
