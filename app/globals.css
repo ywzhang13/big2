@@ -363,10 +363,11 @@
 /* 自己的資訊列沒有名牌容器：風位＋名字＋標示包一層當特效錨點（外觀不變） */
 .mjm-me-who { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; flex: 0 0 auto; }
 
-/* 5) 眼牌者才看得到的三家手牌（老闆 2026-11-08：對家牌貼緊，摸到的那張照舊空一格，不用金框標示） */
+/* 5) 眼牌者才看得到的三家手牌（老闆 2026-11-08：對家牌貼緊，摸到的那張照舊空一格，放在最左端＝對家的右手，
+   跟沒眼牌的 TopBacks 同一個位置規則，不用金框標示；審伯必修③） */
 .mjm-eyehand { display: flex; gap: 0; flex: 0 1 auto; min-width: 0; overflow: hidden; }
 .mjm-side .mjm-eyehand { flex-wrap: wrap; width: 68px; justify-content: center; row-gap: 0; }
-.mjm-eyehand .drew { margin-left: 4px; }
+.mjm-eyehand .drew { margin-right: 4px; }
 
 /* ===== v5（小宜 2026-10-15，老闆選方案 A）：MIGI 大特效、標示、眼牌時手牌比吃碰牌大、手機左右家轉向 ===== */
 /* 名牌標示 MIGI（＝地聽，沿用地聽原本的綠；放大加光暈） */

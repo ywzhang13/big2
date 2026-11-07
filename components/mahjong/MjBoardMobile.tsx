@@ -186,10 +186,11 @@ export function DeclareFx({ seat, name, migi, desk }: { seat: number; name: stri
   );
 }
 
-/** 我眼牌時：對家取代牌背條，翻開手牌（一列）；摸進的那張排最後＋金框 */
+/** 我眼牌時：對家取代牌背條，翻開手牌（一列）；摸進的那張跟沒眼牌時的 TopBacks 一樣放在最左端＝對家的右手，
+ *  貼緊、摸到的那張空一格，不用金框（老闆 2026-11-08，審伯必修③） */
 function EyeHand({ h, w, ht }: { h: MjOpponentHand; w: number; ht: number }) {
   const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
-  const tiles = [...h.hand.filter((t) => t !== drew), ...(drew ? [drew] : [])];
+  const tiles = [...(drew ? [drew] : []), ...h.hand.filter((t) => t !== drew)];
   return (
     <div className="mjm-eyehand">
       {tiles.map((t) => (

@@ -247,16 +247,25 @@ function PlayerPanel({
       <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
       </div>
 
-      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最後＋空一格，不用金框，老闆 2026-11-08） */}
+      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最後＋空一格，不用金框，老闆 2026-11-08）。
+          下家用 flex-col-reverse：陣列順序跟上家一樣（摸到的那張排最後），CSS 反過來讓它顯示在最上面，下面留空一格（審伯必修②，2026-11-08） */}
       {opponent ? (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}>
+        <div className={`flex ${isHorizontal ? "flex-row" : position === "right" ? "flex-col-reverse" : "flex-col"} items-center`}>
           {eyeHandTiles(opponent).map(({ tile, drew }) =>
             isHorizontal ? (
               <div key={tile.id} data-drew={drew || undefined} style={drew ? { marginLeft: 6 } : undefined}>
                 <MjTile tile={tile} width={26} height={35} />
               </div>
             ) : (
-              <div key={tile.id} data-drew={drew || undefined} style={{ width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginTop: drew ? 6 : 0 }}>
+              <div
+                key={tile.id}
+                data-drew={drew || undefined}
+                style={{
+                  width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0,
+                  marginTop: drew && position !== "right" ? 6 : 0,
+                  marginBottom: drew && position === "right" ? 6 : 0,
+                }}
+              >
                 <div style={{ transform: rotStyle }}>
                   <MjTile tile={tile} width={tileSize} height={tileH} />
                 </div>
@@ -265,11 +274,15 @@ function PlayerPanel({
           )}
         </div>
       ) : (
-      /* Face-down tiles (outside edge) */
-      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
-        {Array.from({ length: player.tileCount }).map((_, i) => (
+      /* Face-down tiles (outside edge)：沒摸牌貼緊；摸牌時只有那張空一格——對家最左、上家下端、下家上端，
+         和眼牌分支同一套位置規則（老闆 2026-11-08，審伯必修①） */
+      (() => {
+        const drew = player.tileCount % 3 === 2;
+        const backCount = drew ? player.tileCount - 1 : player.tileCount;
+        const back = (key: string | number, isDrew: boolean) => (
           <div
-            key={i}
+            key={key}
+            data-drew={isDrew || undefined}
             className="rounded-[2px]"
             style={{
               width: isHorizontal ? tileSize - 2 : tileH - 6,
@@ -278,10 +291,22 @@ function PlayerPanel({
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
               ...(rotStyle ? { transform: rotStyle } : {}),
+              ...(isHorizontal
+                ? (isDrew ? { marginRight: 6 } : {})
+                : position === "right"
+                  ? (isDrew ? { marginBottom: 6 } : {})
+                  : (isDrew ? { marginTop: 6 } : {})),
             }}
           />
-        ))}
-      </div>
+        );
+        return (
+          <div className={`flex ${isHorizontal ? "flex-row" : position === "right" ? "flex-col-reverse" : "flex-col"} items-center`}>
+            {isHorizontal && drew && back("drew", true)}
+            {Array.from({ length: backCount }, (_, i) => back(i, false))}
+            {!isHorizontal && drew && back("drew", true)}
+          </div>
+        );
+      })()
       )}
 
       {/* Flowers + Revealed melds — same visual spec for all three opponents:
