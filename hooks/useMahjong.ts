@@ -792,11 +792,20 @@ export function useMahjong(
           // 才在那張牌上冒出「補花」字樣，再停另一半時間才補下一張；連續補花、槓後補花一樣一張一張來。
           // 伺服器已經把整串補花都結清，這裡用「前一手的手牌＋這張花」在前端重演一次給大家看
           holdFor(addedFlowers.length * FLOWER_PACE_MS + (slow ? SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS : 0));
-          const base = stateRef.current.myHand;
+          const base0 = stateRef.current.myHand;
           const half = FLOWER_PACE_MS / 2;
           const showFlower = (i: number) => {
             const tile = addedFlowers[i];
-            setState((prev) => ({ ...prev, myHand: safeHand([...base, tile]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false }));
+            // 老闆 2026-11-08 查到：牌 id 每局會重複使用，base0 原本的手牌裡可能剛好有張舊 id
+            // 跟這張新補的花撞號；之前固定用同一份 base0 疊上去，摸牌格的 drawnTileId 用 id 去
+            // 手牌裡找，找到的反而是撞號的那張舊牌（畫面看起來像白板之類的），不是真的花。
+            // 這裡先把「已經要顯示成花」的那幾個 id 從 base0 濾掉，保證陣列裡這個 id 只有一個、
+            // 指到的一定是這張花；同時用 shown（到目前這張為止的所有花）取代單一 tile，連續補花
+            // 才會一張一張疊上去，不會每張都蓋掉前一張
+            const shown = addedFlowers.slice(0, i + 1);
+            const shownIds = new Set(shown.map((t) => t.id));
+            const dedupedBase = base0.filter((t) => !shownIds.has(t.id));
+            setState((prev) => ({ ...prev, myHand: safeHand([...dedupedBase, ...shown]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false }));
             setTimeout(() => {
               setState((prev) => ({ ...prev, flowerLabel: true }));
               setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), half);
