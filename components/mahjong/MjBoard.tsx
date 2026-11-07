@@ -45,6 +45,8 @@ export interface MjBoardProps {
   isMyTurn: boolean;
   playerName: string;
   drawnTileId: number | null;
+  /** 別家牌背欄「摸到的那張空一格」用：剛真的摸進一張牌的座位，不是吃碰槓來的（老闆 2026-11-08） */
+  drawnSeat?: number | null;
   slowDraw: { tileId: number; win: boolean } | null; // 眼牌後慢慢摸牌（只有自己看得到）
   actionNotice: { seat: number; type: string; key?: number } | null;
   /** 牌桌中間那張大牌：最近打出的一張，一直亮到下一張打出 */
@@ -128,13 +130,14 @@ function DeclareTags({ ting, eye, fx }: { ting?: boolean; eye?: boolean; fx?: { 
   return null;
 }
 
-/** 眼牌者看到的手牌：摸進的那張排最後一張 */
-function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
+/** 眼牌者看到的手牌：橫向(對家)、下家(右)摸進的那張排最前面；上家(左)排最後一張；其餘牌保留 h.hand 原本
+ *  的 sortTiles 順序，不會因為排最前面／最後面而被打亂（審伯必修②，2026-11-08 第二次更正） */
+function eyeHandTiles(h: MjOpponentHand, drawFirst = false): { tile: Tile; drew: boolean }[] {
   const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
-  return [...h.hand.filter((t) => t !== drew).map((tile) => ({ tile, drew: false })), ...(drew ? [{ tile: drew, drew: true }] : [])];
+  const rest = h.hand.filter((t) => t !== drew).map((tile) => ({ tile, drew: false }));
+  const drewItem = drew ? [{ tile: drew, drew: true }] : [];
+  return drawFirst ? [...drewItem, ...rest] : [...rest, ...drewItem];
 }
-
-const DREW_RING = { borderRadius: 3, boxShadow: "0 0 0 2px #fbbf24, 0 0 10px rgba(251,191,36,.45)" };
 
 /** Player info panel for table edges */
 function PlayerPanel({
@@ -149,6 +152,7 @@ function PlayerPanel({
   fx,
   opponent,
   busy,
+  drew,
 }: {
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
@@ -161,6 +165,7 @@ function PlayerPanel({
   fx?: { both: boolean }; // 正在播宣告特效
   opponent?: MjOpponentHand; // 我眼牌時：這家的牌面（暗槓翻開）
   busy?: boolean; // 輪到我打牌／有吃碰槓胡按鈕：花的展開面板要收起來
+  drew?: boolean; // 這家剛真的摸進一張牌（不是吃碰槓來的）：牌背那張要空一格
 }) {
   if (!player) return null;
 
@@ -249,17 +254,27 @@ function PlayerPanel({
       <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
       </div>
 
-      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，摸進的那張最後＋金框） */}
+      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最左／最後＋空一格，不用金框，老闆 2026-11-08）。
+          對家(橫向)、下家(右) 摸到的那張排最前面；上家(左) 排最後面。容器一律用 flex-col 正常順序（不反轉），
+          其他翻開的牌維持 sortTiles 的原始順序，不會整列倒過來（審伯必修②，2026-11-08 第二次更正） */}
       {opponent ? (
-        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
-          {eyeHandTiles(opponent).map(({ tile, drew }) =>
+        <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center`}>
+          {eyeHandTiles(opponent, isHorizontal || position === "right").map(({ tile, drew }) =>
             isHorizontal ? (
-              <div key={tile.id} style={drew ? { marginLeft: 6, ...DREW_RING } : undefined}>
+              <div key={tile.id} data-drew={drew || undefined} style={drew ? { marginRight: 6 } : undefined}>
                 <MjTile tile={tile} width={26} height={35} />
               </div>
             ) : (
-              <div key={tile.id} style={{ width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
-                <div style={{ transform: rotStyle, ...(drew ? DREW_RING : {}) }}>
+              <div
+                key={tile.id}
+                data-drew={drew || undefined}
+                style={{
+                  width: tileH + 2, height: tileSize + 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0,
+                  marginTop: drew && position !== "right" ? 6 : 0,
+                  marginBottom: drew && position === "right" ? 6 : 0,
+                }}
+              >
+                <div style={{ transform: rotStyle }}>
                   <MjTile tile={tile} width={tileSize} height={tileH} />
                 </div>
               </div>
@@ -267,11 +282,16 @@ function PlayerPanel({
           )}
         </div>
       ) : (
-      /* Face-down tiles (outside edge) */
-      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} gap-[1px] items-center`}>
-        {Array.from({ length: player.tileCount }).map((_, i) => (
+      /* Face-down tiles (outside edge)：沒摸牌貼緊；摸牌時只有那張空一格——對家最左、上家下端、下家上端，
+         和眼牌分支同一套位置規則（老闆 2026-11-08，審伯必修①）。
+         是不是「摸牌」看 drew 這個 prop（真的摸進一張才算，吃碰槓來的不算），不是張數取模（老闆 2026-11-08 第二次更正） */
+      (() => {
+        const isDrawn = drew === true;
+        const backCount = isDrawn ? player.tileCount - 1 : player.tileCount;
+        const back = (key: string | number, isDrew: boolean) => (
           <div
-            key={i}
+            key={key}
+            data-drew={isDrew || undefined}
             className="rounded-[2px]"
             style={{
               width: isHorizontal ? tileSize - 2 : tileH - 6,
@@ -280,10 +300,22 @@ function PlayerPanel({
               boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
               border: "0.5px solid rgba(255,255,255,0.08)",
               ...(rotStyle ? { transform: rotStyle } : {}),
+              ...(isHorizontal
+                ? (isDrew ? { marginRight: 6 } : {})
+                : position === "right"
+                  ? (isDrew ? { marginBottom: 6 } : {})
+                  : (isDrew ? { marginTop: 6 } : {})),
             }}
           />
-        ))}
-      </div>
+        );
+        return (
+          <div className={`flex ${isHorizontal ? "flex-row" : position === "right" ? "flex-col-reverse" : "flex-col"} items-center`}>
+            {isHorizontal && drew && back("drew", true)}
+            {Array.from({ length: backCount }, (_, i) => back(i, false))}
+            {!isHorizontal && drew && back("drew", true)}
+          </div>
+        );
+      })()
       )}
 
       {/* Flowers + Revealed melds — same visual spec for all three opponents:
@@ -454,6 +486,7 @@ export default function MjBoard({
   isMyTurn,
   playerName,
   drawnTileId,
+  drawnSeat,
   slowDraw,
   actionNotice,
   focusDiscard,
@@ -545,6 +578,7 @@ export default function MjBoard({
           opponent={oppOf(top?.seat)}
           busy={flowerBusy}
           dealerConsecutive={dealerConsecutive}
+          drew={top != null && top.seat === drawnSeat}
         />
       </div>
 
@@ -564,6 +598,7 @@ export default function MjBoard({
             opponent={oppOf(left?.seat)}
             busy={flowerBusy}
             dealerConsecutive={dealerConsecutive}
+            drew={left != null && left.seat === drawnSeat}
           />
         </div>
 
@@ -809,6 +844,7 @@ export default function MjBoard({
             opponent={oppOf(right?.seat)}
             busy={flowerBusy}
             dealerConsecutive={dealerConsecutive}
+            drew={right != null && right.seat === drawnSeat}
           />
         </div>
       </div>

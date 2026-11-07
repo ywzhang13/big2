@@ -102,8 +102,8 @@
 .mjm-plate-v .l1 .mjm-wind { width: 16px; height: 16px; font-size: 10px; }
 .mjm-plate-v .mjm-nm { display: block; height: 13px; line-height: 13px; }
 
-/* 對家的牌背：一張一張（摸進的那張隔開 4px，放在最左端＝對家的右手；老闆 2026-11-07） */
-.mjm-topbacks { display: flex; align-items: center; gap: 1px; flex: 0 0 auto; }
+/* 對家的牌背：一張一張貼緊（摸進的那張隔開 4px，放在最左端＝對家的右手；老闆 2026-11-07，貼緊改法 2026-11-08） */
+.mjm-topbacks { display: flex; align-items: center; gap: 0; flex: 0 0 auto; }
 .mjm-topbacks .drew { display: flex; margin-right: 4px; }
 
 /* 自己補花：摸牌格先停一下，才在那張牌上冒出「補花」字樣（老闆 2026-11-07 第三次更正）。
@@ -363,10 +363,11 @@
 /* 自己的資訊列沒有名牌容器：風位＋名字＋標示包一層當特效錨點（外觀不變） */
 .mjm-me-who { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; flex: 0 0 auto; }
 
-/* 5) 眼牌者才看得到的三家手牌 */
-.mjm-eyehand { display: flex; gap: 1px; flex: 0 1 auto; min-width: 0; overflow: hidden; }
-.mjm-side .mjm-eyehand { flex-wrap: wrap; width: 68px; justify-content: center; row-gap: 1px; }
-.mjm-eyehand .drew { border-radius: 3px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
+/* 5) 眼牌者才看得到的三家手牌（老闆 2026-11-08：對家牌貼緊，摸到的那張照舊空一格，放在最左端＝對家的右手，
+   跟沒眼牌的 TopBacks 同一個位置規則，不用金框標示；審伯必修③） */
+.mjm-eyehand { display: flex; gap: 0; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.mjm-side .mjm-eyehand { flex-wrap: wrap; width: 68px; justify-content: center; row-gap: 0; }
+.mjm-eyehand .drew { margin-right: 4px; }
 
 /* ===== v5（小宜 2026-10-15，老闆選方案 A）：MIGI 大特效、標示、眼牌時手牌比吃碰牌大、手機左右家轉向 ===== */
 /* 名牌標示 MIGI（＝地聽，沿用地聽原本的綠；放大加光暈） */
@@ -539,7 +540,10 @@
 .mjm-sidehand .cell { width: 16px; height: 12px; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .mjm-side.left  .mjm-sidehand .cell > * { transform: rotate(90deg); }
 .mjm-side.right .mjm-sidehand .cell > * { transform: rotate(-90deg); }
-.mjm-sidehand .drew { border-radius: 2px; box-shadow: 0 0 0 2px #fbbf24, 0 0 8px rgba(251, 191, 36, .45); }
+/* 摸到的那張跟對家一樣空一格，不用金框（老闆 2026-11-08）：左家排到最下面，上面隔 4px；
+   右家（column-reverse）排到最上面，下面隔 4px */
+.mjm-side.left  .mjm-sidehand .cell.drew { margin-top: 4px; }
+.mjm-side.right .mjm-sidehand .cell.drew { margin-bottom: 4px; }
 /* 吃碰槓欄：每一副自己一直列、由上往下排；放不下就往海底方向長出第二列，不會溢出。
    和金框的 8px 間距由這一欄留（沒有吃碰槓時是空的一欄） */
 .mjm-side .mjm-meldcol {

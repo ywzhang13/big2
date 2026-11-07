@@ -184,6 +184,9 @@ export interface MjClientState {
   hostId: string;
   hasDrawn: boolean;
   drawnTileId: number | null;
+  /** 別家手牌欄「摸到的那張空一格」用：剛真的摸進一張牌(含槓後、補花後補牌)的座位；吃／碰／槓、打牌後清空
+   *  (老闆 2026-11-08 定案，只在前端用事件推出，不從伺服器的張數取模猜) */
+  drawnSeat: number | null;
   actionNotice: { seat: number; type: string; key: number } | null;
   // Round system
   roomSettings?: RoomSettings;
@@ -272,6 +275,7 @@ export function useMahjong(
     hostId: "",
     hasDrawn: false,
     drawnTileId: null,
+    drawnSeat: null,
     actionNotice: null,
   });
 
@@ -654,6 +658,11 @@ export function useMahjong(
         robFlower: pendingFlowerRob != null && pendingFlowerRob.robberSeat === mySeat,
         // 輪到我且剛摸完牌：重新整理後把摸進的那張分開顯示
         drawnTileId: gs.myDrawnTileId ?? prev.drawnTileId,
+        // 審伯 2026-11-08 複審必修：這裡拿到的是權威快照，不是靠事件一路推出來的；漏收 mj_discard／mj_action
+        // 的話，別家手牌欄的摸牌空格可能停在錯的座位上。快照沒有「誰剛摸牌」這個欄位，沒辦法分辨，
+        // 所以一律歸零——之後只靠新的 mj_draw 把它設回真正摸牌的人，最多是正在等出牌的那家暫時貼緊，
+        // 不會把空格錯留在別人身上
+        drawnSeat: null,
         wallRemaining: gs.wallCount,
         hasDrawn: gs.hasDrawn,
         // 請求送出時我的動作還在路上，或送出後已經有新進展（例如我按了過、上家已經打牌）：這份的按鈕是舊的，保留畫面上的。
@@ -1090,6 +1099,8 @@ export function useMahjong(
         chiForbidden: [],
         // 上一局最後摸進的牌 id 不能留到新局（牌 id 每局重複使用）；座位頻道的發牌先到就保留它標的那張
         drawnTileId: dealtThisGameRef.current ? prev.drawnTileId : null,
+        // 開新局：莊家一開始的 17 張是發牌給的，不是「摸」的，不用空格（老闆 2026-11-08）
+        drawnSeat: null,
         hasDrawn: msg.currentTurn === msg.dealerSeat, // dealer starts with 17
         players: msg.players.map((p) => ({
           id: p.id,
@@ -1153,6 +1164,8 @@ export function useMahjong(
         ...prev,
         wallRemaining: wallCount,
         hasDrawn: true,
+        // 這家真的摸進一張牌（含槓後、補花後補牌）：別家手牌欄那張空一格就看這個，不是張數取模（老闆 2026-11-08）
+        drawnSeat: seat,
         // 七搶一不搶後會重送摸牌事件；若又要等七搶一，後面的 pending 事件會再設回來
         pendingFlowerRob: null,
         robFlower: false,
@@ -1187,6 +1200,8 @@ export function useMahjong(
         eyeWithTing: false,
         chiForbidden: [],
         drawnTileId: prev.mySeat === seat ? null : prev.drawnTileId,
+        // 打出後那張就收回去了，不管是摸到的還是吃碰來的都要貼緊（老闆 2026-11-08）
+        drawnSeat: prev.drawnSeat === seat ? null : prev.drawnSeat,
         players: prev.players.map((p) =>
           p.seat === seat
             ? {
@@ -1251,6 +1266,9 @@ export function useMahjong(
           // 我槓完補牌的按鈕（槓上開花、再槓）走座位頻道，可能比這個事件先到
           availableActions: keepEarlyActions && msg.seat === prev.mySeat ? prev.availableActions : [],
           hasDrawn: true, // after chi/pong/kong player must discard (or already drew for kong)
+          // 吃、碰、(連續)吃碰、槓都是「拿別家或自己手上的牌湊成一副」，不是摸牌：那張不空格、貼緊；
+          // 明槓補牌會再收到一次 mj_draw，到時候才會重新空格（老闆 2026-11-08）
+          drawnSeat: prev.drawnSeat === msg.seat ? null : prev.drawnSeat,
           actionNotice: { seat: msg.seat, type: msg.type, key: noticeKey },
           myHand: updatedHand,
           // 被吃碰槓拿走的那張從打出那家的海底拿掉（和伺服器輸出的 state 一致，不用等輪詢）
@@ -1691,6 +1709,7 @@ export function useMahjong(
           eyeWithTing: false,
           chiForbidden: [],
           drawnTileId: null,
+          drawnSeat: prev.drawnSeat === prev.mySeat ? null : prev.drawnSeat,
           hasDrawn: false,
           lastDiscard: tile ? { tile, from: prev.mySeat } : prev.lastDiscard,
           focusDiscard: tile ? { tile, from: prev.mySeat } : prev.focusDiscard,
