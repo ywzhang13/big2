@@ -609,6 +609,10 @@ export function useMahjong(
       // 用快照補建一次，之後都不再動；換新局那個分支（漏收 mj_game_start）一樣會正確重建自己的基線
       // （審伯 2026-11-08 必修①）
       flowerTrackerRef.current.onPoll(gs.players, (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined, mySeat);
+      // 審伯 2026-11-08 複審必修：走到這裡代表輪詢拿到的是真的權威快照（前面已經擋掉過時、晚到、版本落後的
+      // 回應），不是補花動畫自己發出的那次——這裡一律作廢本地還在播的補花動畫，接下來 setState 要套用的是
+      // 快照本身的手牌／花數，不能讓舊動畫剩下的巢狀計時器晚一點又把畫面蓋回演到一半的樣子
+      flowerAnimGuardRef.current.invalidate();
       setState((prev) => ({
         ...prev,
         status: gs.status as MjClientState["status"],
