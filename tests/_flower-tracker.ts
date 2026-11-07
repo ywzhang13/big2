@@ -66,4 +66,35 @@ const B = round(1, 2, 0); // 換莊後的下一局
   t.onPoll(seats([X]), undefined);
   check(t.onEvent(0, [X]).length === 0 && t.onEvent(0, [X, flower(144)]).length === 1, "沒有局資訊時照常合併、只播新補的");
 }
+// 8. 審伯 2026-11-08 必修①：自己（selfSeat）重新整理、中途進房——快照裡已經有舊花，
+//    下一個事件同時帶著舊花和新花時，只取出新花
+{
+  const t = new FlowerTracker();
+  t.onPoll(seats([X]), A, 0); // 重新整理／中途進房：第一次拿到快照，自己座位已經有一張舊花 X，建立基線
+  const added = t.onEvent(0, [X, flower(145)]); // mj_draw_tile 事件同時帶著舊花 X 和新花
+  check(added.length === 1 && added[0].id === 145, "自己中途進房、快照已有舊花，事件同時帶舊花新花時只取出新花");
+}
+// 9. 自己（selfSeat）同一局裡輪詢只建立一次基線，不會因為漏掉事件而把之後輪詢多出來的花
+//    誤記成「已知」——手牌、張數交給輪詢本身（不靠 FlowerTracker）維持正確，之後真的事件來了照樣能補播
+{
+  const t = new FlowerTracker();
+  t.onPoll(seats([X]), A, 0); // 第一次快照建立基線
+  t.onPoll(seats([X, flower(146)]), A, 0); // 完全漏掉事件：下一次輪詢伺服器快照已經多了一張花，基線不會跟著動
+  t.onPoll(seats([X, flower(146)]), A, 0); // 再輪詢一次也一樣，不會壞掉、不會重複建立
+  check(t.onEvent(0, [X, flower(146)]).length === 1, "自己的基線輪詢只建立一次，漏掉的事件之後靠真的事件補播一次，不多不少");
+}
+// 10. 自己（selfSeat）換新局（輪詢發現是更新的一局）：reset 要含自己在內重建基線，不能把自己漏掉
+{
+  const t = new FlowerTracker();
+  t.onGameStart(seats([X]), A);
+  t.onPoll(seats(), B, 0); // 漏收 mj_game_start，輪詢先看到新局；自己這局還沒有花
+  check(t.onEvent(0, [X]).length === 1, "自己換新局時輪詢重建基線要含自己，新局摸到舊局用過的花 id 照樣播一次");
+}
+// 11. 別家（非 selfSeat）的輪詢行為完全不受 selfSeat 參數影響，維持原本「只記不播」
+{
+  const t = new FlowerTracker();
+  t.onPoll(seats([], [X]), A, 0); // 自己是 0，座位 1 是別家
+  check(t.onEvent(1, [X]).length === 0, "別家的花輪詢已經記下的，事件不會重播（selfSeat 不影響別家）");
+}
+
 if (failed) process.exit(1);

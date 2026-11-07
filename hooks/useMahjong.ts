@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabase";
 import { tileKey, sortTiles } from "@/lib/mahjong/tiles";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
+import { FlowerAnimGuard } from "@/lib/mahjong/flowerAnimGuard";
 import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
 import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
@@ -287,6 +288,7 @@ export function useMahjong(
   const closedRef = useRef(false);
   const markClosed = useCallback((info: RoomClosedInfo) => {
     closedRef.current = true;
+    flowerAnimGuardRef.current.invalidate(); // 房間結束：補花動畫如果還沒播完，剩下的計時器都要失效，不能再寫 state（審伯 2026-11-08 必修②）
     // 已經有總分的就不要被沒有總分的蓋掉（例如先收到事件、之後輪詢回 404）
     setClosed((prev) => (prev && prev.players.length > 0 && info.players.length === 0 ? prev : info));
   }, []);
@@ -326,6 +328,8 @@ export function useMahjong(
   // 補花特效（小宜 2026-10-16）：只在收到廣播時播，輪詢只記下來不播（重新整理不重播）。
   // 每個座位已經知道的花牌 id（跟著局走，見 FlowerTracker）；事件帶來的花牌和它比對，多出來的就是這次補的
   const flowerTrackerRef = useRef(new FlowerTracker());
+  // 自己補花動畫的巢狀 setTimeout 序號保護（審伯 2026-11-08 必修②），見 lib/mahjong/flowerAnimGuard.ts
+  const flowerAnimGuardRef = useRef(new FlowerAnimGuard());
   const flowerFxRef = useRef(new Map<number, MjFlowerFx>()); // 正在播的膠囊（同一家 1 秒內又補到時接續）
   const flowerTimersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const flowerKeyRef = useRef(0);
@@ -399,6 +403,9 @@ export function useMahjong(
     clearTimeout(h.timer);
     h.timer = setTimeout(releaseHold, ms);
   }, [releaseHold]);
+  // 元件卸載（離開牌局頁、換房）：自己補花如果還在播，剩下的巢狀計時器要失效，不能在卸載後還寫 state
+  // （審伯 2026-11-08 必修②；myGen 捕捉到的號碼跟卸載後的不一樣，setState 前都會先擋下來）
+  useEffect(() => () => { flowerAnimGuardRef.current.invalidate(); }, []);
   /** 顯示節奏提示 ms 毫秒（新的蓋掉舊的；舊的計時器到了不會清掉新的） */
   const paceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showPace = useCallback((note: NonNullable<MjClientState["paceNote"]>, ms: number) => {
@@ -598,7 +605,10 @@ export function useMahjong(
       // 自己的花只靠 mj_draw_tile 這個即時事件來播（見下面 bindPrivateEvents 裡的註解）：
       // 這裡的輪詢如果連自己也記，會在事件送達前就把新花記成「已知」，事件來了反而讀不到新花，動畫整個不會播
       // （老闆 2026-11-08 查到：手牌裡完全看不到補花，根因就是這個輪詢和即時事件的賽跑，不是只有「補花」字樣沒做對）
-      flowerTrackerRef.current.onPoll(gs.players.filter((p) => p.seat !== mySeat), (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined);
+      // 傳整份 players（含自己）＋ mySeat：onPoll 內部只在自己完全沒有基線時（重新整理、中途進房、漏事件）
+      // 用快照補建一次，之後都不再動；換新局那個分支（漏收 mj_game_start）一樣會正確重建自己的基線
+      // （審伯 2026-11-08 必修①）
+      flowerTrackerRef.current.onPoll(gs.players, (gs as Record<string, unknown>).roundInfo as RoundInfo | undefined, mySeat);
       setState((prev) => ({
         ...prev,
         status: gs.status as MjClientState["status"],
@@ -796,9 +806,16 @@ export function useMahjong(
           // 才在那張牌上冒出「補花」字樣，再停另一半時間才補下一張；連續補花、槓後補花一樣一張一張來。
           // 伺服器已經把整串補花都結清，這裡用「前一手的手牌＋這張花」在前端重演一次給大家看
           holdFor(addedFlowers.length * FLOWER_PACE_MS + (slow ? SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS : 0));
+          // 審伯 2026-11-08 必修②：巢狀 setTimeout 原本沒存、取消不了，換新局、換房、卸載、伺服器快照
+          // 已經更新時，舊的回呼還是會在之後把手牌蓋回補花演到一半的樣子。這裡用 holdRef.gen 當序號——
+          // 每次開始一段新的補花動畫都重新發一個號碼，markClosed／mj_game_start／卸載都會把 gen 再加 1，
+          // 之後每個 setTimeout 的回呼先比對自己拿到的號碼還是不是目前這個，不是就直接不寫 state
+          const myGen = flowerAnimGuardRef.current.start();
+          const isStale = () => flowerAnimGuardRef.current.isStale(myGen);
           const base0 = stateRef.current.myHand;
           const half = FLOWER_PACE_MS / 2;
           const showFlower = (i: number) => {
+            if (isStale()) return;
             const tile = addedFlowers[i];
             // 老闆 2026-11-08 查到：牌 id 每局會重複使用，base0 原本的手牌裡可能剛好有張舊 id
             // 跟這張新補的花撞號；用 id 去手牌裡找，找到的反而是撞號的那張舊牌（畫面看起來像白板之類的），
@@ -814,8 +831,12 @@ export function useMahjong(
             // 就被提早點開
             setState((prev) => ({ ...prev, myHand: sortTiles([...dedupedBase, tile]), drawnTileId: tile.id, hasDrawn: true, availableActions: [], slowDraw: null, flowerLabel: false, flowerAnimating: true }));
             setTimeout(() => {
+              if (isStale()) return;
               setState((prev) => ({ ...prev, flowerLabel: true }));
-              setTimeout(() => (i + 1 < addedFlowers.length ? showFlower(i + 1) : applyFinal()), half);
+              setTimeout(() => {
+                if (isStale()) return;
+                if (i + 1 < addedFlowers.length) showFlower(i + 1); else applyFinal();
+              }, half);
             }, half);
           };
           showFlower(0);
@@ -993,6 +1014,9 @@ export function useMahjong(
       fxTimersRef.current.clear();
       declareEndRef.current.clear();
       clearFlowerFx(); // 上一局的補花膠囊同理（見下方 flowerFx: []）
+      // 上一局自己補花的動畫如果還沒播完就換局了，剩下的巢狀計時器要失效，不能再把這一局的手牌
+      // 蓋回上一局補花演到一半的樣子（審伯 2026-11-08 必修②）；myGen 捕捉到的號碼跟這裡不一樣就不會寫 state
+      flowerAnimGuardRef.current.invalidate();
       const msg = payload as {
         currentTurn: number;
         dealerSeat: number;

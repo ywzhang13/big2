@@ -30,8 +30,14 @@ export class FlowerTracker {
     return players.filter((p) => p.flowers.length > 0);
   }
 
-  /** 輪詢：只記不播。更新的一局（漏收開局事件）就整個換成快照；舊的回應不碰基線 */
-  onPoll(players: SeatFlowers[], round: RoundInfo | null | undefined): void {
+  /**
+   * 輪詢：別家只記不播。更新的一局（漏收開局事件）就整個換成快照重建基線，含自己——這是換局，不是事件，
+   * 不算「播」。自己的座位（selfSeat）在同一局裡只在完全沒有基線時（重新整理、中途進房、斷線重連漏掉
+   * mj_draw_tile 事件）用這次快照補建基線，之後都不再動：自己的新花只能靠事件播出來，不會被輪詢搶走
+   * （審伯 2026-11-08 必修①：原本自己整個被排除在輪詢之外，連「第一次建基線」都沒有，中途進房或漏事件
+   * 之後第一次補花永遠播不出來）
+   */
+  onPoll(players: SeatFlowers[], round: RoundInfo | null | undefined, selfSeat?: number): void {
     const polled = gameKeyOf(round);
     if (polled && this.game) {
       const rel = compareGameKey(polled, this.game);
@@ -39,7 +45,13 @@ export class FlowerTracker {
       if (rel > 0) { this.game = polled; this.reset(players); return; }
     }
     if (polled && !this.game) this.game = polled;
-    for (const p of players) this.note(p.seat, p.flowers);
+    for (const p of players) {
+      if (p.seat === selfSeat) {
+        if (!this.known.has(p.seat)) this.known.set(p.seat, new Set(p.flowers.map((t) => t.id)));
+      } else {
+        this.note(p.seat, p.flowers);
+      }
+    }
   }
 
   /** 廣播事件（摸牌、補花）：回傳這次新補的花；這家還沒記過（剛重新整理）就只記不播 */
