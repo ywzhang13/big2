@@ -128,10 +128,12 @@ function DeclareTags({ ting, eye, fx }: { ting?: boolean; eye?: boolean; fx?: { 
   return null;
 }
 
-/** 眼牌者看到的手牌：摸進的那張排最後一張 */
-function eyeHandTiles(h: MjOpponentHand): { tile: Tile; drew: boolean }[] {
+/** 眼牌者看到的手牌：橫向(對家)摸進的那張排最前面＝最左端，直向(左右家)排最後一張（審伯必修，2026-11-08） */
+function eyeHandTiles(h: MjOpponentHand, drawFirst = false): { tile: Tile; drew: boolean }[] {
   const drew = h.drawnTileId != null ? h.hand.find((t) => t.id === h.drawnTileId) : undefined;
-  return [...h.hand.filter((t) => t !== drew).map((tile) => ({ tile, drew: false })), ...(drew ? [{ tile: drew, drew: true }] : [])];
+  const rest = h.hand.filter((t) => t !== drew).map((tile) => ({ tile, drew: false }));
+  const drewItem = drew ? [{ tile: drew, drew: true }] : [];
+  return drawFirst ? [...drewItem, ...rest] : [...rest, ...drewItem];
 }
 
 /** Player info panel for table edges */
@@ -247,13 +249,14 @@ function PlayerPanel({
       <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
       </div>
 
-      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最後＋空一格，不用金框，老闆 2026-11-08）。
+      {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最左／最後＋空一格，不用金框，老闆 2026-11-08）。
+          對家(橫向)摸到的那張排最前面＝最左端，跟沒眼牌的 TopBacks 同一個位置規則（審伯必修，2026-11-08）。
           下家用 flex-col-reverse：陣列順序跟上家一樣（摸到的那張排最後），CSS 反過來讓它顯示在最上面，下面留空一格（審伯必修②，2026-11-08） */}
       {opponent ? (
         <div className={`flex ${isHorizontal ? "flex-row" : position === "right" ? "flex-col-reverse" : "flex-col"} items-center`}>
-          {eyeHandTiles(opponent).map(({ tile, drew }) =>
+          {eyeHandTiles(opponent, isHorizontal).map(({ tile, drew }) =>
             isHorizontal ? (
-              <div key={tile.id} data-drew={drew || undefined} style={drew ? { marginLeft: 6 } : undefined}>
+              <div key={tile.id} data-drew={drew || undefined} style={drew ? { marginRight: 6 } : undefined}>
                 <MjTile tile={tile} width={26} height={35} />
               </div>
             ) : (
