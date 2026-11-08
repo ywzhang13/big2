@@ -5,7 +5,10 @@
 //   computeEyeDrawDelayMs：這次摸牌要晚幾毫秒（跟玩家自己畫面同一條公式，眼牌＋補花兩段相加）
 //   isHeldForSlowDraw：pull() 的關卡本身（所有入口共用同一個判斷）
 //   shouldShowSlowDrawFlip：要不要播翻牌動畫
-import { computeEyeDrawDelayMs, isHeldForSlowDraw, shouldShowSlowDrawFlip } from "../app/mahjong/watch/page";
+import {
+  applyGameOverEvent, computeEyeDrawDelayMs, isHeldForSlowDraw, shouldApplyDelayedSettlement, shouldExitOnRoomGone,
+  shouldShowSlowDrawFlip, type GameOverPayload,
+} from "../app/mahjong/watch/page";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "../lib/mahjong/pace";
 import type { SpectateView } from "../lib/mahjong/spectateClient";
 
@@ -51,6 +54,50 @@ check(computeEyeDrawDelayMs(0, [], 0) === 0, "完全沒人眼牌時：延遲是 
   check(shouldShowSlowDrawFlip(base, 42) === false, "drawnTileId 沒變（重新整理拿到同一份快照）：不重播");
   check(shouldShowSlowDrawFlip({ ...base, eyeSeats: [] }, null) === false, "正在看的這家不是眼牌：不播翻牌動畫，維持現有行為");
   check(shouldShowSlowDrawFlip({ ...base, drawnTileId: null }, null) === false, "這家目前沒有摸到的牌（drawnTileId 是 null）：不播");
+}
+
+// ===== 審伯首審擋下的三項（老闆 2026-11-08 第二次）=====
+// 用假時鐘（自己傳 now／round 值，不靠真的 setTimeout）模擬 app/mahjong/watch/page.tsx 的 mj_draw →
+// mj_game_over → pull() 404／410 這一批事件的真實順序。
+
+// 情境 6（必修①）：眼牌自摸是整場最後一局——mj_game_over 一到就要「立刻」（不等慢摸的畫面延遲）
+// 讓 finalSettlementRef 反映正確狀態，這樣即使 pull() 搶先一步在畫面套用之前就先拿到 404／410，
+// 也不會被誤判成房間中途關閉而自動退出
+{
+  const viewBeforeDraw = { status: "playing", currentTurn: 1, playerScores: [0, 0, 0, 0] } as unknown as SpectateView;
+  const payload: GameOverPayload = {
+    winnerSeat: 1, winnerName: "阿美", score: { fans: ["自摸"], totalFan: 1 }, winners: [],
+    settlement: {}, playerScores: [100, -100, 0, 0], roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0 }, gameOver: true,
+  };
+  // 這一步對應「收到 mj_game_over，立刻同步更新 viewRef／finalSettlementRef」（還沒等慢摸的 setTimeout）
+  const next = applyGameOverEvent(viewBeforeDraw, payload);
+  const finalSettlementSetImmediately = next !== null && payload.gameOver === true;
+  check(finalSettlementSetImmediately, "眼牌自摸最後一局：mj_game_over 一到，finalSettlementRef 立刻（同步）設為 true，不等慢摸的畫面延遲");
+  // 這一步對應「在畫面真的套用結算之前，pull() 搶先一步拿到房間已刪的 404」
+  check(shouldExitOnRoomGone(404, finalSettlementSetImmediately) === false, "搶在畫面套用之前先到的 404：因為 finalSettlementRef 已經是 true，不會自動退出，結算留著");
+  check(shouldExitOnRoomGone(410, finalSettlementSetImmediately) === false, "同上，410 也一樣不會自動退出");
+}
+
+// 情境 7（必修②，最佳可行驗證）：不是眼牌時的一般觀戰流程完全不受影響——沒有慢摸就不會延後畫面，
+// mj_game_over 立刻套用，翻牌動畫也不會播
+// ⚠️ 關於「摸牌當下開始翻 800ms、1800ms 才進入摸牌後狀態」：查證後發現伺服器對眼牌玩家的摸牌／自動
+// 打出是同一個 API 請求內原子處理（app/api/mahjong/draw/route.ts 的 autoDiscarded），REST 輪詢拿到的
+// 一定已經是摸牌＋處理完的最終結果，沒有「已摸牌、還沒打出」的中繼狀態可以查詢；玩家本人的翻牌動畫
+// 能在 0ms 開始，是因為私人事件 mj_draw_tile 在同一個請求的回應裡就直接帶了那張牌。觀戰者要在真正
+// 摸牌當下（而不是資料到齊後）就看到翻牌，需要伺服器額外送一個帶牌面的私人廣播給核准觀戰的人——這是
+// 後端改動，這輪沒有動，已經回報阿哲，不自己加。這裡驗證的是「資料到齊後翻牌動畫會正確觸發」這個
+// 已經做到的部分（情境 5），以及没有慢摸時完全不受影響：
+check(computeEyeDrawDelayMs(2, [], 0) === 0, "不是眼牌：延遲 0，資料一到就套用，不會多等 800ms 或 1800ms");
+
+// 情境 8（必修③）：慢摸期間如果新局快照先到（viewRef 的 roundInfo 已經換成下一局），延後套用的舊結算
+// 不能把新局蓋回去；alive=false（換視角、離開觀戰）也要跳過
+{
+  const roundA = { currentRound: 1, currentGame: 1, dealerConsecutive: 0 };
+  const roundB = { currentRound: 1, currentGame: 2, dealerConsecutive: 0 }; // 下一局
+  check(shouldApplyDelayedSettlement(true, roundA, roundA) === true, "正常情況：alive=true、還是同一局（roundInfo 相同）——可以套用");
+  check(shouldApplyDelayedSettlement(true, roundB, roundA) === false, "慢摸期間已經換局（viewRef 的 roundInfo 變成下一局）：不套用，不會把舊結算蓋回新局");
+  check(shouldApplyDelayedSettlement(false, roundA, roundA) === false, "慢摸期間換視角／離開觀戰（alive=false）：不套用，就算局次沒變也一樣跳過");
+  check(shouldApplyDelayedSettlement(false, roundB, roundA) === false, "alive=false 又換了局：雙重理由都不套用");
 }
 
 if (failed) process.exit(1);

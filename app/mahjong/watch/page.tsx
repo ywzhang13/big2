@@ -135,6 +135,15 @@ export function shouldShowSlowDrawFlip(view: Pick<SpectateView, "drawnTileId" | 
   return view.drawnTileId != null && view.drawnTileId !== prevDrawnTileId && view.eyeSeats.includes(view.mySeat);
 }
 
+/** 延後套用的結算（mj_game_over，眼牌那家正在慢慢摸時）在真的要套用「畫面」前，要不要被取消／忽略
+ *  （審伯首審必修③）：alive=false（換視角、離開觀戰、effect 重跑）或這段等待期間已經換了新局
+ *  （viewRef 現在的 roundInfo 跟排程當下不一樣，表示有更新的快照先蓋過去了）都要跳過，不能把舊結算蓋回去。
+ *  注意：finalSettlementRef／viewRef 本身是在收到事件的當下「立刻」同步更新的（不受這個函式影響），
+ *  這裡只控制「要不要呼叫 setView 把畫面換成這份結算」 */
+export function shouldApplyDelayedSettlement(alive: boolean, currentRoundInfo: unknown, scheduledRoundInfo: unknown): boolean {
+  return alive && JSON.stringify(currentRoundInfo) === JSON.stringify(scheduledRoundInfo);
+}
+
 export default function MahjongWatchPage() {
   const auth = useMjAuth();
   const mobile = useMobileLandscape();
@@ -337,18 +346,29 @@ export default function MahjongWatchPage() {
         }
       } else soon();
       if (msg.event === "mj_game_over") {
-        // 審伯必修①：每一局結束都會發這個事件，不是只有整場最後一局；只有真的套用成功（view 不是 null，
-        // 不是事件比第一次 view 還早到）而且這局的 gameOver===true（整場最後一局）才設最終旗標，
-        // 不然中途一局結束後拿到的 404／410 會被誤判成「已經看過最後一局結算」而不自動退出
+        // 審伯首審必修①：眼牌自摸結束時，這一批事件是「mj_draw（設 hold）→ mj_game_over（gameOver=true）→
+        // 房間刪除後的 404／410」。viewRef／finalSettlementRef 要「立刻」同步更新（不等慢摸那段時間），
+        // 之後不管是哪個 pull() 先拿到 404／410，都讀得到正確的 finalSettlementRef，不會因為 alive=false
+        // 把結算丟掉；只有「畫面」（setView）才延後到慢摸時間過了才套用，對齊本人的節奏
         const p = (msg.payload ?? {}) as GameOverPayload;
-        const applyIt = () => {
-          if (!alive) return;
-          const next = applyGameOverEvent(viewRef.current, p);
-          if (next) { viewRef.current = next; setView(next); if (p.gameOver === true) finalSettlementRef.current = true; }
-        };
-        // 眼牌那家正在慢慢摸：如果這一局是自摸結束，結果也不能比本人早出現，等慢摸那段時間過了才套用（老闆 2026-11-08）
-        if (holdRef.current.on) setTimeout(applyIt, Math.max(0, holdRef.current.until - Date.now()));
-        else applyIt();
+        const next = applyGameOverEvent(viewRef.current, p);
+        if (next) {
+          viewRef.current = next;
+          if (p.gameOver === true) finalSettlementRef.current = true;
+          const wait = holdRef.current.on ? Math.max(0, holdRef.current.until - Date.now()) : 0;
+          // 審伯首審必修③：延後套用的「畫面」要綁定這一局（用這次事件自己的 roundInfo），套用前確認
+          // viewRef.current 還是同一局——這段等待期間如果已經有更新的快照／新局蓋過 viewRef（例如 hold
+          // 提早解除、pull() 先拿到更新的資料），就不要用這份舊結算蓋回去；alive 則擋住換視角／離開觀戰
+          const scheduledRoundInfo = p.roundInfo;
+          if (wait > 0) {
+            setTimeout(() => {
+              if (!shouldApplyDelayedSettlement(alive, viewRef.current?.roundInfo, scheduledRoundInfo)) return;
+              setView(next);
+            }, wait);
+          } else {
+            setView(next);
+          }
+        }
       }
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
