@@ -161,20 +161,13 @@ export function findJustDrawnTile(newView: Pick<SpectateView, "lastDiscard" | "s
   return null;
 }
 
-/** 摸牌當下（t=0）就能播正確翻牌動畫的關鍵：用「已經處理完」的新狀態 newView 配合剛摸到的那張牌
- *  （findJustDrawnTile），往回推一份「剛摸到、還沒打出」的中繼畫面——手牌比舊的 oldView 多這一張，
- *  棄牌堆、海底維持舊狀態（還沒打出），status 強制設回 playing（自摸也先不顯示結算，等 1800ms 才出現），
- *  讓翻牌動畫能在 t=0 立刻顯示正確的牌，不用等到最終狀態（可能已經是打出後或結算）才看得到（審伯必修②）。
- *  tile 是 null（找不到剛摸到的牌）就回傳 null，呼叫端退回原本整段延遲的做法 */
-export function buildMidDrawView(oldView: SpectateView, newView: SpectateView, tile: Tile): SpectateView {
-  return {
-    ...newView,
-    status: "playing",
-    myHand: [...oldView.myHand, tile],
-    drawnTileId: tile.id,
-    lastDiscard: oldView.lastDiscard,
-    focusDiscard: oldView.focusDiscard,
-  };
+/** 摸牌當下（t=0）就能播正確翻牌動畫的關鍵：以「摸牌前的舊快照」oldView 為底（審伯複審必修②——
+ *  不能用已經處理完的 newView 當底，那樣棄牌堆、海底、currentTurn 全部會是「打出後」的樣子，等於
+ *  提早洩漏結果；也不會混進已核准觀戰那家以外的任何新資料，因為整份都原封不動沿用 oldView），
+ *  只在被觀戰那家的手牌多放一張剛摸到的牌（findJustDrawnTile 找出來的那張），讓翻牌動畫在 t=0
+ *  立刻顯示正確的牌，不用等到最終狀態（可能已經是打出後或結算）才看得到 */
+export function buildMidDrawView(oldView: SpectateView, tile: Tile): SpectateView {
+  return { ...oldView, myHand: [...oldView.myHand, tile], drawnTileId: tile.id };
 }
 
 export default function MahjongWatchPage() {
@@ -307,6 +300,9 @@ export default function MahjongWatchPage() {
       const r = await fetchView(room.roomId, target.playerId);
       inFlight = false;
       if (!alive) return;
+      // 審伯複審必修②：這次請求送出「之後」可能有 mj_draw 進來、開始慢摸並同步設了 hold——這份回應已經
+      // 過時（有可能是已經處理完的最終狀態，會比本人早出現），一律丟棄，等慢摸自己的時間軸去拿
+      if (isHeldForSlowDraw(holdRef.current, Date.now())) return;
       if (r.ok) {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
@@ -327,7 +323,10 @@ export default function MahjongWatchPage() {
         }
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
-        if (!shouldExitOnRoomGone(r.status, finalSettlementRef.current)) { alive = false; return; }
+        // 審伯複審必修①：這裡是「不退出」的分支（最後一局已經看過結算），不能跟著把 alive 設成 false——
+        // alive=false 會連帶讓 stagedEyeReveal 排的 1800ms 延後結算的 setView 也被擋下來，結算永遠不會出現。
+        // 這個分支只代表「房間已刪、但畫面要留著」，effect 本身沒有要卸載，alive 維持 true
+        if (!shouldExitOnRoomGone(r.status, finalSettlementRef.current)) return;
         alive = false;
         setView(null);
         setViewSeat(null);
@@ -350,42 +349,48 @@ export default function MahjongWatchPage() {
     // 慢慢摸牌的節奏（老闆 2026-11-07：觀戰者看被觀戰的人摸牌，節奏要跟那位玩家自己畫面上的一樣，不能比較快）：
     // 延後拿最新狀態的時間，而不是另外做一套動畫；拿到的還是同一個 pull()，只是晚一點拿，畫面停留的時間自然就對上了
     const soonAfter = (ms: number) => { if (timer) clearTimeout(timer); timer = setTimeout(() => { timer = null; void pull(); }, ms); };
-    // 審伯首審必修②：觀戰的翻牌要跟本人同一條時間軸——t=0（收到 mj_draw）就先拉「已經處理完」的狀態
-    // （繞過 holdRef，不等慢摸時間），找出那張剛摸到的牌，往回推一份「剛摸到、還沒打出」的中繼畫面立刻
-    // 顯示＋開始翻牌；800ms 翻完、停住；1800ms 才換成真正的最終畫面（打出後，或自摸結算）。
+    // 審伯複審必修②：觀戰的翻牌要跟本人同一條時間軸——t=0（收到 mj_draw，進這個函式的當下、還沒 await
+    // 之前）就要同步建立這次重播的世代（revealGenRef）、同步擋住所有一般的拉取（holdRef），不能等
+    // fetchView 回來才設，不然「拉取中」那段空檔，輪詢／visibilitychange／online／已經在途中的 pull()
+    // 都可能先把已經處理完的狀態秀出來。拿到資料後先比對世代還是不是同一輪，不是（例如第二次 mj_draw
+    // 插進來、或換視角離開觀戰）就整個丟棄，不套用也不再往下排。800ms 翻完、停住；1800ms（都從 t=0 算，
+    // 扣掉拉取花的時間）才換成真正的最終畫面（打出後，或自摸結算）。
     // 找不到剛摸到的牌（槓後補牌、連續吃碰）、拉取失敗、或還沒有基線：退回原本整段延遲、不翻牌的做法
     const stagedEyeReveal = async (seat: number, ms: number) => {
+      const gen = ++revealGenRef.current;
+      holdRef.current = { on: true, until: Date.now() + ms };
+      const startedAt = Date.now();
+      const remaining = () => Math.max(0, ms - (Date.now() - startedAt));
+      // 還是同一輪才補排 soonAfter（找不到剛摸到的牌／拉取失敗／沒有基線時的退路）：已經被新一輪蓋過
+      // 就不用再排，新一輪自己會處理
+      const fallback = () => { if (revealGenRef.current === gen) soonAfter(remaining()); };
       const oldView = viewRef.current;
-      if (!oldView) { holdRef.current = { on: true, until: Date.now() + ms }; soonAfter(ms); return; }
+      if (!oldView) { fallback(); return; }
       const r = await fetchView(room.roomId, target.playerId);
-      if (!alive) return;
-      if (!r.ok) { holdRef.current = { on: true, until: Date.now() + ms }; soonAfter(ms); return; }
+      if (!alive || revealGenRef.current !== gen) return; // 舊的或被第二次 mj_draw 蓋過的一律丟棄
+      if (!r.ok) { fallback(); return; }
       const newView = toSpectateView(r.data, focusRef.current);
       const tile = findJustDrawnTile(newView, seat);
       if (!tile) {
         viewRef.current = newView;
         if (newView.status === "finished" && newView.winner && newView.gameOver) finalSettlementRef.current = true;
-        holdRef.current = { on: true, until: Date.now() + ms };
-        soonAfter(ms);
+        fallback();
         return;
       }
-      const mid = buildMidDrawView(oldView, newView, tile);
-      const gen = ++revealGenRef.current;
+      const mid = buildMidDrawView(oldView, tile);
       viewRef.current = mid;
-      focusRef.current = mid.focusDiscard;
       setView(mid);
       setSlowDraw({ tileId: tile.id, win: newView.status === "finished" && newView.winner?.seat === seat });
       // 審伯首審必修①的同一條規則：真的是整場最後一局（gameOver===true）就立刻同步設旗標，不等 1800ms
       if (newView.status === "finished" && newView.winner && newView.gameOver) finalSettlementRef.current = true;
-      holdRef.current = { on: true, until: Date.now() + ms }; // 繼續擋住其他 pull() 入口直到 1800ms
-      setTimeout(() => setSlowDraw((cur) => (cur?.tileId === tile.id ? null : cur)), WATCH_FLIP_MS); // 翻完，停住
-      setTimeout(() => { // 1800ms：換成真正的最終畫面（打出後的狀態，或自摸結算）
+      setTimeout(() => setSlowDraw((cur) => (cur?.tileId === tile.id ? null : cur)), Math.max(0, WATCH_FLIP_MS - (Date.now() - startedAt))); // 翻完，停住
+      setTimeout(() => { // t=0 起算 1800ms：換成真正的最終畫面（打出後的狀態，或自摸結算）
         if (!alive || revealGenRef.current !== gen) return;
         if (holdRef.current.on) holdRef.current.on = false;
         viewRef.current = newView;
         focusRef.current = newView.focusDiscard;
         setView(newView);
-      }, ms);
+      }, remaining());
     };
     void pull();
     const poll = setInterval(() => { if (sync.due(Date.now(), document.hidden)) void pull(); }, POLL_TICK_MS);

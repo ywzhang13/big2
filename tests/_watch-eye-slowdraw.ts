@@ -134,26 +134,176 @@ check(WATCH_FLIP_MS < EYE_DRAW_MS, "800ms 翻完後還要再停到 1800ms 才出
   check(findJustDrawnTile(newView, 1) === null, "打牌的不是這家自己、也不是這家自摸：找不到，呼叫端退回原本整段延遲的做法");
 }
 
-// 情境 12：buildMidDrawView——t=0 的中繼畫面要讓翻牌動畫顯示正確的牌，且不能提早露出「打出後」或「自摸結算」
+// 情境 12（審伯複審必修②）：buildMidDrawView 要以「摸牌前的舊快照」為底，只在手牌多放一張剛摸到的牌；
+// 棄牌堆、牌桌上的玩家資料（players／wallRemaining／currentTurn／opponentHands）一律沿用舊快照，
+// 不能混進 newView 已經處理完的任何東西——不然等於提早洩漏結果，也可能帶進已核准那一家以外的資料
 {
   const oldHand = [tile(1), tile(2), tile(3)];
-  const oldView = { myHand: oldHand, lastDiscard: null, focusDiscard: null } as unknown as SpectateView;
-  const drawn = tile(999, "9筒");
-  const newViewDiscarded = {
-    status: "playing", myHand: [tile(2), tile(3), tile(4)], lastDiscard: { tile: drawn, from: 1 }, focusDiscard: { tile: drawn, from: 1 }, drawnTileId: null,
+  const oldPlayers = [{ seat: 0, discards: [] }, { seat: 1, discards: [] }];
+  const oldView = {
+    status: "playing", myHand: oldHand, lastDiscard: null, focusDiscard: null, wallRemaining: 68, currentTurn: 1,
+    players: oldPlayers, opponentHands: null,
   } as unknown as SpectateView;
-  const mid = buildMidDrawView(oldView, newViewDiscarded, drawn);
+  const drawn = tile(999, "9筒");
+  const mid = buildMidDrawView(oldView, drawn);
   check(mid.myHand.length === 4 && mid.myHand.some((t) => t.id === 999), "中繼畫面：手牌是舊手牌＋剛摸到的那張（共 4 張），翻牌動畫找得到這張牌");
   check(mid.drawnTileId === 999, "中繼畫面：drawnTileId 指到剛摸到的那張，翻牌動畫（SlowDrawTile）比對得到");
+  check(mid.status === "playing", "中繼畫面：status 沿用舊快照，自摸結算不會在 t=0～1800ms 提早出現");
   check(mid.lastDiscard === null, "中繼畫面：棄牌堆維持舊狀態（還沒打出），不會提早看到「已經打出」的畫面");
+  check(mid.wallRemaining === 68, "中繼畫面：剩餘牌數沿用舊快照，不是已經摸過之後少一張的新數字");
+  check(mid.currentTurn === 1, "中繼畫面：currentTurn 沿用舊快照，不是已經換下一家的新狀態");
+  check((mid.players as unknown) === oldPlayers, "中繼畫面：players（牌桌上每家的公開資料）整份沿用舊快照，不混進任何新資料");
+  check(mid.opponentHands === null, "中繼畫面：opponentHands 沿用舊快照，不會多帶出已核准那家以外的資料");
+}
 
-  const newViewWin = {
-    status: "finished", myHand: [tile(2), tile(3), drawn], lastDiscard: null, focusDiscard: null, drawnTileId: null,
-    winner: { seat: 1, name: "阿美", score: { fans: ["自摸"], totalFan: 1 }, winTile: drawn },
-  } as unknown as SpectateView;
-  const midWin = buildMidDrawView(oldView, newViewWin, drawn);
-  check(midWin.status === "playing", "自摸情境的中繼畫面：status 強制設回 playing，結算不會在 t=0～800ms 提早出現");
-  check(midWin.winner?.seat === 1, "自摸情境的中繼畫面：winner 資料還在（之後換成最終畫面時可以直接用），只是先不顯示");
+// ===== 審伯複審必修①②：整合式假時鐘測試（真的跑過延後回呼，不只測純函式）=====
+// 用一支最小化的假時鐘＋假 setTimeout，原樣對照 stagedEyeReveal／pull() 在 app/mahjong/watch/page.tsx
+// 裡的關鍵判斷式（isHeldForSlowDraw、shouldExitOnRoomGone、buildMidDrawView、findJustDrawnTile、
+// revealGenRef／holdRef 的設定時機），模擬完整的事件序列並真的推進時間、真的執行排好的回呼。
+{
+  type FakeTimer = { id: number; at: number; fn: () => void };
+  class FakeClock {
+    now = 0;
+    private timers: FakeTimer[] = [];
+    private nextId = 1;
+    setTimeout(fn: () => void, ms: number) {
+      const id = this.nextId++;
+      this.timers.push({ id, at: this.now + ms, fn });
+      return id;
+    }
+    /** 真的把時間往前推，途中到期的 timer 依排定順序依序執行（可能又排新的 timer，一併處理） */
+    advanceTo(target: number) {
+      for (;;) {
+        const due = this.timers.filter((t) => t.at <= target).sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        this.timers = this.timers.filter((t) => t.id !== due.id);
+        this.now = due.at;
+        due.fn();
+      }
+      this.now = target;
+    }
+  }
+
+  // 模擬 app/mahjong/watch/page.tsx 的 holdRef／revealGenRef／viewRef／finalSettlementRef／alive，
+  // 以及 stagedEyeReveal、pull() 404 分支裡「真正會跑到」的那幾行邏輯（跟實際程式一一對應）
+  function makeHarness(clock: FakeClock) {
+    const holdRef = { current: { on: false, until: 0 } };
+    const revealGenRef = { current: 0 };
+    let alive = true;
+    let finalSettlement = false;
+    let viewRef: SpectateView | null = { status: "playing", myHand: [tile(1)], lastDiscard: null, gameOver: false } as unknown as SpectateView;
+    const views: SpectateView[] = []; // 每次「畫面真的換成什麼」依序記錄，對應 setView() 被呼叫的歷史
+    const setView = (v: SpectateView) => views.push(v);
+
+    // 對應 app/mahjong/watch/page.tsx 的 stagedEyeReveal：fetchLatency＝fetchView 要多久才回來
+    const stagedEyeReveal = (seat: number, ms: number, newView: SpectateView, fetchLatency: number) => {
+      const gen = ++revealGenRef.current;
+      holdRef.current = { on: true, until: clock.now + ms };
+      const startedAt = clock.now;
+      const remaining = () => Math.max(0, ms - (clock.now - startedAt));
+      const oldView = viewRef;
+      if (!oldView) return;
+      clock.setTimeout(() => { // 對應 await fetchView(...) 真的要花時間才回來
+        if (!alive || revealGenRef.current !== gen) return; // 審伯複審必修②：世代不對（被第二次 mj_draw 蓋過）就整段丟棄
+        const tile_ = findJustDrawnTile(newView, seat);
+        if (!tile_) return;
+        const mid = buildMidDrawView(oldView, tile_);
+        viewRef = mid;
+        setView(mid);
+        if (newView.status === "finished" && newView.winner && newView.gameOver) finalSettlement = true; // 必修①：立刻同步設
+        clock.setTimeout(() => { // t=0 起算 1800ms（扣掉拉取花的時間）：換成最終畫面
+          if (!alive || revealGenRef.current !== gen) return;
+          if (holdRef.current.on) holdRef.current.on = false;
+          viewRef = newView;
+          setView(newView);
+        }, remaining());
+      }, fetchLatency);
+    };
+
+    // 對應 pull()：拿到 404／410 時的判斷（審伯複審必修①：這個分支不能把 alive 設成 false）
+    const pullHits404 = (status: 404 | 410 = 404) => {
+      if (!shouldExitOnRoomGone(status, finalSettlement)) return; // 不退出，alive 維持 true
+      alive = false;
+    };
+    const pullHits403 = () => { if (!shouldExitOnRoomGone(403, finalSettlement)) return; alive = false; };
+
+    return { holdRef, revealGenRef, get alive() { return alive; }, get finalSettlement() { return finalSettlement; }, get viewRef() { return viewRef; }, views, stagedEyeReveal, pullHits404, pullHits403 };
+  }
+
+  // 情境 13：中繼畫面 → gameOver=true 的自摸結算 → 1800ms 前收到 404 和 410 → 1800ms 後顯示結算、留在觀戰頁
+  {
+    const clock = new FakeClock();
+    const h = makeHarness(clock);
+    const winTile = tile(500, "東");
+    const finalView = {
+      status: "finished", myHand: [tile(1)], lastDiscard: null, gameOver: true,
+      winner: { seat: 1, name: "阿美", score: { fans: ["自摸"], totalFan: 1 }, winTile },
+    } as unknown as SpectateView;
+    h.stagedEyeReveal(1, EYE_DRAW_MS, finalView, 120); // fetchView 花 120ms 才回來
+
+    clock.advanceTo(120); // 拉取完成：中繼畫面上場、開始翻牌
+    check(h.views.length === 1, "t=120ms（拉取完成）：中繼畫面已經顯示");
+    check(h.views[0].myHand.some((t) => t.id === 500), "中繼畫面：手牌裡看得到剛摸到（胡）的那張牌");
+    check(h.views[0].status === "playing", "中繼畫面：status 還是 playing，自摸結算還沒出現");
+    check(h.finalSettlement === true, "finalSettlementRef 在中繼畫面套用的同一刻就已經是 true（必修①，不等 1800ms）");
+
+    // 1800ms 前，房間已經被刪，陸續收到 404、410——結算不能被取消，alive 要維持 true
+    clock.advanceTo(900);
+    h.pullHits404(); h.pullHits404(); // 先只打 404
+    check(h.alive === true, "1800ms 前收到 404：alive 維持 true，不會把 effect 判定成要卸載");
+    clock.advanceTo(1500);
+    h.pullHits404();
+    check(h.alive === true, "再收到一次 404：alive 還是 true");
+    check(h.views.length === 1, "1800ms 之前：畫面只套用過一次（中繼畫面），還沒看到自摸結算");
+
+    clock.advanceTo(EYE_DRAW_MS); // 補滿到 t=1800ms
+    check(h.views.length === 2, "t=1800ms：真的切到最終畫面（自摸結算）");
+    check(h.views[1].status === "finished" && h.views[1].winner?.seat === 1, "1800ms 後：顯示的是自摸結算（誰胡、winTile 都是最後那份 finalView）");
+    check(h.holdRef.current.on === false, "1800ms 後：hold 解除，恢復正常輪詢");
+
+    // 結算出現「之後」才發生的 410（比照房間真的被刪掉、但畫面已經留住結算）：還是不自動退出
+    h.pullHits404();
+    check(h.alive === true, "1800ms 之後再收到 404：結算已經留在畫面上，一樣不自動退出");
+  }
+
+  // 情境 14：403（觀戰權限被收回）無論什麼時候都立刻退出，不受慢摸／結算影響
+  {
+    const clock = new FakeClock();
+    const h = makeHarness(clock);
+    const winTile = tile(501, "南");
+    const finalView = { status: "finished", myHand: [tile(1)], lastDiscard: null, gameOver: true, winner: { seat: 1, name: "阿美", score: {}, winTile } } as unknown as SpectateView;
+    h.stagedEyeReveal(1, EYE_DRAW_MS, finalView, 50);
+    clock.advanceTo(50);
+    check(h.finalSettlement === true, "403 情境：結算旗標先設成 true（跟情境 13 一樣）");
+    h.pullHits403();
+    check(h.alive === false, "403（收回觀戰權限）：不管結算旗標是不是 true，照舊立刻退出（alive=false）");
+  }
+
+  // 情境 15（審伯複審必修②）：第二次 mj_draw 交錯——第一次的拉取還沒回來，第二次已經進來，世代要對得上，
+  // 舊的那次回應整段丟棄，不能把中繼畫面或最終畫面套到錯的那一次
+  {
+    const clock = new FakeClock();
+    const h = makeHarness(clock);
+    const firstDrawTile = tile(600, "一筒");
+    const firstView = { status: "playing", myHand: [tile(1), tile(2)], lastDiscard: { tile: firstDrawTile, from: 1 }, gameOver: false } as unknown as SpectateView;
+    const secondDrawTile = tile(601, "二筒");
+    const secondView = { status: "playing", myHand: [tile(1), tile(2)], lastDiscard: { tile: secondDrawTile, from: 1 }, gameOver: false } as unknown as SpectateView;
+
+    h.stagedEyeReveal(1, EYE_DRAW_MS, firstView, 500); // 第一次摸牌：拉取要 500ms 才回來（還沒回來時被第二次打斷）
+    clock.advanceTo(100);
+    h.stagedEyeReveal(1, EYE_DRAW_MS, secondView, 120); // 100ms 時第二次 mj_draw 進來（世代 +1，蓋過第一次）
+
+    clock.advanceTo(100 + 500); // 第一次的拉取在 t=600ms 回來，但世代已經被第二次蓋過
+    check(h.views.length <= 1, "第一次摸牌的回應（世代已經過期）不會套用中繼畫面，不會把錯的那張牌顯示出來");
+    if (h.views.length === 1) check(h.views[0].myHand.some((t) => t.id === 601), "如果已經套用了畫面，那一定是第二次（最新世代）的牌，不是第一次的");
+
+    clock.advanceTo(100 + 120); // 第二次的拉取在 t=220ms 回來
+    check(h.views.some((v) => v.myHand.some((t) => t.id === 601)), "第二次（最新世代）的中繼畫面有正確套用，看得到第二次摸到的那張牌");
+
+    clock.advanceTo(100 + EYE_DRAW_MS); // 第二次的 1800ms（從第二次 t=0=100ms 算）到了
+    const last = h.views[h.views.length - 1];
+    check(last.lastDiscard?.tile.id === 601, "最終畫面是第二次（最新世代）的最終狀態，不是第一次那份過期的資料");
+  }
 }
 
 if (failed) process.exit(1);
