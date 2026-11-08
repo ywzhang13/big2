@@ -10,6 +10,7 @@ import {
   shouldApplyDelayedSettlement, shouldExitOnRoomGone, shouldShowSlowDrawFlip, WATCH_FLIP_MS, type GameOverPayload,
 } from "../app/mahjong/watch/page";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "../lib/mahjong/pace";
+import { planWinShow } from "../lib/mahjong/winShow";
 import type { SpectateView } from "../lib/mahjong/spectateClient";
 import type { Tile } from "../lib/mahjong/tiles";
 
@@ -101,6 +102,71 @@ check(computeEyeDrawDelayMs(2, [], 0) === 0, "不是眼牌：延遲 0，資料�
   check(shouldApplyDelayedSettlement(true, roundB, roundA) === false, "慢摸期間已經換局（viewRef 的 roundInfo 變成下一局）：不套用，不會把舊結算蓋回新局");
   check(shouldApplyDelayedSettlement(false, roundA, roundA) === false, "慢摸期間換視角／離開觀戰（alive=false）：不套用，就算局次沒變也一樣跳過");
   check(shouldApplyDelayedSettlement(false, roundB, roundA) === false, "alive=false 又換了局：雙重理由都不套用");
+}
+
+// ===== 老闆 2026-11-08（第四次）：觀戰自摸特效播兩次 =====
+// 根因：applyGameOverEvent 組 view.winner 時沒有帶 winFx（伺服器的 mj_game_over 廣播沒有把它放在
+// winnerSeat／score 這幾個單獨欄位裡，是放在 winners[] 陣列每一筆的物件展開裡——跟玩家自己畫面
+// hooks/useMahjong.ts 的 mj_game_over 處理一樣，要去 winners[] 裡找回同一個座位那筆）。
+// 漏了這個欄位，hooks/useWinShow.tsx 的「一般胡牌」效果（只看 planWinShow(...)!=="cele" 來決定要不要
+// 播預設的金色浮層，只看一次就不再重看）會因為這份 winner 沒有 winFx，誤判成「這家沒有專屬特效」，
+// 先播一次預設浮層；等下一次 pull() 的權威快照補上 winFx，真正的 zfx 效果才接著播——變成播兩次。
+// 這裡驗證的是「資料來源本身」：只要 applyGameOverEvent 吐出來的 winner.winFx 一開始就正確，
+// planWinShow 從第一刻就會算出跟最終一致的結果（zfx 或 meteor），不會有「先 cele 後 zfx」這種中間態。
+{
+  const view = { status: "playing", currentTurn: 1, playerScores: [0, 0, 0, 0] } as unknown as SpectateView;
+  const payload: GameOverPayload = {
+    winnerSeat: 1, winnerName: "阿美", score: { fans: ["自摸"], totalFan: 1 },
+    winners: [
+      { seat: 0, name: "老闆", score: { fans: [], totalFan: 0 } }, // 陪榜的其他座位沒有 winFx，不能被誤抓
+      { seat: 1, name: "阿美", score: { fans: ["自摸"], totalFan: 1 }, winFx: "sakura" }, // 真正的贏家
+    ],
+    settlement: {}, playerScores: [0, 100, 0, 0], roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0 }, gameOver: false,
+  };
+  const next = applyGameOverEvent(view, payload);
+  check(next?.winner?.seat === 1 && next?.winner?.winFx === "sakura", "mj_game_over 一到：winner.winFx 就是阿美自己設定的 sakura，不是 undefined");
+  const plan = planWinShow({ pick: null, zimo: true, winFx: next?.winner?.winFx });
+  check(plan.join() === "zfx", "從第一刻起 planWinShow 就算出 zfx（不是退回 cele）：不會先播一次預設浮層");
+  check(plan.join() !== "cele", "跟 useWinShow 的早期效果同一個判斷式：plan 不等於單純 cele，一開始就會跳過預設浮層那一段");
+}
+
+// 情境：贏家本人沒有設定專屬特效（winners[] 裡那筆沒有 winFx）——plan 正確是 cele，且只會播這一次，
+// 不是漏抓 winFx 造成的「假 cele」（跟上面那個情境對照，確認修法沒有把沒有 winFx 的人也誤判出特效）
+{
+  const view = { status: "playing", currentTurn: 2, playerScores: [0, 0, 0, 0] } as unknown as SpectateView;
+  const payload: GameOverPayload = {
+    winnerSeat: 2, winnerName: "阿德", score: { fans: ["自摸"], totalFan: 1 },
+    winners: [{ seat: 2, name: "阿德", score: { fans: ["自摸"], totalFan: 1 } }], // 沒有 winFx：這家沒有自摸特效庫的設定
+    settlement: {}, playerScores: [0, 0, 100, 0], roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0 }, gameOver: false,
+  };
+  const next = applyGameOverEvent(view, payload);
+  check(next?.winner?.winFx === undefined, "沒有設定特效的贏家：winner.winFx 維持 undefined，不會被誤塞值");
+  check(planWinShow({ pick: null, zimo: true, winFx: next?.winner?.winFx }).join() === "cele", "沒有專屬特效：plan 正確是 cele，只播一次金色自摸浮層");
+}
+
+// 情境：帳號專屬隕石（winFx="meteor"）跟新特效庫走的是同一條修法，一併驗證不會漏抓
+{
+  const view = { status: "playing", currentTurn: 3, playerScores: [0, 0, 0, 0] } as unknown as SpectateView;
+  const payload: GameOverPayload = {
+    winnerSeat: 3, winnerName: "阿德", score: { fans: ["自摸"], totalFan: 1 },
+    winners: [{ seat: 3, name: "阿德", score: { fans: ["自摸"], totalFan: 1 }, winFx: "meteor" }],
+    settlement: {}, playerScores: [0, 0, 0, 100], roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0 }, gameOver: false,
+  };
+  const next = applyGameOverEvent(view, payload);
+  check(next?.winner?.winFx === "meteor", "隕石帳號：winner.winFx 正確是 meteor");
+  check(planWinShow({ pick: null, zimo: true, winFx: next?.winner?.winFx }).join() === "meteor", "plan 從第一刻起就是 meteor，不會先播一次預設浮層");
+}
+
+// 情境：流局（winnerSeat < 0）——winFx 不適用，確認不會從 winners[] 裡誤抓到任何一家的 winFx
+{
+  const view = { status: "playing", currentTurn: 0, playerScores: [0, 0, 0, 0] } as unknown as SpectateView;
+  const payload: GameOverPayload = {
+    winnerSeat: -1, winnerName: null, score: null,
+    winners: [{ seat: 0, name: "老闆", score: { fans: [], totalFan: 0 }, winFx: "sakura" }], // 流局時 winners[] 理論上不會有這種資料，防呆用
+    settlement: {}, playerScores: [0, 0, 0, 0], roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0 }, gameOver: false,
+  };
+  const next = applyGameOverEvent(view, payload);
+  check(next?.winner?.seat === -1 && (next?.winner as { winFx?: string })?.winFx === undefined, "流局：winner.winFx 一律不設，不會誤抓 winners[] 裡其他家的資料");
 }
 
 // ===== 審伯首審②（老闆 2026-11-08 第三次）：觀戰的翻牌要跟本人同一條時間軸 =====
