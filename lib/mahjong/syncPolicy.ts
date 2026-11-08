@@ -33,6 +33,13 @@ export class SyncPolicy {
   private applied = new Set<string>();
   /** 連續拿到比畫面舊的完整狀態、已經重抓幾次 */
   private staleStateStreak = 0;
+  /** 上一次權威快照成功套用之後，是否曾經跳號（漏收過事件）：曾經漏過，即使之後的事件版本追上了，
+   *  也不能只看版本號判斷「沒有漏任何事件」——漏掉的那個事件可能動過快照本身判斷不出來的欄位（例如
+   *  誰剛摸牌還沒打出），只有真的套用一次完整快照才能保證資料正確。這個旗標只能在快照套用成功時
+   *  （noteVersion 的 fromState 分支）清掉，不能在偵測到跳號的當下就清掉，不然還沒套用過快照、只是
+   *  版本剛好追上，就會被誤判成沒漏事件（老闆 2026-11-08 複審必修：B 摸牌 sv=3、漏掉 B 打牌 sv=4、
+   *  接著收到 C 的動作 sv=5，版本追上了但空格還留在 B，不能被 isAtLatest 當成沒漏事件） */
+  private missedSinceState = false;
   constructor(private safetyMs = SAFETY_POLL_MS, private offlineMs = OFFLINE_POLL_MS) {}
 
   /** 送出一次完整狀態請求（不管是定時、事件觸發還是回前景） */
@@ -48,7 +55,7 @@ export class SyncPolicy {
     return now - this.lastSent >= (this.live ? this.safetyMs : this.offlineMs);
   }
   /** 換房間：版本號重新算 */
-  resetVersion() { this.sv = null; this.stateSv = null; this.asked = null; this.applied.clear(); this.staleStateStreak = 0; }
+  resetVersion() { this.sv = null; this.stateSv = null; this.asked = null; this.applied.clear(); this.staleStateStreak = 0; this.missedSinceState = false; }
   /**
    * 完整狀態回來、套用前先問：apply＝照常套用（之後呼叫 noteVersion fromState）；
    * refetch＝版本比看過的最新版本舊，不套用、再抓一次；drop＝連續重抓 MAX_STALE_STATE_REFETCH 次還是舊的，先不抓，等保險輪詢。
@@ -59,6 +66,14 @@ export class SyncPolicy {
     if (this.staleStateStreak >= MAX_STALE_STATE_REFETCH) { this.staleStateStreak = 0; return "drop"; }
     this.staleStateStreak++;
     return "refetch";
+  }
+  /** 完整狀態的版本剛好等於已經套用過的最新版本：這份快照沒有任何事件還沒收到的新資訊，可以放心
+   *  保留純靠事件推出來、快照本身判斷不出來的欄位（例如誰剛摸牌還沒打出；吃碰槓不算摸牌，不受影響）。
+   *  一定要在 checkState 判定 apply 之後、noteVersion(sv,{fromState:true}) 更新 this.sv 之前呼叫，
+   *  不然這次快照自己的版本會把 this.sv 蓋過去，兩邊永遠相等、比不出有沒有漏事件
+   *  （老闆 2026-11-08：自己打牌後排隊中的完整狀態比下一家 mj_draw 晚回來，會把剛設好的欄位誤判成要清掉） */
+  isAtLatest(sv: unknown): boolean {
+    return typeof sv === "number" && Number.isFinite(sv) && this.sv !== null && sv === this.sv && !this.missedSinceState;
   }
   /** 記下套用過的帶版本事件 */
   markApplied(key: string) {
@@ -92,6 +107,11 @@ export class SyncPolicy {
     const prev = this.sv;
     if (prev === null || sv > prev) this.sv = sv;
     if (fromState && (this.stateSv === null || sv > this.stateSv)) this.stateSv = sv;
-    return !fromState && prev !== null && sv > prev + 1;
+    // 快照套用成功：到這個版本為止都是權威資料，清掉漏事件記號（一定要在這裡清，不能在下面偵測到
+    // 跳號的當下就清，見上面 missedSinceState 的註解）
+    if (fromState) { this.missedSinceState = false; return false; }
+    const jumped = prev !== null && sv > prev + 1;
+    if (jumped) this.missedSinceState = true;
+    return jumped;
   }
 }
