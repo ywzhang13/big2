@@ -114,6 +114,27 @@ export function applyGameOverEvent(view: SpectateView | null, p: GameOverPayload
   };
 }
 
+/** mj_draw 這一次要晚幾毫秒才讓觀戰者拉到最新資料（老闆 2026-11-08）：和玩家自己畫面同一條公式
+ *  （hooks/useMahjong.ts 的 mj_draw 處理）——那家正在眼牌才要「慢慢摸」（EYE_DRAW_MS），剛好疊到補花
+ *  （FLOWER_FX_MS + 每多一張疊 FLOWER_STAGGER_MS）就兩段相加，不是眼牌、也沒補花就是 0（不用慢摸） */
+export function computeEyeDrawDelayMs(seat: number, eyeSeats: number[], newFlowerCount: number): number {
+  const eyeMs = eyeSeats.includes(seat) ? EYE_DRAW_MS : 0;
+  const flowerMs = newFlowerCount > 0 ? FLOWER_FX_MS + FLOWER_STAGGER_MS * (newFlowerCount - 1) : 0;
+  return eyeMs + flowerMs;
+}
+
+/** pull() 要不要被「慢慢摸牌」關卡擋下來（老闆 2026-11-08）：不管是誰呼叫 pull()（定時輪詢、soonAfter
+ *  排的那次、visibilitychange、online），只要還沒到 until 時間就擋住，摸到的牌不會提早出現 */
+export function isHeldForSlowDraw(hold: { on: boolean; until: number }, now: number): boolean {
+  return hold.on && now < hold.until;
+}
+
+/** 剛拿到新的一張牌（drawnTileId 變了）而且正在看的這家是眼牌的人，才播翻牌動畫；不是眼牌、或張數沒變
+ *  （不是真的摸到新牌，例如重新整理拿到同一份快照）都不播（老闆 2026-11-08） */
+export function shouldShowSlowDrawFlip(view: Pick<SpectateView, "drawnTileId" | "eyeSeats" | "mySeat">, prevDrawnTileId: number | null): boolean {
+  return view.drawnTileId != null && view.drawnTileId !== prevDrawnTileId && view.eyeSeats.includes(view.mySeat);
+}
+
 export default function MahjongWatchPage() {
   const auth = useMjAuth();
   const mobile = useMobileLandscape();
@@ -135,6 +156,14 @@ export default function MahjongWatchPage() {
   // 就不要清掉畫面、不要跳錯誤頁，讓結算（誰胡、胡什麼、台數、輸贏）留在畫面上，觀戰者自己按「離開觀戰」才離開；
   // 不是最後一把時房間還在，不會有這個 ref，404／410 仍然照舊視為房間關閉、自動退出
   const finalSettlementRef = useRef(false);
+  // 眼牌那家摸牌「慢慢摸」（老闆 2026-11-08）：mj_draw 只靠 soonAfter 晚一點排下一次 pull()，
+  // 但 :266 的定時輪詢、visibilitychange／online 都各自呼叫 pull()，原本沒有一個共同的關卡擋住它們，
+  // 延遲期間還是可能先拉到摸牌後的最新狀態，讓觀戰者比本人更早看到。這個 ref 是唯一的關卡：
+  // pull() 一開始就檢查，是真的擋住「所有」會呼叫 pull() 的入口，不是只擋 mj_draw 自己排的那次
+  const holdRef = useRef<{ on: boolean; until: number }>({ on: false, until: 0 });
+  // 只在「正在看的那家」自己摸牌時才播放翻牌動畫（跟玩家自己畫面的 SlowDrawTile 共用同一個視覺元件）；
+  // 蓋掉 slowDraw={null} 那段舊寫法
+  const [slowDraw, setSlowDraw] = useState<{ tileId: number; win: boolean } | null>(null);
   const [revokedBy, setRevokedBy] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(true);
   const [slow, setSlow] = useState(false);
@@ -221,6 +250,10 @@ export default function MahjongWatchPage() {
     const sync = new SyncPolicy(20_000);
     const slowT = setTimeout(() => { if (alive) setSlow(true); }, 300); // 切換超過 300ms 才出現「載入中」
     const pull = async () => {
+      // 眼牌那家正在「慢慢摸」：不管是誰呼叫 pull()（定時輪詢、soonAfter 排的那次、visibilitychange、online），
+      // 在這段時間內一律不拉資料，摸到的牌、補花、輸贏都不能比本人畫面更早出現（老闆 2026-11-08）
+      if (isHeldForSlowDraw(holdRef.current, Date.now())) return;
+      if (holdRef.current.on) holdRef.current.on = false;
       if (Date.now() < backoffUntil) return; // 429 等待中：保險輪詢也不另外打（等待結束時 timer 會補拿一次）
       if (inFlight) { again = true; return; }
       inFlight = true;
@@ -231,12 +264,21 @@ export default function MahjongWatchPage() {
       if (r.ok) {
         const v = toSpectateView(r.data, focusRef.current);
         focusRef.current = v.focusDiscard;
+        const prevDrawnTileId = viewRef.current?.drawnTileId ?? null;
         viewRef.current = v;
         // 整場打完的最後一把：記下來，等一下房間被刪、拿到 404／410 時不要把結算清掉（老闆 2026-11-08）
         if (v.status === "finished" && v.winner && v.gameOver) finalSettlementRef.current = true;
         // 第一次拿到這個視角：先記下現在各家的花牌 id 當基準，不要當成剛補到的（不然一進來就亮一輪）
         for (const p of v.players) if (!flowerSeenRef.current.has(p.seat)) flowerSeenRef.current.set(p.seat, new Set(p.flowers.map((t) => t.id)));
         syncDeclareFx(v.eyeSeats, v.tingSeats);
+        // 剛結束慢慢摸牌、拿到新的一張：補翻牌動畫，跟玩家自己畫面的 SlowDrawTile 共用（播完自己清掉，跟
+        // hooks/useMahjong.ts 的 SLOW_DRAW_MS 一樣長；只有正在看的這家自己摸牌才播，不是這家的事件不會走到這裡）
+        if (shouldShowSlowDrawFlip(v, prevDrawnTileId) && v.drawnTileId != null) {
+          const tileId = v.drawnTileId;
+          const win = v.status === "finished" && v.winner?.seat === v.mySeat;
+          setSlowDraw({ tileId, win });
+          setTimeout(() => setSlowDraw((cur) => (cur?.tileId === tileId ? null : cur)), 800);
+        }
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
         if (!shouldExitOnRoomGone(r.status, finalSettlementRef.current)) { alive = false; return; }
@@ -277,9 +319,9 @@ export default function MahjongWatchPage() {
         const cur = viewRef.current;
         const prevN = cur?.players.find((p) => p.seat === seat)?.flowers.length ?? 0;
         const newFlowerN = typeof seat === "number" ? Math.max(0, (flowers?.length ?? 0) - prevN) : 0;
-        const flowerMs = newFlowerN > 0 ? FLOWER_FX_MS + FLOWER_STAGGER_MS * (newFlowerN - 1) : 0;
-        const eyeMs = typeof seat === "number" && cur?.eyeSeats.includes(seat) ? EYE_DRAW_MS : 0;
-        const ms = eyeMs + flowerMs;
+        const ms = typeof seat === "number" ? computeEyeDrawDelayMs(seat, cur?.eyeSeats ?? [], newFlowerN) : 0;
+        // 擋住這段時間內「所有」會拉資料的入口（見上面 pull() 開頭的關卡），不是只延後這一次排的 pull()
+        if (ms > 0) holdRef.current = { on: true, until: Date.now() + ms };
         if (ms > 0) soonAfter(ms); else soon();
         // 被觀戰的那家不用額外亮正面（本人畫面已經在手牌最右邊顯示）；別家補花的那格亮正面跟玩家自己畫面一樣（老闆 2026-11-07）
         if (typeof seat === "number" && seat !== viewSeat && flowers) {
@@ -299,8 +341,14 @@ export default function MahjongWatchPage() {
         // 不是事件比第一次 view 還早到）而且這局的 gameOver===true（整場最後一局）才設最終旗標，
         // 不然中途一局結束後拿到的 404／410 會被誤判成「已經看過最後一局結算」而不自動退出
         const p = (msg.payload ?? {}) as GameOverPayload;
-        const next = applyGameOverEvent(viewRef.current, p);
-        if (next) { viewRef.current = next; setView(next); if (p.gameOver === true) finalSettlementRef.current = true; }
+        const applyIt = () => {
+          if (!alive) return;
+          const next = applyGameOverEvent(viewRef.current, p);
+          if (next) { viewRef.current = next; setView(next); if (p.gameOver === true) finalSettlementRef.current = true; }
+        };
+        // 眼牌那家正在慢慢摸：如果這一局是自摸結束，結果也不能比本人早出現，等慢摸那段時間過了才套用（老闆 2026-11-08）
+        if (holdRef.current.on) setTimeout(applyIt, Math.max(0, holdRef.current.until - Date.now()));
+        else applyIt();
       }
       if (msg.event === "mj_eye_declared") {
         const { seat, ting } = (msg.payload ?? {}) as { seat?: number; ting?: boolean };
@@ -336,9 +384,9 @@ export default function MahjongWatchPage() {
     if (rr.ok) setRoom(rr.data);
   };
   /** 切換視角：先把畫面上的手牌清掉、標籤換成新玩家，等新視角的資料到了才顯示（不顯示上一位的手牌） */
-  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); finalSettlementRef.current = false; };
+  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); finalSettlementRef.current = false; holdRef.current = { on: false, until: 0 }; setSlowDraw(null); };
   /** 離開觀戰：前端停止拿視角、回玩家清單；不撤銷其他玩家給的同意（對接格式 3.4、規格 5.6） */
-  const leave = async () => { setView(null); setViewSeat(null); finalSettlementRef.current = false; if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
+  const leave = async () => { setView(null); setViewSeat(null); finalSettlementRef.current = false; holdRef.current = { on: false, until: 0 }; setSlowDraw(null); if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
 
   const nameOf = (seat: number | null) => targets.find((t) => t.seat === seat)?.name ?? "";
   const approved = targets.filter((t) => t.status === "approved");
@@ -351,7 +399,7 @@ export default function MahjongWatchPage() {
       focusDiscard: v.focusDiscard, paceNote: null, availableActions: [], pendingAddKong: null, robKong: false, pendingFlowerRob: null, robFlower: false,
       tingSeats: v.tingSeats, eyeSeats: v.eyeSeats, eyeOptions: [], eyeWithTing: false, chiForbidden: [], opponentHands: v.opponentHands, declareFx,
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
-      drawnTileId: v.drawnTileId, slowDraw: null, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
+      drawnTileId: v.drawnTileId, slowDraw, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
       // 觀戰者看被觀戰的人（老闆 2026-11-08 定案）：暗槓要跟本人看到的一樣，最左邊一張翻開；
       // mySeat 就是被觀戰的那家，自然走同一條 MjBoard／MjBoardMobile 的「自己」渲染邏輯，不用特別標記
