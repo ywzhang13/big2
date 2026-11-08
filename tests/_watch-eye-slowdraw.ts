@@ -6,11 +6,14 @@
 //   isHeldForSlowDraw：pull() 的關卡本身（所有入口共用同一個判斷）
 //   shouldShowSlowDrawFlip：要不要播翻牌動畫
 import {
-  applyGameOverEvent, computeEyeDrawDelayMs, isHeldForSlowDraw, shouldApplyDelayedSettlement, shouldExitOnRoomGone,
-  shouldShowSlowDrawFlip, type GameOverPayload,
+  applyGameOverEvent, buildMidDrawView, computeEyeDrawDelayMs, findJustDrawnTile, isHeldForSlowDraw,
+  shouldApplyDelayedSettlement, shouldExitOnRoomGone, shouldShowSlowDrawFlip, WATCH_FLIP_MS, type GameOverPayload,
 } from "../app/mahjong/watch/page";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "../lib/mahjong/pace";
 import type { SpectateView } from "../lib/mahjong/spectateClient";
+import type { Tile } from "../lib/mahjong/tiles";
+
+const tile = (id: number, display = `${id}萬`): Tile => ({ id, suit: "m", rank: 1, display } as Tile);
 
 let failed = 0;
 const check = (ok: boolean, msg: string) => { if (!ok) failed++; console.log(`${ok ? "✅" : "❌"} ${msg}`); };
@@ -98,6 +101,59 @@ check(computeEyeDrawDelayMs(2, [], 0) === 0, "不是眼牌：延遲 0，資料�
   check(shouldApplyDelayedSettlement(true, roundB, roundA) === false, "慢摸期間已經換局（viewRef 的 roundInfo 變成下一局）：不套用，不會把舊結算蓋回新局");
   check(shouldApplyDelayedSettlement(false, roundA, roundA) === false, "慢摸期間換視角／離開觀戰（alive=false）：不套用，就算局次沒變也一樣跳過");
   check(shouldApplyDelayedSettlement(false, roundB, roundA) === false, "alive=false 又換了局：雙重理由都不套用");
+}
+
+// ===== 審伯首審②（老闆 2026-11-08 第三次）：觀戰的翻牌要跟本人同一條時間軸 =====
+// t=0（收到 mj_draw）就用「已經處理完」的狀態（newView）配合 findJustDrawnTile／buildMidDrawView
+// 往回推一份「剛摸到、還沒打出」的中繼畫面，立刻顯示＋開始翻牌；WATCH_FLIP_MS（800ms）翻完、停住；
+// 到 EYE_DRAW_MS（1800ms）才換成 newView 本身（打出後的狀態，或自摸結算）。
+
+check(WATCH_FLIP_MS === 800, "翻牌動畫播放 800ms，跟玩家自己畫面的 SLOW_DRAW_MS 一樣長");
+check(WATCH_FLIP_MS < EYE_DRAW_MS, "800ms 翻完後還要再停到 1800ms 才出結果，不是翻完就立刻顯示");
+
+// 情境 9：一般摸牌後自動打出——剛摸到的牌＝newView.lastDiscard 那張（seat 自己打出的）
+{
+  const t = tile(201, "7筒");
+  const newView = { status: "playing", lastDiscard: { tile: t, from: 2 }, winner: undefined, winners: undefined } as unknown as SpectateView;
+  const found = findJustDrawnTile(newView, 2);
+  check(found?.id === 201, "一般摸牌後自動打出：找到的剛摸到的牌，就是這家自己打出的那張（lastDiscard）");
+  check(findJustDrawnTile(newView, 3) === null, "別人打的牌不算是座位 3 剛摸到的牌：找不到");
+}
+
+// 情境 10：自摸結束——剛摸到的牌＝winner.winTile（結算用的「胡的那張」）
+{
+  const t = tile(202, "東");
+  const newView = { status: "finished", lastDiscard: null, winner: { seat: 1, name: "阿美", score: {}, winTile: t }, winners: undefined } as unknown as SpectateView;
+  check(findJustDrawnTile(newView, 1)?.id === 202, "自摸結束：找到的剛摸到的牌是 winner.winTile（胡的那張）");
+  check(findJustDrawnTile(newView, 1 + 1) === null, "不是胡牌的那家：找不到剛摸到的牌（不該亂顯示翻牌動畫）");
+}
+
+// 情境 11：槓後補牌、連續吃碰這類找不到「摸一張就定案」的情況——回傳 null，呼叫端會退回整段延遲的做法
+{
+  const newView = { status: "playing", lastDiscard: { tile: tile(203), from: 0 }, winner: undefined, winners: undefined } as unknown as SpectateView;
+  check(findJustDrawnTile(newView, 1) === null, "打牌的不是這家自己、也不是這家自摸：找不到，呼叫端退回原本整段延遲的做法");
+}
+
+// 情境 12：buildMidDrawView——t=0 的中繼畫面要讓翻牌動畫顯示正確的牌，且不能提早露出「打出後」或「自摸結算」
+{
+  const oldHand = [tile(1), tile(2), tile(3)];
+  const oldView = { myHand: oldHand, lastDiscard: null, focusDiscard: null } as unknown as SpectateView;
+  const drawn = tile(999, "9筒");
+  const newViewDiscarded = {
+    status: "playing", myHand: [tile(2), tile(3), tile(4)], lastDiscard: { tile: drawn, from: 1 }, focusDiscard: { tile: drawn, from: 1 }, drawnTileId: null,
+  } as unknown as SpectateView;
+  const mid = buildMidDrawView(oldView, newViewDiscarded, drawn);
+  check(mid.myHand.length === 4 && mid.myHand.some((t) => t.id === 999), "中繼畫面：手牌是舊手牌＋剛摸到的那張（共 4 張），翻牌動畫找得到這張牌");
+  check(mid.drawnTileId === 999, "中繼畫面：drawnTileId 指到剛摸到的那張，翻牌動畫（SlowDrawTile）比對得到");
+  check(mid.lastDiscard === null, "中繼畫面：棄牌堆維持舊狀態（還沒打出），不會提早看到「已經打出」的畫面");
+
+  const newViewWin = {
+    status: "finished", myHand: [tile(2), tile(3), drawn], lastDiscard: null, focusDiscard: null, drawnTileId: null,
+    winner: { seat: 1, name: "阿美", score: { fans: ["自摸"], totalFan: 1 }, winTile: drawn },
+  } as unknown as SpectateView;
+  const midWin = buildMidDrawView(oldView, newViewWin, drawn);
+  check(midWin.status === "playing", "自摸情境的中繼畫面：status 強制設回 playing，結算不會在 t=0～800ms 提早出現");
+  check(midWin.winner?.seat === 1, "自摸情境的中繼畫面：winner 資料還在（之後換成最終畫面時可以直接用），只是先不顯示");
 }
 
 if (failed) process.exit(1);

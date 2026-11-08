@@ -69,6 +69,10 @@ function statusOf(t: SpectateTarget, skew: number): { text: string; tone: "" | "
   }
 }
 
+// 翻牌動畫播放時長（審伯首審必修②）：跟 hooks/useMahjong.ts 的 SLOW_DRAW_MS 同一個值，
+// 玩家自己畫面的翻牌動畫也是播這麼久，兩邊對齊
+export const WATCH_FLIP_MS = 800;
+
 /** pull() 拿到 403／404／410（房間不見了或被收回權限）時，要不要當成「房間關閉」自動退出（老闆 2026-11-08）：
  * 整場打完伺服器會刪房，下一次一定會拿到 404／410——如果已經看過最後一把的結算（gameOver＋winner），
  * 這次不是房間中途關閉，是預期中的事，結算畫面留著，觀戰者自己按「離開觀戰」才離開；
@@ -144,6 +148,35 @@ export function shouldApplyDelayedSettlement(alive: boolean, currentRoundInfo: u
   return alive && JSON.stringify(currentRoundInfo) === JSON.stringify(scheduledRoundInfo);
 }
 
+/** 從「已經處理完」的最新快照（newView）找出 seat 剛摸到的那張牌：一般摸牌後自動打出＝newView.lastDiscard
+ *  那張；自摸結束＝newView.winner／winners 裡 seat 那家的 winTile。兩種都找不到（例如槓後補牌、連續吃碰
+ *  這類不是「摸一張就定案」的事件）回傳 null，呼叫端退回原本整段延遲、不翻牌的做法（審伯首審必修②） */
+export function findJustDrawnTile(newView: Pick<SpectateView, "lastDiscard" | "status" | "winner" | "winners">, seat: number): Tile | null {
+  if (newView.lastDiscard && newView.lastDiscard.from === seat) return newView.lastDiscard.tile;
+  if (newView.status === "finished") {
+    if (newView.winner?.seat === seat && newView.winner.winTile) return newView.winner.winTile;
+    const w = newView.winners?.find((x) => x.seat === seat);
+    if (w?.winTile) return w.winTile;
+  }
+  return null;
+}
+
+/** 摸牌當下（t=0）就能播正確翻牌動畫的關鍵：用「已經處理完」的新狀態 newView 配合剛摸到的那張牌
+ *  （findJustDrawnTile），往回推一份「剛摸到、還沒打出」的中繼畫面——手牌比舊的 oldView 多這一張，
+ *  棄牌堆、海底維持舊狀態（還沒打出），status 強制設回 playing（自摸也先不顯示結算，等 1800ms 才出現），
+ *  讓翻牌動畫能在 t=0 立刻顯示正確的牌，不用等到最終狀態（可能已經是打出後或結算）才看得到（審伯必修②）。
+ *  tile 是 null（找不到剛摸到的牌）就回傳 null，呼叫端退回原本整段延遲的做法 */
+export function buildMidDrawView(oldView: SpectateView, newView: SpectateView, tile: Tile): SpectateView {
+  return {
+    ...newView,
+    status: "playing",
+    myHand: [...oldView.myHand, tile],
+    drawnTileId: tile.id,
+    lastDiscard: oldView.lastDiscard,
+    focusDiscard: oldView.focusDiscard,
+  };
+}
+
 export default function MahjongWatchPage() {
   const auth = useMjAuth();
   const mobile = useMobileLandscape();
@@ -173,6 +206,10 @@ export default function MahjongWatchPage() {
   // 只在「正在看的那家」自己摸牌時才播放翻牌動畫（跟玩家自己畫面的 SlowDrawTile 共用同一個視覺元件）；
   // 蓋掉 slowDraw={null} 那段舊寫法
   const [slowDraw, setSlowDraw] = useState<{ tileId: number; win: boolean } | null>(null);
+  // t=0 先拉已處理完的狀態、1800ms 才換成最終畫面（stagedEyeReveal，審伯必修②）：每次排一輪新的重播
+  // 就加 1，1800ms 那次 setView 之前先比對，序號對不上（同一輪裡又有更新的摸牌、或換視角／離開觀戰）
+  // 就不套用，避免舊的重播蓋掉新的狀態
+  const revealGenRef = useRef(0);
   const [revokedBy, setRevokedBy] = useState<number | null>(null);
   const [drawer, setDrawer] = useState(true);
   const [slow, setSlow] = useState(false);
@@ -286,7 +323,7 @@ export default function MahjongWatchPage() {
           const tileId = v.drawnTileId;
           const win = v.status === "finished" && v.winner?.seat === v.mySeat;
           setSlowDraw({ tileId, win });
-          setTimeout(() => setSlowDraw((cur) => (cur?.tileId === tileId ? null : cur)), 800);
+          setTimeout(() => setSlowDraw((cur) => (cur?.tileId === tileId ? null : cur)), WATCH_FLIP_MS);
         }
         setView(v); setSlow(false); clearTimeout(slowT);
       } else if (r.status === 403 || r.status === 404 || r.status === 410) {
@@ -313,6 +350,43 @@ export default function MahjongWatchPage() {
     // 慢慢摸牌的節奏（老闆 2026-11-07：觀戰者看被觀戰的人摸牌，節奏要跟那位玩家自己畫面上的一樣，不能比較快）：
     // 延後拿最新狀態的時間，而不是另外做一套動畫；拿到的還是同一個 pull()，只是晚一點拿，畫面停留的時間自然就對上了
     const soonAfter = (ms: number) => { if (timer) clearTimeout(timer); timer = setTimeout(() => { timer = null; void pull(); }, ms); };
+    // 審伯首審必修②：觀戰的翻牌要跟本人同一條時間軸——t=0（收到 mj_draw）就先拉「已經處理完」的狀態
+    // （繞過 holdRef，不等慢摸時間），找出那張剛摸到的牌，往回推一份「剛摸到、還沒打出」的中繼畫面立刻
+    // 顯示＋開始翻牌；800ms 翻完、停住；1800ms 才換成真正的最終畫面（打出後，或自摸結算）。
+    // 找不到剛摸到的牌（槓後補牌、連續吃碰）、拉取失敗、或還沒有基線：退回原本整段延遲、不翻牌的做法
+    const stagedEyeReveal = async (seat: number, ms: number) => {
+      const oldView = viewRef.current;
+      if (!oldView) { holdRef.current = { on: true, until: Date.now() + ms }; soonAfter(ms); return; }
+      const r = await fetchView(room.roomId, target.playerId);
+      if (!alive) return;
+      if (!r.ok) { holdRef.current = { on: true, until: Date.now() + ms }; soonAfter(ms); return; }
+      const newView = toSpectateView(r.data, focusRef.current);
+      const tile = findJustDrawnTile(newView, seat);
+      if (!tile) {
+        viewRef.current = newView;
+        if (newView.status === "finished" && newView.winner && newView.gameOver) finalSettlementRef.current = true;
+        holdRef.current = { on: true, until: Date.now() + ms };
+        soonAfter(ms);
+        return;
+      }
+      const mid = buildMidDrawView(oldView, newView, tile);
+      const gen = ++revealGenRef.current;
+      viewRef.current = mid;
+      focusRef.current = mid.focusDiscard;
+      setView(mid);
+      setSlowDraw({ tileId: tile.id, win: newView.status === "finished" && newView.winner?.seat === seat });
+      // 審伯首審必修①的同一條規則：真的是整場最後一局（gameOver===true）就立刻同步設旗標，不等 1800ms
+      if (newView.status === "finished" && newView.winner && newView.gameOver) finalSettlementRef.current = true;
+      holdRef.current = { on: true, until: Date.now() + ms }; // 繼續擋住其他 pull() 入口直到 1800ms
+      setTimeout(() => setSlowDraw((cur) => (cur?.tileId === tile.id ? null : cur)), WATCH_FLIP_MS); // 翻完，停住
+      setTimeout(() => { // 1800ms：換成真正的最終畫面（打出後的狀態，或自摸結算）
+        if (!alive || revealGenRef.current !== gen) return;
+        if (holdRef.current.on) holdRef.current.on = false;
+        viewRef.current = newView;
+        focusRef.current = newView.focusDiscard;
+        setView(newView);
+      }, ms);
+    };
     void pull();
     const poll = setInterval(() => { if (sync.due(Date.now(), document.hidden)) void pull(); }, POLL_TICK_MS);
     const onBack = () => { if (!document.hidden) void pull(); };
@@ -329,9 +403,15 @@ export default function MahjongWatchPage() {
         const prevN = cur?.players.find((p) => p.seat === seat)?.flowers.length ?? 0;
         const newFlowerN = typeof seat === "number" ? Math.max(0, (flowers?.length ?? 0) - prevN) : 0;
         const ms = typeof seat === "number" ? computeEyeDrawDelayMs(seat, cur?.eyeSeats ?? [], newFlowerN) : 0;
-        // 擋住這段時間內「所有」會拉資料的入口（見上面 pull() 開頭的關卡），不是只延後這一次排的 pull()
-        if (ms > 0) holdRef.current = { on: true, until: Date.now() + ms };
-        if (ms > 0) soonAfter(ms); else soon();
+        // 審伯首審必修②：正在看的這家自己摸牌（沒疊補花，單純眼牌延遲）才用「t=0 先拉已處理完的狀態、
+        // 照本人時間軸重播」；其他情況（別的眼牌座位、疊補花）維持原本整段延遲、不翻牌的做法，範圍不擴大
+        if (ms > 0 && seat === viewSeat && newFlowerN === 0) {
+          void stagedEyeReveal(seat, ms);
+        } else {
+          // 擋住這段時間內「所有」會拉資料的入口（見上面 pull() 開頭的關卡），不是只延後這一次排的 pull()
+          if (ms > 0) holdRef.current = { on: true, until: Date.now() + ms };
+          if (ms > 0) soonAfter(ms); else soon();
+        }
         // 被觀戰的那家不用額外亮正面（本人畫面已經在手牌最右邊顯示）；別家補花的那格亮正面跟玩家自己畫面一樣（老闆 2026-11-07）
         if (typeof seat === "number" && seat !== viewSeat && flowers) {
           const seen = flowerSeenRef.current.get(seat) ?? new Set<number>();
@@ -404,9 +484,9 @@ export default function MahjongWatchPage() {
     if (rr.ok) setRoom(rr.data);
   };
   /** 切換視角：先把畫面上的手牌清掉、標籤換成新玩家，等新視角的資料到了才顯示（不顯示上一位的手牌） */
-  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); finalSettlementRef.current = false; holdRef.current = { on: false, until: 0 }; setSlowDraw(null); };
+  const watch = (seat: number) => { setView(null); focusRef.current = null; setSlow(false); setRevokedBy(null); setViewSeat(seat); flowerSeenRef.current = new Map(); setFlowerFx([]); finalSettlementRef.current = false; holdRef.current = { on: false, until: 0 }; setSlowDraw(null); revealGenRef.current++; };
   /** 離開觀戰：前端停止拿視角、回玩家清單；不撤銷其他玩家給的同意（對接格式 3.4、規格 5.6） */
-  const leave = async () => { setView(null); setViewSeat(null); finalSettlementRef.current = false; holdRef.current = { on: false, until: 0 }; setSlowDraw(null); if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
+  const leave = async () => { setView(null); setViewSeat(null); finalSettlementRef.current = false; holdRef.current = { on: false, until: 0 }; setSlowDraw(null); revealGenRef.current++; if (room) { const r = await lookupRoom(room.code); if (r.ok) setRoom(r.data); } };
 
   const nameOf = (seat: number | null) => targets.find((t) => t.seat === seat)?.name ?? "";
   const approved = targets.filter((t) => t.status === "approved");
