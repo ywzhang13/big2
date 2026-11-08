@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { MjHandReveal } from "@/hooks/useMahjong";
+import type { WinFx } from "@/lib/mahjong/gameState";
 import { getSupabase } from "@/lib/supabase";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
@@ -85,7 +86,9 @@ export function shouldExitOnRoomGone(status: 403 | 404 | 410, sawFinalSettlement
  *  不是只有整場最後一局才有；流局時 winnerSeat＝-1、winnerName／score 都是 null（審伯必修②） */
 export interface GameOverPayload {
   winnerSeat: number; winnerName: string | null; score: unknown;
-  winners: { seat: number; name: string; score: unknown }[];
+  // winFx：贏家帳號的專屬自摸特效代號，伺服器在 winners[] 這個陣列裡用物件展開整份 WinnerEntry 帶過來
+  // （lib/mahjong/events.ts 的 gameOverEvent），不在上面單獨的 winnerSeat／score 這幾個欄位裡
+  winners: { seat: number; name: string; score: unknown; winFx?: WinFx }[];
   allHands?: MjHandReveal[];
   settlement: unknown; playerScores?: number[]; roundInfo: unknown; gameOver: boolean;
   remainingWall?: Tile[]; handStats?: unknown;
@@ -101,9 +104,13 @@ export interface GameOverPayload {
 export function applyGameOverEvent(view: SpectateView | null, p: GameOverPayload): SpectateView | null {
   if (!view) return view;
   const isDraw = p.winnerSeat == null || p.winnerSeat < 0;
+  // winFx 沒有單獨帶在 winnerSeat／score 旁邊，要從 winners[] 裡找回同一個座位的那筆（老闆 2026-11-08：
+  // 這裡漏了這個欄位，觀戰的人會先看到沒有 winFx 的這份、播出預設的金色自摸浮層，等下一次 pull() 拿到
+  // 補上 winFx 的完整快照，才換成玩家自己設定的特效，變成播兩次）
+  const winFx = isDraw ? undefined : p.winners?.find((w) => w.seat === p.winnerSeat)?.winFx;
   const winner = (isDraw
     ? { seat: -1, name: "", score: { fans: [], totalFan: 0 }, allHands: p.allHands }
-    : { seat: p.winnerSeat, name: p.winnerName ?? "", score: p.score, allHands: p.allHands }) as SpectateView["winner"];
+    : { seat: p.winnerSeat, name: p.winnerName ?? "", score: p.score, allHands: p.allHands, ...(winFx ? { winFx } : {}) }) as SpectateView["winner"];
   return {
     ...view,
     status: "finished",
