@@ -166,4 +166,34 @@ const makeRoom = () => {
   check(room.drawnSeat === B, "情境10：收到新的 mj_draw 之後，照樣正確設回摸牌的 B");
 }
 
+// 情境 11～12（老闆 2026-11-08 複審必修）：漏收事件之後，即使之後更晚的事件把版本追上了，版本號
+// 相等也不能當成「沒漏事件」——漏掉的那個事件可能正好會改掉 drawnSeat，只有真的套用一次完整快照
+// 才能保證資料正確。對應 isAtLatest 內部新增的 missedSinceState 記號（見 _sync-policy.ts）
+
+// 情境 11：漏收 mj_discard（B 打牌）之後，收到更晚的事件（C 的動作），再套用同版本快照——
+// 版本剛好等於目前版本，但這段時間真的漏過事件，drawnSeat 還是要清掉，不能留在 B 身上
+{
+  const room = makeRoom();
+  room.draw(3, B); // B 摸牌，sv=3，drawnSeat=B
+  check(room.drawnSeat === B, "情境11：B 摸牌，drawnSeat 先指到 B");
+  // 漏收 B 打牌（sv=4，mj_discard）：不呼叫 room.discard(4, B)，模擬這個事件真的沒收到
+  room.action(5, C); // C 的動作（sv=5）先到：版本從 3 直接跳到 5，中間漏了 4
+  check(room.drawnSeat === B, "情境11：漏收期間，C 的動作不影響 B 的 drawnSeat（C 不是 B，不會被清掉）");
+  room.snapshot(5); // 快照版本剛好是 5，等於目前看過的最新版本——但這段時間真的跳過號
+  check(room.drawnSeat === null, "情境11：漏 mj_discard 之後版本追上，快照還是要清掉 drawnSeat，不能錯留在 B 身上");
+}
+
+// 情境 12：漏收 mj_action（例如槓）之後，收到更晚的事件（D 摸牌），再套用同版本快照——
+// 版本剛好等於目前版本，但一樣要清掉（即使 D 摸牌事件本身是真的收到、drawnSeat 目前剛好是對的）
+{
+  const room = makeRoom();
+  room.draw(3, B); // B 摸牌，sv=3，drawnSeat=B
+  check(room.drawnSeat === B, "情境12：B 摸牌，drawnSeat 先指到 B");
+  // 漏收 B 的動作（sv=4，例如明槓）：不呼叫 room.action(4, B)
+  room.draw(5, D); // D 摸牌（sv=5）先到：版本從 3 跳到 5，中間漏了 4
+  check(room.drawnSeat === D, "情境12：D 摸牌事件本身有收到，drawnSeat 先正確指到 D");
+  room.snapshot(5); // 快照版本剛好是 5，等於目前版本——但這段時間一樣漏過號
+  check(room.drawnSeat === null, "情境12：漏 mj_action 之後版本追上，即使目前的 drawnSeat 剛好正確，快照還是要清掉，不能僥倖留著");
+}
+
 if (failed) process.exit(1);

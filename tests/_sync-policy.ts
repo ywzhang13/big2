@@ -216,4 +216,28 @@ const check = (ok: boolean, msg: string) => { if (!ok) failed++; console.log(`${
   check(s.isAtLatest(11), "L6 套用完快照後，再量一次 11 才算追上（這次快照已經是看過的最新版本）");
 }
 
+// isAtLatest＋漏事件記號（老闆 2026-11-08 複審必修）：跳號之後即使後面的事件版本追上了，版本號相等
+// 也不能當成「沒漏事件」——這個記號只能在快照真的套用成功（noteVersion fromState）時才清掉
+{
+  const s = new SyncPolicy();
+  s.noteVersion(3); // sv=3（例如 B 摸牌），目前沒有漏事件
+  check(s.isAtLatest(3), "M1 還沒跳過號：版本相等就算追上");
+  s.noteVersion(5); // 直接跳到 5（中間 4 漏掉了，例如漏收的 mj_discard／mj_action）
+  check(!s.isAtLatest(5), "M2 跳號之後：即使快照版本剛好等於目前版本（5），也不算追上（可能漏的那個事件動過快照看不出來的欄位）");
+  check(!s.isAtLatest(4) && !s.isAtLatest(6), "M3 跳號之後：版本不相等的快照本來就不算追上（不用等漏事件記號生效）");
+  s.noteVersion(5, { fromState: true }); // 套用一次完整快照，涵蓋到版本 5
+  check(s.isAtLatest(5), "M4 快照套用成功之後：漏事件記號清掉，版本相等重新算追上");
+  s.noteVersion(7); // 再跳一次號（6 漏掉）
+  const caughtUpBeforeApply = s.isAtLatest(7);
+  check(!caughtUpBeforeApply, "M5 記號只能在套用快照時清掉：跳號當下（還沒套用快照）量到的還是沒追上");
+  s.noteVersion(7, { fromState: true });
+  check(s.isAtLatest(7), "M6 這次套用快照之後：記號才真的清掉");
+  s.resetVersion();
+  s.noteVersion(1); s.noteVersion(3); // 換房間前跳過號
+  check(!s.isAtLatest(3), "M7 換房間前：漏事件記號還留著（還沒套用過新房間的快照）");
+  s.resetVersion();
+  s.noteVersion(1);
+  check(s.isAtLatest(1), "M8 換房間：漏事件記號跟著版本號一起重新算，不會被舊房間的跳號卡住");
+}
+
 if (failed) { console.log(`❌ 失敗 ${failed} 項`); process.exit(1); }
