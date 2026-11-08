@@ -60,6 +60,14 @@ export class SyncPolicy {
     this.staleStateStreak++;
     return "refetch";
   }
+  /** 完整狀態的版本剛好等於已經套用過的最新版本：這份快照沒有任何事件還沒收到的新資訊，可以放心
+   *  保留純靠事件推出來、快照本身判斷不出來的欄位（例如誰剛摸牌還沒打出；吃碰槓不算摸牌，不受影響）。
+   *  一定要在 checkState 判定 apply 之後、noteVersion(sv,{fromState:true}) 更新 this.sv 之前呼叫，
+   *  不然這次快照自己的版本會把 this.sv 蓋過去，兩邊永遠相等、比不出有沒有漏事件
+   *  （老闆 2026-11-08：自己打牌後排隊中的完整狀態比下一家 mj_draw 晚回來，會把剛設好的欄位誤判成要清掉） */
+  isAtLatest(sv: unknown): boolean {
+    return typeof sv === "number" && Number.isFinite(sv) && this.sv !== null && sv === this.sv;
+  }
   /** 記下套用過的帶版本事件 */
   markApplied(key: string) {
     this.applied.add(key);

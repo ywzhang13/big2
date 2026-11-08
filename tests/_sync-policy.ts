@@ -200,4 +200,20 @@ const check = (ok: boolean, msg: string) => { if (!ok) failed++; console.log(`${
   }
 }
 
+// isAtLatest：完整狀態的版本是不是剛好等於已經靠事件推出來的最新版本（老闆 2026-11-08：別家摸牌的
+// 空格，判斷要不要保留純靠事件推出來、快照本身看不出來的欄位，就是看這個）
+{
+  const s = new SyncPolicy();
+  check(!s.isAtLatest(10), "L1 還沒看過任何版本：一律不算追上");
+  s.noteVersion(10);
+  check(s.isAtLatest(10), "L2 事件版本剛好等於快照版本：追上了，沒有漏事件");
+  check(!s.isAtLatest(11), "L3 快照版本領先事件版本（真的漏了還沒收到的事件）：沒追上");
+  check(!s.isAtLatest(undefined) && !s.isAtLatest("10") && !s.isAtLatest(NaN), "L4 快照沒帶版本號（舊伺服器、大廳）：一律不算追上");
+  // 呼叫順序必須在 noteVersion(sv,{fromState:true}) 之前，不然這次快照自己的版本會把 this.sv 蓋過去
+  const caughtUp = s.isAtLatest(11); // 在套用這次快照之前先比
+  s.noteVersion(11, { fromState: true }); // 套用快照才更新 this.sv
+  check(!caughtUp, "L5 比較時機要在 noteVersion(fromState) 之前：套用前量到的是沒追上（11 領先事件版本 10）");
+  check(s.isAtLatest(11), "L6 套用完快照後，再量一次 11 才算追上（這次快照已經是看過的最新版本）");
+}
+
 if (failed) { console.log(`❌ 失敗 ${failed} 項`); process.exit(1); }

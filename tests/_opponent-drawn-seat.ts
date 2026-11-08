@@ -4,6 +4,8 @@
 // （mj_draw 設、mj_discard／mj_action／mj_game_start 清），重現六種真的會發生的情境：
 //   摸牌、吃、碰、連續吃碰（吃完又碰）、槓後補牌（明槓→補牌）、補花完成後（補花鏈最後一張收尾）
 // 每一步都驗證：只有真的摸進那張的座位 drawnSeat 會指到它，吃／碰／槓完成（還沒摸補牌前）一律是 null（貼緊）。
+import { SyncPolicy } from "../lib/mahjong/syncPolicy";
+
 let failed = 0;
 const check = (ok: boolean, msg: string) => { if (!ok) failed++; console.log(`${ok ? "✅" : "❌"} ${msg}`); };
 
@@ -101,6 +103,67 @@ const A = 0, B = 1, C = 2, D = 3; // 四個座位
   check(s.drawnSeat === null, "套用權威快照後：drawnSeat 一律歸零，不會把空格錯留在 B 身上");
   s = onDraw(s, C); // 快照之後，真的收到 C 摸牌的事件
   check(s.drawnSeat === C, "快照之後新的 mj_draw：drawnSeat 正確設回真正摸牌的 C");
+}
+
+// 情境 8～10（老闆 2026-11-08 必修）：情境 7 的 onSnapshot 是舊做法（快照一律歸零），用來對照
+// 「漏收事件」這個規則本身沒有變。新規則是：套用快照前先用 hooks/useMahjong.ts 真的在用的
+// SyncPolicy.isAtLatest 比對版本（stateSv === 目前靠事件推出來的最新版本，才算沒有漏事件），
+// 不是只看快照本身——所以這裡直接用真的 SyncPolicy，不是重寫一個簡化版，確保測的是真邏輯。
+// 對應 onHeld（事件走這裡）＋ fetchState（套用權威快照走這裡，isAtLatest 的呼叫順序一定要在
+// noteVersion(sv,{fromState:true}) 之前，不然比不出來）這兩段真正的程式流程。
+const makeRoom = () => {
+  const sync = new SyncPolicy();
+  let s: MiniState = { drawnSeat: null };
+  const event = (sv: number, apply: (s: MiniState) => MiniState) => {
+    if (sync.isStale(sv)) return; // 亂序晚到的舊事件：不套用（跳號補抓不是這份測試的重點，見 _sync-policy.ts）
+    s = apply(s);
+    sync.noteVersion(sv);
+  };
+  const draw = (sv: number, seat: number) => event(sv, (st) => onDraw(st, seat));
+  const discard = (sv: number, seat: number) => event(sv, (st) => onDiscard(st, seat));
+  const action = (sv: number, seat: number) => event(sv, (st) => onAction(st, seat));
+  const snapshot = (stateSv: number) => {
+    const caughtUp = sync.isAtLatest(stateSv); // 一定要在 noteVersion(fromState) 之前比
+    sync.noteVersion(stateSv, { fromState: true });
+    s = { ...s, drawnSeat: caughtUp ? s.drawnSeat : null };
+  };
+  return { get drawnSeat() { return s.drawnSeat; }, draw, discard, action, snapshot };
+};
+
+// 情境 8：自己打牌後觸發的 fetchState，比下一家的 mj_draw 晚回來（沒有漏任何事件，只是請求比較慢）——
+// 空格要保留，不能被這份「過時但沒漏事件」的快照清掉
+{
+  const room = makeRoom();
+  room.draw(1, A); // A 摸牌
+  room.discard(2, A); // A 打出（我方），這一步在真的程式裡會觸發 fetchState(rid) 送出
+  room.draw(3, B); // 下一家 B 馬上摸牌，mj_draw 廣播先到，drawnSeat=B
+  check(room.drawnSeat === B, "情境8：B 摸牌，drawnSeat 先指到 B");
+  room.snapshot(3); // 我方那次 fetchState 現在才回來，伺服器回的版本剛好是 3（已經涵蓋 B 摸牌，沒有漏事件）
+  check(room.drawnSeat === B, "情境8：fetchState 比下一家 mj_draw 晚回來但版本追上了，B 的空格不會被清掉");
+}
+
+// 情境 9：快照版本領先已經收到的事件版本（真的漏了還沒收到的事件，例如重新整理、斷線重連）——
+// 空格要清掉，不能留在錯的座位上
+{
+  const room = makeRoom();
+  room.draw(1, A);
+  room.discard(2, A);
+  room.draw(3, B); // B 摸牌，drawnSeat=B，目前看過的版本是 3
+  check(room.drawnSeat === B, "情境9：B 摸牌，drawnSeat 先指到 B");
+  room.snapshot(5); // 快照版本是 5，比看過的 3 新了 2 版：中間漏了（例如 B 打牌、C 的動作）我們沒收到的事件
+  check(room.drawnSeat === null, "情境9：快照版本領先事件版本（漏收事件），空格要清掉，不會錯留在 B 身上");
+}
+
+// 情境 10：一般情況（沒有競速）——fetchState 剛好在下一家摸牌之前就回來，版本跟事件一樣新，
+// 保留目前正確的值（null），之後收到的新摸牌事件照樣能正確設回來，確認新規則不影響平常的情況
+{
+  const room = makeRoom();
+  room.draw(1, A);
+  room.discard(2, A); // A 打出，drawnSeat 收回成 null，目前版本是 2
+  room.snapshot(2); // fetchState 剛好在 B 摸牌之前回來，版本跟事件一樣是 2：沒有漏事件
+  check(room.drawnSeat === null, "情境10：沒有競速時，快照version追上，drawnSeat 維持原本正確的 null");
+  room.draw(3, B); // 之後才收到 B 摸牌
+  check(room.drawnSeat === B, "情境10：收到新的 mj_draw 之後，照樣正確設回摸牌的 B");
 }
 
 if (failed) process.exit(1);

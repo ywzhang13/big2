@@ -545,6 +545,12 @@ export function useMahjong(
       const svVerdict = syncRef.current.checkState(stateSv);
       if (svVerdict === "refetch") { if (!closedRef.current) fetchStateRef.current?.(rid); return; }
       if (svVerdict === "drop") return;
+      // 這份快照的版本跟目前靠事件推出來的最新版本一樣，代表這段時間沒有漏收任何事件：
+      // 誰剛摸牌還沒打出（drawnSeat）這個快照本身看不出來的欄位，靠事件推出來的值已經是正確答案，
+      // 不用被這次 setState 歸零。版本領先（代表真的有還沒收到的事件）才歸零，和原本「漏收事件/
+      // 重新整理一律歸零」的規則不衝突，只是不再錯殺「自己打牌觸發的這次請求，比下一家的 mj_draw
+      // 晚回來」這種沒有漏任何事件的正常情況（老闆 2026-11-08）
+      const drawnSeatCaughtUp = syncRef.current.isAtLatest(stateSv);
       syncRef.current.noteVersion(stateSv, { fromState: true });
       // 牌局節奏：伺服器說特效還沒播完（重新整理、切回前景時接上），剩下的時間用伺服器的兩個時間相減，不用手機時鐘
       {
@@ -658,11 +664,14 @@ export function useMahjong(
         robFlower: pendingFlowerRob != null && pendingFlowerRob.robberSeat === mySeat,
         // 輪到我且剛摸完牌：重新整理後把摸進的那張分開顯示
         drawnTileId: gs.myDrawnTileId ?? prev.drawnTileId,
-        // 審伯 2026-11-08 複審必修：這裡拿到的是權威快照，不是靠事件一路推出來的；漏收 mj_discard／mj_action
-        // 的話，別家手牌欄的摸牌空格可能停在錯的座位上。快照沒有「誰剛摸牌」這個欄位，沒辦法分辨，
-        // 所以一律歸零——之後只靠新的 mj_draw 把它設回真正摸牌的人，最多是正在等出牌的那家暫時貼緊，
-        // 不會把空格錯留在別人身上
-        drawnSeat: null,
+        // 審伯 2026-11-08 複審必修＋老闆 2026-11-08 必修：這裡拿到的是權威快照，不是靠事件一路推出來的；
+        // 快照沒有「誰剛摸牌」這個欄位（吃碰槓待出牌也是 hasDrawn=true，沒辦法用 currentTurn 分辨），
+        // 沒辦法自己判斷。drawnSeatCaughtUp 為 false（這段時間真的漏收了事件，例如重新整理、中途進房）
+        // 才歸零，之後只靠新的 mj_draw 設回真正摸牌的人，最多是正在等出牌的那家暫時貼緊，不會把空格
+        // 錯留在別人身上；drawnSeatCaughtUp 為 true（版本跟事件推出來的一樣新，沒有漏任何事件）就保留
+        // 事件已經推出來的值，不然自己打牌觸發的這次請求比下一家 mj_draw 晚回來時，會把剛摸牌那家正確
+        // 的空格誤判成要清掉
+        drawnSeat: drawnSeatCaughtUp ? prev.drawnSeat : null,
         wallRemaining: gs.wallCount,
         hasDrawn: gs.hasDrawn,
         // 請求送出時我的動作還在路上，或送出後已經有新進展（例如我按了過、上家已經打牌）：這份的按鈕是舊的，保留畫面上的。
