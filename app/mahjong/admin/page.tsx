@@ -302,7 +302,7 @@ function UnpaidTab() {
         {shown.map((r) => (
           <button key={r.userId} type="button" className="fxs-owe" onClick={() => setWho(r)} data-admin-owe={r.name} data-amount={r.amount}>
             <FxsAvatar url={r.avatarUrl} name={r.name} />
-            <span className="who"><b>{r.name}</b><span>{r.matches} 場・自摸 {r.zimo} 次</span></span>
+            <span className="who"><b>{r.name}</b><span>{r.matches} 場・自摸 {r.zimo} 次{r.myTableCount > 0 && `・其中 ${r.myTableCount} 場有我在桌`}</span></span>
             <span className="amt">{nt(r.amount)}</span><span className="go">›</span>
           </button>
         ))}
@@ -459,7 +459,7 @@ function PlayerSettle({ p, onBack }: { p: UnsettledPlayer; onBack: () => void })
                 </label>
                 <span className="t">{fmtTaipei(when(m))}</span>
                 <b className="code">房 {code(m.roomCode)}</b>
-                <span className="z">自摸 {m.zimo} 次</span>
+                <span className="z">自摸 {m.zimo} 次{m.myTable && <> <span className="fxs-tag gold sm" data-admin-mytable={code(m.roomCode)}>我在桌</span></>}</span>
                 <span className="amt">{nt(m.due)}</span>
                 <button type="button" className="fxs-btn sm gold" disabled={busy} onClick={() => startPay([m.roomId])} data-admin-paid={code(m.roomCode)}>已收</button>
               </div>
@@ -471,7 +471,7 @@ function PlayerSettle({ p, onBack }: { p: UnsettledPlayer; onBack: () => void })
               <span className="ck" />
               <span className="t">{m.startedAt ?? m.endedAt ? fmtTaipei(when(m)) : "打牌中"}</span>
               <b className="code">{m.roomCode ? `房 ${m.roomCode}` : ""}</b>
-              <span className="z">自摸 {m.zimo} 次</span>
+              <span className="z">自摸 {m.zimo} 次{m.myTable && <> <span className="fxs-tag gold sm" data-admin-mytable={code(m.roomCode)}>我在桌</span></>}</span>
               <span className="amt">{nt(m.due)}</span>
               <span className="fxs-tag clr sm">進行中</span>
             </div>
@@ -485,7 +485,7 @@ function PlayerSettle({ p, onBack }: { p: UnsettledPlayer; onBack: () => void })
               <span className="ck" />
               <span className="t">{fmtTaipei(when(m))}</span>
               <b className="code">房 {code(m.roomCode)}</b>
-              <span className="z">自摸 {m.zimo} 次</span>
+              <span className="z">自摸 {m.zimo} 次{m.myTable && <> <span className="fxs-tag gold sm" data-admin-mytable={code(m.roomCode)}>我在桌</span></>}</span>
               <span className="amt">{nt(m.due)}</span>
               <button type="button" className="fxs-btn sm" disabled={busy} onClick={() => setAsking(m)} data-admin-unsettle={code(m.roomCode)}>撤回</button>
             </div>

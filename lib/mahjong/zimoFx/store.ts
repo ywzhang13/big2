@@ -1,7 +1,7 @@
 // 自摸特效庫＋斗內的資料庫存取（只在伺服器用 service role）。
 // 測試時整個檔案會被換成 tests/support/stub-zimofx-store.ts（在記憶體 PostgreSQL 跑真的 migration 和 SQL 函式）。
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { parseFxExpiry, type DonationRow } from "./rules";
+import { OWNER_USER_ID, parseFxExpiry, type DonationRow } from "./rules";
 import { toSettled, toSettleResult, toUnsettled, toUnsettleResult, type SettledMatch, type SettleResult, type UnsettledMatch, type UnsettleResult } from "./settle";
 export type { SettledMatch, SettleResult, SettleRoom, UnsettledMatch, UnsettleResult } from "./settle";
 
@@ -69,6 +69,18 @@ export async function matchZimo(roomIds: string[]): Promise<{ roomId: string; ha
   if (roomIds.length === 0) return [];
   const rows = await rpc<{ room_id: string; hand_no: number; user_id: string; won_at: string }[]>("mj_match_zimo", { p_rooms: roomIds });
   return (rows ?? []).map((r) => ({ roomId: String(r.room_id), handNo: Number(r.hand_no), userId: String(r.user_id), wonAt: Date.parse(r.won_at) }));
+}
+/** 這些房間（麻將）裡，老闆帳號是不是也坐在那桌：只看實際入座的 4 個座位（match_record_players），觀戰不算（老闆 2026-11-09） */
+export async function ownerSeatedRooms(roomIds: string[]): Promise<Set<string>> {
+  if (roomIds.length === 0) return new Set();
+  const { data, error } = await getSupabaseAdmin()
+    .from("match_records")
+    .select("room_id, me:match_record_players!inner(user_id)")
+    .eq("game", "mahjong")
+    .eq("me.user_id", OWNER_USER_ID)
+    .in("room_id", roomIds);
+  if (error) throw new Error(`查詢同桌場次失敗：${error.message}`);
+  return new Set((data ?? []).map((r) => String((r as { room_id: string }).room_id)));
 }
 
 export interface ZimoCountRow { userId: string; count: number; lastResetAt: number | null; lastResetSource: "donation" | "clear" | "system" | null; lastResetCleared: number | null }

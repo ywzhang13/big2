@@ -244,7 +244,7 @@ eq(await D.snap(MJ), S0.mj, "⑤ 套用後才多給的權限（auditor 讀 mj_pl
     const src = readFileSync(f, "utf8");
     return !/getSupabaseAdmin/.test(src) || /getSupabase(Server)?\(\)/.test(src);
   }).map((f) => path.relative(ROOT, f).split(path.sep).join("/"));
-  eq([touching.length, bad], [2, []], "⑧ 程式裡讀寫四張麻將表的檔案（lib/mahjong/db.ts、lib/records/store.ts）都只用 getSupabaseAdmin（service role）");
+  eq([touching.length, bad], [3, []], "⑧ 程式裡讀寫四張麻將表的檔案（lib/mahjong/db.ts、lib/records/store.ts、lib/mahjong/zimoFx/store.ts 查老闆是否同桌）都只用 getSupabaseAdmin（service role）");
 }
 
 console.log(results.join("\n"));

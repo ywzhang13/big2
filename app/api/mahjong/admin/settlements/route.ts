@@ -1,17 +1,18 @@
 // 斗內後台：以場結清（老闆 2026-11-02）。只有老闆帳號能用。一場＝一間房；應給＝這場 11/1 00:00（台灣時間）之後的自摸次數 × NT$10。
-//   GET：未結清的人 → { price, total, players: [{ userId, name, avatarUrl, matches, zimo, amount }] }（已打完的場次；金額多的在前，同額看最早的場次）
+//   GET：未結清的人 → { price, total, players: [{ userId, name, avatarUrl, matches, zimo, amount, myTableCount }] }（已打完的場次；金額多的在前，同額看最早的場次）
 //   GET ?userId=：這個人的場次 → { price, unpaid: [場次], playing: [還在打的場次（不能結清）], paid: [最近 30 天結清的], totalDue }
+//     每一場都多一個 myTable：老闆帳號是不是也坐在那桌（只看實際入座，觀戰不算；老闆 2026-11-09，私下清算用，只是標記，不影響金額／結清流程）
 //   POST { userId, roomIds: [...], amount? }：結清這幾場。amount＝實收（不給＝等於應給）；比應給多的算打賞，和應給記成同一筆斗內。
 //     成功 → { batchId, due, amount, tip, rooms: [{ roomId, roomCode, zimo, due }] }
 //     409 short { due, amount, shortBy }＝實收不夠；409 not_finished／already_settled／nothing_due（附 roomId）＝那場不能結清；整批都不生效
 import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
 import { ZIMO_PRICE } from "@/lib/mahjong/zimoFx/rules";
-import { lineProfile, lineProfiles, nowMs, settledMatches, settleMatches, unsettledMatches } from "@/lib/mahjong/zimoFx/store";
+import { lineProfile, lineProfiles, nowMs, ownerSeatedRooms, settledMatches, settleMatches, unsettledMatches } from "@/lib/mahjong/zimoFx/store";
 import { isUuid } from "@/lib/mahjong/spectate/rules";
 
 const PAID_DAYS = 30;
-const match = (m: { roomId: string; roomCode: string | null; startedAt: number | null; endedAt: number | null; zimo: number; due: number }) =>
-  ({ roomId: m.roomId, roomCode: m.roomCode, startedAt: m.startedAt, endedAt: m.endedAt, zimo: m.zimo, due: m.due });
+const match = (m: { roomId: string; roomCode: string | null; startedAt: number | null; endedAt: number | null; zimo: number; due: number }, mine: Set<string>) =>
+  ({ roomId: m.roomId, roomCode: m.roomCode, startedAt: m.startedAt, endedAt: m.endedAt, zimo: m.zimo, due: m.due, myTable: mine.has(m.roomId) });
 
 export async function GET(request: Request) {
   try {
@@ -20,23 +21,27 @@ export async function GET(request: Request) {
     const userId = new URL(request.url).searchParams.get("userId");
     if (userId !== null) {
       if (!isUuid(userId)) return fail(400, "bad_request");
-      const [rows, paid] = await Promise.all([unsettledMatches(userId), settledMatches(userId, nowMs() - PAID_DAYS * 864e5)]);
+      const [rows, paidRaw] = await Promise.all([unsettledMatches(userId), settledMatches(userId, nowMs() - PAID_DAYS * 864e5)]);
+      const mine = await ownerSeatedRooms([...rows.map((r) => r.roomId), ...paidRaw.map((r) => r.roomId)]);
       const byEnd = (a: { endedAt: number | null; startedAt: number | null }, b: typeof a) => (a.endedAt ?? a.startedAt ?? 0) - (b.endedAt ?? b.startedAt ?? 0);
-      const unpaid = rows.filter((r) => r.endedAt !== null).sort(byEnd).map(match);
-      const playing = rows.filter((r) => r.endedAt === null).sort(byEnd).map(match);
+      const unpaid = rows.filter((r) => r.endedAt !== null).sort(byEnd).map((r) => match(r, mine));
+      const playing = rows.filter((r) => r.endedAt === null).sort(byEnd).map((r) => match(r, mine));
+      const paid = paidRaw.map((r) => ({ ...r, myTable: mine.has(r.roomId) }));
       return ok({ price: ZIMO_PRICE, unpaid, playing, paid, totalDue: unpaid.reduce((a, r) => a + r.due, 0) });
     }
     const rows = (await unsettledMatches(null)).filter((r) => r.endedAt !== null);
-    const per = new Map<string, { matches: number; zimo: number; amount: number; oldest: number }>();
+    const mine = await ownerSeatedRooms(rows.map((r) => r.roomId));
+    const per = new Map<string, { matches: number; zimo: number; amount: number; oldest: number; myTableCount: number }>();
     for (const r of rows) {
-      const p = per.get(r.userId) ?? { matches: 0, zimo: 0, amount: 0, oldest: Infinity };
+      const p = per.get(r.userId) ?? { matches: 0, zimo: 0, amount: 0, oldest: Infinity, myTableCount: 0 };
       p.matches++; p.zimo += r.zimo; p.amount += r.due; p.oldest = Math.min(p.oldest, r.endedAt!);
+      if (mine.has(r.roomId)) p.myTableCount++;
       per.set(r.userId, p);
     }
     const profiles = await lineProfiles([...per.keys()]);
     const players = [...per.entries()].filter(([u]) => profiles.has(u))
       .sort(([, a], [, b]) => b.amount - a.amount || a.oldest - b.oldest)
-      .map(([u, p]) => ({ userId: u, ...profiles.get(u)!, matches: p.matches, zimo: p.zimo, amount: p.amount }));
+      .map(([u, p]) => ({ userId: u, ...profiles.get(u)!, matches: p.matches, zimo: p.zimo, amount: p.amount, myTableCount: p.myTableCount }));
     return ok({ price: ZIMO_PRICE, total: players.reduce((a, p) => a + p.amount, 0), players });
   } catch (err) {
     console.error("[mj-admin] settlements", err instanceof Error ? err.message : err);
