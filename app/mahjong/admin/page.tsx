@@ -471,7 +471,7 @@ function PlayerSettle({ p, onBack }: { p: UnsettledPlayer; onBack: () => void })
               <span className="ck" />
               <span className="t">{m.startedAt ?? m.endedAt ? fmtTaipei(when(m)) : "打牌中"}</span>
               <b className="code">{m.roomCode ? `房 ${m.roomCode}` : ""}</b>
-              <span className="z">自摸 {m.zimo} 次</span>
+              <span className="z">自摸 {m.zimo} 次{m.myTable && <> <span className="fxs-tag gold sm" data-admin-mytable={code(m.roomCode)}>我在桌</span></>}</span>
               <span className="amt">{nt(m.due)}</span>
               <span className="fxs-tag clr sm">進行中</span>
             </div>

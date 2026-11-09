@@ -6,6 +6,13 @@
 //   T2 老闆沒同桌的未結清場次：myTable=false；外層清單 myTableCount 不算這場（觀戰不算，見上）
 //   T3 已結清區：兩種場次各自結清後，paid 陣列裡每一場的 myTable 各自正確，不受結清動作影響
 //   T4 金額、合計、已收、撤回完全不受影響：myTable=true 和 false 的場次應給一樣算、結清／撤回流程一樣跑
+//   T5（審伯必修：app/mahjong/admin/page.tsx:469～477 進行中場次漏接畫面）playing 陣列的每一場也要有 myTable 欄位、
+//      不能結清的限制和應給不受影響。⚠️ 資料面的限制：match_record_players 只有 close_room_with_record 在「整場結束」時才會寫，
+//      還在打（mj_match_unsettled 判斷 endedAt=null＝match_records 那場還沒有紀錄）的場次，match_record_players 一定也還沒有那場的
+//      任何一列（同一個交易寫入、match_id 還外鍵參照不到）——所以 playing 陣列目前只會是 myTable=false，沒辦法真的做出「正在打、
+//      老闆同桌」還要有 myTable=true 的資料；這裡驗證的是「欄位一定在、值穩定是 false、不會是 undefined 讓畫面炸掉」，
+//      畫面「收到 true 時會不會顯示」改用 Playwright 搭假資料驗證（見截圖），已回報阿哲：要讓進行中場次真的能顯示，
+//      需要另外查「正在打」的即時座位（mj_players／mj_rooms），不在這次「只接畫面」的範圍內
 import { GET as settleGet, POST as settlePost } from "../../app/api/mahjong/admin/settlements/route";
 import { POST as revokePost } from "../../app/api/mahjong/admin/settlements/revoke/route";
 import { tokens } from "../support/stub-auth";
@@ -73,6 +80,23 @@ const b1 = back.body.unpaid.find((m: { roomId: string }) => m.roomId === rid(1))
 const b2 = back.body.unpaid.find((m: { roomId: string }) => m.roomId === rid(2));
 eq([rv.status, rv.body.rooms.length, b1.myTable, b2.myTable], [200, 2, true, false],
   "T4 撤回整批：兩場都回到未結清，myTable 標記維持原樣（老闆同桌的還是 true，沒同桌的還是 false），撤回流程不受影響");
+
+// ---- T5 進行中（還在打）的場次 ----
+// F：還在打的場次，只記自摸、不呼叫 addMatch（沒有 ended，match_records 那場本來就還沒有紀錄，mj_match_unsettled 的
+//   left join 對不到、endedAt 回 null，才會進 playing）。試著幫這場標老闆同桌（addMatchPlayers 需要先有 match_records
+//   那場的紀錄才找得到 match_id，這裡找不到，呼叫了也是沒動作）——藉此直接驗證：這場本來就不可能有同桌資料，myTable 仍然
+//   穩定是 false、不是 undefined，playing 陣列不會因為多了 myTable 欄位而出錯；不能結清、應給照舊。
+const [F] = [5].map(uid);
+users[F] = { name: "阿強", avatarUrl: null };
+await addUser(F);
+await addMatchPlayers(rid(3), [F, BOSS, Cc, D]); // 沒有 match_records 可以對應，這行預期無效果（no-op）
+await win(rid(3), F, "2026-11-09T14:30:00");
+const live = await call(settleGet, `/?userId=${F}`);
+const playingRoom = live.body.playing.find((m: { roomId: string }) => m.roomId === rid(3));
+const cantSettle = await call(settlePost, "/", { userId: F, roomIds: [rid(3)] });
+eq([live.body.unpaid.length, playingRoom?.myTable, playingRoom?.endedAt, playingRoom?.due, cantSettle.status, cantSettle.body.error],
+  [0, false, null, 10, 409, "not_finished"],
+  "T5 還在打的場次：playing 陣列有 myTable 欄位（結構上這種場次還沒有同桌資料，穩定是 false，不是 undefined）；應給照算、還是不能結清");
 
 console.log(results.join("\n"));
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);
