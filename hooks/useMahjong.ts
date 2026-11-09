@@ -69,8 +69,10 @@ export interface MjFlowerFx {
   holdMs: number;
 }
 
-/** 慢慢摸牌時也照常即時處理的事件：摸到的牌本身、剩餘張數和補花、眼牌者看到的三家手牌 */
-const SLOW_DRAW_PASS = new Set(["mj_draw_tile", "mj_draw", "mj_opponent_hands"]);
+/** 慢慢摸牌時也照常即時處理的事件：摸到的牌本身、剩餘張數和補花。
+ *  mj_opponent_hands 不在這裡：它是別家（可能是正在慢慢摸牌的那家）打出後的權威快照，要跟著排隊，
+ *  不能搶先套用、提早洩漏「這家已經打出了」（見 pendingEyeRevealSeatRef 的說明） */
+const SLOW_DRAW_PASS = new Set(["mj_draw_tile", "mj_draw"]);
 const SLOW_DRAW_MS = 800;
 /** 眼牌者摸牌：翻到正面後一律再停 1 秒，才自動打出或進結算 */
 const SLOW_DRAW_PAUSE_MS = 1000;
@@ -387,6 +389,12 @@ export function useMahjong(
   const holdRef = useRef<{ on: boolean; gen: number; queue: (() => void)[]; timer?: ReturnType<typeof setTimeout>; refetch?: () => void; slowTile?: number }>({ on: false, gen: 0, queue: [] });
   // 眼牌者的同一次摸牌：API 回應和 mj_draw_tile 只處理先到的那個（後到的在動畫播完、打出套用後才來也不能把牌加回去）
   const eyeDrawRef = useRef(new EyeDrawGate());
+  // 我眼牌時，別家也眼牌者摸牌後：這家自動摸打在同一個請求裡做完，opponentHands 的快照拿到的已經是打出後
+  // 的狀態（drawnTileId 一律是 null），而且不能胡就是打出剛摸到的那張，手牌內容前後完全沒變、沒有任何畫面
+  // 證據能看到摸到了什麼（老闆回報「偶爾看不到別人摸的牌」，尤其對方也眼牌時更容易發生，根因就是這個）。
+  // 這裡記下「正在等這家的打出事件」，mj_discard 一到就借用那張牌（打出的＝剛摸到的那張）做一份暫時的揭露
+  // 畫面，撐到 mj_opponent_hands 的權威快照套用為止（見下面 mj_draw／mj_discard／mj_opponent_hands）
+  const pendingEyeRevealSeatRef = useRef<number | null>(null);
   // 自己的吃碰槓（有牌面）：老柯 2026-10-29 起公開的 mj_action 不帶別家暗槓牌面，自己暗槓時改用座位頻道 mj_hand_update.myRevealed
   const myRevealedRef = useRef<Meld[] | null>(null);
   const releaseHold = useCallback(() => {
@@ -399,6 +407,8 @@ export function useMahjong(
     const refetch = h.refetch;
     h.queue = [];
     h.refetch = undefined;
+    // 保險：等的這家沒有打出（例如自動自摸結束整局），不能把揭露記號留到下一次不相干的摸牌
+    pendingEyeRevealSeatRef.current = null;
     setState((prev) => (prev.slowDraw ? { ...prev, slowDraw: null } : prev));
     queue.forEach((fn) => fn());
     refetch?.(); // 排隊期間丟掉的輪詢，停完再抓一次，收斂到伺服器狀態
@@ -1046,6 +1056,7 @@ export function useMahjong(
     // --- mj_game_start ---
     onHeld(channel, "mj_game_start", ({ payload }) => {
       eyeDrawRef.current.reset(); // 上一局沒處理完的摸牌作廢（牌 id 每局重複使用）
+      pendingEyeRevealSeatRef.current = null; // 上一局還沒等到打出的揭露記號不能帶到新的一局（牌 id 每局重複使用）
       myRevealedRef.current = null; // 上一局自己暗槓留下的吃碰槓不能帶到這一局
       dismissedOwnActionsRef.current = null;
       playedFxRef.current.clear();
@@ -1163,8 +1174,11 @@ export function useMahjong(
         const ms = EYE_PACE_MS + flowerPaceMs;
         holdFor(ms);
         showPace({ seat, kind: "eye" }, ms);
-      } else if (gotFlower && seat !== cur.mySeat) {
-        showPace({ seat, kind: "flower" }, flowerPaceMs);
+        // 我也眼牌、看得到這家的手牌：記下來等這家打出（剛摸到的那張），借那張牌做暫時揭露（見 mj_discard）
+        pendingEyeRevealSeatRef.current = cur.eyeSeats.includes(cur.mySeat) ? seat : null;
+      } else {
+        pendingEyeRevealSeatRef.current = null;
+        if (gotFlower && seat !== cur.mySeat) showPace({ seat, kind: "flower" }, flowerPaceMs);
       }
       // 自己補到花交給 mj_draw_tile 處理（那邊才看得到完整手牌，可以把花牌放進手牌最右邊）；
       // 這裡先叫過一次會把 FlowerTracker 的基線吃掉，mj_draw_tile 那邊就看不到新補的花了，所以跳過自己
@@ -1229,6 +1243,27 @@ export function useMahjong(
             ? prev.myHand.filter((t) => t.id !== tile.id)
             : prev.myHand,
       }));
+    });
+
+    // --- mj_discard（另外直接訂閱，不進排隊；配合 mj_draw 設的 pendingEyeRevealSeatRef） ---
+    // 我也眼牌、剛標記在等這家打出：眼牌自動摸打的規則是「不能胡就打出剛摸到的那張」，所以打出的這張
+    // 就是剛摸到的那張，借它做一份暫時的揭露（手牌多放這張＋標成剛摸到），讓眼牌者真的看得到摸了什麼，
+    // 撐到 mj_opponent_hands 的權威快照套用為止（那份快照已經移出 SLOW_DRAW_PASS，會跟著排隊，不會搶先
+    // 蓋掉這份揭露）。不用等排隊：這份本來就是要立刻顯示給使用者看的暫時畫面，跟 mj_draw／mj_draw_tile
+    // 一樣繞過節奏關卡
+    channel.on("broadcast", { event: "mj_discard" }, ({ payload }) => {
+      const { seat, tile } = payload as { seat: number; tile: Tile };
+      if (pendingEyeRevealSeatRef.current !== seat) return;
+      pendingEyeRevealSeatRef.current = null;
+      setState((prev) => {
+        const hands = prev.opponentHands;
+        const idx = hands?.findIndex((h) => h.seat === seat) ?? -1;
+        if (!hands || idx === -1 || hands[idx].hand.some((t) => t.id === tile.id)) return prev;
+        return {
+          ...prev,
+          opponentHands: hands.map((h, i) => (i === idx ? { ...h, hand: [...h.hand, tile], drawnTileId: tile.id } : h)),
+        };
+      });
     });
 
     // --- mj_action (chi/pong/kong) ---
@@ -1609,6 +1644,10 @@ export function useMahjong(
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
       channelRef.current = null;
+      // 審伯必修：這個 effect 在換房（roomCode 變了）時會重跑，不是整個元件卸載重建；座位編號不是跨房間
+      // 的唯一值，換房後舊房間留下的揭露記號如果不清掉，新房間剛好同一個座位打牌時會被誤套用（見下面
+      // 新增的跨房測試）
+      pendingEyeRevealSeatRef.current = null;
     };
   }, [roomCode, playerName, myId, fetchState, markClosed, bindPrivateEvents, playDeclareFx, playFlowerFx, noteFlowers, clearFlowerFx, onHeld, holdFor, showPace]);
 
