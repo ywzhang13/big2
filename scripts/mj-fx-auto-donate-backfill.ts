@@ -18,7 +18,7 @@
 //     預覽站的假 Supabase 沒有實作完整的 REST／auth.admin.listUsers，一般模式在那邊讀不到真資料。
 //   ⚠️ 要處理正式站，env 檔要指向正式環境（例如 vercel env pull --environment=production 下來的檔）。
 // 輸出：印到終端機，同時寫一份 .tmp/斗內自動開通-補開試算.md（試算的名單，不是執行後的結果）。
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OWNER_USER_ID } from "../lib/mahjong/zimoFx/rules";
@@ -153,6 +153,7 @@ lines.push("");
 const md = lines.join("\n");
 console.log(md);
 const out = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.tmp/斗內自動開通-補開試算.md");
+mkdirSync(path.dirname(out), { recursive: true }); // .tmp 不進 git、rsync 預覽站時也被排除，目錄不一定存在
 writeFileSync(out, md, "utf8");
 console.log(`\n已寫入 ${out}（這份是試算的名單，不是執行結果）`);
 
