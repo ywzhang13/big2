@@ -1,7 +1,10 @@
 -- 回滾 20261109_mahjong_fx_auto_donate.sql：拿掉自動開通／收回，mj_fx_grant／mj_fx_revoke／mj_donation_tip／
 --   mj_match_settle／mj_donation_void／mj_match_unsettle 改回套用前（20261104）的本體。
 --   mj_fx_auto_block 整張刪掉（只是「老闆手動收回過」的標記，不是帳目紀錄，刪了不影響任何斗內／開通紀錄）。
---   已經被自動開通／收回的那些 mj_fx_grants、mj_fx_audit 紀錄照樣留著（審伯 2026-11-02 必修 2 的慣例：紀錄不能刪）。
+--   系統自動開通（granted_by='system:donate'）還有效的要先收回（審伯 2026-11-09 必修③），不然回滾後這份機制
+--   沒了，這些特效會永久留著收不回來；每人各寫一筆 fx_revoke 操作紀錄（detail.rollback=true 可辨識）。
+--   手動開通、斗內、結清紀錄完全不動；已經被自動開通／收回的那些 mj_fx_grants、mj_fx_audit 紀錄照樣留著
+--   （審伯 2026-11-02 必修 2 的慣例：紀錄不能刪）。
 begin;
 
 do $$
@@ -11,6 +14,20 @@ begin
   if v_tbl is not null and obj_description(v_tbl, 'pg_class') is distinct from 'mj_fx_auto_block:20261109' then
     raise exception '拒絕回滾：public.mj_fx_auto_block 不是 20261109_mahjong_fx_auto_donate.sql 建的，不刪';
   end if;
+end $$;
+
+-- 收回還有效的系統自動開通；只動 granted_by='system:donate' 那幾列，手動開通（granted_by 是帳號 id）不碰
+do $$
+declare
+  v_now timestamptz := now();
+  r record;
+begin
+  for r in select distinct user_id from public.mj_fx_grants where granted_by = 'system:donate' and revoked_at is null loop
+    update public.mj_fx_grants set revoked_at = v_now, revoked_by = 'system'
+    where user_id = r.user_id and granted_by = 'system:donate' and revoked_at is null;
+    insert into public.mj_fx_audit (at, actor_id, action, target_user_id, detail)
+    values (v_now, 'system', 'fx_revoke', r.user_id, jsonb_build_object('fx', 'all', 'rollback', true, 'reason', '回滾自動開通'));
+  end loop;
 end $$;
 
 drop function if exists public.mj_fx_auto_sync(text, timestamptz);

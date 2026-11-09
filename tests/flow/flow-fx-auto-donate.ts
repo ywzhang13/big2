@@ -8,7 +8,15 @@
 //   T6 老闆手動收回過的人，之後斗內不會自動開通；老闆自己手動開通一次才解除擋
 //   T7 老闆帳號不受影響：斗內給老闆帳號不會多開任何東西、不寫自動操作紀錄
 //   T8 已經有有效開通（不論手動／系統）時再斗內：不會多開 6 列
-//   T9 回滾：函式改回舊版、mj_fx_auto_block 整張刪掉；斗內／開通／操作紀錄一筆都沒少；重套一次（表已經不存在）照常成功
+//   T10 補開（阿哲 2026-11-09 拍板：獨立、要明確下 --apply 才寫入，和即時自動開通呼叫同一支 mj_fx_auto_sync）：
+//      先直接寫入既有斗內資料（不經過 tip／settle，模擬上線前就有、從沒被同步過的舊帳），
+//      再呼叫 mj_fx_auto_sync（和 scripts/mj-fx-auto-donate-backfill.ts --apply 一樣的呼叫）補開；
+//      有效斗內的補開；被③擋著的不補；已經有開通的不多開；重跑第二次完全不變
+//   T11 併發（審伯 2026-11-09 必修②：mj_fx_auto_sync 用玩家 id 當 key 取交易內鎖）：
+//      雙連線同時觸發同一玩家的開通：恆為 6 筆有效開通、1 筆自動操作紀錄；
+//      雙連線同時作廢同一玩家最後兩筆有效斗內：以兩邊都寫完之後的最終狀態決定收回，恆為 1 筆自動收回紀錄、0 筆有效開通
+//   T9 回滾：函式改回舊版、系統自動開通的還有效的先收回（手動開通不動）、mj_fx_auto_block 整張刪掉；
+//      斗內／結清／手動開通紀錄一筆都沒少；重套一次（表已經不存在）照常成功
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,13 +35,13 @@ extraMigrations.push("20261104_mahjong_match_settle.sql", "20261105_mahjong_hand
 
 const MIG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations");
 const BOSS = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";
-const uid = (n: number) => `ec000000-0000-4000-8000-00000000000${n}`;
+const uid = (n: number) => `ec000000-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`;
 const rid = (n: number) => `ed000000-0000-4000-8000-00000000000${n}`;
-const [A, B, C, D, Z, Y, X] = [1, 2, 3, 4, 5, 6, 7].map(uid);
+const [A, B, C, D, Z, Y, X, W, V, U] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(uid);
 tokens.boss = { id: BOSS, displayName: "張育瑋", pictureUrl: null, isGuest: false };
 users[BOSS] = { name: "張育瑋", avatarUrl: null };
-for (const [u, n] of [[A, "A"], [B, "B"], [C, "C"], [D, "D"], [Z, "Z"], [Y, "Y"], [X, "X"]]) users[u] = { name: n, avatarUrl: null };
-for (const u of [BOSS, A, B, C, D, Z, Y, X]) await addUser(u);
+for (const [u, n] of [[A, "A"], [B, "B"], [C, "C"], [D, "D"], [Z, "Z"], [Y, "Y"], [X, "X"], [W, "W"], [V, "V"], [U, "U"]]) users[u] = { name: n, avatarUrl: null };
+for (const u of [BOSS, A, B, C, D, Z, Y, X, W, V, U]) await addUser(u);
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -56,6 +64,12 @@ const auditAuto = (u: string, action: string) => n("select count(*)::int n from 
 const totals = async () => [await n("select count(*)::int n from mj_donations"), await n("select count(*)::int n from mj_fx_audit"), await n("select count(*)::int n from mj_fx_grants")];
 let hand = 0;
 const win = (room: string, u: string, at: string) => d.query("insert into mj_zimo_wins (room_id, hand_no, user_id, won_at) values ($1, $2, $3, $4)", [room, ++hand, u, iso(at)]);
+/** 直接寫一筆斗內（不經過 mj_donation_tip／mj_match_settle，不會觸發自動同步）：模擬上線前就有、從沒被同步過的舊帳 */
+const rawDonation = async (u: string, amount: number, at: string): Promise<string> =>
+  (await d.query<{ id: string }>("insert into mj_donations (user_id, player_name, amount, donated_at, created_by, created_at) values ($1, $2, $3, $4, 'legacy-seed', $4) returning id",
+    [u, users[u]?.name ?? u, amount, iso(at)])).rows[0].id;
+/** 和 scripts/mj-fx-auto-donate-backfill.ts --apply 同一支函式：直接呼叫 mj_fx_auto_sync */
+const sync = (u: string) => d.query<{ r: { granted?: boolean; revoked?: boolean } }>("select public.mj_fx_auto_sync($1) as r", [u]);
 
 // ---- M1 套用前：模擬老闆過去手動操作留下的紀錄（backfill 只看這份） ----
 clock.now = T("2026-11-09T09:00:00");
@@ -119,15 +133,48 @@ clock.now = T("2026-11-09T15:00:00");
 const t8 = await call(tipPost, { userId: D, amount: 40, donatedAt: new Date(clock.now).toISOString() });
 eq([g8.body.granted, t8.status, await allFx(D), await activeFx(D)], [6, 200, 6, 6], "T8 D 已經有老闆手動開通：再斗內不會多開 6 列（本來就是開著的）");
 
+// ---- T10 補開（直接寫入既有斗內，模擬上線前就有、從沒被同步過的舊帳；呼叫 mj_fx_auto_sync＝--apply 的做法） ----
+clock.now = T("2026-11-09T16:00:00");
+await rawDonation(W, 60, "2026-10-20T10:00:00"); // W：舊帳，有效斗內，從沒開通過
+await rawDonation(Z, 60, "2026-10-20T10:00:00"); // Z：舊帳，但 M1 已經判定被③擋著
+const s1 = await sync(W);
+const s1b = await sync(W); // 重跑第二次
+const s2 = await sync(Z);
+const s3 = await sync(D); // D 在 T8 已經是手動開通、有效，補開不應該多開
+eq([s1.rows[0].r, await activeFx(W), await auditAuto(W, "fx_grant"), s1b.rows[0].r, await allFx(W), s2.rows[0].r, await allFx(Z), s3.rows[0].r, await allFx(D)],
+  [{ granted: true }, 6, 1, {}, 6, {}, 0, {}, 6],
+  "T10 補開：W 這筆舊帳沒人動過，呼叫 mj_fx_auto_sync 補開 6 列、寫 1 筆自動開通紀錄，重跑第二次完全不變（還是 6 列、不多寫）；" +
+  "Z 被③擋著，補開不會開通；D 已經是手動開通，補開不會多開");
+
+// ---- T11 併發：同一玩家雙連線同時觸發 ----
+clock.now = T("2026-11-09T17:00:00");
+await rawDonation(V, 60, "2026-11-09T17:00:00"); // V：還沒開通過
+const race1 = await Promise.all([sync(V), sync(V)]);
+eq([race1.map((r) => r.rows[0].r).filter((r) => r.granted).length, await activeFx(V), await auditAuto(V, "fx_grant")], [1, 6, 1],
+  "T11a 雙連線同時幫 V 開通：只有一邊真的開通（另一邊看到鎖之後的最新狀態就跳過），恆為 6 筆有效開通、1 筆自動開通紀錄");
+
+const ut1 = await call(tipPost, { userId: U, amount: 10, donatedAt: new Date(clock.now).toISOString() });
+const ut2 = await call(tipPost, { userId: U, amount: 10, donatedAt: new Date(clock.now).toISOString() });
+const beforeRevoke = [await activeFx(U), await auditAuto(U, "fx_grant")];
+await Promise.all([call(voidPost, { id: ut1.body.id, reason: "測試" }), call(voidPost, { id: ut2.body.id, reason: "測試" })]);
+eq([beforeRevoke, await activeFx(U), await auditAuto(U, "fx_revoke")], [[6, 1], 0, 1],
+  "T11b 雙連線同時作廢 U 最後兩筆有效斗內：U 原本是開著的（6 筆、1 筆開通紀錄）；兩邊都寫完之後，以最終「沒有任何有效斗內」決定收回，恆為 1 筆自動收回紀錄、0 筆有效開通（不會因為各自只看到另一筆還有效而兩邊都漏收回）");
+
 // ---- T9 回滾 ----
 const before9 = await totals();
 await d.exec(readFileSync(path.join(MIG, "20261109_mahjong_fx_auto_donate_rollback.sql"), "utf8"));
 const goneFn = await n("select count(*)::int n from pg_proc where proname = 'mj_fx_auto_sync'");
 const goneTbl = await n("select (to_regclass('public.mj_fx_auto_block') is null)::int n");
+const stillActiveManual = await n("select count(*)::int n from mj_fx_grants where user_id = $1 and revoked_at is null", [D]); // D 是手動開通，回滾不該動
+const systemRevoked = await n("select count(*)::int n from mj_fx_grants where granted_by = 'system:donate' and revoked_at is null"); // 回滾後系統開的全部收回
+const rollbackAudit = await n("select count(*)::int n from mj_fx_audit where action = 'fx_revoke' and (detail ->> 'rollback') = 'true'");
+const after9 = await totals();
 let again = "沒擋";
 try { await d.exec(readFileSync(path.join(MIG, "20261109_mahjong_fx_auto_donate.sql"), "utf8")); } catch { again = "擋下"; await d.exec("rollback"); }
-eq([goneFn, goneTbl, (await totals()).join() === before9.join(), again], [0, 1, true, "沒擋"],
-  "T9 回滾：mj_fx_auto_sync 拿掉、mj_fx_auto_block 整張刪掉；斗內／操作紀錄／開通筆數不變；重套一次（表已經不存在）不會被擋下，照常成功");
+eq([goneFn, goneTbl, stillActiveManual, systemRevoked, rollbackAudit > 0, after9[0] === before9[0], after9[2] === before9[2], after9[1] > before9[1], again],
+  [0, 1, 6, 0, true, true, true, true, "沒擋"],
+  "T9 回滾：mj_fx_auto_sync 拿掉；D 的手動開通完全不動還是 6 列；所有系統自動開通（granted_by='system:donate'）都收回、寫可辨識的 rollback 操作紀錄；" +
+  "mj_fx_auto_block 整張刪掉；斗內筆數、開通紀錄筆數（只是標收回，不刪）都沒變，只有操作紀錄因為新寫的 rollback 收回紀錄而增加；重套一次（表已經不存在）不會被擋下，照常成功");
 
 console.log(results.join("\n"));
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);

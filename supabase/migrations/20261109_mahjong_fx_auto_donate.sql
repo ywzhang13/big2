@@ -17,7 +17,11 @@
 --   ④ 改寫 mj_donation_tip、mj_match_settle、mj_donation_void、mj_match_unsettle，在同一個交易裡呼叫 mj_fx_auto_sync──舊版本體在回滾檔
 --      （不動 mj_donation_add／mj_donation_record：10/31 以場結清上線後現在的路由都不呼叫了，只留給部署空檔相容）
 --   ⑤ 一次性回填 mj_fx_auto_block：每個帳號最後一次「老闆手動」fx_grant／fx_revoke 若是 fx_revoke，就算被擋著
---      （上線時試算名單用同一條規則，見 scripts/mj-fx-auto-donate-backfill.ts，不會自動套用）
+--      （這份只回填「擋著」的狀態，不補開任何特效；補開舊斗內者是獨立、要明確下 --apply 才寫入的步驟，
+--      見 scripts/mj-fx-auto-donate-backfill.ts，規則呼叫這份的 mj_fx_auto_sync，和即時自動開通同一條規則，
+--      這份 migration 本身完全不自動補開——阿哲 2026-11-09 拍板：補開要先給老闆看過名單再執行，不能跟著部署自動跑）
+-- 併發：mj_fx_auto_sync 一開頭就取得以玩家 id 為 key 的交易內鎖（審伯 2026-11-09 必修②），
+--   同一玩家的打賞／結清／作廢／撤回結清／補開同時觸發會依序處理，不會重複開通或漏收回。
 -- API 介面完全沒變（這幾支函式的參數、回傳格式都和套用前一樣），不用通知前端。
 -- 權限：新表、新函式只給 service_role。回滾見 20261109_mahjong_fx_auto_donate_rollback.sql。
 begin;
@@ -58,6 +62,9 @@ begin
   if p_user = 'c5707922-f6f0-4c10-9c87-3532fdbf6b72' then -- 老闆帳號（OWNER_USER_ID）不受影響
     return '{}'::jsonb;
   end if;
+  -- 鎖住這個玩家：打賞／結清／作廢／撤回結清／補開同時觸發也會依序處理，後面的會看到前面已經提交的結果再判斷，
+  -- 不會兩邊都讀到舊狀態而重複開通、或兩邊都以為對方還有效斗內而漏收回
+  perform pg_advisory_xact_lock(hashtext('mj_fx_auto_sync:' || p_user));
   v_has := exists (select 1 from mj_donations where user_id = p_user and voided_at is null);
   v_active := exists (select 1 from mj_fx_grants where user_id = p_user and revoked_at is null and expires_at > v_now);
   if v_has and not v_active then
