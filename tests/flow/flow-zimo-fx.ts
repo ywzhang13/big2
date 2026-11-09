@@ -1,6 +1,6 @@
 // 自摸特效庫＋斗內後台（老闆 2026-10-31 定案），走真的 API、真的 migration（記憶體 PostgreSQL）
 //   Z1 後台 8 支 API：沒登入 401；一般玩家、遊客、遊客身分的老闆帳號都 403，回應沒有任何資料
-//   Z2 記帳、作廢：只記帳不開通；作廢要原因、只能一次；排行榜扣回；操作紀錄都在；資料庫刪不掉、改不了
+//   Z2 記帳、作廢：記帳有效就自動開通（老闆 2026-11-09）；作廢要原因、只能一次；排行榜扣回；操作紀錄都在；資料庫刪不掉、改不了
 //   Z3 排行榜：只算本週有效；顯示 LINE 名稱和頭像（老闆 2026-10-31 不做匿名）；公開 API 沒有任何帳號 id；有登入時自己那列 me
 //   Z10 總斗內（range=all）：累計多週的有效斗內、作廢不算、名稱頭像用最新一筆有效的、沒有帳號 id；本週榜不受影響；range 亂填 400
 //   Z11 打牌、摸牌、動作、下一局：查自摸特效的請求在登入檢查之前就發出（和登入檢查同時進行，不多串一次往返）
@@ -136,8 +136,9 @@ let idA = "", idB = "";
     (await post(donationsAdd, { userId: G, amount: 100, donatedAt: "2026-10-27T20:00:00+08:00" }, "boss")).body.error,
   ];
   const fxAfterDonate = await get(myFxGet, "/", "a");
-  eq([a1.status, b1.status, bad, fxAfterDonate.body.available], [200, 200, [400, 400, 400, 400, "unknown_player"], { golden: null }],
-    "Z2 老闆記兩筆 200；金額 0、小數、超過 999999、未來日期 400；遊客帳號 unknown_player；記帳不會開通特效");
+  eq([a1.status, b1.status, bad, fxAfterDonate.body.available],
+    [200, 200, [400, 400, 400, 400, "unknown_player"], { golden: null, meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null }],
+    "Z2 老闆記兩筆 200；金額 0、小數、超過 999999、未來日期 400；遊客帳號 unknown_player；阿明有效斗內（老闆 2026-11-09）自動開通全部特效");
   const before = (await get(board, "/")).body.rows.map((r: { name: string; amount: number }) => `${r.name}:${r.amount}`);
   const v1 = await post(donationVoid, { id: idB, reason: "金額打錯" }, "boss");
   const v2 = await post(donationVoid, { id: idB, reason: "再一次" }, "boss");
@@ -154,8 +155,8 @@ let idA = "", idB = "";
     try { await d.exec(s); tries.push("沒擋"); } catch { tries.push("擋下"); }
   }
   const au = (await get(audit, "/", "boss")).body.records.map((r: { action: string }) => r.action);
-  eq([tries, au], [["擋下", "擋下", "擋下", "擋下", "擋下"], ["donation_void", "donation_add", "donation_add", "donation_add"]],
-    "Z2 資料庫層：刪斗內、改金額、取消作廢、刪或改操作紀錄全部被擋；操作紀錄有 3 筆記帳＋1 筆作廢（失敗的作廢不記）");
+  eq([tries, au], [["擋下", "擋下", "擋下", "擋下", "擋下"], ["fx_revoke", "donation_void", "donation_add", "fx_grant", "donation_add", "fx_grant", "donation_add"]],
+    "Z2 資料庫層：刪斗內、改金額、取消作廢、刪或改操作紀錄全部被擋；操作紀錄有 3 筆記帳＋1 筆作廢，加上阿明、阿華記帳時各自動開通一次（fx_grant）、阿華那筆作廢後自動收回（fx_revoke）");
 }
 
 // ---- Z3 排行榜不外露 ----
@@ -205,8 +206,8 @@ let idA = "", idB = "";
   const r3 = await post(fxRevoke, { userId: B }, "boss");
   const info = (await get(fxGet, `/?userId=${B}`, "boss")).body;
   eq([r1.body.revoked, z1.fx, r2.body.revoked, z2.fx, r3.body.revoked, info.active, info.selected, info.grants.length, (await post(fxRevoke, { userId: BOSS }, "boss")).body.error],
-    [6, "golden", 0, "golden", 0, {}, "golden", 6, "owner_permanent"],
-    "Z5 一次全開（2026-11-02）：收回一律全部收回（舊格式只帶冰封也一樣）→ 收回 6 列、自摸安全回退金色；再收回 0 列；開通紀錄保留 6 筆；老闆帳號不能收回");
+    [12, "golden", 0, "golden", 0, {}, "golden", 18, "owner_permanent"],
+    "Z5 一次全開（2026-11-02）：收回一律全部收回（舊格式只帶冰封也一樣）→ 連同阿華 Z3 斗內自動開通、還有效的 6 列一起收回 12 列、自摸安全回退金色；再收回 0 列；開通紀錄保留 18 筆（Z2 自動開通又因作廢收回的 6＋Z3 自動開通的 6＋這裡手動開通的 6）；老闆帳號不能收回");
 }
 
 // ---- Z6 老闆永久 ----

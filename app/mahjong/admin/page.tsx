@@ -629,8 +629,8 @@ function auditText(a: AuditRecord): string {
     case "zimo_clear": return `清除 ${who} 自摸 ${Number(d.cleared) || 0} 次`;
     case "zimo_reset_all": return `系統重置：全部玩家自摸次數從 11/1 起從 0 開始（${Number(d.users) || 0} 人、共 ${Number(d.cleared) || 0} 次，舊紀錄保留）`;
     case "donation_void": return `作廢 ${who} ${nt(Number(d.amount) || 0)}${d.reason ? `（${String(d.reason)}）` : ""}`;
-    case "fx_grant": return `開通 ${who} ${Array.isArray(d.fx) && d.fx.length >= ZIMO_FX_LIST.length ? "全部特效" : fxList(d.fx)}`;
-    case "fx_revoke": return `收回 ${who} ${d.fx === undefined || d.fx === "all" || (Array.isArray(d.fx) && d.fx.length >= ZIMO_FX_LIST.length) ? "全部特效" : fxList(d.fx)}`;
+    case "fx_grant": return `開通 ${who} ${Array.isArray(d.fx) && d.fx.length >= ZIMO_FX_LIST.length ? "全部特效" : fxList(d.fx)}${d.auto ? "（系統自動：有斗內）" : ""}`;
+    case "fx_revoke": return `收回 ${who} ${d.fx === undefined || d.fx === "all" || (Array.isArray(d.fx) && d.fx.length >= ZIMO_FX_LIST.length) ? "全部特效" : fxList(d.fx)}${d.auto ? "（系統自動：斗內作廢）" : ""}`;
     case "fx_select": return `${who} 換成 ${fxList(d.fx)}`;
     default: return `${a.action} ${who}`;
   }
