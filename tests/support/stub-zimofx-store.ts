@@ -28,12 +28,37 @@ export async function addMatch(roomId: string, code: string, started: number, en
   if (ended === null) return;
   await (await db()).query("insert into match_records (game, room_id, room_code, started_at, ended_at) values ('mahjong', $1, $2, $3, $4)", [roomId, code, iso(started), iso(ended)]);
 }
+/** 測試用：記這場實際入座的帳號（座位 0～3，null＝那個座位沒有登入帳號）；只有要測「老闆同桌」才需要呼叫（老闆 2026-11-09） */
+export async function addMatchPlayers(roomId: string, userIds: (string | null)[]): Promise<void> {
+  const d = await db();
+  const row = await d.query<{ id: string }>("select id from match_records where game = 'mahjong' and room_id = $1", [roomId]);
+  const matchId = row.rows[0]?.id;
+  if (!matchId) return;
+  for (let seat = 0; seat < userIds.length; seat++) {
+    if (!userIds[seat]) continue;
+    await d.query(
+      "insert into match_record_players (match_id, seat, player_name, player_id, total_score, user_id) values ($1, $2, 't', 't', 0, $3) on conflict (match_id, seat) do update set user_id = excluded.user_id",
+      [matchId, seat, userIds[seat]]);
+  }
+}
+/** 和正式 store.ts 的 ownerSeatedRooms 同一個意思，這裡用 SQL 直接查（測試不走 supabase-js） */
+export async function ownerSeatedRooms(roomIds: string[]): Promise<Set<string>> {
+  if (roomIds.length === 0) return new Set();
+  const OWNER = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";
+  const r = await (await db()).query<{ room_id: string }>(
+    "select distinct m.room_id from match_records m join match_record_players p on p.match_id = m.id where m.game = 'mahjong' and p.user_id = $1 and m.room_id = any($2::uuid[])",
+    [OWNER, roomIds]);
+  return new Set(r.rows.map((x) => String(x.room_id)));
+}
 export function db(): Promise<PGlite> {
   dbp ??= (async () => {
     const d = await donateDb(); // 已經建好角色、auth.users 和 20261021 的斗內表
     // 對戰紀錄表（正式庫由 20261016_match_records.sql 建；這裡只建以場結清用得到的欄位）
     await d.exec(`create table if not exists public.match_records (id uuid primary key default gen_random_uuid(), game text not null, room_id uuid not null,
-      room_code char(4) not null, started_at timestamptz, ended_at timestamptz not null, hands_played int, unique (game, room_id));`);
+      room_code char(4) not null, started_at timestamptz, ended_at timestamptz not null, hands_played int, unique (game, room_id));
+      create table if not exists public.match_record_players (match_id uuid not null references match_records(id) on delete cascade,
+      seat int not null check (seat between 0 and 3), player_name text not null, player_id text not null, total_score int not null default 0,
+      user_id uuid, primary key (match_id, seat));`);
     const migrations = ["20261031_mahjong_zimo_fx.sql", "20261101_mahjong_golden_zimo.sql", "20261102_mahjong_donate_deduct.sql", ...extraMigrations];
     for (const migration of migrations) {
       const sql = path.resolve(path.dirname(fileURLToPath(import.meta.url)), `../../supabase/migrations/${migration}`);

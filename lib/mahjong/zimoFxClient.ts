@@ -107,14 +107,14 @@ export function fmtTaipei(ms: number): string {
 
 // ---- 斗內以場結清（老柯 app/api/mahjong/admin/settlements；小宜〈斗內改版〉規格 C）----
 // 老闆 2026-11-02：按「已收」要有金額欄，預設帶入應給金額（多場就是合計），可以改；多給的算打賞（和應給記成同一筆斗內），少給不能送出
-/** 依人列表的一列：只列還有已打完、未結清場次的人（金額多的在前，同額看最早的場次） */
-export interface UnsettledPlayer { userId: string; name: string; avatarUrl: string | null; matches: number; zimo: number; amount: number }
-/** 一場：zimo＝這場 11/1 之後的自摸次數、due＝應給；時間是毫秒 */
-export interface SettleMatch { roomId: string; roomCode: string | null; startedAt: number | null; endedAt: number | null; zimo: number; due: number }
+/** 依人列表的一列：只列還有已打完、未結清場次的人（金額多的在前，同額看最早的場次）；myTableCount＝其中幾場老闆也在桌（老闆 2026-11-09） */
+export interface UnsettledPlayer { userId: string; name: string; avatarUrl: string | null; matches: number; zimo: number; amount: number; myTableCount: number }
+/** 一場：zimo＝這場 11/1 之後的自摸次數、due＝應給；時間是毫秒；myTable＝老闆帳號是不是也坐在這桌（只是標記，不影響金額／結清流程） */
+export interface SettleMatch { roomId: string; roomCode: string | null; startedAt: number | null; endedAt: number | null; zimo: number; due: number; myTable: boolean }
 /** 已結清的一場：batchId＝那筆斗內 id（同一批結清共用，撤回整批）；amount／tip＝那批的實收和打賞 */
 export interface SettledMatch {
   settlementId: string; roomId: string; roomCode: string | null; endedAt: number | null; zimo: number; due: number;
-  batchId: string; amount: number; tip: number; settledAt: number; source: "settle" | "migrate";
+  batchId: string; amount: number; tip: number; settledAt: number; source: "settle" | "migrate"; myTable: boolean;
 }
 export interface SettleRoom { roomId: string; roomCode: string | null; zimo: number; due: number }
 export const getUnsettled = () => call<{ price: number; total: number; players: UnsettledPlayer[] }>("GET", "/api/mahjong/admin/settlements");
