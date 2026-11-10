@@ -24,6 +24,9 @@ export const isChatUiEvent = (e: Event) => !!(e.target as Element | null)?.close
 /** 單一畫布的特效（櫻花紛飛、如來神掌、核彈）：不走零件、不預熱；圖要開播前就解碼好，沒好就退回金色。
  *  核彈的爆炸本體全是程式畫的，只有人物、飛彈、蕈狀雲三張是圖（lib/mahjong/fx/nukeFx.ts） */
 export const isCanvasFx = (x: unknown): x is "sakura" | "rulai" | "nuke" => x === "sakura" || x === "rulai" || x === "nuke";
+/** 核彈不出「自摸的那張牌」和自摸者的名字：畫面只留爆炸和大字（老闆 2026-11-10） */
+export const fxShowsTile = (fx: ZimoFxNew) => fx !== "nuke";
+export const fxShowsName = (fx: ZimoFxNew) => fx !== "nuke";
 /** 特效的圖載不到：這一段換成金色自摸浮層（其他段不動） */
 export const zfxPlanToCele = (plan: WinShowStage[]): WinShowStage[] => plan.map((s) => (s === "zfx" ? "cele" : s));
 /** 等圖載好最多 ms 毫秒：載好才 true；失敗、超時都是 false（超時後才載好也不算，已經決定退回了） */

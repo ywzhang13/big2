@@ -23,7 +23,7 @@ const FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
 /** 專屬特效的卡片：只有 GET 回的 ownerFx 有這個代號才顯示（不寫死帳號；神掌＝老闆、核彈＝另一位，見 rules.ts 的 EXCLUSIVE_FX） */
 const OWNER_FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
   { code: "rulai", name: "如來神掌", art: "/mahjong-fx/zimo/rulai/rulai-title.webp" },
-  { code: "nuke", name: "核彈", art: "/mahjong-fx/zimo/nuke/nuke-title.webp" },
+  { code: "nuke", name: "核彈", art: "/mahjong-fx/zimo/rulai/rulai-title.webp" }, // 大字和神掌同一張（老闆 2026-11-10）
 ];
 
 const PREVIEW_TILES: Tile[] = [

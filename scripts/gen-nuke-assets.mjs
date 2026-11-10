@@ -1,5 +1,6 @@
 // 核彈自摸特效（nuke，老闆 2026-11-10）的素材產生器。
 // 來源＝老闆提供的 Q 版金正恩去背圖（大笑、豎大拇指、中山裝）：裁掉透明邊、縮成電腦／手機兩種尺寸、轉成 webp。
+// 這款只有人物一張素材（大字借如來神掌的，爆炸整段是程式畫的）。
 //   node scripts/gen-nuke-assets.mjs [來源圖] [--preview]
 //   來源圖預設 ~/Desktop/正恩.png；--preview 另外寫一張預覽頁（在 public 外，見下）
 // 爆炸整段（飛彈、火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃）都是 lib/mahjong/fx/nukeFx.ts 程式畫的，不吃素材。
@@ -44,39 +45,7 @@ for (const [suffix, w] of [["d", W_D], ["m", W_M]]) {
 /** 人物在素材裡的長寬比：nukeFx 用它算畫面上要畫多大，不用每次量圖 */
 console.log(`\nkimAR = ${(written[0].info.width / written[0].info.height).toFixed(4)}  ← 填進 lib/mahjong/fx/nukeFx.ts 的 NUKE_KIM_AR`);
 
-// ── 「自摸」大字（components/mahjong/ZimoTitle.tsx 的 .zz-art 當背景圖用，所以顏色要做在圖裡）──
-// 核爆配色：上緣亮黃 → 橘 → 暗紅，外面一圈焦黑描邊；其他特效的大字是老闆用圖產生的，這款用字型畫。
-const TITLE_W = 900, TITLE_H = 460;
-const titleSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TITLE_W} ${TITLE_H}" width="${TITLE_W}" height="${TITLE_H}">
-  <defs>
-    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff0b4"/>
-      <stop offset="0.34" stop-color="#ffc24a"/>
-      <stop offset="0.62" stop-color="#ff7a1e"/>
-      <stop offset="0.86" stop-color="#d2380f"/>
-      <stop offset="1" stop-color="#7d1f06"/>
-    </linearGradient>
-    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur stdDeviation="14" result="b"/>
-      <feColorMatrix in="b" type="matrix"
-        values="1 0 0 0 0  0 .45 0 0 0  0 0 .1 0 0  0 0 0 .85 0" result="g"/>
-      <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <g filter="url(#glow)">
-    <text x="${TITLE_W / 2}" y="${TITLE_H * 0.78}" text-anchor="middle"
-          font-family="PingFang TC, Hiragino Sans, Heiti TC, Noto Sans CJK TC, sans-serif"
-          font-weight="bold" font-size="330" letter-spacing="12"
-          fill="url(#fill)" stroke="#200c03" stroke-width="18" paint-order="stroke">自摸</text>
-  </g>
-</svg>`;
-{
-  const file = path.join(OUT, "nuke-title.webp");
-  const info = await sharp(Buffer.from(titleSvg)).webp({ quality: 92, alphaQuality: 100, effort: 6 }).toFile(file);
-  written.push({ file, info });
-  console.log(`寫出 ${path.relative(ROOT, file)}（${info.width}×${info.height}，${(info.size / 1024).toFixed(0)} KB）`);
-  console.log(`titleAR = ${(info.width / info.height).toFixed(4)}  ← 填進 components/mahjong/ZimoTitle.tsx 的 ZIMO_TITLE_AR.nuke`);
-}
+// 「自摸」大字不在這裡產：核彈借用如來神掌那張（老闆 2026-11-10，見 components/mahjong/ZimoTitle.tsx 的 zimoTitleArt）。
 
 if (PREVIEW) {
   // 預覽頁一定寫在 public 外面：scripts/asset-hashes.mjs 會掃整個 public/mahjong-fx，

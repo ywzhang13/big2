@@ -12,14 +12,16 @@
 //   N10 核彈是「專屬特效」：只有 EXCLUSIVE_FX 指定的那個帳號能用（不是老闆），後台不能開通，走單一畫布路線，名稱「核彈」
 //   N11 核彈 4.60 秒、主擊 1.80；其他特效的時間軸沒動
 //   N12 蕈狀雲的柱頂夾在畫面內（原本固定 u*1.25 會整朵衝出畫面外，老闆 2026-11-10 改成夾住）
-//   N13 常數和素材一致：NUKE_KIM_AR、ZIMO_TITLE_AR.nuke 就是圖檔的實際長寬比
+//   N13 常數和素材一致：NUKE_KIM_AR 就是人物圖的實際長寬比
+//   N14 這一款不出「自摸的那張牌」和名字；「自摸」大字借如來神掌那張素材（長寬比也跟著它）
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { ZFX_TL } from "../components/mahjong/ZimoFx";
-import { ZIMO_TITLE_AR } from "../components/mahjong/ZimoTitle";
+import { ZIMO_TITLE_AR, zimoTitleArt } from "../components/mahjong/ZimoTitle";
+import { RULAI_META } from "../lib/mahjong/fx/rulaiMeta";
 import { NUKE_ART, NUKE_KIM_AR, NUKE_LIMIT, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
-import { isCanvasFx, isZimoFxNew } from "../lib/mahjong/winShow";
+import { fxShowsName, fxShowsTile, isCanvasFx, isZimoFxNew, ZIMO_FX_NEW } from "../lib/mahjong/winShow";
 import { canUseExclusiveFx, EXCLUSIVE_FX, isExclusiveFx, isOwner, isSelectableZimoFx, isZimoFx } from "../lib/mahjong/zimoFx/rules";
 import { fxName, ZIMO_FX_LIST } from "../lib/mahjong/zimoFxClient";
 
@@ -149,13 +151,13 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
 // N9
 {
   const manifest = JSON.parse(readFileSync(new URL("../scripts/immutable-assets.json", import.meta.url), "utf8")) as Record<string, string>;
-  const mobile = [...NUKE_ART.map((n) => `nuke-${n}-m.webp`), "nuke-title.webp"];
+  const mobile = NUKE_ART.map((n) => `nuke-${n}-m.webp`); // 大字借神掌那張（早就登記過），這裡只算這一款自己的素材
   let bytes = 0, px = 0;
   for (const f of mobile) { const p = new URL(f, NUKE_DIR); bytes += statSync(p).size; const m = await sharp(fileURLToPath(p)).metadata(); px += (m.width ?? 0) * (m.height ?? 0); }
   const mb = px * 4 / 1048576;
   ok(mb <= 14, `N9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（爆炸整段是程式畫的，沒有素材）`);
   ok(bytes <= 1_000_000, `N9 手機下載 ${(bytes / 1024).toFixed(0)} KB ≤ 1 MB`);
-  const files = [...NUKE_ART.flatMap((n) => [`nuke-${n}-d.webp`, `nuke-${n}-m.webp`]), "nuke-title.webp"];
+  const files = NUKE_ART.flatMap((n) => [`nuke-${n}-d.webp`, `nuke-${n}-m.webp`]);
   ok(files.every((f) => !!manifest[`/mahjong-fx/zimo/nuke/${f}`]), `N9 ${files.length} 張圖都在長期快取雜湊清單`);
   // 音效（zimo-nuke-pc／mobile.mp3）還沒出檔；一出檔就必須跟著登記，否則這一條會紅
   const sfx = ["/mahjong-fx/s/zimo-nuke-pc.mp3", "/mahjong-fx/s/zimo-nuke-mobile.mp3"];
@@ -177,10 +179,19 @@ ok(ZFX_TL.nuke.tile === 2400 && ZFX_TL.nuke.zimo === 2780 && ZFX_TL.nuke.name ==
 ok(ZFX_TL.thunder.total === 3220 && ZFX_TL.frost.total === 2900 && ZFX_TL.sakura.total === 3400 && ZFX_TL.rulai.total === 4200, "N11 其他特效長度沒動");
 // N13
 {
-  const ar = async (f: string) => { const m = await sharp(fileURLToPath(new URL(f, NUKE_DIR))).metadata(); return (m.width ?? 0) / (m.height ?? 1); };
-  const kim = await ar("nuke-kim-d.webp"), title = await ar("nuke-title.webp");
-  ok(Math.abs(kim - NUKE_KIM_AR) < 0.002, `N13 NUKE_KIM_AR ${NUKE_KIM_AR} 就是素材的長寬比（${kim.toFixed(4)}）`);
-  ok(Math.abs(title - ZIMO_TITLE_AR.nuke) < 0.002, `N13 ZIMO_TITLE_AR.nuke ${ZIMO_TITLE_AR.nuke} 就是大字圖的長寬比（${title.toFixed(4)}）`);
+  const m = await sharp(fileURLToPath(new URL("nuke-kim-d.webp", NUKE_DIR))).metadata();
+  const kim = (m.width ?? 0) / (m.height ?? 1);
+  ok(Math.abs(kim - NUKE_KIM_AR) < 0.002, `N13 NUKE_KIM_AR ${NUKE_KIM_AR} 就是人物圖的長寬比（${kim.toFixed(4)}）`);
+  ok(!existsSync(new URL("nuke-title.webp", NUKE_DIR)), "N13 這一款沒有自己的大字素材（借神掌那張，不留沒人用的檔）");
+}
+// N14
+{
+  ok(!fxShowsTile("nuke") && !fxShowsName("nuke"), "N14 核彈不出自摸的那張牌、也不出名字");
+  const others = ZIMO_FX_NEW.filter((f) => f !== "nuke");
+  ok(others.every((f) => fxShowsTile(f) && fxShowsName(f)), `N14 其他 ${others.length} 種照舊出牌和名字`);
+  const title = zimoTitleArt("nuke");
+  ok(title === "/mahjong-fx/zimo/rulai/rulai-title.webp" && title === zimoTitleArt("rulai"), `N14 核彈的大字就是神掌那張（${title}）`);
+  ok(ZIMO_TITLE_AR.nuke === RULAI_META.titleAR, `N14 大字長寬比跟著神掌（${ZIMO_TITLE_AR.nuke}）`);
 }
 
 for (const r of results) console.log(r);
