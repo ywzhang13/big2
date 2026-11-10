@@ -6,7 +6,9 @@ import { mjFetch } from "./clientAuth";
 // 老闆 2026-10-31：烈焰（flame）和隕石太像，移除，只剩 6 種
 export type ZimoFxCode = "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
 /** 金色自摸是全帳號永久可選的回退效果，不出現在後台授權清單。 */
-export type ZimoFxChoice = "golden" | ZimoFxCode | "rulai"; // rulai 如來神掌：只有老闆能選，不在 ZIMO_FX_LIST（後台「開通全部」用那份清單）
+export type ZimoFxChoice = "golden" | ZimoFxCode | OwnerFxCode;
+/** 老闆專屬（如來神掌、核彈）：只有老闆能選，不在 ZIMO_FX_LIST（後台「開通全部」用那份清單） */
+export type OwnerFxCode = "rulai" | "nuke";
 export const ZIMO_FX_LIST: { code: ZimoFxCode; name: string }[] = [
   { code: "meteor", name: "隕石" },
   { code: "thunder", name: "雷霆" },
@@ -15,7 +17,9 @@ export const ZIMO_FX_LIST: { code: ZimoFxCode; name: string }[] = [
   { code: "blackhole", name: "黑洞" },
   { code: "sakura", name: "櫻花" },
 ];
-export const fxName = (code: string) => (code === "rulai" ? "如來神掌" : ZIMO_FX_LIST.find((f) => f.code === code)?.name ?? code);
+const OWNER_FX_NAME: Record<OwnerFxCode, string> = { rulai: "如來神掌", nuke: "核彈" };
+export const fxName = (code: string) =>
+  OWNER_FX_NAME[code as OwnerFxCode] ?? ZIMO_FX_LIST.find((f) => f.code === code)?.name ?? code;
 
 export type Res<T> = { ok: true; data: T } | { ok: false; status: number; error: string; body?: Record<string, unknown> };
 
@@ -31,7 +35,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: Record<strin
 }
 
 // ---- 玩家自己（設定頁）：第 4 節 ----
-export interface MyZimoFx { serverNow: number; displayName: string; isOwner: boolean; /** 只有老闆的回應才有：老闆專屬的特效（第 8 張卡看它） */ ownerFx?: "rulai"[]; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
+export interface MyZimoFx { serverNow: number; displayName: string; isOwner: boolean; /** 只有老闆的回應才有：老闆專屬的特效（第 8 張卡看它） */ ownerFx?: OwnerFxCode[]; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
 export const getMyFx = () => call<MyZimoFx>("GET", "/api/mahjong/zimo-fx");
 export const selectMyFx = (fx: ZimoFxChoice) => call<{ selected: ZimoFxChoice }>("POST", "/api/mahjong/zimo-fx", { fx });
 /** 選用被拒（403 not_granted：沒開通、過期、被收回）時，伺服器帶回目前實際套用的那一種（老柯 2026-10-31） */

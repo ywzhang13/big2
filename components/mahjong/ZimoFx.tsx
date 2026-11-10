@@ -24,6 +24,7 @@ import { artUsable, isCanvasFx, isChatUiEvent, type ZimoFxNew } from "@/lib/mahj
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
 import { RULAI_ART, RULAI_FACES, RULAI_TL, rulaiProject, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
+import { NUKE_ART, NUKE_TL, runNuke, type NukeArt } from "@/lib/mahjong/fx/nukeFx";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
@@ -47,6 +48,7 @@ export const ZFX_TL: Record<ZimoFxNew, { hit: number; tile: number; zimo: number
   blackhole: { hit: 1120, boom: 1190, tile: 1420, zimo: 1860, name: 2100, total: 3160 }, // 老闆 2026-11-05：大字太短（原本 2.60 秒結束、只留 0.74 秒），延到 1.3 秒；其他零件照舊 2.60 秒收完，大字留到結束
   sakura: SAKURA_TL,
   rulai: RULAI_TL,
+  nuke: NUKE_TL,
 };
 export const isOwnTitleFx = (fx: string): fx is ZimoFxNew => fx in ZFX_TL;
 const hitOf = (fx: ZimoFxNew) => ZFX_TL[fx].hit;
@@ -67,11 +69,17 @@ export const ZFX_ART: Record<ZimoFxNew, string[]> = {
     "blackhole-accretion-front", "blackhole-debris-single", "blackhole-nova-filaments"],
   sakura: ["sakura-title"], // 花瓣表依裝置選一張，見 zfxArt
   rulai: ["rulai-title"], // 其他 9 張依裝置選一組，見 zfxArt（scripts/gen-rulai-assets.mjs 產生）
+  nuke: ["nuke-title"], // 人物圖依裝置選一張，見 zfxArt；爆炸整段是程式畫的，沒有素材（scripts/gen-nuke-assets.mjs 產生）
 };
 /** 花瓣表：手機用小張（長期快取，換內容要改檔名）。v3＝老闆的花瓣叢照片素材（2026-11-07 試做，只給測試房看，未上線） */
 const sakuraSheet = () => (isTouchDevice() ? "sakura-petals-v3-m" : "sakura-petals-v3-d");
 const rulaiFile = (n: RulaiArt) => `rulai-${n}-${isTouchDevice() ? "m" : "d"}`;
-const zfxArt = (fx: ZimoFxNew) => (fx === "sakura" ? [...ZFX_ART.sakura, sakuraSheet()] : fx === "rulai" ? [...ZFX_ART.rulai, ...RULAI_ART.map(rulaiFile)] : ZFX_ART[fx]);
+const nukeFile = (n: NukeArt) => `nuke-${n}-${isTouchDevice() ? "m" : "d"}`;
+const zfxArt = (fx: ZimoFxNew) =>
+  fx === "sakura" ? [...ZFX_ART.sakura, sakuraSheet()]
+  : fx === "rulai" ? [...ZFX_ART.rulai, ...RULAI_ART.map(rulaiFile)]
+  : fx === "nuke" ? [...ZFX_ART.nuke, ...NUKE_ART.map(nukeFile)]
+  : ZFX_ART[fx];
 
 const RM_Q = "(prefers-reduced-motion: reduce)";
 function useReducedMotion() {
@@ -168,6 +176,17 @@ function playRulai(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: b
   const board = stage ? Array.from(stage.children).find((c): c is HTMLElement => c instanceof HTMLElement && !!c.querySelector("[data-fx-seat]")) ?? null : null;
   return runRulai({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage, board },
     g, art, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW, faces: rulaiFaces, back: backColors(root) }).stop;
+}
+
+/** 核彈：同櫻花、如來神掌，圖開播前就要解碼好，沒好就立刻退回金色（不邊播邊載）。牌桌不傾斜，所以不用找 board */
+function playNuke(root: HTMLElement, cv: HTMLCanvasElement, g: SakuraGeo, rm: boolean, stage: HTMLElement | null, zeroAt: () => number, onFail: () => void) {
+  const imgs = artImgs.get("nuke") ?? [];
+  if (!artUsable(imgs) || imgs.length !== zfxArt("nuke").length) return onFail();
+  // 順序和 zfxArt 一樣：第一張是大字，後面照 NUKE_ART
+  const art = Object.fromEntries(NUKE_ART.map((n, i) => [n, imgs[i + 1]])) as Record<NukeArt, HTMLImageElement>;
+  const q = (sel: string) => root.querySelector<HTMLElement>(sel);
+  return runNuke({ cv, dim: q(".zf-dim"), tile: q("[data-zf-tile]"), tileIn: q(".zf-tile-in"), title: q("[data-zf-zimo]"), art: q(".zz-art"), back: q(".zz-back"), name: q(".zz-name"), stage },
+    g, art, { dpr: window.devicePixelRatio, rm, zeroAt, stageShadow: STAGE_SHADOW }).stop;
 }
 
 /** 主擊時牌桌震一下（比隕石輕：手機最大 12px、電腦 16px，0.35 秒）；櫻花不震 */
@@ -505,6 +524,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       if (!cvRef.current) return;
       const st = embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]"), geo = { W, H, u, px, py, rel, mobile }, fail = () => { if (artFailRef.current) { ended.current = true; artFailRef.current(); } };
       if (fx === "rulai") return playRulai(root, cvRef.current, geo, rm, st, () => (zeroRef.current = performance.now()), fail);
+      if (fx === "nuke") return playNuke(root, cvRef.current, geo, rm, st, () => (zeroRef.current = performance.now()), fail);
       zeroRef.current = performance.now();
       return playSakura(root, cvRef.current, geo, rm, st, zeroRef.current, fail);
     }

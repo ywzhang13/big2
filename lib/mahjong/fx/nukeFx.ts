@@ -1,0 +1,470 @@
+// 核彈自摸（nuke，老闆 2026-11-10）。老闆帳號專屬，和如來神掌同一條路（OWNER_FX）。
+// 敘事（老闆 2026-11-10 定案）：Q 版金正恩從胡牌者那一側登場比讚 → 飛彈從他身後竄出、走拋物線砸向胡牌者的位置
+//   → 核爆白閃、火球、衝擊波 → 蕈狀雲升起 → 牌從爆心炸出 → 「自摸」大字 → 他還在火光前比讚。
+// 素材只有一張：Q 版金正恩去背圖（scripts/gen-nuke-assets.mjs 從老闆提供的 PNG 產生）。
+// 飛彈、火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃、金屑全部是程式畫的，不吃圖檔——
+//   好處是換配色、改節奏只動這支，不用重出素材，也不會踩長期快取「同檔名換內容」的坑。
+// 單一畫布，畫面只由時間決定（draw(ms)），沒有 Web Animation、沒有每格 shadowBlur（和 rulaiFx 同一套作法）。
+import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, type SakuraEls, type SakuraGeo } from "./canvasFx";
+
+/** 時間軸（ms，從特效開始算；音效 zimo-nuke-*.mp3 的 0 秒＝這裡的 0，爆炸聲對在 hit） */
+export const NUKE_TL = { enter: 260, launch: 900, hit: 1800, boom: 1870, tile: 2400, zimo: 2780, name: 3020, total: 4600 };
+/** 要載的圖（依裝置選 -d／-m，見 ZimoFx 的 zfxArt） */
+export const NUKE_ART = ["kim"] as const;
+export type NukeArt = (typeof NUKE_ART)[number];
+/** 人物圖的長寬比（寬÷高）：scripts/gen-nuke-assets.mjs 產生時印出來的 kimAR */
+export const NUKE_KIM_AR = 0.9517;
+/** 減少動態：畫這一刻的靜止畫面（爆完、蕈狀雲在、沒有閃光和震動） */
+export const NUKE_STILL_MS = 2600;
+const STILL_END = 620;
+
+/** 手機／電腦上限：畫布倍率、碎片、煙團、金屑、衝擊環 */
+export const NUKE_LIMIT = {
+  mobile: { dpr: 1.5, debris: 14, smoke: 10, sparks: 48, rings: 2 },
+  desktop: { dpr: 2, debris: 24, smoke: 16, sparks: 110, rings: 3 },
+} as const;
+
+/** 地面效果壓扁（和牌桌視角一致，同 rulaiFx 的 SQ） */
+const SQ = 0.54;
+const TAU = Math.PI * 2;
+/** 勝者在我的哪一邊：從桌心指向勝者（0 自己＝下、1 下家＝右、2 對家＝上、3 上家＝左），同 ZimoFx 的 SIDE */
+const SIDE = [[0, 1], [1, 0], [0, -1], [-1, 0]] as const;
+
+/** 暗幕：開場壓下來，播到結束都留著（結算接手時牌桌不會先亮一下） */
+export const nukeDim = (ms: number) => 0.66 * sm(seg(ms, 0, 420));
+/** 整體淡出（最後 0.4 秒） */
+const fadeOut = (ms: number) => 1 - sm(seg(ms, NUKE_TL.total - 400, NUKE_TL.total));
+
+/** 牌從爆心炸出來、停在那裡 */
+export function nukeTilePose(ms: number) {
+  const f = seg(ms, NUKE_TL.tile, NUKE_TL.tile + 420);
+  if (ms < NUKE_TL.tile) return { opacity: 0, transform: "translateY(26%) scale(0.2)" };
+  const up = seg(f, 0, 0.72), down = seg(f, 0.72, 1), o = outC(up);
+  const y = down > 0 ? lerp(-8, 0, down) : lerp(26, -8, o);
+  const sc = down > 0 ? lerp(1.24, 1, down) : lerp(0.2, 1.24, o);
+  return { opacity: seg(f, 0, 0.4), transform: f >= 1 ? "none" : `translateY(${y.toFixed(1)}%) scale(${sc.toFixed(3)})` };
+}
+
+/** 「自摸」大字：被爆風往上推一下再落定 */
+export function nukeTitlePose(ms: number) {
+  const z = outC(seg(ms, NUKE_TL.zimo, NUKE_TL.zimo + 340));
+  return {
+    art: { opacity: z, transform: z >= 1 ? "none" : `translateY(${((1 - z) * 26).toFixed(1)}px) scale(${(0.86 + 0.14 * z).toFixed(3)})` },
+    back: seg(ms, NUKE_TL.zimo - 80, NUKE_TL.zimo + 140),
+    name: seg(ms, NUKE_TL.name, NUKE_TL.name + 260),
+  };
+}
+
+/** 主擊的震動：核爆比隕石重，手機 18px、電腦 24px，0.55 秒衰減 */
+export function nukeShake(ms: number, mobile: boolean): [number, number] {
+  const p = seg(ms, NUKE_TL.hit, NUKE_TL.hit + 550);
+  if (p <= 0 || p >= 1) return [0, 0];
+  const A = (mobile ? 18 : 24) * Math.pow(1 - p, 2);
+  const t = (ms - NUKE_TL.hit) / 1000;
+  return [Math.sin(t * 74) * A, Math.cos(t * 61) * A * 0.72];
+}
+
+/** 鏡頭：命中那一刻往前頂一下 */
+export const nukeCam = (ms: number) => 1 + 0.045 * Math.pow(1 - seg(ms, NUKE_TL.hit, NUKE_TL.hit + 460), 2) * (ms > NUKE_TL.hit ? 1 : 0);
+
+/** 飛彈在 t（0～1）時走到哪：從人物身後拋到落點，中間拱起 */
+function missileAt(t: number, sx: number, sy: number, px: number, py: number, arc: number) {
+  const x = lerp(sx, px, t);
+  const y = lerp(sy, py, t) - Math.sin(t * Math.PI) * arc;
+  return [x, y] as const;
+}
+
+export class NukeCanvas {
+  private x: CanvasRenderingContext2D;
+  private dpr: number;
+  private L: { dpr: number; debris: number; smoke: number; sparks: number; rings: number };
+  private debris: { a: number; R: number; up: number; s: number; spin: number; rot: number; ph: number }[];
+  private smoke: { a: number; R: number; s: number; ph: number; rise: number }[];
+  private sparks: { a: number; R: number; s: number; ph: number }[];
+  /** 粒子比例（自動降級，frameGovernor 給） */
+  scale = 1;
+  /** 上一格畫了幾個零件（驗收用） */
+  lastCount = 0;
+  constructor(private cv: HTMLCanvasElement, private g: SakuraGeo, private art: Partial<Record<NukeArt, HTMLImageElement>>, devicePixelRatio: number) {
+    const L = (this.L = g.mobile ? NUKE_LIMIT.mobile : NUKE_LIMIT.desktop);
+    this.dpr = Math.min(devicePixelRatio || 1, L.dpr);
+    cv.width = Math.round(g.W * this.dpr);
+    cv.height = Math.round(g.H * this.dpr);
+    this.x = cv.getContext("2d")!;
+    const u = g.u, r = rng(4521);
+    // 固定亂數：每次播都一樣，不會這局好看下局怪
+    this.debris = Array.from({ length: L.debris }, () => ({
+      a: r() * TAU, R: u * (0.4 + r() * 0.95), up: u * (0.3 + r() * 0.7),
+      s: u * (0.016 + r() * 0.026), spin: (r() - 0.5) * 11, rot: r() * TAU, ph: r(),
+    }));
+    this.smoke = Array.from({ length: L.smoke }, (_, i) => ({
+      a: (i / L.smoke) * TAU + r() * 0.5, R: u * (0.3 + r() * 0.5),
+      s: u * (0.18 + r() * 0.2), ph: r(), rise: u * (0.1 + r() * 0.3),
+    }));
+    this.sparks = Array.from({ length: L.sparks }, () => ({ a: r() * TAU, R: u * (0.25 + r() * 1.25), s: 1 + r() * 2.4, ph: r() }));
+  }
+
+  destroy() {
+    this.cv.width = 0;
+    this.cv.height = 0;
+    this.debris = [];
+    this.smoke = [];
+    this.sparks = [];
+    this.art = {};
+  }
+
+  /** 開播前試畫一格：把「第一次用這張圖」的材質上傳成本挪到這裡（同 rulai 的 prime） */
+  prime() {
+    this.draw(NUKE_TL.hit + 120);
+    this.x.setTransform(1, 0, 0, 1, 0, 0);
+    this.x.clearRect(0, 0, this.cv.width, this.cv.height);
+  }
+
+  draw(ms: number) {
+    const { x, dpr, L } = this, { W, H, u, px, py, rel } = this.g, T = NUKE_TL;
+    const S = this.scale, fade = fadeOut(ms);
+    let count = 0;
+    x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.clearRect(0, 0, W, H);
+    if (fade <= 0) { this.lastCount = 0; return; }
+
+    // ── 人物站的位置：一定站在落點的「另一邊」，不然會整個蓋住爆心 ──────────
+    // 進場方向照胡牌者那一側（sxDir／syDir 只決定滑入的方向），站的位置則取離落點遠的那半邊。
+    const [sxDir, syDir] = SIDE[rel];
+    const kimH = u * (this.g.mobile ? 0.46 : 0.54), kimW = kimH * NUKE_KIM_AR;
+    const toRight = px < W / 2;                      // 落點偏左 → 人站右邊，反之亦然
+    const kimX = toRight ? W - kimW * 0.58 : kimW * 0.58;
+    const kimY = H * 0.99;                           // 腳貼畫面底（drawImage 用底邊對齊）
+
+    // ── 0～launch：警報紅光（畫面邊緣脈動） ─────────────────────────────
+    const alert = sm(seg(ms, 120, 520)) * (1 - sm(seg(ms, T.launch, T.hit))) * fade;
+    if (alert > 0.01) {
+      const pulse = 0.5 + 0.5 * Math.sin((ms / 1000) * 11);
+      const gr = x.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.26, W / 2, H / 2, Math.max(W, H) * 0.72);
+      gr.addColorStop(0, "rgba(210,32,28,0)");
+      gr.addColorStop(1, `rgba(228,38,30,${(0.5 * alert * (0.55 + 0.45 * pulse)).toFixed(3)})`);
+      x.fillStyle = gr;
+      x.fillRect(0, 0, W, H);
+      count++;
+    }
+
+    // ── 地面焦痕：命中後出現，留到最後 ──────────────────────────────────
+    const scorch = sm(seg(ms, T.hit, T.hit + 320)) * fade;
+    if (scorch > 0.01) {
+      const R = u * 0.62 * (0.8 + 0.2 * sm(seg(ms, T.hit, T.hit + 900)));
+      const gr = x.createRadialGradient(px, py, 0, px, py, R);
+      gr.addColorStop(0, `rgba(16,10,8,${(0.86 * scorch).toFixed(3)})`);
+      gr.addColorStop(0.62, `rgba(44,22,12,${(0.6 * scorch).toFixed(3)})`);
+      gr.addColorStop(1, "rgba(60,30,14,0)");
+      x.save();
+      x.translate(px, py); x.scale(1, SQ); x.translate(-px, -py);
+      x.fillStyle = gr;
+      x.beginPath(); x.arc(px, py, R, 0, TAU); x.fill();
+      x.restore();
+      count++;
+    }
+
+    // ── 蕈狀雲：柱 → 頭，命中後升起（實體煙，畫在爆炸光後面才看得出形狀）────
+    // 高度夾在落點到畫面頂之間：u*1.25 在一般牌桌上會整朵衝出畫面外，什麼都看不到。
+    const mush = seg(ms, T.boom + 120, T.total - 500);
+    if (mush > 0) {
+      const rise = outC(mush);
+      const a = Math.min(1, seg(ms, T.boom + 120, T.boom + 520)) * fade * (1 - 0.3 * sm(seg(ms, T.total - 1400, T.total - 300)));
+      const maxH = Math.max(u * 0.34, py - H * 0.1);           // 柱頂不超過畫面上緣下方一點
+      const stemH = Math.min(u * 0.9, maxH) * rise, stemW = u * 0.17 * (0.6 + 0.4 * rise);
+      const gs = x.createLinearGradient(px, py, px, py - stemH);
+      gs.addColorStop(0, `rgba(118,62,34,${(0.82 * a).toFixed(3)})`);
+      gs.addColorStop(0.5, `rgba(104,78,62,${(0.72 * a).toFixed(3)})`);
+      gs.addColorStop(1, `rgba(96,86,80,${(0.6 * a).toFixed(3)})`);
+      x.fillStyle = gs;
+      x.beginPath();
+      x.moveTo(px - stemW, py);
+      x.quadraticCurveTo(px - stemW * 0.5, py - stemH * 0.6, px - stemW * 0.72, py - stemH);
+      x.lineTo(px + stemW * 0.72, py - stemH);
+      x.quadraticCurveTo(px + stemW * 0.5, py - stemH * 0.6, px + stemW, py);
+      x.closePath();
+      x.fill();
+      count++;
+      // 蘑菇頭：外翻的扁橢圓，底下壓一圈較暗的影讓它浮起來
+      const capY = py - stemH, capR = Math.min(u * 0.36, W * 0.2) * (0.4 + 0.6 * rise);
+      x.save();
+      x.translate(px, capY); x.scale(1, 0.62); x.translate(-px, -capY);
+      const gc = x.createRadialGradient(px, capY - capR * 0.25, capR * 0.08, px, capY, capR);
+      gc.addColorStop(0, `rgba(188,112,58,${(0.9 * a).toFixed(3)})`);
+      gc.addColorStop(0.55, `rgba(124,86,66,${(0.82 * a).toFixed(3)})`);
+      gc.addColorStop(1, `rgba(86,72,66,0)`);
+      x.fillStyle = gc;
+      x.beginPath(); x.arc(px, capY, capR, 0, TAU); x.fill();
+      x.restore();
+      count++;
+      // 頭的上緣被下方火光打亮一條
+      x.globalCompositeOperation = "lighter";
+      x.globalAlpha = a * 0.5;
+      const gl = x.createLinearGradient(px, capY - capR * 0.5, px, capY + capR * 0.3);
+      gl.addColorStop(0, "rgba(255,170,70,0)");
+      gl.addColorStop(1, "rgba(255,150,54,0.75)");
+      x.fillStyle = gl;
+      x.save();
+      x.translate(px, capY); x.scale(1, 0.62); x.translate(-px, -capY);
+      x.beginPath(); x.arc(px, capY, capR * 0.94, 0, TAU); x.fill();
+      x.restore();
+      x.globalAlpha = 1;
+      x.globalCompositeOperation = "source-over";
+      count++;
+    }
+
+    x.globalCompositeOperation = "lighter";
+
+    // ── 衝擊波環：命中後往外擴的壓扁橢圓環 ───────────────────────────────
+    for (let i = 0; i < L.rings; i++) {
+      const p = seg(ms, T.hit + i * 150, T.hit + i * 150 + 900);
+      if (p <= 0 || p >= 1) continue;
+      const R = u * (0.16 + outC(p) * 1.9), a = (1 - p) * (1 - p) * 0.72 * fade;
+      x.save();
+      x.translate(px, py); x.scale(1, SQ); x.translate(-px, -py);
+      x.strokeStyle = `rgba(255,214,150,${a.toFixed(3)})`;
+      x.lineWidth = u * 0.03 * (1 - p * 0.6);
+      x.beginPath(); x.arc(px, py, R, 0, TAU); x.stroke();
+      x.restore();
+      count++;
+    }
+
+    // ── 火球：命中瞬間膨脹，然後收成餘燼 ─────────────────────────────────
+    const fb = seg(ms, T.hit, T.hit + 760);
+    if (fb > 0 && fb < 1) {
+      const R = u * (0.1 + outC(fb) * 0.78), a = (1 - inC(fb)) * fade;
+      const gf = x.createRadialGradient(px, py - R * 0.1, 0, px, py, R);
+      gf.addColorStop(0, `rgba(255,255,242,${a.toFixed(3)})`);
+      gf.addColorStop(0.28, `rgba(255,228,132,${(0.95 * a).toFixed(3)})`);
+      gf.addColorStop(0.62, `rgba(255,136,38,${(0.72 * a).toFixed(3)})`);
+      gf.addColorStop(1, "rgba(180,42,12,0)");
+      x.fillStyle = gf;
+      x.beginPath(); x.arc(px, py, R, 0, TAU); x.fill();
+      count++;
+    }
+
+    // ── 金屑／火星：爆開後往外飛，慢慢落下 ───────────────────────────────
+    const sparkN = Math.round(this.sparks.length * S);
+    for (let i = 0; i < sparkN; i++) {
+      const s = this.sparks[i];
+      const dl = s.ph * 140, p = seg(ms, T.hit + dl, T.hit + dl + 1000 + s.ph * 500);
+      if (p <= 0 || p >= 1) continue;
+      const R = s.R * outC(p);
+      const X = px + Math.cos(s.a) * R, Y = py + Math.sin(s.a) * R * SQ - Math.sin(p * Math.PI) * u * 0.3 + p * p * u * 0.22;
+      x.globalAlpha = (1 - p) * fade;
+      x.fillStyle = p < 0.4 ? "#fff0c4" : "#ff9a3c";
+      x.beginPath(); x.arc(X, Y, s.s * (1 - p * 0.5), 0, TAU); x.fill();
+      count++;
+    }
+    x.globalAlpha = 1;
+
+    // ── 碎片：拋物線飛出去 ──────────────────────────────────────────────
+    x.globalCompositeOperation = "source-over";
+    const debN = Math.round(this.debris.length * S);
+    for (let i = 0; i < debN; i++) {
+      const b = this.debris[i];
+      const dl = b.ph * 110, p = seg(ms, T.hit + dl, T.hit + dl + 820 + b.ph * 360);
+      if (p <= 0 || p >= 1) continue;
+      const R = b.R * outC(p);
+      const X = px + Math.cos(b.a) * R, Y = py + Math.sin(b.a) * R * SQ - Math.sin(p * Math.PI) * b.up;
+      const sc = b.s * (1 + 0.5 * Math.sin(p * Math.PI)), rt = b.rot + b.spin * p;
+      const c2 = Math.cos(rt), s2 = Math.sin(rt);
+      x.setTransform(c2 * dpr, s2 * dpr, -s2 * dpr, c2 * dpr, X * dpr, Y * dpr);
+      x.globalAlpha = (1 - p * p) * fade;
+      x.fillStyle = "#2b2420";
+      x.fillRect(-sc, -sc * 0.72, sc * 2, sc * 1.44);
+      count++;
+    }
+    x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.globalAlpha = 1;
+
+    // ── 煙團：爆完往上飄散 ──────────────────────────────────────────────
+    const smokeN = Math.round(this.smoke.length * S);
+    for (let i = 0; i < smokeN; i++) {
+      const s = this.smoke[i];
+      const dl = s.ph * 200, p = seg(ms, T.boom + dl, T.boom + dl + 1500 + s.ph * 700);
+      if (p <= 0 || p >= 1) continue;
+      const R = s.R * outC(p), z = s.s * (0.7 + p * 0.9);
+      const X = px + Math.cos(s.a) * R, Y = py + Math.sin(s.a) * R * SQ - p * s.rise - p * u * 0.12;
+      x.globalAlpha = (1 - p) * 0.3 * fade;
+      x.fillStyle = "#6b5f58";
+      x.beginPath(); x.arc(X, Y, z, 0, TAU); x.fill();
+      count++;
+    }
+    x.globalAlpha = 1;
+
+    // ── 飛彈：從人物身後拋向落點（命中就消失） ───────────────────────────
+    const fly = seg(ms, T.launch, T.hit);
+    if (fly > 0 && fly < 1) {
+      const sx = kimX - sxDir * kimW * 0.3, sy = kimY - kimH * 0.62;
+      const arc = u * 0.62;
+      const [mx, my] = missileAt(fly, sx, sy, px, py, arc);
+      const [ax, ay] = missileAt(Math.max(0, fly - 0.02), sx, sy, px, py, arc);
+      const ang = Math.atan2(my - ay, mx - ax);
+      const len = u * 0.2, rad = len * 0.21;
+      x.save();
+      x.translate(mx, my);
+      x.rotate(ang);
+      // 尾焰（在彈體後面，先畫）
+      x.globalCompositeOperation = "lighter";
+      const gt = x.createLinearGradient(-len * 0.5, 0, -len * 2.1, 0);
+      gt.addColorStop(0, "rgba(255,238,170,0.95)");
+      gt.addColorStop(0.45, "rgba(255,150,48,0.6)");
+      gt.addColorStop(1, "rgba(255,90,20,0)");
+      x.fillStyle = gt;
+      x.beginPath();
+      x.moveTo(-len * 0.5, -rad * 0.82);
+      x.lineTo(-len * (1.5 + 0.5 * Math.abs(Math.sin(ms / 40))), 0);
+      x.lineTo(-len * 0.5, rad * 0.82);
+      x.closePath();
+      x.fill();
+      // 彈體
+      x.globalCompositeOperation = "source-over";
+      x.fillStyle = "#d8dae0";
+      x.beginPath();
+      x.moveTo(len, 0);
+      x.quadraticCurveTo(len * 0.42, -rad, -len * 0.5, -rad);
+      x.lineTo(-len * 0.5, rad);
+      x.quadraticCurveTo(len * 0.42, rad, len, 0);
+      x.closePath();
+      x.fill();
+      // 彈頭紅環 + 尾翼
+      x.fillStyle = "#c4342a";
+      x.beginPath();
+      x.moveTo(len, 0);
+      x.quadraticCurveTo(len * 0.66, -rad * 0.72, len * 0.46, -rad * 0.86);
+      x.lineTo(len * 0.46, rad * 0.86);
+      x.quadraticCurveTo(len * 0.66, rad * 0.72, len, 0);
+      x.closePath();
+      x.fill();
+      x.fillStyle = "#9aa0ab";
+      x.beginPath();
+      x.moveTo(-len * 0.5, -rad);
+      x.lineTo(-len * 0.86, -rad * 1.9);
+      x.lineTo(-len * 0.3, -rad * 0.9);
+      x.closePath();
+      x.fill();
+      x.beginPath();
+      x.moveTo(-len * 0.5, rad);
+      x.lineTo(-len * 0.86, rad * 1.9);
+      x.lineTo(-len * 0.3, rad * 0.9);
+      x.closePath();
+      x.fill();
+      x.restore();
+      count++;
+    }
+
+    // ── 金正恩：從那一側滑進來、比讚，爆炸時被火光照亮 ─────────────────────
+    const kim = this.art.kim;
+    if (kim && kim.complete && kim.naturalWidth > 0) {
+      const inP = sm(seg(ms, T.enter, T.enter + 420));
+      if (inP > 0) {
+        const slide = (1 - inP) * u * 0.42;
+        const X = kimX + sxDir * slide, Y = kimY + syDir * slide * 0.5;
+        // 命中時被往後震一下
+        const kick = Math.pow(1 - seg(ms, T.hit, T.hit + 420), 2) * (ms > T.hit ? 1 : 0) * u * 0.05;
+        const sc = 0.88 + 0.12 * inP;
+        const w = kimW * sc, h = kimH * sc;
+        x.globalAlpha = inP * fade;
+        x.drawImage(kim, X - w / 2 + sxDir * kick, Y - h + syDir * kick * 0.4, w, h);
+        // 爆炸的暖光打在人物身上
+        const lit = (1 - seg(ms, T.hit, T.hit + 700)) * (ms > T.hit ? 1 : 0);
+        if (lit > 0.02) {
+          x.globalCompositeOperation = "lighter";
+          x.globalAlpha = lit * 0.34 * fade;
+          x.drawImage(kim, X - w / 2 + sxDir * kick, Y - h + syDir * kick * 0.4, w, h);
+          x.globalCompositeOperation = "source-over";
+        }
+        x.globalAlpha = 1;
+        count++;
+      }
+    }
+
+    // ── 白閃：命中那一格整個畫面白掉，很快退 ──────────────────────────────
+    const flash = 1 - seg(ms, T.hit - 30, T.hit + 260);
+    if (flash > 0 && ms > T.hit - 30) {
+      x.globalCompositeOperation = "lighter";
+      x.fillStyle = `rgba(255,250,235,${(flash * flash * 0.92 * fade).toFixed(3)})`;
+      x.fillRect(0, 0, W, H);
+      x.globalCompositeOperation = "source-over";
+      count++;
+    }
+
+    this.lastCount = count;
+  }
+}
+
+type Styled = { style: Partial<CSSStyleDeclaration> };
+
+/**
+ * 播一次核彈自摸：回傳 stop（跳過、換局、卸載時呼叫，可重複呼叫）。
+ * 全程只有一個 requestAnimationFrame 迴圈；播完或 stop 就放掉畫布和圖片參照。
+ */
+export function runNuke(
+  els: SakuraEls,
+  g: SakuraGeo,
+  art: Partial<Record<NukeArt, HTMLImageElement>>,
+  o: { dpr: number; rm: boolean; zeroAt: () => number; stageShadow: string; raf?: (f: (now: number) => void) => number; caf?: (id: number) => void },
+) {
+  const raf = o.raf ?? requestAnimationFrame, caf = o.caf ?? cancelAnimationFrame;
+  const { dim, tile, tileIn, title, art: artEl, back, name, stage, cv } = els;
+  const fx = new NukeCanvas(cv, g, art, o.dpr);
+  let id = 0, stopped = false, moved = false;
+  const setOp = (e: Styled | null | undefined, v: number) => { if (e) e.style.opacity = v.toFixed(3); };
+  // 收尾一律把三個 inline style 都清掉（不能只在震過的情況才清）：
+  // transformOrigin 在開播就寫上去了，留著會被下一個特效的 transform 吃到，牌桌會從錯的點縮放（同 rulaiFx 的 clearStage）
+  const clearStage = () => {
+    if (stage) { stage.style.transform = ""; stage.style.boxShadow = ""; stage.style.transformOrigin = ""; moved = false; }
+  };
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    caf(id);
+    clearStage();
+    fx.destroy();
+  };
+  if (!o.rm) fx.prime();
+  // 時間零點在試畫之後：試畫花的時間不算進特效，聲音也從這裡對齊
+  const zeroAt = o.zeroAt();
+
+  if (o.rm) {
+    // 減少動態：定格在爆完的畫面，只有淡入，不震不閃
+    fx.draw(NUKE_STILL_MS);
+    const step = (now: number) => {
+      if (stopped) return;
+      const ms = now - zeroAt, p = sakuraStillPose(ms);
+      setOp(cv as unknown as Styled, p.base); setOp(dim, 0.66 * p.base);
+      setOp(tileIn, p.main); setOp(artEl, p.main); setOp(back, p.main); setOp(name, p.name);
+      if (ms < STILL_END) id = raf(step);
+    };
+    id = raf(step);
+  } else {
+    const gov = frameGovernor();
+    let last = zeroAt;
+    if (stage) stage.style.transformOrigin = `${Math.round(g.px)}px ${Math.round(g.py)}px`;
+    const step = (now: number) => {
+      if (stopped) return;
+      const ms = now - zeroAt;
+      fx.scale = gov(now - last);
+      last = now;
+      if (ms >= NUKE_TL.total) { setOp(tile, 0); setOp(title, 0); clearStage(); fx.destroy(); return; }
+      fx.draw(ms);
+      setOp(dim, nukeDim(ms));
+      const pose = nukeTilePose(ms), t = nukeTitlePose(ms), fo = fadeOut(ms);
+      if (tileIn) { tileIn.style.opacity = pose.opacity.toFixed(3); tileIn.style.transform = pose.transform; }
+      if (artEl) { artEl.style.opacity = t.art.opacity.toFixed(3); artEl.style.transform = t.art.transform; }
+      setOp(back, t.back); setOp(name, t.name); setOp(tile, fo); setOp(title, fo);
+      if (stage) {
+        const [sx, sy] = nukeShake(ms, g.mobile), cam = nukeCam(ms);
+        if (sx || sy || Math.abs(cam - 1) > 1e-4) {
+          stage.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) scale(${cam.toFixed(4)})`;
+          stage.style.boxShadow = o.stageShadow;
+          moved = true;
+        } else if (moved) { stage.style.transform = ""; stage.style.boxShadow = ""; moved = false; }
+      }
+      id = raf(step);
+    };
+    id = raf(step);
+  }
+  return { stop };
+}

@@ -23,6 +23,7 @@ const FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
 /** 老闆專屬的卡片：只有 GET 回 ownerFx 才顯示（不寫死帳號） */
 const OWNER_FX_CARDS: { code: FxChoice; name: string; art?: string }[] = [
   { code: "rulai", name: "如來神掌", art: "/mahjong-fx/zimo/rulai/rulai-title.webp" },
+  { code: "nuke", name: "核彈", art: "/mahjong-fx/zimo/nuke/nuke-title.webp" },
 ];
 
 const PREVIEW_TILES: Tile[] = [

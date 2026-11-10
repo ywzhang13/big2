@@ -9,8 +9,8 @@ export const ZIMO_FX: readonly WinFx[] = ["meteor", "thunder", "storm", "frost",
 export const isZimoFx = (x: unknown): x is WinFx => typeof x === "string" && (ZIMO_FX as readonly string[]).includes(x);
 /** 金色自摸是所有 LINE 帳號永久可選的預設，不屬於後台可開通／收回的特效。 */
 export const GOLDEN_ZIMO_FX: WinFx = "golden";
-/** 老闆專屬特效（如來神掌，老闆 2026-11-05）：只有老闆帳號能選，不在 ZIMO_FX 裡，所以後台不能開通、「開通全部」也不包含；同桌和觀戰者照代號播 */
-export const OWNER_FX: readonly WinFx[] = ["rulai"];
+/** 老闆專屬特效（如來神掌，老闆 2026-11-05；核彈，老闆 2026-11-10）：只有老闆帳號能選，不在 ZIMO_FX 裡，所以後台不能開通、「開通全部」也不包含；同桌和觀戰者照代號播 */
+export const OWNER_FX: readonly WinFx[] = ["rulai", "nuke"];
 export const isOwnerFx = (x: unknown): x is WinFx => typeof x === "string" && (OWNER_FX as readonly string[]).includes(x);
 export const isSelectableZimoFx = (x: unknown): x is WinFx => x === GOLDEN_ZIMO_FX || isZimoFx(x) || isOwnerFx(x);
 

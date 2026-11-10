@@ -13,7 +13,7 @@ import { RULAI_META } from "@/lib/mahjong/fx/rulaiMeta";
 import "./zimoTitle.css";
 
 /** 每款大字圖的長寬比（寬÷高，切圖時量的原尺寸：雷霆 656×346、風暴 725×363、冰封 647×352、黑洞 696×343、櫻花 646×345） */
-export const ZIMO_TITLE_AR: Record<ZimoFxNew, number> = { thunder: 1.896, storm: 1.997, frost: 1.838, blackhole: 2.029, sakura: 1.872, rulai: RULAI_META.titleAR };
+export const ZIMO_TITLE_AR: Record<ZimoFxNew, number> = { thunder: 1.896, storm: 1.997, frost: 1.838, blackhole: 2.029, sakura: 1.872, rulai: RULAI_META.titleAR, nuke: 1.9565 };
 /** 大字高度相對字級（em） */
 export const ZIMO_TITLE_EM = 1.2;
 export const zimoTitleArt = (fx: ZimoFxNew) => `/mahjong-fx/zimo/${fx}/${fx}-title.webp`;
