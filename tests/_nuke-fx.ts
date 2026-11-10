@@ -1,4 +1,4 @@
-// 核彈畫布引擎（lib/mahjong/fx/nukeFx.ts；老闆帳號專屬，老闆 2026-11-10）：用假的 canvas 記下每一次畫圖
+// 核彈畫布引擎（lib/mahjong/fx/nukeFx.ts；專屬 jeff 門清一摸三，老闆 2026-11-10）：用假的 canvas 記下每一次畫圖
 //   N1 手機同時粒子（碎片＋煙團＋金屑）72；畫布倍率手機 ≤1.5、電腦 ≤2
 //   N2 畫面只由時間決定：同一個 ms 畫兩次，畫圖指令完全一樣
 //   N3 人物站在落點的另一邊（不蓋住爆心）、腳貼畫面底、不超過畫面六成高
@@ -9,7 +9,7 @@
 //   N7 減少動態：定格在爆完的畫面，不震不閃；卸載後畫布歸 0
 //   N8 暗幕留到結束；牌 2.40、大字 2.78、名字 3.02 才出現；最後 0.4 秒才淡出
 //   N9 手機素材實際量：下載 ≤1 MB、解碼 ≤14 MB；每張圖都登記在長期快取雜湊清單（音效出檔後也必須登記）
-//   N10 核彈是老闆專屬：後台不能開通（不在 ZIMO_FX_LIST、isZimoFx 不認），走單一畫布路線，名稱「核彈」
+//   N10 核彈是「專屬特效」：只有 EXCLUSIVE_FX 指定的那個帳號能用（不是老闆），後台不能開通，走單一畫布路線，名稱「核彈」
 //   N11 核彈 4.60 秒、主擊 1.80；其他特效的時間軸沒動
 //   N12 蕈狀雲的柱頂夾在畫面內（原本固定 u*1.25 會整朵衝出畫面外，老闆 2026-11-10 改成夾住）
 //   N13 常數和素材一致：NUKE_KIM_AR、ZIMO_TITLE_AR.nuke 就是圖檔的實際長寬比
@@ -20,7 +20,7 @@ import { ZFX_TL } from "../components/mahjong/ZimoFx";
 import { ZIMO_TITLE_AR } from "../components/mahjong/ZimoTitle";
 import { NUKE_ART, NUKE_KIM_AR, NUKE_LIMIT, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
 import { isCanvasFx, isZimoFxNew } from "../lib/mahjong/winShow";
-import { isOwnerFx, isSelectableZimoFx, isZimoFx } from "../lib/mahjong/zimoFx/rules";
+import { canUseExclusiveFx, EXCLUSIVE_FX, isExclusiveFx, isOwner, isSelectableZimoFx, isZimoFx } from "../lib/mahjong/zimoFx/rules";
 import { fxName, ZIMO_FX_LIST } from "../lib/mahjong/zimoFxClient";
 
 const results: string[] = [];
@@ -164,7 +164,12 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
 }
 // N10
 ok(!ZIMO_FX_LIST.some((f) => (f.code as string) === "nuke") && !isZimoFx("nuke"), "N10 核彈不在後台開通清單（開通全部不含）");
-ok(isOwnerFx("nuke") && isSelectableZimoFx("nuke"), "N10 核彈是老闆專屬、老闆選得到");
+ok(isExclusiveFx("nuke") && isSelectableZimoFx("nuke"), "N10 核彈是專屬特效、被指定的帳號選得到");
+{
+  const owner = EXCLUSIVE_FX.nuke ?? "";
+  ok(!!owner && !isOwner(owner), `N10 核彈專屬的是別的帳號、不是老闆（…${owner.slice(-4)}）`);
+  ok(canUseExclusiveFx(owner, "nuke") && !canUseExclusiveFx("別人", "nuke") && !canUseExclusiveFx(null, "nuke"), "N10 只有那個帳號能用核彈");
+}
 ok(isZimoFxNew("nuke") && isCanvasFx("nuke") && fxName("nuke") === "核彈", "N10 走新特效、單一畫布路線，名稱核彈");
 // N11
 ok(ZFX_TL.nuke.total === 4600 && ZFX_TL.nuke.hit === 1800, "N11 核彈 4.60 秒、主擊 1.80");

@@ -58,8 +58,8 @@ await post(mySet, { fx: "storm" }, "a");
 {
   const [boss, a, b, g, none] = [await get(myGet, "/", "boss"), await get(myGet, "/", "a"), await get(myGet, "/", "b"), await get(myGet, "/", "guest"), await get(myGet, "/")];
   eq([boss.body.ownerFx, boss.body.available.rulai, "ownerFx" in a.body, "ownerFx" in b.body, a.body.available, b.body.available, g.status, none.status],
-    [["rulai", "nuke"], null, false, false, { golden: null, ...SIX }, { golden: null }, 403, 401],
-    "R1 老闆的回應帶 ownerFx=[rulai, nuke]（核彈 2026-11-10 加入，同樣老闆專屬）、available 有 rulai（永久）；永久開通的玩家和沒開通的玩家都沒有 ownerFx、available 沒有 rulai；遊客 403、沒登入 401");
+    [["rulai"], null, false, false, { golden: null, ...SIX }, { golden: null }, 403, 401],
+    "R1 老闆的回應帶 ownerFx=[rulai]（核彈專屬別人，不在老闆這份）、available 有 rulai（永久）；永久開通的玩家和沒開通的玩家都沒有 ownerFx、available 沒有 rulai；遊客 403、沒登入 401");
 }
 
 // ---- R2 POST ----

@@ -9,14 +9,30 @@ export const ZIMO_FX: readonly WinFx[] = ["meteor", "thunder", "storm", "frost",
 export const isZimoFx = (x: unknown): x is WinFx => typeof x === "string" && (ZIMO_FX as readonly string[]).includes(x);
 /** 金色自摸是所有 LINE 帳號永久可選的預設，不屬於後台可開通／收回的特效。 */
 export const GOLDEN_ZIMO_FX: WinFx = "golden";
-/** 老闆專屬特效（如來神掌，老闆 2026-11-05；核彈，老闆 2026-11-10）：只有老闆帳號能選，不在 ZIMO_FX 裡，所以後台不能開通、「開通全部」也不包含；同桌和觀戰者照代號播 */
-export const OWNER_FX: readonly WinFx[] = ["rulai", "nuke"];
-export const isOwnerFx = (x: unknown): x is WinFx => typeof x === "string" && (OWNER_FX as readonly string[]).includes(x);
-export const isSelectableZimoFx = (x: unknown): x is WinFx => x === GOLDEN_ZIMO_FX || isZimoFx(x) || isOwnerFx(x);
-
 /** 老闆帳號（原本綁隕石的那個 LINE 帳號）：後台只有他能用；6 種特效永久全開，沒選過就是隕石 */
 export const OWNER_USER_ID = "c5707922-f6f0-4c10-9c87-3532fdbf6b72";
 export const isOwner = (userId: string | null | undefined) => userId === OWNER_USER_ID;
+
+/**
+ * 專屬特效：代號 → 能用的那一個帳號（一種特效只屬於一個帳號）。不在 ZIMO_FX 裡，
+ * 所以後台不能開通、「開通全部」也不包含，被指定的那個帳號永久可選；同桌和觀戰者照代號播。
+ *   ・如來神掌（rulai）＝老闆帳號（老闆 2026-11-05）
+ *   ・核彈（nuke）＝jeff 門清一摸三（老闆 2026-11-10 指定，不是老闆帳號——所以不能寫成「老闆專屬」）
+ * 要換人、要加新的專屬特效只改這張表；授權判斷一律走 exclusiveFxFor／canUseExclusiveFx，不要再比對帳號 id。
+ */
+export const EXCLUSIVE_FX: Readonly<Partial<Record<WinFx, string>>> = {
+  rulai: OWNER_USER_ID,
+  nuke: "00406f94-5e88-43ed-84b2-c1e4b114bb10",
+};
+export const EXCLUSIVE_FX_CODES = Object.keys(EXCLUSIVE_FX) as readonly WinFx[];
+export const isExclusiveFx = (x: unknown): x is WinFx => typeof x === "string" && x in EXCLUSIVE_FX;
+/** 這個帳號專屬的特效（沒有就空陣列）：設定頁的專屬卡片看它，不寫死帳號 */
+export const exclusiveFxFor = (userId: string | null | undefined): WinFx[] =>
+  userId ? EXCLUSIVE_FX_CODES.filter((c) => EXCLUSIVE_FX[c] === userId) : [];
+/** 這個帳號能用這一種專屬特效嗎（不是專屬特效、或不是指定的那個帳號都是 false） */
+export const canUseExclusiveFx = (userId: string | null | undefined, fx: unknown): fx is WinFx =>
+  !!userId && isExclusiveFx(fx) && EXCLUSIVE_FX[fx] === userId;
+export const isSelectableZimoFx = (x: unknown): x is WinFx => x === GOLDEN_ZIMO_FX || isZimoFx(x) || isExclusiveFx(x);
 
 const TPE_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,7 +58,8 @@ export interface ZimoFxNow { code: WinFx; until: number | null }
 export function resolveZimoFx(userId: string | null | undefined, pref: { fx: string; until: number | null } | undefined): ZimoFxNow | undefined {
   if (!userId) return undefined;
   if (pref?.fx === GOLDEN_ZIMO_FX) return { code: GOLDEN_ZIMO_FX, until: null };
-  if (isOwner(userId) && (isZimoFx(pref?.fx) || isOwnerFx(pref?.fx))) return { code: pref.fx, until: null };
+  if (pref && canUseExclusiveFx(userId, pref.fx)) return { code: pref.fx, until: null }; // 專屬特效：指定的那個帳號永久有效
+  if (isOwner(userId) && isZimoFx(pref?.fx)) return { code: pref.fx, until: null };
   if (!pref || !isZimoFx(pref.fx) || pref.until === null) return { code: GOLDEN_ZIMO_FX, until: null };
   return { code: pref.fx, until: pref.until }; // 永久是 Infinity，存進牌局 JSON 會變成 null，兩者 zimoFxValid 都算有效
 }

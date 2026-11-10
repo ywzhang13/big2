@@ -4,7 +4,7 @@
 //     大牌自摸＝大牌專屬段 → 隕石。放槍胡不播隕石，照一般流程。
 //   ・帳號自摸特效庫的 5 種新特效（雷霆、風暴、冰封、黑洞、櫻花，老闆 2026-10-31；winFx 是其中之一）：都是完整版，比照隕石——
 //     特效自己帶專屬「自摸」大字，取代自摸浮層：自摸＝zfx；大牌自摸＝big → zfx。放槍胡不播，照一般流程。
-//     如來神掌（rulai，老闆 2026-11-05）、核彈（nuke，老闆 2026-11-10）是老闆帳號專屬，伺服器只給老闆，走同一條路。
+//     如來神掌（rulai，老闆 2026-11-05）、核彈（nuke，老闆 2026-11-10）是專屬特效，伺服器只給 EXCLUSIVE_FX 指定的那個帳號，走同一條路。
 //   ・天胡、八仙過海、七搶一（BIG_WIN_ORDER 的 cele=false）照舊：只播大牌專屬段，不接浮層、也不播隕石或新特效。
 //   ・回傳 ["cele"]＝一般胡牌：沿用原本的慶祝浮層（不擋結算、不記播過），其他組合由頁面依序播完才出結算。
 import type { BigWinPick } from "./bigWin";
@@ -13,7 +13,7 @@ import type { WinFx } from "./gameState";
 export type WinShowStage = "cele" | "meteor" | "big" | "zfx";
 
 /** 特效庫的新自摸特效（components/mahjong/ZimoFx.tsx；隕石是另一支 MeteorFx）。
- *  前 5 種是後台可開通的，rulai／nuke 是老闆專屬（OWNER_FX），伺服器只給老闆 */
+ *  前 5 種是後台可開通的，rulai／nuke 是專屬特效（EXCLUSIVE_FX），伺服器只給被指定的那個帳號 */
 export const ZIMO_FX_NEW = ["thunder", "storm", "frost", "blackhole", "sakura", "rulai", "nuke"] as const;
 export type ZimoFxNew = (typeof ZIMO_FX_NEW)[number];
 export const isZimoFxNew = (x: unknown): x is ZimoFxNew => typeof x === "string" && (ZIMO_FX_NEW as readonly string[]).includes(x);

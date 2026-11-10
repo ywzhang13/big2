@@ -2,21 +2,23 @@
 //   GET：金色自摸（全帳號永久）＋已開通、還在有效期的特效（代號→到期時間，null＝永久；有開通就 6 種全開；老闆帳號 6 種永久）和目前選用
 //   POST { fx }：金色自摸或已開通的特效可套用（同時寫操作紀錄）；沒開通、過期、被收回 403 not_granted，
 //     不會改到原本的選用，回應附上目前實際套用的 selected（前端照這個顯示，不要留在被拒的那一種）
-//   老闆專屬特效（OWNER_FX）：GET 只有老闆的回應帶 ownerFx，available 也只有老闆有；其他人 POST 一樣 403 not_granted，就算有開通也不行
+//   專屬特效（EXCLUSIVE_FX，如來神掌＝老闆、核彈＝jeff 門清一摸三）：GET 只有被指定的那個帳號帶 ownerFx、available 才有那一種（永久）；
+//     其他人 POST 一樣 403 not_granted，就算有開通也不行
 import { getAuthUser } from "@/lib/auth";
 import { fail, ok, readBody } from "@/lib/mahjong/zimoFx/admin";
-import { GOLDEN_ZIMO_FX, isOwner, isOwnerFx, isSelectableZimoFx, OWNER_FX, ZIMO_FX } from "@/lib/mahjong/zimoFx/rules";
+import { canUseExclusiveFx, exclusiveFxFor, GOLDEN_ZIMO_FX, isExclusiveFx, isOwner, isSelectableZimoFx, ZIMO_FX } from "@/lib/mahjong/zimoFx/rules";
 import { nowMs, playerFx, selectFx } from "@/lib/mahjong/zimoFx/store";
 
 async function available(userId: string, now: number): Promise<{ fx: Record<string, number | null>; selected: string | null }> {
   const { grants, selected } = await playerFx(userId);
   const fx: Record<string, number | null> = { [GOLDEN_ZIMO_FX]: null };
-  if (isOwner(userId)) for (const c of [...ZIMO_FX, ...OWNER_FX]) fx[c] = null;
+  if (isOwner(userId)) for (const c of ZIMO_FX) fx[c] = null;
   else {
     // 一次全開（老闆 2026-11-02）：有任何一筆還有效的開通，6 種都能用，到期時間取最晚的；永久開通（2026-11-04）＝null，和老闆帳號一樣
     const until = Math.max(0, ...grants.filter((g) => !g.revokedAt && g.expiresAt > now).map((g) => g.expiresAt));
     if (until > 0) for (const c of ZIMO_FX) fx[c] = until === Infinity ? null : until;
   }
+  for (const c of exclusiveFxFor(userId)) fx[c] = null; // 專屬特效：被指定的那個帳號永久可選（後台開通不了，也收不回）
   const sel = selected && selected in fx ? selected : GOLDEN_ZIMO_FX;
   return { fx, selected: sel };
 }
@@ -28,7 +30,8 @@ export async function GET(request: Request) {
     if (user.isGuest) return fail(403, "guest_not_allowed");
     const now = nowMs();
     const a = await available(user.id, now);
-    return ok({ serverNow: now, displayName: user.displayName ?? "LINE 使用者", isOwner: isOwner(user.id), ...(isOwner(user.id) ? { ownerFx: OWNER_FX } : {}), available: a.fx, selected: a.selected });
+    const mine = exclusiveFxFor(user.id); // 這個帳號專屬的特效（設定頁靠它決定要不要出那張卡）
+    return ok({ serverNow: now, displayName: user.displayName ?? "LINE 使用者", isOwner: isOwner(user.id), ...(mine.length ? { ownerFx: mine } : {}), available: a.fx, selected: a.selected });
   } catch (err) {
     console.error("[mj-zimo-fx] get", err instanceof Error ? err.message : err);
     return fail(500, "server_error");
@@ -42,7 +45,8 @@ export async function POST(request: Request) {
     if (user.isGuest) return fail(403, "guest_not_allowed");
     const b = await readBody(request);
     if (!b || !isSelectableZimoFx(b.fx)) return fail(400, "bad_request");
-    const allowed = (!isOwnerFx(b.fx) || isOwner(user.id)) && (await selectFx(user.id, b.fx, isOwner(user.id)));
+    const mine = canUseExclusiveFx(user.id, b.fx); // 自己的專屬特效：不用開通也能選（永久）
+    const allowed = (!isExclusiveFx(b.fx) || mine) && (await selectFx(user.id, b.fx, isOwner(user.id) || mine));
     if (!allowed) return fail(403, "not_granted", { selected: (await available(user.id, nowMs())).selected });
     return ok({ selected: b.fx });
   } catch (err) {

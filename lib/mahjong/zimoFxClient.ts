@@ -7,7 +7,7 @@ import { mjFetch } from "./clientAuth";
 export type ZimoFxCode = "meteor" | "thunder" | "storm" | "frost" | "blackhole" | "sakura";
 /** 金色自摸是全帳號永久可選的回退效果，不出現在後台授權清單。 */
 export type ZimoFxChoice = "golden" | ZimoFxCode | OwnerFxCode;
-/** 老闆專屬（如來神掌、核彈）：只有老闆能選，不在 ZIMO_FX_LIST（後台「開通全部」用那份清單） */
+/** 專屬特效（如來神掌＝老闆、核彈＝jeff 門清一摸三）：只有被指定的那個帳號能選，不在 ZIMO_FX_LIST（後台「開通全部」用那份清單） */
 export type OwnerFxCode = "rulai" | "nuke";
 export const ZIMO_FX_LIST: { code: ZimoFxCode; name: string }[] = [
   { code: "meteor", name: "隕石" },
@@ -35,7 +35,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: Record<strin
 }
 
 // ---- 玩家自己（設定頁）：第 4 節 ----
-export interface MyZimoFx { serverNow: number; displayName: string; isOwner: boolean; /** 只有老闆的回應才有：老闆專屬的特效（第 8 張卡看它） */ ownerFx?: OwnerFxCode[]; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
+export interface MyZimoFx { serverNow: number; displayName: string; isOwner: boolean; /** 只有被指定的那個帳號才有：這個帳號專屬的特效（設定頁的專屬卡片看它） */ ownerFx?: OwnerFxCode[]; available: Partial<Record<ZimoFxChoice, number | null>>; selected: ZimoFxChoice | null }
 export const getMyFx = () => call<MyZimoFx>("GET", "/api/mahjong/zimo-fx");
 export const selectMyFx = (fx: ZimoFxChoice) => call<{ selected: ZimoFxChoice }>("POST", "/api/mahjong/zimo-fx", { fx });
 /** 選用被拒（403 not_granted：沒開通、過期、被收回）時，伺服器帶回目前實際套用的那一種（老柯 2026-10-31） */
