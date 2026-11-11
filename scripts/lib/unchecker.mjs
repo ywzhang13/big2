@@ -184,28 +184,62 @@ export async function stripFakeChecker(file, opts = {}) {
     // 整片判成不透明，顏色就直接照搬原圖、把棋盤一起帶進去。真正飽和的火焰彩度都破百。
     alpha[p] = Math.max(aLevel, aRel, chroma[p] / 60);
   }
-  // 很淡的地方（α 小）還原前景是除以小數，雜訊會被放大成灰霧：直接當全透明
-  const FLOOR = 0.14;
-  const sm = new Float32Array(N);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let acc = 0, n = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const yy = y + dy, xx = x + dx;
-        if (yy < 0 || yy >= H || xx < 0 || xx >= W) continue;
-        acc += alpha[yy * W + xx]; n++;
+  // 殘留的棋盤紋是「一格一格交替」的高頻訊號：對 α 做一次「比一格還大」的方框模糊就會被抹平。
+  // 但只在半透明的地方用模糊值——實心的部分要保持銳利，不然整個形狀會糊掉。
+  const box = (src, rad) => {
+    const tmp = new Float32Array(N), out = new Float32Array(N);
+    for (let y = 0; y < H; y++) {
+      let acc = 0;
+      for (let x = -rad; x <= rad; x++) acc += src[y * W + Math.min(W - 1, Math.max(0, x))];
+      for (let x = 0; x < W; x++) {
+        tmp[y * W + x] = acc / (2 * rad + 1);
+        acc -= src[y * W + Math.min(W - 1, Math.max(0, x - rad))];
+        acc += src[y * W + Math.min(W - 1, Math.max(0, x + rad + 1))];
       }
-      sm[y * W + x] = acc / n;
     }
-  }
-  const out = Buffer.alloc(N * 4);
+    for (let x = 0; x < W; x++) {
+      let acc = 0;
+      for (let y = -rad; y <= rad; y++) acc += tmp[Math.min(H - 1, Math.max(0, y)) * W + x];
+      for (let y = 0; y < H; y++) {
+        out[y * W + x] = acc / (2 * rad + 1);
+        acc -= tmp[Math.min(H - 1, Math.max(0, y - rad)) * W + x];
+        acc += tmp[Math.min(H - 1, Math.max(0, y + rad + 1)) * W + x];
+      }
+    }
+    return out;
+  };
+  const FLOOR = 0.14;
+  const sm = box(alpha, 1);          // 只做最輕的平滑；α 整片模糊會讓解錯的顏色更明顯
+  // 先算出每個像素「解混合」後的顏色和最終 α
+  const fin = new Float32Array(N);
+  const col = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
   for (let p = 0; p < N; p++) {
-    const i = p * C, o = p * 4, B = Bof[p];
+    const i = p * C, B = Bof[p];
     // 扣掉底線之後再過一次 smoothstep：剩下的低值（背景殘霧）被壓得更低，
     // 高值幾乎不動，所以光暈不會被切出硬邊。
     const t = sm[p] <= FLOOR ? 0 : Math.min(1, (sm[p] - FLOOR) / (1 - FLOOR));
     const a = t * t * (3 - 2 * t);
-    for (let c = 0; c < 3; c++) out[o + c] = a > 0.02 ? Math.max(0, Math.min(255, (data[i + c] - B * (1 - a)) / a)) : 0;
+    fin[p] = a;
+    for (let c = 0; c < 3; c++) col[c][p] = a > 0.02 ? Math.max(0, Math.min(255, (data[i + c] - B * (1 - a)) / a)) : 0;
+  }
+  // α 很小的地方，解混合是「除以很小的數」，雜訊會被放大成灰霧——那裡的顏色不能信。
+  // 改成從鄰近實心處暈染過來（預乘 α 後模糊再除回去，標準的 color bleed）：
+  // 光暈就變成「暖色的淡光」，而不是「灰色的棋盤」。
+  const rad = Math.max(2, Math.round(cell * 0.6));
+  const aB = box(fin, rad);
+  const cB = col.map((ch) => {
+    const pre = new Float32Array(N);
+    for (let p = 0; p < N; p++) pre[p] = ch[p] * fin[p];
+    return box(pre, rad);
+  });
+  const out = Buffer.alloc(N * 4);
+  for (let p = 0; p < N; p++) {
+    const o = p * 4, a = fin[p];
+    const trust = Math.min(1, Math.max(0, (a - 0.25) / 0.45));   // α>0.7 完全用自己的顏色
+    for (let c = 0; c < 3; c++) {
+      const bleed = aB[p] > 1e-4 ? cB[c][p] / aB[p] : 0;
+      out[o + c] = Math.round(Math.max(0, Math.min(255, col[c][p] * trust + bleed * (1 - trust))));
+    }
     out[o + 3] = Math.round(a * 255);
   }
   return sharp(out, { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();

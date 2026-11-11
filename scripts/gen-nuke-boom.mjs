@@ -13,6 +13,7 @@
 //   ・順便擋掉最常見的三個坑：格子對不齊、整張沒有 alpha（黑底）、每一格沒有置中。
 import sharp from "sharp";
 import { hasRealAlpha, stripFakeChecker } from "./lib/unchecker.mjs";
+import { mergeUpscaled } from "./lib/merge-upscaled.mjs";
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,8 +27,11 @@ const [COLS, ROWS] = (gi >= 0 ? argv[gi + 1] : "4x4").split("x").map(Number);
 /** 每格四周先裁掉幾個像素：有些生成器會在格與格之間畫出格線，不裁會跟著被當成內容 */
 const ii = argv.indexOf("--inset");
 const INSET = ii >= 0 ? Number(argv[ii + 1]) || 0 : 0;
+/** --alpha-from <低解析原圖>：alpha 取這張去背的結果，顏色取主來源（見 lib/merge-upscaled.mjs） */
+const ai = argv.indexOf("--alpha-from");
+const ALPHA_FROM = ai >= 0 && argv[ai + 1] && !argv[ai + 1].startsWith("--") ? argv[ai + 1] : null;
 /** 每格輸出大小：電腦、手機 */
-const CELL_D = 384, CELL_M = 256;
+const CELL_D = 512, CELL_M = 256;   // 電腦版每格 512（來源 2048 的表才吃得到）；手機維持 256，解碼量不變
 const ALPHA_MIN = 8;
 
 if (!SRC || !COLS || !ROWS) {
@@ -104,11 +108,32 @@ if (cells.length !== COLS * ROWS) {
 mkdirSync(OUT, { recursive: true });
 const n = cells.length;
 const cols = COLS, rows = Math.ceil(n / COLS);
+// --alpha-from：另外去背一張低解析版，用它的 alpha 配這張的顏色
+let alphaCells = null;
+if (ALPHA_FROM) {
+  console.log(`\nalpha 另外取自 ${ALPHA_FROM}（這張的棋盤規則、去背乾淨）`);
+  const lowKeyed = (await hasRealAlpha(ALPHA_FROM)) ? ALPHA_FROM : await stripFakeChecker(ALPHA_FROM);
+  const lowImg = sharp(lowKeyed).ensureAlpha();
+  const lm = await lowImg.metadata();
+  const lw = lm.width / COLS, lh = lm.height / ROWS;
+  // 兩張圖的格子大小不同，裁邊也要照比例縮（高解析裁 6px ＝ 低解析裁 3px）
+  const hiCellW = ((await sharp(cells[0]).metadata()).width ?? lw) + INSET * 2;
+  const inLow = Math.round((INSET * lw) / hiCellW);
+  alphaCells = [];
+  for (let i = 0; i < n; i++) {
+    alphaCells.push(await lowImg.clone()
+      .extract({ left: (i % COLS) * lw + inLow, top: Math.floor(i / COLS) * lh + inLow, width: lw - inLow * 2, height: lh - inLow * 2 })
+      .png().toBuffer());
+  }
+}
+
 for (const [suffix, cell] of [["d", CELL_D], ["m", CELL_M]]) {
   const sheet = sharp({ create: { width: cols * cell, height: rows * cell, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } });
   const parts = [];
   for (let i = 0; i < n; i++) {
-    const buf = await sharp(cells[i]).resize({ width: cell, height: cell, fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+    let srcCell = cells[i];
+    if (alphaCells) srcCell = await mergeUpscaled(alphaCells[i], srcCell, cell);
+    const buf = await sharp(srcCell).resize({ width: cell, height: cell, fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
     parts.push({ input: buf, left: (i % cols) * cell, top: Math.floor(i / cols) * cell });
   }
   const file = path.join(OUT, `nuke-boom-v2-${suffix}.webp`);
