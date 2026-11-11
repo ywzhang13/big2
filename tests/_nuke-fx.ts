@@ -32,21 +32,28 @@ type Call = [string, ...unknown[]];
 function fakeCtx() {
   const calls: Call[] = [], props: Record<string, unknown> = {};
   const drawn = new Set<unknown>();
-  const rec = (name: string) => (...a: unknown[]) => { if (name === "drawImage") drawn.add(a[0]); calls.push([name, ...a.map((v) => (typeof v === "object" ? "obj" : v))]); };
-  const base: Record<string, unknown> = { calls, props, drawn, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
+  const imgs: { img: unknown; x: number; y: number; w: number; h: number }[] = [];
+  const rec = (name: string) => (...a: unknown[]) => {
+    if (name === "drawImage") { drawn.add(a[0]); imgs.push({ img: a[0], x: a[1] as number, y: a[2] as number, w: a[3] as number, h: a[4] as number }); }
+    calls.push([name, ...a.map((v) => (typeof v === "object" ? "obj" : v))]);
+  };
+  const base: Record<string, unknown> = { calls, props, drawn, imgs, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
   return new Proxy(base, {
     get: (t, k: string) => (k in t ? t[k] : rec(k)),
     set: (t, k: string, v) => { props[k] = v; calls.push([`set:${k}`, typeof v === "object" ? "obj" : v]); return true; },
-  }) as unknown as CanvasRenderingContext2D & { calls: Call[]; props: Record<string, unknown>; drawn: Set<unknown> };
+  }) as unknown as CanvasRenderingContext2D & { calls: Call[]; props: Record<string, unknown>; drawn: Set<unknown>; imgs: { img: unknown; x: number; y: number; w: number; h: number }[] };
 }
 function fakeCanvas() { const ctx = fakeCtx(); return { width: 0, height: 0, style: {}, getContext: () => ctx, ctx } as unknown as HTMLCanvasElement & { ctx: ReturnType<typeof fakeCtx> }; }
+const baked: (HTMLCanvasElement & { ctx: ReturnType<typeof fakeCtx> })[] = [];
+(globalThis as unknown as { document: unknown }).document = { createElement: () => { const c = fakeCanvas(); baked.push(c); return c; } };
 const img = (w: number, h: number) => ({ naturalWidth: w, naturalHeight: h, complete: true }) as HTMLImageElement;
 const art = () => ({ kim: img(1024, Math.round(1024 / NUKE_KIM_AR)) });
 /** 手機 844×390、電腦 1440×900（同如來神掌的驗收尺寸）；px/py＝胡牌者的位置＝爆心 */
 const geo = (rel: number, mobile = true) => ({ W: mobile ? 844 : 1440, H: mobile ? 390 : 900, u: mobile ? 390 : 892.8, px: mobile ? 422 : 720, py: mobile ? 273 : 630, rel, mobile });
 const make = (rel = 0, mobile = true, dpr = 3, over: Partial<ReturnType<typeof geo>> = {}) => {
-  const g = { ...geo(rel, mobile), ...over }, cv = fakeCanvas();
-  return { cv, g, f: new NukeCanvas(cv, g, art(), dpr), x: cv.ctx };
+  const g = { ...geo(rel, mobile), ...over }, cv = fakeCanvas(), kim = art(), b0 = baked.length;
+  const f = new NukeCanvas(cv, g, kim, dpr);
+  return { cv, g, f, x: cv.ctx, kim: kim.kim, smokeTex: baked[b0], fireTex: baked[b0 + 1] };
 };
 const T = NUKE_TL;
 const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
@@ -55,22 +62,24 @@ const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
 {
   const L = NUKE_LIMIT.mobile;
   ok(L.debris + L.smoke + L.sparks === 72, `N1 手機同時粒子 ${L.debris + L.smoke + L.sparks}（碎片 ${L.debris}＋煙 ${L.smoke}＋金屑 ${L.sparks}）`);
+  baked.length = 0;
   const m = make(0, true, 3), d = make(0, false, 3);
+  ok(baked.length === 4 && baked[0].width === NUKE_LIMIT.mobile.tex && baked[2].width === NUKE_LIMIT.desktop.tex,
+    `N1 每個畫布只烘兩張紋理（手機 ${NUKE_LIMIT.mobile.tex}px、電腦 ${NUKE_LIMIT.desktop.tex}px）`);
   ok(m.cv.width === Math.round(844 * 1.5), "N1 手機倍率上限 1.5");
   ok(d.cv.width === 1440 * 2, "N1 電腦倍率上限 2");
   let max = 0;
   for (let ms = 0; ms < T.total; ms += 40) { m.f.draw(ms); max = Math.max(max, m.f.lastCount); }
-  ok(max > 0 && max <= 90, `N1 每一格的零件數都在上限內（最多 ${max}）`);
+  ok(max > 0 && max <= 120, `N1 每一格的零件數都在上限內（最多 ${max}）`);
 }
 // N2
 { const { f, x } = make(); for (const ms of [600, 1850, 2500, 3600]) { x.calls.length = 0; f.draw(ms); const a = JSON.stringify(x.calls); x.calls.length = 0; f.draw(ms); ok(a === JSON.stringify(x.calls), `N2 ${ms}ms 畫兩次完全一樣`); } }
 // N3
 {
   const rect = (px: number, mobile = true) => {
-    const { cv, f } = make(0, mobile, 2, { px });
+    const { cv, f, kim } = make(0, mobile, 2, { px });
     f.draw(T.hit + 400);
-    const c = cv.ctx.calls.find((k) => k[0] === "drawImage");
-    return c ? { x: c[2] as number, y: c[3] as number, w: c[4] as number, h: c[5] as number } : null;
+    return cv.ctx.imgs.find((d) => d.img === kim) ?? null;
   };
   const left = rect(200), right = rect(700), def = rect(422);
   const clear = (r: { x: number; w: number } | null, px: number) => !!r && (px < r.x || px > r.x + r.w);
@@ -79,7 +88,7 @@ const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
   const H = geo(0).H;
   ok(!!def && Math.abs(def.y + def.h - H * 0.99) < 2, `N3 腳貼畫面底（底邊 ${def ? (def.y + def.h).toFixed(0) : "?"}／${H}）`);
   ok(!!def && def.h <= H * 0.6, `N3 人物高度 ${def ? def.h.toFixed(0) : "?"} ≤ 畫面六成（${(H * 0.6).toFixed(0)}）`);
-  const none = (() => { const { cv, f } = make(); f.draw(T.enter - 1); return !cv.ctx.calls.some((c) => c[0] === "drawImage"); })();
+  const none = (() => { const { cv, f, kim } = make(); f.draw(T.enter - 1); return !cv.ctx.imgs.some((d) => d.img === kim); })();
   ok(none, "N3 登場時間（0.26 秒）之前不畫人物");
 }
 // N4
@@ -93,14 +102,14 @@ const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
 {
   const loop = () => { let next: ((n: number) => void) | null = null, id = 0, pending = 0; return { raf: (f: (n: number) => void) => { next = f; pending++; return ++id; }, caf: () => { next = null; pending = 0; }, tick(n: number) { const f = next; next = null; pending = 0; f?.(n); }, get live() { return !!next; }, get pending() { return pending; } }; };
   const el = () => ({ style: {} as Record<string, string> }); // 沒有 animate 方法：程式一叫就丟例外
-  const mk = (rm = false) => { const l = loop(), cv = fakeCanvas(), e = { dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el() }; const r = runNuke({ cv, ...e } as never, geo(0), art(), { dpr: 2, rm, zeroAt: () => 0, stageShadow: "S", raf: l.raf, caf: l.caf }); return { l, cv, e, r }; };
+  const mk = (rm = false) => { baked.length = 0; const l = loop(), cv = fakeCanvas(), e = { dim: el(), tile: el(), tileIn: el(), title: el(), art: el(), back: el(), name: el(), stage: el() }; const r = runNuke({ cv, ...e } as never, geo(0), art(), { dpr: 2, rm, zeroAt: () => 0, stageShadow: "S", raf: l.raf, caf: l.caf }); return { l, cv, e, r }; };
   const a = mk();
   ok(a.l.pending === 1 && a.cv.width > 0, "N6 開始後只排一格");
   let threw = false;
   try { for (let t = 16; t < T.total; t += 16) { a.l.tick(t); if (a.l.pending > 1) throw new Error("多排"); } } catch { threw = true; }
   ok(!threw, "N6 整段播放沒有 element.animate、一次只排一格");
   a.l.tick(T.total);
-  ok(!a.l.live && a.cv.width === 0 && a.cv.height === 0, "N6 播完：迴圈停、畫布歸 0");
+  ok(!a.l.live && a.cv.width === 0 && a.cv.height === 0 && baked.slice(-2).every((c) => c.width === 0), "N6 播完：迴圈停、畫布和烘好的紋理都歸 0");
   ok(a.e.tile.style.opacity === "0.000" && a.e.title.style.opacity === "0.000" && a.e.dim.style.opacity === "0.660", "N6 播完：牌和大字透明、暗幕留著");
   ok(a.e.stage.style.transform === "" && a.e.stage.style.transformOrigin === "", "N6 播完：舞台復位");
   {
@@ -139,14 +148,21 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
 // N12
 {
   const stemTop = (over: Partial<ReturnType<typeof geo>> = {}) => {
-    const { cv, f, g } = make(0, true, 2, over);
-    f.draw(3600); // 這一刻只有蕈狀雲在畫折線（飛彈早就沒了、碎片用 fillRect、煙和環用 arc）
-    const lines = cv.ctx.calls.filter((c) => c[0] === "lineTo");
-    return { n: lines.length, y: lines.length ? (lines[0][2] as number) : NaN, py: g.py };
+    const { cv, f, g, smokeTex } = make(0, true, 2, over);
+    f.draw(3600);
+    // 煙團畫在 translate(cx, cy) 之後的區域座標（中心是 0,0），所以每一球的位置＝它前面那個 translate。
+    // 焦痕、裂紋、衝擊環也會 translate，因此要照呼叫順序對到「這一次 drawImage 畫的是不是煙」。
+    const tops: number[] = [];
+    let ty = NaN, k = 0;
+    for (const c of cv.ctx.calls) {
+      if (c[0] === "translate") ty = c[2] as number;
+      else if (c[0] === "drawImage") { if (cv.ctx.imgs[k]?.img === smokeTex) tops.push(ty); k++; }
+    }
+    return { n: tops.length, y: tops.length ? Math.min(...tops) : NaN, py: g.py };
   };
   const mid = stemTop(), high = stemTop({ py: 160 });
-  ok(mid.n === 1 && mid.y >= 0 && mid.y < mid.py, `N12 柱頂留在畫面內（y=${mid.y.toFixed(0)}，爆心 y=${mid.py}）`);
-  ok(high.n === 1 && high.y > -geo(0).u * 0.34, `N12 爆心很靠上時柱頂也不會衝太高（y=${high.y.toFixed(0)}）`);
+  ok(mid.n >= 6 && mid.y >= 0 && mid.y < mid.py, `N12 蕈狀雲是 ${mid.n} 球烘好的煙堆的，最高那球還在畫面內（y=${mid.y.toFixed(0)}，爆心 y=${mid.py}）`);
+  ok(high.n >= 6 && high.y > -geo(0).u * 0.34, `N12 爆心很靠上時最高那球也不會衝太高（y=${high.y.toFixed(0)}）`);
 }
 // N9
 {
@@ -154,8 +170,9 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
   const mobile = NUKE_ART.map((n) => `nuke-${n}-m.webp`); // 大字借神掌那張（早就登記過），這裡只算這一款自己的素材
   let bytes = 0, px = 0;
   for (const f of mobile) { const p = new URL(f, NUKE_DIR); bytes += statSync(p).size; const m = await sharp(fileURLToPath(p)).metadata(); px += (m.width ?? 0) * (m.height ?? 0); }
-  const mb = px * 4 / 1048576;
-  ok(mb <= 14, `N9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（爆炸整段是程式畫的，沒有素材）`);
+  const bakedMb = NUKE_LIMIT.mobile.tex * NUKE_LIMIT.mobile.tex * 4 * 2 / 1048576; // 開播前烘的煙、火兩張
+  const mb = px * 4 / 1048576 + bakedMb;
+  ok(mb <= 14, `N9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（含烘的 ${bakedMb.toFixed(2)} MB；爆炸整段是程式畫的，沒有素材）`);
   ok(bytes <= 1_000_000, `N9 手機下載 ${(bytes / 1024).toFixed(0)} KB ≤ 1 MB`);
   const files = NUKE_ART.flatMap((n) => [`nuke-${n}-d.webp`, `nuke-${n}-m.webp`]);
   ok(files.every((f) => !!manifest[`/mahjong-fx/zimo/nuke/${f}`]), `N9 ${files.length} 張圖都在長期快取雜湊清單`);
