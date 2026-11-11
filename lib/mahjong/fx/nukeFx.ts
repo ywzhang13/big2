@@ -4,7 +4,7 @@
 //   → 核爆白閃、火球、衝擊波 → 蕈狀雲升起 → 「自摸」大字 → 他還在火光前比讚。
 // 老闆 2026-11-10：這一款不出「自摸的那張牌」、也不出自摸者的名字（winShow 的 fxShowsTile／fxShowsName），
 //   大字直接借如來神掌那張素材。畫面上沒有那兩個元素時，下面的 setOp 自然略過，時間軸的 tile／name 留著給節奏和音效對點。
-// 素材三件：Q 版金正恩、Q 版飛彈（gen-nuke-assets.mjs；飛彈會自動轉正成彈頭朝右）、
+// 素材三件：Q 版金正恩的四個姿勢表（gen-nuke-poses.mjs；四格的頭會自動對齊）、Q 版飛彈（gen-nuke-assets.mjs；會自動轉正成彈頭朝右）、
 //   爆炸的 16 格序列幀（gen-nuke-boom.mjs；老闆 2026-11-11 出圖）。大字借如來神掌那張。
 // 火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃、金屑、飛彈尾焰全部是程式畫的，不吃圖檔——
 //   好處是換配色、改節奏只動這支，不用重出素材，也不會踩長期快取「同檔名換內容」的坑。
@@ -14,10 +14,20 @@ import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, t
 /** 時間軸（ms，從特效開始算；音效 zimo-nuke-*.mp3 的 0 秒＝這裡的 0，爆炸聲對在 hit） */
 export const NUKE_TL = { enter: 260, launch: 900, hit: 1800, boom: 1870, tile: 2400, zimo: 2780, name: 3020, total: 4600 };
 /** 要載的圖（依裝置選 -d／-m，見 ZimoFx 的 zfxArt） */
-export const NUKE_ART = ["kim", "missile", "boom"] as const;
+export const NUKE_ART = ["kim-set", "missile", "boom"] as const;
 export type NukeArt = (typeof NUKE_ART)[number];
-/** 人物圖的長寬比（寬÷高）：scripts/gen-nuke-assets.mjs 產生時印出來的 kimAR */
-export const NUKE_KIM_AR = 0.9517;
+/** 人物的四個姿勢（scripts/gen-nuke-poses.mjs 產，2×2 的方格表，四格的頭已經對齊到同一個位置）。
+ *  姿勢照劇情換，不是逐格動畫：站著 → 指天大吼 → 摀耳朵 → 大笑比讚。
+ *  格子是正方形，人物頭頂在格高 6% 處、腳到格底，所以畫的時候整格等比貼上就好。 */
+export const NUKE_POSES = { cols: 2, rows: 2, n: 4 } as const;
+/** 哪一刻用哪一個姿勢（索引對應上面的順序） */
+export function nukePose(ms: number): number {
+  const T = NUKE_TL;
+  if (ms < T.launch) return 0;              // 登場：站著
+  if (ms < T.hit - 60) return 1;            // 飛彈在天上：指著大吼
+  if (ms < T.hit + 760) return 2;           // 命中前一瞬到爆完：摀耳朵
+  return 3;                                 // 收尾：大笑比讚
+}
 /** 飛彈圖的長寬比（寬÷高）：同上的 missileAR。素材已經轉正成彈頭朝右，畫的時候直接轉到飛行角度 */
 export const NUKE_MISSILE_AR = 2.3869;
 /** 爆炸序列幀（老闆 2026-11-11 出圖，scripts/gen-nuke-boom.mjs 產）：4×4＝16 格，從左上往右逐列排。
@@ -202,7 +212,9 @@ export class NukeCanvas {
     // ── 人物站的位置：一定站在落點的「另一邊」，不然會整個蓋住爆心 ──────────
     // 進場方向照胡牌者那一側（sxDir／syDir 只決定滑入的方向），站的位置則取離落點遠的那半邊。
     const [sxDir, syDir] = SIDE[rel];
-    const kimH = u * (this.g.mobile ? 0.46 : 0.54), kimW = kimH * NUKE_KIM_AR;
+    // 姿勢表的格子是正方形，人物約佔格高 94%（頭頂留 6%）；
+    // 原本單張是裁到人物邊界的，所以這裡要放大一點才會是同樣的視覺大小
+    const kimH = u * (this.g.mobile ? 0.49 : 0.58), kimW = kimH;
     const toRight = px < W / 2;                      // 落點偏左 → 人站右邊，反之亦然
     const kimX = toRight ? W - kimW * 0.58 : kimW * 0.58;
     const kimY = H * 0.99;                           // 腳貼畫面底（drawImage 用底邊對齊）
@@ -488,53 +500,34 @@ export class NukeCanvas {
     }
 
 
-    // ── 金正恩：從那一側滑進來、比讚，爆炸時被火光照亮 ─────────────────────
-    const kim = this.art.kim;
+    // ── 金正恩：從那一側滑進來，照劇情換姿勢，爆炸時被火光照亮 ─────────────────
+    const kim = this.art["kim-set"];
     if (kim && kim.complete && kim.naturalWidth > 0) {
       const inP = sm(seg(ms, T.enter, T.enter + 420));
       if (inP > 0) {
+        const pose = nukePose(ms);
+        const cw = kim.naturalWidth / NUKE_POSES.cols, chh = kim.naturalHeight / NUKE_POSES.rows;
+        const sxSrc = (pose % NUKE_POSES.cols) * cw, sySrc = Math.floor(pose / NUKE_POSES.cols) * chh;
         const slide = (1 - inP) * u * 0.42;
         const X = kimX + sxDir * slide, Y = kimY + syDir * slide * 0.5;
         // 命中時被往後震一下
         const kick = Math.pow(1 - seg(ms, T.hit, T.hit + 420), 2) * (ms > T.hit ? 1 : 0) * u * 0.05;
         const sc = 0.88 + 0.12 * inP;
         const w = kimW * sc, h = kimH * sc;
+        const dx = X - w / 2 + sxDir * kick, dy = Y - h + syDir * kick * 0.4;
         x.globalAlpha = inP * fade;
-        x.drawImage(kim, X - w / 2 + sxDir * kick, Y - h + syDir * kick * 0.4, w, h);
+        x.drawImage(kim, sxSrc, sySrc, cw, chh, dx, dy, w, h);
         // 爆炸的暖光打在人物身上
         const lit = (1 - seg(ms, T.hit, T.hit + 700)) * (ms > T.hit ? 1 : 0);
         if (lit > 0.02) {
           x.globalCompositeOperation = "lighter";
           x.globalAlpha = lit * 0.34 * fade;
-          x.drawImage(kim, X - w / 2 + sxDir * kick, Y - h + syDir * kick * 0.4, w, h);
+          x.drawImage(kim, sxSrc, sySrc, cw, chh, dx, dy, w, h);
           x.globalCompositeOperation = "source-over";
         }
         x.globalAlpha = 1;
         count++;
       }
-    }
-
-    // ── 爆後的色溫和暗角：整個畫面壓暖、四角壓暗，像有一顆光源在燒 ─────────────
-    // 其他款的華麗感有一半來自整體調色；這兩層很便宜（兩個 fillRect），但畫面立刻不再是「綠桌子配幾個亮點」。
-    const warm = (1 - seg(ms, T.hit, T.hit + 1400)) * (ms > T.hit - 40 ? 1 : 0) * fade;
-    if (warm > 0.02) {
-      x.globalCompositeOperation = "lighter";
-      const gw = x.createRadialGradient(px, py, 0, px, py, Math.max(W, H) * 0.8);
-      gw.addColorStop(0, `rgba(255,150,56,${(0.3 * warm).toFixed(3)})`);
-      gw.addColorStop(1, "rgba(180,54,14,0)");
-      x.fillStyle = gw;
-      x.fillRect(0, 0, W, H);
-      x.globalCompositeOperation = "source-over";
-      count++;
-    }
-    const vig = sm(seg(ms, T.hit, T.hit + 420)) * fade;
-    if (vig > 0.02) {
-      const gv = x.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.max(W, H) * 0.72);
-      gv.addColorStop(0, "rgba(4,6,9,0)");
-      gv.addColorStop(1, `rgba(4,6,9,${(0.5 * vig).toFixed(3)})`);
-      x.fillStyle = gv;
-      x.fillRect(0, 0, W, H);
-      count++;
     }
 
     // ── 白閃：命中那一格整個畫面白掉，很快退 ──────────────────────────────
