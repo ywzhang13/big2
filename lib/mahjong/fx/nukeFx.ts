@@ -14,7 +14,7 @@ import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, t
 /** 時間軸（ms，從特效開始算；音效 zimo-nuke-*.mp3 的 0 秒＝這裡的 0，爆炸聲對在 hit） */
 export const NUKE_TL = { enter: 260, launch: 900, hit: 1800, boom: 1870, tile: 2400, zimo: 2780, name: 3020, total: 4600 };
 /** 要載的圖（依裝置選 -d／-m，見 ZimoFx 的 zfxArt） */
-export const NUKE_ART = ["kim-set-v2", "missile-v2", "boom-v2"] as const;
+export const NUKE_ART = ["kim-set-v3", "missile-v2", "boom-v2"] as const;
 export type NukeArt = (typeof NUKE_ART)[number];
 /** 人物的四個姿勢（scripts/gen-nuke-poses.mjs 產，2×2 的方格表，四格的頭已經對齊到同一個位置）。
  *  姿勢照劇情換，不是逐格動畫：站著 → 指天大吼 → 摀耳朵 → 大笑比讚。
@@ -501,7 +501,7 @@ export class NukeCanvas {
 
 
     // ── 金正恩：從那一側滑進來，照劇情換姿勢，爆炸時被火光照亮 ─────────────────
-    const kim = this.art["kim-set-v2"];
+    const kim = this.art["kim-set-v3"];
     if (kim && kim.complete && kim.naturalWidth > 0) {
       const inP = sm(seg(ms, T.enter, T.enter + 420));
       if (inP > 0) {

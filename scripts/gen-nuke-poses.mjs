@@ -1,6 +1,6 @@
 // 核彈特效的人物四姿勢表（老闆 2026-11-11 出圖）。
 //   node scripts/gen-nuke-poses.mjs ~/Desktop/人物4格.png [--grid 2x2]
-// 輸出 public/mahjong-fx/zimo/nuke/nuke-kim-set-v2-d.webp（每格 512px）與 -m.webp（每格 384px）。
+// 輸出 public/mahjong-fx/zimo/nuke/nuke-kim-set-v3-d.webp（每格 512px）與 -m.webp（每格 384px）。
 // 檔名帶 v2：前一版已經進過分支歷史，長期快取規定同檔名不能換內容（tests/_immutable-history.ts 在守）。
 //
 // 為什麼要校正而不是直接切：AI 出的四張圖「看起來一致」，實測頭的大小會差到 26%、中心也會偏，
@@ -110,7 +110,7 @@ for (const [suffix, cell] of [["d", CELL_D], ["m", CELL_M]]) {
     input: await sharp(b).resize({ width: cell, height: cell }).toBuffer(),
     left: (i % COLS) * cell, top: Math.floor(i / COLS) * cell,
   })));
-  const file = path.join(OUT, `nuke-kim-set-v2-${suffix}.webp`);
+  const file = path.join(OUT, `nuke-kim-set-v3-${suffix}.webp`);
   const info = await sharp({ create: { width: COLS * cell, height: ROWS * cell, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
     .composite(parts).webp({ quality: 90, alphaQuality: 100, effort: 6 }).toFile(file);
   console.log(`寫出 ${path.relative(ROOT, file)}（${info.width}×${info.height}，${(info.size / 1024).toFixed(0)} KB，解碼約 ${((info.width * info.height * 4) / 1048576).toFixed(1)} MB）`);
