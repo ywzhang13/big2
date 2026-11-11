@@ -3,11 +3,13 @@
 // 都是裁掉透明邊、縮成電腦／手機兩種尺寸、轉成 webp；大字借如來神掌那張，爆炸整段是程式畫的。
 //   node scripts/gen-nuke-assets.mjs [人物圖] [--missile <飛彈圖>] [--preview]
 //   預設 ~/Desktop/正恩.png 和 ~/Desktop/飛彈.png；--preview 另外寫一張預覽頁（在 public 外，見下）
+// 飛彈輸出帶 v2：前一版已經進過分支歷史，長期快取規定同檔名不能換內容。
 // 飛彈圖會自動「轉正」成彈頭朝右：先用不透明像素的主軸算出它畫的方向，再用彈頭那端偏紅（R−G 最大）
 //   決定是哪一頭，轉到 0 度輸出。這樣特效裡只要照飛行角度旋轉，不用為素材的姿勢多記一個偏移量。
 // 爆炸整段（飛彈、火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃）都是 lib/mahjong/fx/nukeFx.ts 程式畫的，不吃素材。
 // 長期快取（lib/staticCache.ts 的 mahjong-fx）：換內容一定要改檔名或加版本號，改完跑 node scripts/asset-hashes.mjs --write。
 import sharp from "sharp";
+import { hasRealAlpha, stripFakeChecker } from "./lib/unchecker.mjs";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -52,7 +54,10 @@ console.log(`\nkimAR = ${(written[0].info.width / written[0].info.height).toFixe
 
 // ── 飛彈：量出素材畫的方向，轉成彈頭朝右再輸出 ──────────────────────────────
 {
-  const src = sharp(MISSILE_SRC).ensureAlpha();
+  // 來源可能沒有真的透明度（AI／素材站常把透明格直接畫進圖裡）：先鍵掉再處理。
+  // 用硬邊模式：飛彈是卡通硬描邊，flood fill 不會吃掉包在機身裡的亮色（警示條、輻射標誌）。
+  const keyed = (await hasRealAlpha(MISSILE_SRC)) ? MISSILE_SRC : await stripFakeChecker(MISSILE_SRC, { mode: "hard" });
+  const src = sharp(keyed).ensureAlpha();
   const m0 = await src.metadata();
   console.log(`\n飛彈來源：${MISSILE_SRC}（${m0.width}×${m0.height}）`);
   // 量方向用縮圖就夠（快，而且雜點影響更小）
@@ -90,7 +95,7 @@ console.log(`\nkimAR = ${(written[0].info.width / written[0].info.height).toFixe
   console.log(`轉正去邊後：${upright.info.width}×${upright.info.height}`);
   const out = [];
   for (const [suffix, w] of [["d", W_D], ["m", W_M]]) {
-    const file = path.join(OUT, `nuke-missile-${suffix}.webp`);
+    const file = path.join(OUT, `nuke-missile-v2-${suffix}.webp`);
     const info2 = await sharp(upright.data).resize({ width: w, fit: "inside", withoutEnlargement: false })
       .webp({ quality: 90, alphaQuality: 100, effort: 6 }).toFile(file);
     out.push({ file, info: info2 });

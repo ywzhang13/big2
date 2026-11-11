@@ -51,13 +51,13 @@ function fakeCanvas() { const ctx = fakeCtx(); return { width: 0, height: 0, sty
 const baked: (HTMLCanvasElement & { ctx: ReturnType<typeof fakeCtx> })[] = [];
 (globalThis as unknown as { document: unknown }).document = { createElement: () => { const c = fakeCanvas(); baked.push(c); return c; } };
 const img = (w: number, h: number) => ({ naturalWidth: w, naturalHeight: h, complete: true }) as HTMLImageElement;
-const art = () => ({ "kim-set-v2": img(1024, 1024), missile: img(1024, Math.round(1024 / NUKE_MISSILE_AR)), "boom-v2": img(1536, 1536) });
+const art = () => ({ "kim-set-v2": img(1024, 1024), "missile-v2": img(1024, Math.round(1024 / NUKE_MISSILE_AR)), "boom-v2": img(1536, 1536) });
 /** 手機 844×390、電腦 1440×900（同如來神掌的驗收尺寸）；px/py＝胡牌者的位置＝爆心 */
 const geo = (rel: number, mobile = true) => ({ W: mobile ? 844 : 1440, H: mobile ? 390 : 900, u: mobile ? 390 : 892.8, px: mobile ? 422 : 720, py: mobile ? 273 : 630, rel, mobile });
 const make = (rel = 0, mobile = true, dpr = 3, over: Partial<ReturnType<typeof geo>> = {}) => {
   const g = { ...geo(rel, mobile), ...over }, cv = fakeCanvas(), kim = art(), b0 = baked.length;
   const f = new NukeCanvas(cv, g, kim, dpr);
-  return { cv, g, f, x: cv.ctx, kim: kim["kim-set-v2"], missile: kim.missile, boom: kim["boom-v2"], smokeTex: baked[b0], fireTex: baked[b0 + 1] };
+  return { cv, g, f, x: cv.ctx, kim: kim["kim-set-v2"], missile: kim["missile-v2"], boom: kim["boom-v2"], smokeTex: baked[b0], fireTex: baked[b0 + 1] };
 };
 const T = NUKE_TL;
 const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
@@ -203,7 +203,7 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
   ok(frameAt(T.hit + NUKE_BOOM.dur + 50) === null, "N16 播完就不再畫（後面交給蕈狀雲和煙）");
   const cellW = 1536 / NUKE_BOOM.cols;
   ok(!!a0 && a0[2] === cellW && a0[3] === cellW, `N16 每一格就是素材的 1/${NUKE_BOOM.cols} 寬（${cellW}px）`);
-  const noSheet = (() => { const cv = fakeCanvas(); const f2 = new NukeCanvas(cv, geo(0), { "kim-set-v2": img(1024, 1024), missile: img(1024, 429) }, 2); f2.draw(T.hit + 200); return cv.ctx.calls.some((c) => c[0] === "arc"); })();
+  const noSheet = (() => { const cv = fakeCanvas(); const f2 = new NukeCanvas(cv, geo(0), { "kim-set-v2": img(1024, 1024), "missile-v2": img(1024, 429) }, 2); f2.draw(T.hit + 200); return cv.ctx.calls.some((c) => c[0] === "arc"); })();
   ok(noSheet, "N16 序列幀載不到：退回程式畫的三層火球，不會開天窗");
 }
 // N9
@@ -241,7 +241,7 @@ ok(ZFX_TL.thunder.total === 3220 && ZFX_TL.frost.total === 2900 && ZFX_TL.sakura
   const m = await sharp(fileURLToPath(new URL("nuke-kim-set-v2-d.webp", NUKE_DIR))).metadata();
   ok(m.width === m.height && (m.width ?? 0) % NUKE_POSES.cols === 0, `N13 人物姿勢表是方格（${m.width}×${m.height}，切 ${NUKE_POSES.cols}×${NUKE_POSES.rows}）`);
   ok(!existsSync(new URL("nuke-title.webp", NUKE_DIR)), "N13 這一款沒有自己的大字素材（借神掌那張，不留沒人用的檔）");
-  const mm = await sharp(fileURLToPath(new URL("nuke-missile-d.webp", NUKE_DIR))).metadata();
+  const mm = await sharp(fileURLToPath(new URL("nuke-missile-v2-d.webp", NUKE_DIR))).metadata();
   const mAR = (mm.width ?? 0) / (mm.height ?? 1);
   ok(Math.abs(mAR - NUKE_MISSILE_AR) < 0.002, `N13 NUKE_MISSILE_AR ${NUKE_MISSILE_AR} 就是飛彈圖的長寬比（${mAR.toFixed(4)}）`);
   ok(mAR > 1.6, `N13 飛彈素材是轉正的（橫躺、彈頭朝右，長寬比 ${mAR.toFixed(2)}）`);

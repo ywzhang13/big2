@@ -14,7 +14,7 @@ import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, t
 /** 時間軸（ms，從特效開始算；音效 zimo-nuke-*.mp3 的 0 秒＝這裡的 0，爆炸聲對在 hit） */
 export const NUKE_TL = { enter: 260, launch: 900, hit: 1800, boom: 1870, tile: 2400, zimo: 2780, name: 3020, total: 4600 };
 /** 要載的圖（依裝置選 -d／-m，見 ZimoFx 的 zfxArt） */
-export const NUKE_ART = ["kim-set-v2", "missile", "boom-v2"] as const;
+export const NUKE_ART = ["kim-set-v2", "missile-v2", "boom-v2"] as const;
 export type NukeArt = (typeof NUKE_ART)[number];
 /** 人物的四個姿勢（scripts/gen-nuke-poses.mjs 產，2×2 的方格表，四格的頭已經對齊到同一個位置）。
  *  姿勢照劇情換，不是逐格動畫：站著 → 指天大吼 → 摀耳朵 → 大笑比讚。
@@ -29,7 +29,7 @@ export function nukePose(ms: number): number {
   return 3;                                 // 收尾：大笑比讚
 }
 /** 飛彈圖的長寬比（寬÷高）：同上的 missileAR。素材已經轉正成彈頭朝右，畫的時候直接轉到飛行角度 */
-export const NUKE_MISSILE_AR = 2.3869;
+export const NUKE_MISSILE_AR = 3.3355;
 /** 爆炸序列幀（老闆 2026-11-11 出圖，scripts/gen-nuke-boom.mjs 產）：4×4＝16 格，從左上往右逐列排。
  *  dur＝整段播完的毫秒數（16 格約 17fps，和素材的張數相稱；再快會看到跳格） */
 export const NUKE_BOOM = { cols: 4, rows: 4, frames: 16, dur: 940 } as const;
@@ -445,7 +445,7 @@ export class NukeCanvas {
       const [mx, my] = missileAt(fly, sx, sy, px, py, arc);
       const [ax, ay] = missileAt(Math.max(0, fly - 0.02), sx, sy, px, py, arc);
       const ang = Math.atan2(my - ay, mx - ax);
-      const mw = u * 0.46, mh = mw / NUKE_MISSILE_AR;      // 畫面上的彈體長寬
+      const mw = u * 0.52, mh = mw / NUKE_MISSILE_AR;      // 畫面上的彈體長寬（新素材更細長，拉長一點才有份量）
       const len = mw / 2, rad = mh / 2;
       x.save();
       x.translate(mx, my);
@@ -464,7 +464,7 @@ export class NukeCanvas {
       x.closePath();
       x.fill();
       x.globalCompositeOperation = "source-over";
-      const mi = this.art.missile;
+      const mi = this.art["missile-v2"];
       if (mi && mi.complete && mi.naturalWidth > 0) {
         x.drawImage(mi, -len, -rad, mw, mh);
       } else {
