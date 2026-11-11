@@ -20,7 +20,7 @@ import sharp from "sharp";
 import { ZFX_TL } from "../components/mahjong/ZimoFx";
 import { ZIMO_TITLE_AR, zimoTitleArt } from "../components/mahjong/ZimoTitle";
 import { RULAI_META } from "../lib/mahjong/fx/rulaiMeta";
-import { NUKE_ART, NUKE_KIM_AR, NUKE_LIMIT, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
+import { NUKE_ART, NUKE_KIM_AR, NUKE_LIMIT, NUKE_MISSILE_AR, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
 import { fxShowsName, fxShowsTile, isCanvasFx, isZimoFxNew, ZIMO_FX_NEW } from "../lib/mahjong/winShow";
 import { canUseExclusiveFx, EXCLUSIVE_FX, isExclusiveFx, isOwner, isSelectableZimoFx, isZimoFx } from "../lib/mahjong/zimoFx/rules";
 import { fxName, ZIMO_FX_LIST } from "../lib/mahjong/zimoFxClient";
@@ -47,13 +47,13 @@ function fakeCanvas() { const ctx = fakeCtx(); return { width: 0, height: 0, sty
 const baked: (HTMLCanvasElement & { ctx: ReturnType<typeof fakeCtx> })[] = [];
 (globalThis as unknown as { document: unknown }).document = { createElement: () => { const c = fakeCanvas(); baked.push(c); return c; } };
 const img = (w: number, h: number) => ({ naturalWidth: w, naturalHeight: h, complete: true }) as HTMLImageElement;
-const art = () => ({ kim: img(1024, Math.round(1024 / NUKE_KIM_AR)) });
+const art = () => ({ kim: img(1024, Math.round(1024 / NUKE_KIM_AR)), missile: img(1024, Math.round(1024 / NUKE_MISSILE_AR)) });
 /** 手機 844×390、電腦 1440×900（同如來神掌的驗收尺寸）；px/py＝胡牌者的位置＝爆心 */
 const geo = (rel: number, mobile = true) => ({ W: mobile ? 844 : 1440, H: mobile ? 390 : 900, u: mobile ? 390 : 892.8, px: mobile ? 422 : 720, py: mobile ? 273 : 630, rel, mobile });
 const make = (rel = 0, mobile = true, dpr = 3, over: Partial<ReturnType<typeof geo>> = {}) => {
   const g = { ...geo(rel, mobile), ...over }, cv = fakeCanvas(), kim = art(), b0 = baked.length;
   const f = new NukeCanvas(cv, g, kim, dpr);
-  return { cv, g, f, x: cv.ctx, kim: kim.kim, smokeTex: baked[b0], fireTex: baked[b0 + 1] };
+  return { cv, g, f, x: cv.ctx, kim: kim.kim, missile: kim.missile, smokeTex: baked[b0], fireTex: baked[b0 + 1] };
 };
 const T = NUKE_TL;
 const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
@@ -200,6 +200,19 @@ ok(ZFX_TL.thunder.total === 3220 && ZFX_TL.frost.total === 2900 && ZFX_TL.sakura
   const kim = (m.width ?? 0) / (m.height ?? 1);
   ok(Math.abs(kim - NUKE_KIM_AR) < 0.002, `N13 NUKE_KIM_AR ${NUKE_KIM_AR} 就是人物圖的長寬比（${kim.toFixed(4)}）`);
   ok(!existsSync(new URL("nuke-title.webp", NUKE_DIR)), "N13 這一款沒有自己的大字素材（借神掌那張，不留沒人用的檔）");
+  const mm = await sharp(fileURLToPath(new URL("nuke-missile-d.webp", NUKE_DIR))).metadata();
+  const mAR = (mm.width ?? 0) / (mm.height ?? 1);
+  ok(Math.abs(mAR - NUKE_MISSILE_AR) < 0.002, `N13 NUKE_MISSILE_AR ${NUKE_MISSILE_AR} 就是飛彈圖的長寬比（${mAR.toFixed(4)}）`);
+  ok(mAR > 1.6, `N13 飛彈素材是轉正的（橫躺、彈頭朝右，長寬比 ${mAR.toFixed(2)}）`);
+}
+// N15 飛彈：飛行中畫素材、命中後就不畫；素材載不到也不會整個不見（退回向量彈體）
+{
+  const at = (ms: number) => { const { cv, f, missile } = make(0, true, 2); f.draw(ms); return cv.ctx.imgs.filter((d) => d.img === missile).length; };
+  ok(at(T.launch - 1) === 0 && at((T.launch + T.hit) / 2) === 1 && at(T.hit + 10) === 0, "N15 飛彈只在發射到命中之間畫，一格一張");
+  const cv = fakeCanvas(), g = geo(0);
+  const f = new NukeCanvas(cv, g, { kim: img(1024, 1076) }, 2);  // 故意沒有飛彈素材
+  f.draw((T.launch + T.hit) / 2);
+  ok(cv.ctx.calls.some((c) => c[0] === "quadraticCurveTo"), "N15 飛彈素材載不到：退回向量彈體，不是空白");
 }
 // N14
 {

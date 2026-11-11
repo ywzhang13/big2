@@ -4,8 +4,8 @@
 //   → 核爆白閃、火球、衝擊波 → 蕈狀雲升起 → 「自摸」大字 → 他還在火光前比讚。
 // 老闆 2026-11-10：這一款不出「自摸的那張牌」、也不出自摸者的名字（winShow 的 fxShowsTile／fxShowsName），
 //   大字直接借如來神掌那張素材。畫面上沒有那兩個元素時，下面的 setOp 自然略過，時間軸的 tile／name 留著給節奏和音效對點。
-// 素材只有一張：Q 版金正恩去背圖（scripts/gen-nuke-assets.mjs 從老闆提供的 PNG 產生）。
-// 飛彈、火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃、金屑全部是程式畫的，不吃圖檔——
+// 素材兩張：Q 版金正恩、Q 版飛彈（老闆 2026-11-11 出圖；scripts/gen-nuke-assets.mjs 轉成 webp，飛彈還會自動轉正成彈頭朝右）。
+// 火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃、金屑、飛彈尾焰全部是程式畫的，不吃圖檔——
 //   好處是換配色、改節奏只動這支，不用重出素材，也不會踩長期快取「同檔名換內容」的坑。
 // 單一畫布，畫面只由時間決定（draw(ms)），沒有 Web Animation、沒有每格 shadowBlur（和 rulaiFx 同一套作法）。
 import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, type SakuraEls, type SakuraGeo } from "./canvasFx";
@@ -13,10 +13,12 @@ import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, t
 /** 時間軸（ms，從特效開始算；音效 zimo-nuke-*.mp3 的 0 秒＝這裡的 0，爆炸聲對在 hit） */
 export const NUKE_TL = { enter: 260, launch: 900, hit: 1800, boom: 1870, tile: 2400, zimo: 2780, name: 3020, total: 4600 };
 /** 要載的圖（依裝置選 -d／-m，見 ZimoFx 的 zfxArt） */
-export const NUKE_ART = ["kim"] as const;
+export const NUKE_ART = ["kim", "missile"] as const;
 export type NukeArt = (typeof NUKE_ART)[number];
 /** 人物圖的長寬比（寬÷高）：scripts/gen-nuke-assets.mjs 產生時印出來的 kimAR */
 export const NUKE_KIM_AR = 0.9517;
+/** 飛彈圖的長寬比（寬÷高）：同上的 missileAR。素材已經轉正成彈頭朝右，畫的時候直接轉到飛行角度 */
+export const NUKE_MISSILE_AR = 2.3869;
 /** 減少動態：畫這一刻的靜止畫面（爆完、蕈狀雲在、沒有閃光和震動） */
 export const NUKE_STILL_MS = 2600;
 const STILL_END = 620;
@@ -398,7 +400,9 @@ export class NukeCanvas {
     }
     x.globalAlpha = 1;
 
-    // ── 飛彈：從人物身後拋向落點（命中就消失） ───────────────────────────
+    // ── 飛彈：從人物身後拋向落點（命中就消失）──────────────────────────────
+    // 彈體是老闆出的去背圖（素材已經轉正成彈頭朝右，所以直接轉到飛行角度就好）；
+    // 尾焰留程式畫：長度隨時間抖動、命中就收掉，做成圖反而僵硬。圖沒好就退回原本的向量彈體。
     const fly = seg(ms, T.launch, T.hit);
     if (fly > 0 && fly < 1) {
       const sx = kimX - sxDir * kimW * 0.3, sy = kimY - kimH * 0.62;
@@ -406,58 +410,60 @@ export class NukeCanvas {
       const [mx, my] = missileAt(fly, sx, sy, px, py, arc);
       const [ax, ay] = missileAt(Math.max(0, fly - 0.02), sx, sy, px, py, arc);
       const ang = Math.atan2(my - ay, mx - ax);
-      const len = u * 0.2, rad = len * 0.21;
+      const mw = u * 0.46, mh = mw / NUKE_MISSILE_AR;      // 畫面上的彈體長寬
+      const len = mw / 2, rad = mh / 2;
       x.save();
       x.translate(mx, my);
       x.rotate(ang);
       // 尾焰（在彈體後面，先畫）
       x.globalCompositeOperation = "lighter";
-      const gt = x.createLinearGradient(-len * 0.5, 0, -len * 2.1, 0);
+      const gt = x.createLinearGradient(-len * 0.72, 0, -len * 2.3, 0);
       gt.addColorStop(0, "rgba(255,238,170,0.95)");
       gt.addColorStop(0.45, "rgba(255,150,48,0.6)");
       gt.addColorStop(1, "rgba(255,90,20,0)");
       x.fillStyle = gt;
       x.beginPath();
-      x.moveTo(-len * 0.5, -rad * 0.82);
-      x.lineTo(-len * (1.5 + 0.5 * Math.abs(Math.sin(ms / 40))), 0);
-      x.lineTo(-len * 0.5, rad * 0.82);
+      x.moveTo(-len * 0.72, -rad * 0.5);
+      x.lineTo(-len * (1.6 + 0.5 * Math.abs(Math.sin(ms / 40))), 0);
+      x.lineTo(-len * 0.72, rad * 0.5);
       x.closePath();
       x.fill();
-      // 彈體
       x.globalCompositeOperation = "source-over";
-      x.fillStyle = "#d8dae0";
-      x.beginPath();
-      x.moveTo(len, 0);
-      x.quadraticCurveTo(len * 0.42, -rad, -len * 0.5, -rad);
-      x.lineTo(-len * 0.5, rad);
-      x.quadraticCurveTo(len * 0.42, rad, len, 0);
-      x.closePath();
-      x.fill();
-      // 彈頭紅環 + 尾翼
-      x.fillStyle = "#c4342a";
-      x.beginPath();
-      x.moveTo(len, 0);
-      x.quadraticCurveTo(len * 0.66, -rad * 0.72, len * 0.46, -rad * 0.86);
-      x.lineTo(len * 0.46, rad * 0.86);
-      x.quadraticCurveTo(len * 0.66, rad * 0.72, len, 0);
-      x.closePath();
-      x.fill();
-      x.fillStyle = "#9aa0ab";
-      x.beginPath();
-      x.moveTo(-len * 0.5, -rad);
-      x.lineTo(-len * 0.86, -rad * 1.9);
-      x.lineTo(-len * 0.3, -rad * 0.9);
-      x.closePath();
-      x.fill();
-      x.beginPath();
-      x.moveTo(-len * 0.5, rad);
-      x.lineTo(-len * 0.86, rad * 1.9);
-      x.lineTo(-len * 0.3, rad * 0.9);
-      x.closePath();
-      x.fill();
+      const mi = this.art.missile;
+      if (mi && mi.complete && mi.naturalWidth > 0) {
+        x.drawImage(mi, -len, -rad, mw, mh);
+      } else {
+        // 退回向量彈體：彈身、彈頭紅環、兩片尾翼（只有素材載不到才會看到）
+        x.fillStyle = "#d8dae0";
+        x.beginPath();
+        x.moveTo(len, 0);
+        x.quadraticCurveTo(len * 0.42, -rad, -len * 0.5, -rad);
+        x.lineTo(-len * 0.5, rad);
+        x.quadraticCurveTo(len * 0.42, rad, len, 0);
+        x.closePath();
+        x.fill();
+        x.fillStyle = "#c4342a";
+        x.beginPath();
+        x.moveTo(len, 0);
+        x.quadraticCurveTo(len * 0.66, -rad * 0.72, len * 0.46, -rad * 0.86);
+        x.lineTo(len * 0.46, rad * 0.86);
+        x.quadraticCurveTo(len * 0.66, rad * 0.72, len, 0);
+        x.closePath();
+        x.fill();
+        x.fillStyle = "#9aa0ab";
+        for (const sgn of [-1, 1]) {
+          x.beginPath();
+          x.moveTo(-len * 0.5, sgn * rad);
+          x.lineTo(-len * 0.86, sgn * rad * 1.9);
+          x.lineTo(-len * 0.3, sgn * rad * 0.9);
+          x.closePath();
+          x.fill();
+        }
+      }
       x.restore();
       count++;
     }
+
 
     // ── 金正恩：從那一側滑進來、比讚，爆炸時被火光照亮 ─────────────────────
     const kim = this.art.kim;
