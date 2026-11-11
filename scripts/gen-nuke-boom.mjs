@@ -2,7 +2,8 @@
 // 吃兩種輸入，輸出統一：
 //   node scripts/gen-nuke-boom.mjs ~/Desktop/boom.png --grid 4x4      # 已經拼好的精靈表
 //   node scripts/gen-nuke-boom.mjs ~/Desktop/boom-seq --grid 4x4      # 一整個資料夾的 PNG 序列（檔名排序）
-// 輸出 public/mahjong-fx/zimo/nuke/nuke-boom-d.webp（每格 384px）與 -m.webp（每格 256px），
+// 輸出 public/mahjong-fx/zimo/nuke/nuke-boom-v2-d.webp（每格 384px）與 -m.webp（每格 256px），
+// 檔名帶 v2：第一版素材已經進過分支歷史，長期快取規定同檔名不能換內容（tests/_immutable-history.ts 在守），
 // 並印出要填進 lib/mahjong/fx/nukeFx.ts 的格數與每格大小。
 //
 // 為什麼要這支而不是直接丟圖進 public：
@@ -110,7 +111,7 @@ for (const [suffix, cell] of [["d", CELL_D], ["m", CELL_M]]) {
     const buf = await sharp(cells[i]).resize({ width: cell, height: cell, fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
     parts.push({ input: buf, left: (i % cols) * cell, top: Math.floor(i / cols) * cell });
   }
-  const file = path.join(OUT, `nuke-boom-${suffix}.webp`);
+  const file = path.join(OUT, `nuke-boom-v2-${suffix}.webp`);
   const info = await sheet.composite(parts).webp({ quality: 88, alphaQuality: 100, effort: 6 }).toFile(file);
   const mb = (info.width * info.height * 4) / 1048576;
   console.log(`寫出 ${path.relative(ROOT, file)}（${info.width}×${info.height}，${(info.size / 1024).toFixed(0)} KB，解碼約 ${mb.toFixed(1)} MB）`);

@@ -51,7 +51,73 @@ export function slide(src, W, H, r, horizontal, cmp) {
  * 另外兩個保險（取三者最大）：有彩度一定是內容；亮過 t1 或暗過 t0 也一定是內容——
  * 這兩個在物件邊緣（視窗同時吃到內容和背景、兩階差被撐大）時頂住，不會把邊緣啃掉。
  */
-export async function stripFakeChecker(file) {
+/**
+ * 硬邊模式（卡通角色用）：從畫面最外圈往內 flood fill，只有「連得到邊界」的背景色才算背景。
+ * 為什麼要這樣：棋盤的亮格（243）和角色的眼白（248）亮度幾乎一樣，純看像素值分不出來，
+ * 會把眼白判成透明（老闆 2026-11-11 回報）。眼白被臉包著、連不到邊界，所以這招分得出來。
+ * 邊緣另外處理：卡通是硬描邊，外圈 1px 的混色像素不做「解混合」（算出來的顏色會偏，就是毛邊），
+ * 改成直接沿用旁邊不透明像素的顏色，只讓 alpha 做一層淡出。
+ */
+async function stripHard(file, t0, t1) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const W = info.width, H = info.height, N = W * H;
+  const tol = Math.max(8, (t1 - t0) * 0.3);
+  const bgLike = new Uint8Array(N);
+  for (let p = 0; p < N; p++) {
+    const i = p * 4, r = data[i], g = data[i + 1], b = data[i + 2];
+    const v = (r + g + b) / 3;
+    if (Math.max(r, g, b) - Math.min(r, g, b) > 12) continue;
+    // 整個區間都算：深格到淺格之間還有一排反鋸齒的過渡像素（格線），
+    // 只比對兩個端點會把它們留下來，背景就會看到一格一格的淡線
+    if (v >= t0 - tol && v <= t1 + tol) bgLike[p] = 1;
+  }
+  // flood fill：從四邊往內走，只走 bgLike
+  const bg = new Uint8Array(N);
+  const stack = [];
+  const push = (x, y) => { const p = y * W + x; if (!bg[p] && bgLike[p]) { bg[p] = 1; stack.push(p); } };
+  for (let x = 0; x < W; x++) { push(x, 0); push(x, H - 1); }
+  for (let y = 0; y < H; y++) { push(0, y); push(W - 1, y); }
+  while (stack.length) {
+    const p = stack.pop(), x = p % W, y = (p / W) | 0;
+    if (x > 0) push(x - 1, y);
+    if (x < W - 1) push(x + 1, y);
+    if (y > 0) push(x, y - 1);
+    if (y < H - 1) push(x, y + 1);
+  }
+  // 內容外圈 1px 當作邊緣：alpha 淡一點，顏色沿用鄰居（不解混合，才不會有毛邊）
+  const isEdge = new Uint8Array(N);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = y * W + x;
+    if (bg[p]) continue;
+    if ((x > 0 && bg[p - 1]) || (x < W - 1 && bg[p + 1]) || (y > 0 && bg[p - W]) || (y < H - 1 && bg[p + W])) isEdge[p] = 1;
+  }
+  const out = Buffer.alloc(N * 4);
+  let kept = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = y * W + x, i = p * 4;
+    if (bg[p]) continue;
+    kept++;
+    let sr = data[i], sg = data[i + 1], sb = data[i + 2];
+    if (isEdge[p]) {
+      // 取鄰近「不是背景也不是邊緣」的像素顏色平均：邊緣像素本身混了棋盤，不能直接用
+      let n = 0, ar = 0, ag = 0, ab = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const yy = y + dy, xx = x + dx;
+        if (yy < 0 || yy >= H || xx < 0 || xx >= W) continue;
+        const q = yy * W + xx;
+        if (bg[q] || isEdge[q]) continue;
+        ar += data[q * 4]; ag += data[q * 4 + 1]; ab += data[q * 4 + 2]; n++;
+      }
+      if (n) { sr = ar / n; sg = ag / n; sb = ab / n; }
+    }
+    out[i] = sr; out[i + 1] = sg; out[i + 2] = sb;
+    out[i + 3] = isEdge[p] ? 150 : 255;
+  }
+  console.log(`  硬邊模式：留下 ${((kept / N) * 100).toFixed(1)}% 的像素（眼白這類被包住的亮色區塊不會被誤判成背景）`);
+  return sharp(out, { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
+}
+
+export async function stripFakeChecker(file, opts = {}) {
   const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
   const W = info.width, H = info.height, C = info.channels;
   const N = W * H;
@@ -86,6 +152,10 @@ export async function stripFakeChecker(file) {
   const second = (peaks.find(([v]) => Math.abs(v - first) >= 10) ?? [])[0];
   if (second === undefined) throw new Error("背景不是棋盤格（只有一種灰）");
   const t0 = Math.min(first, second), t1 = Math.max(first, second);
+  if (opts.mode === "hard") {
+    console.log(`這張圖沒有 alpha，偵測到畫進去的透明格（灰階 ${t0}／${t1}）`);
+    return stripHard(file, t0, t1);
+  }
   // 視窗略大於一格：用最上面那一列的跳變間距估格子大小
   const edges = [];
   for (let x = 1; x < W; x++) if (Math.abs(lum[x] - lum[x - 1]) > 6) edges.push(x);
