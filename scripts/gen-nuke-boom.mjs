@@ -11,6 +11,7 @@
 //   ・長期快取（CLAUDE.md 的省量紀律）：同檔名換內容會讓老玩家一年看到舊圖，換素材一定要改檔名（-v2）。
 //   ・順便擋掉最常見的三個坑：格子對不齊、整張沒有 alpha（黑底）、每一格沒有置中。
 import sharp from "sharp";
+import { hasRealAlpha, stripFakeChecker } from "./lib/unchecker.mjs";
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +22,9 @@ const argv = process.argv.slice(2);
 const SRC = argv.find((a) => !a.startsWith("--"));
 const gi = argv.indexOf("--grid");
 const [COLS, ROWS] = (gi >= 0 ? argv[gi + 1] : "4x4").split("x").map(Number);
+/** 每格四周先裁掉幾個像素：有些生成器會在格與格之間畫出格線，不裁會跟著被當成內容 */
+const ii = argv.indexOf("--inset");
+const INSET = ii >= 0 ? Number(argv[ii + 1]) || 0 : 0;
 /** 每格輸出大小：電腦、手機 */
 const CELL_D = 384, CELL_M = 256;
 const ALPHA_MIN = 8;
@@ -31,48 +35,6 @@ if (!SRC || !COLS || !ROWS) {
 }
 
 
-/**
- * AI 出圖工具不會輸出真的透明度，常常把「透明格」直接畫進圖裡（整張 3 channels、100% 不透明）。
- * 這支把那種假格子鍵成真 alpha：背景＝沒有彩度、而且亮度接近那兩個灰階之一。
- * 柔邊（光暈）要用「相對底色的比例」算 α，不能用絕對差——合成式 src = F·α + B·(1−α)，
- * 亮處假設 F≈白、暗處假設 F≈黑，α=(v−B)/(255−B) 或 (B−v)/B，這樣兩種底色算出來一致，
- * 格子才不會殘留在柔邊裡（用絕對差會看到一圈棋盤狀的光暈）。
- */
-async function stripFakeChecker(file) {
-  const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
-  const W = info.width, H = info.height, C = info.channels;
-  const hist = new Map();
-  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
-    const i = (y * W + x) * C, r = data[i], g = data[i + 1], b = data[i + 2];
-    if (Math.max(r, g, b) - Math.min(r, g, b) > 6) continue;
-    const v = Math.round((r + g + b) / 3);
-    if (v < 40 || v > 170) continue;
-    hist.set(v, (hist.get(v) ?? 0) + 1);
-  }
-  const tones = [...hist.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
-  const t0 = tones[0], t1 = tones.find((v) => Math.abs(v - t0) > 8) ?? t0;
-  if (t0 === undefined || t0 === t1) throw new Error("這張圖沒有 alpha，也找不到灰色透明格：請給真的去背圖");
-  console.log(`這張圖沒有 alpha，偵測到畫進去的透明格（灰階 ${t0}／${t1}），自動鍵掉`);
-  const out = Buffer.alloc(W * H * 4);
-  for (let p = 0; p < W * H; p++) {
-    const i = p * C, o = p * 4;
-    const r = data[i], g = data[i + 1], b = data[i + 2];
-    const chroma = Math.max(r, g, b) - Math.min(r, g, b);
-    const v = (r + g + b) / 3;
-    const B = Math.abs(v - t0) < Math.abs(v - t1) ? t0 : t1;
-    const rel = v > B ? (v - B) / (255 - B) : (B - v) / B;
-    // 很淡的殘留直接歸零：放大兩倍播出來時，柔邊裡殘留的格子紋路、灰雜點都會看得很清楚。
-    // 兩道門檻——(1) 一律砍掉 10% 以下；(2) 沒有彩度的（＝格線的鋸齒、壓縮雜訊）要到 38% 才留，
-    // 真正的火光一定有彩度，所以不會被誤砍；白色核心的 rel 很高，也在門檻之上。
-    const raw = Math.max(chroma / 16, rel);
-    const floor = chroma < 10 ? 0.38 : 0.1;
-    const a = raw <= floor ? 0 : Math.max(0, Math.min(1, (raw - floor) / (1 - floor)));
-    for (let c = 0; c < 3; c++) out[o + c] = a > 0.02 ? Math.max(0, Math.min(255, (data[i + c] - B * (1 - a)) / a)) : 0;
-    out[o + 3] = Math.round(a * 255);
-  }
-  return sharp(out, { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
-}
-
 /** 把輸入整理成「每一格一張 buffer」 */
 async function frames() {
   const st = statSync(SRC);
@@ -82,23 +44,24 @@ async function frames() {
     console.log(`PNG 序列：${files.length} 張（${files[0]} … ${files.at(-1)}）`);
     return Promise.all(files.map(async (f) => {
       const p = path.join(SRC, f);
-      const mm = await sharp(p).metadata();
-      return sharp(mm.hasAlpha ? p : await stripFakeChecker(p)).ensureAlpha().toBuffer();
+      return sharp((await hasRealAlpha(p)) ? p : await stripFakeChecker(p)).ensureAlpha().toBuffer();
     }));
   }
-  const meta0 = await sharp(SRC).metadata();
-  // 沒有 alpha ＝ 八成是 AI 出的「假透明格」，先鍵掉再切
-  const img = sharp(meta0.hasAlpha ? SRC : await stripFakeChecker(SRC)).ensureAlpha();
+  // 沒有真的透明度 ＝ 八成是 AI 出的「假透明格」，先鍵掉再切
+  const img = sharp((await hasRealAlpha(SRC)) ? SRC : await stripFakeChecker(SRC)).ensureAlpha();
   const m = await img.metadata();
   console.log(`精靈表：${SRC}（${m.width}×${m.height}，切 ${COLS}×${ROWS}）`);
   if (m.width % COLS || m.height % ROWS) {
     throw new Error(`格子對不齊：${m.width}×${m.height} 不能被 ${COLS}×${ROWS} 整除。請確認格數，或請出圖的人把邊界對齊`);
   }
   const cw = m.width / COLS, chh = m.height / ROWS;
+  if (INSET) console.log(`每格四周各裁 ${INSET}px（去掉格線）`);
   const out = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      out.push(await img.clone().extract({ left: c * cw, top: r * chh, width: cw, height: chh }).toBuffer());
+      out.push(await img.clone().extract({
+        left: c * cw + INSET, top: r * chh + INSET, width: cw - INSET * 2, height: chh - INSET * 2,
+      }).toBuffer());
     }
   }
   return out;
