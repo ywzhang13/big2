@@ -4,7 +4,8 @@
 //   → 核爆白閃、火球、衝擊波 → 蕈狀雲升起 → 「自摸」大字 → 他還在火光前比讚。
 // 老闆 2026-11-10：這一款不出「自摸的那張牌」、也不出自摸者的名字（winShow 的 fxShowsTile／fxShowsName），
 //   大字直接借如來神掌那張素材。畫面上沒有那兩個元素時，下面的 setOp 自然略過，時間軸的 tile／name 留著給節奏和音效對點。
-// 素材兩張：Q 版金正恩、Q 版飛彈（老闆 2026-11-11 出圖；scripts/gen-nuke-assets.mjs 轉成 webp，飛彈還會自動轉正成彈頭朝右）。
+// 素材三件：Q 版金正恩、Q 版飛彈（gen-nuke-assets.mjs；飛彈會自動轉正成彈頭朝右）、
+//   爆炸的 16 格序列幀（gen-nuke-boom.mjs；老闆 2026-11-11 出圖）。大字借如來神掌那張。
 // 火球、蕈狀雲、衝擊波、碎片、煙、地面焦痕、白閃、金屑、飛彈尾焰全部是程式畫的，不吃圖檔——
 //   好處是換配色、改節奏只動這支，不用重出素材，也不會踩長期快取「同檔名換內容」的坑。
 // 單一畫布，畫面只由時間決定（draw(ms)），沒有 Web Animation、沒有每格 shadowBlur（和 rulaiFx 同一套作法）。
@@ -13,12 +14,15 @@ import { clamp, frameGovernor, inC, lerp, outC, rng, sakuraStillPose, seg, sm, t
 /** 時間軸（ms，從特效開始算；音效 zimo-nuke-*.mp3 的 0 秒＝這裡的 0，爆炸聲對在 hit） */
 export const NUKE_TL = { enter: 260, launch: 900, hit: 1800, boom: 1870, tile: 2400, zimo: 2780, name: 3020, total: 4600 };
 /** 要載的圖（依裝置選 -d／-m，見 ZimoFx 的 zfxArt） */
-export const NUKE_ART = ["kim", "missile"] as const;
+export const NUKE_ART = ["kim", "missile", "boom"] as const;
 export type NukeArt = (typeof NUKE_ART)[number];
 /** 人物圖的長寬比（寬÷高）：scripts/gen-nuke-assets.mjs 產生時印出來的 kimAR */
 export const NUKE_KIM_AR = 0.9517;
 /** 飛彈圖的長寬比（寬÷高）：同上的 missileAR。素材已經轉正成彈頭朝右，畫的時候直接轉到飛行角度 */
 export const NUKE_MISSILE_AR = 2.3869;
+/** 爆炸序列幀（老闆 2026-11-11 出圖，scripts/gen-nuke-boom.mjs 產）：4×4＝16 格，從左上往右逐列排。
+ *  dur＝整段播完的毫秒數（16 格約 17fps，和素材的張數相稱；再快會看到跳格） */
+export const NUKE_BOOM = { cols: 4, rows: 4, frames: 16, dur: 940 } as const;
 /** 減少動態：畫這一刻的靜止畫面（爆完、蕈狀雲在、沒有閃光和震動） */
 export const NUKE_STILL_MS = 2600;
 const STILL_END = 620;
@@ -308,9 +312,28 @@ export class NukeCanvas {
       count++;
     }
 
-    // ── 火球：三層疊出來（外焰、內核、翻滾的紋理），然後收成餘燼 ─────────────
+    // ── 爆炸本體：老闆出的 16 格序列幀，一格一個 drawImage ────────────────────
+    // 真正的體積感只有序列幀做得到（單張縮放永遠像「一顆球變大」）。素材載不到就退回下面那套
+    // 程式畫的三層火球，整段不會開天窗。
+    const boom = this.art.boom;
+    const bp = seg(ms, T.hit, T.hit + NUKE_BOOM.dur);
+    const boomOk = !!boom && boom.complete && boom.naturalWidth > 0;
+    if (boomOk && bp > 0 && bp < 1) {
+      const idx = Math.min(NUKE_BOOM.frames - 1, Math.floor(bp * NUKE_BOOM.frames));
+      const cw = boom!.naturalWidth / NUKE_BOOM.cols, chh = boom!.naturalHeight / NUKE_BOOM.rows;
+      // 畫面上的半徑。素材每格只有 256px，放到滿版（放大 3 倍以上）會看到馬賽克；
+      // 0.72u 大約是放大 2.6 倍，是「夠大又還看得清楚」的折衷。要再大就得換每格 512px 的來源。
+      const R = u * 0.72;
+      x.globalAlpha = fade * (1 - sm(seg(bp, 0.88, 1)));    // 最後一點淡出，接給蕈狀雲
+      x.drawImage(boom!, (idx % NUKE_BOOM.cols) * cw, Math.floor(idx / NUKE_BOOM.cols) * chh, cw, chh,
+        px - R, py - R * 1.04, R * 2, R * 2);
+      x.globalAlpha = 1;
+      count++;
+    }
+
+    // ── 火球（退路）：三層疊出來（外焰、內核、翻滾的紋理），然後收成餘燼 ───────
     // 單一 radial gradient 看起來像光斑；外焰用烘好的火紋理慢慢轉、內核另外壓一層亮心，才像在燒。
-    const fb = seg(ms, T.hit, T.hit + 760);
+    const fb = boomOk ? 0 : seg(ms, T.hit, T.hit + 760);
     if (fb > 0 && fb < 1) {
       const R = u * (0.1 + outC(fb) * 0.78), a = (1 - inC(fb)) * fade;
       const spin = (ms - T.hit) / 1000;

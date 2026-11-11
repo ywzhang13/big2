@@ -20,7 +20,7 @@ import sharp from "sharp";
 import { ZFX_TL } from "../components/mahjong/ZimoFx";
 import { ZIMO_TITLE_AR, zimoTitleArt } from "../components/mahjong/ZimoTitle";
 import { RULAI_META } from "../lib/mahjong/fx/rulaiMeta";
-import { NUKE_ART, NUKE_KIM_AR, NUKE_LIMIT, NUKE_MISSILE_AR, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
+import { NUKE_ART, NUKE_BOOM, NUKE_KIM_AR, NUKE_LIMIT, NUKE_MISSILE_AR, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
 import { fxShowsName, fxShowsTile, isCanvasFx, isZimoFxNew, ZIMO_FX_NEW } from "../lib/mahjong/winShow";
 import { canUseExclusiveFx, EXCLUSIVE_FX, isExclusiveFx, isOwner, isSelectableZimoFx, isZimoFx } from "../lib/mahjong/zimoFx/rules";
 import { fxName, ZIMO_FX_LIST } from "../lib/mahjong/zimoFxClient";
@@ -47,13 +47,13 @@ function fakeCanvas() { const ctx = fakeCtx(); return { width: 0, height: 0, sty
 const baked: (HTMLCanvasElement & { ctx: ReturnType<typeof fakeCtx> })[] = [];
 (globalThis as unknown as { document: unknown }).document = { createElement: () => { const c = fakeCanvas(); baked.push(c); return c; } };
 const img = (w: number, h: number) => ({ naturalWidth: w, naturalHeight: h, complete: true }) as HTMLImageElement;
-const art = () => ({ kim: img(1024, Math.round(1024 / NUKE_KIM_AR)), missile: img(1024, Math.round(1024 / NUKE_MISSILE_AR)) });
+const art = () => ({ kim: img(1024, Math.round(1024 / NUKE_KIM_AR)), missile: img(1024, Math.round(1024 / NUKE_MISSILE_AR)), boom: img(1536, 1536) });
 /** 手機 844×390、電腦 1440×900（同如來神掌的驗收尺寸）；px/py＝胡牌者的位置＝爆心 */
 const geo = (rel: number, mobile = true) => ({ W: mobile ? 844 : 1440, H: mobile ? 390 : 900, u: mobile ? 390 : 892.8, px: mobile ? 422 : 720, py: mobile ? 273 : 630, rel, mobile });
 const make = (rel = 0, mobile = true, dpr = 3, over: Partial<ReturnType<typeof geo>> = {}) => {
   const g = { ...geo(rel, mobile), ...over }, cv = fakeCanvas(), kim = art(), b0 = baked.length;
   const f = new NukeCanvas(cv, g, kim, dpr);
-  return { cv, g, f, x: cv.ctx, kim: kim.kim, missile: kim.missile, smokeTex: baked[b0], fireTex: baked[b0 + 1] };
+  return { cv, g, f, x: cv.ctx, kim: kim.kim, missile: kim.missile, boom: kim.boom, smokeTex: baked[b0], fireTex: baked[b0 + 1] };
 };
 const T = NUKE_TL;
 const NUKE_DIR = new URL("../public/mahjong-fx/zimo/nuke/", import.meta.url);
@@ -164,6 +164,25 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
   ok(mid.n >= 6 && mid.y >= 0 && mid.y < mid.py, `N12 蕈狀雲是 ${mid.n} 球烘好的煙堆的，最高那球還在畫面內（y=${mid.y.toFixed(0)}，爆心 y=${mid.py}）`);
   ok(high.n >= 6 && high.y > -geo(0).u * 0.34, `N12 爆心很靠上時最高那球也不會衝太高（y=${high.y.toFixed(0)}）`);
 }
+// N16 爆炸序列幀
+{
+  const frameAt = (ms: number) => {
+    const { cv, f, boom } = make(0, true, 2);
+    f.draw(ms);
+    const d = cv.ctx.calls.filter((c) => c[0] === "drawImage");
+    const k = cv.ctx.imgs.findIndex((i) => i.img === boom);
+    return k < 0 ? null : (d[k] as unknown[]).slice(2, 6).map(Number); // sx, sy, sw, sh
+  };
+  const a0 = frameAt(T.hit + 10), a1 = frameAt(T.hit + NUKE_BOOM.dur / 2), a2 = frameAt(T.hit + NUKE_BOOM.dur - 20);
+  ok(frameAt(T.hit - 10) === null && !!a0 && !!a2, "N16 爆炸序列幀只在命中之後播");
+  ok(!!a0 && a0[0] === 0 && a0[1] === 0, "N16 第一格取左上角那一格");
+  ok(!!a1 && !!a2 && (a1[1] > 0 || a1[0] > 0) && (a2[1] > (a1[1] ?? 0) || a2[0] > a1[0]), "N16 格子隨時間往後走（逐列排）");
+  ok(frameAt(T.hit + NUKE_BOOM.dur + 50) === null, "N16 播完就不再畫（後面交給蕈狀雲和煙）");
+  const cellW = 1536 / NUKE_BOOM.cols;
+  ok(!!a0 && a0[2] === cellW && a0[3] === cellW, `N16 每一格就是素材的 1/${NUKE_BOOM.cols} 寬（${cellW}px）`);
+  const noSheet = (() => { const cv = fakeCanvas(); const f2 = new NukeCanvas(cv, geo(0), { kim: img(1024, 1076), missile: img(1024, 429) }, 2); f2.draw(T.hit + 200); return cv.ctx.calls.some((c) => c[0] === "arc"); })();
+  ok(noSheet, "N16 序列幀載不到：退回程式畫的三層火球，不會開天窗");
+}
 // N9
 {
   const manifest = JSON.parse(readFileSync(new URL("../scripts/immutable-assets.json", import.meta.url), "utf8")) as Record<string, string>;
@@ -172,7 +191,7 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
   for (const f of mobile) { const p = new URL(f, NUKE_DIR); bytes += statSync(p).size; const m = await sharp(fileURLToPath(p)).metadata(); px += (m.width ?? 0) * (m.height ?? 0); }
   const bakedMb = NUKE_LIMIT.mobile.tex * NUKE_LIMIT.mobile.tex * 4 * 2 / 1048576; // 開播前烘的煙、火兩張
   const mb = px * 4 / 1048576 + bakedMb;
-  ok(mb <= 14, `N9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（含烘的 ${bakedMb.toFixed(2)} MB；爆炸整段是程式畫的，沒有素材）`);
+  ok(mb <= 14, `N9 手機解碼 ${mb.toFixed(2)} MB ≤ 14 MB（含烘的 ${bakedMb.toFixed(2)} MB；序列幀是最大一張）`);
   ok(bytes <= 1_000_000, `N9 手機下載 ${(bytes / 1024).toFixed(0)} KB ≤ 1 MB`);
   const files = NUKE_ART.flatMap((n) => [`nuke-${n}-d.webp`, `nuke-${n}-m.webp`]);
   ok(files.every((f) => !!manifest[`/mahjong-fx/zimo/nuke/${f}`]), `N9 ${files.length} 張圖都在長期快取雜湊清單`);
@@ -210,7 +229,7 @@ ok(ZFX_TL.thunder.total === 3220 && ZFX_TL.frost.total === 2900 && ZFX_TL.sakura
   const at = (ms: number) => { const { cv, f, missile } = make(0, true, 2); f.draw(ms); return cv.ctx.imgs.filter((d) => d.img === missile).length; };
   ok(at(T.launch - 1) === 0 && at((T.launch + T.hit) / 2) === 1 && at(T.hit + 10) === 0, "N15 飛彈只在發射到命中之間畫，一格一張");
   const cv = fakeCanvas(), g = geo(0);
-  const f = new NukeCanvas(cv, g, { kim: img(1024, 1076) }, 2);  // 故意沒有飛彈素材
+  const f = new NukeCanvas(cv, g, { kim: img(1024, 1076) }, 2);  // 故意沒有飛彈、沒有爆炸素材
   f.draw((T.launch + T.hit) / 2);
   ok(cv.ctx.calls.some((c) => c[0] === "quadraticCurveTo"), "N15 飛彈素材載不到：退回向量彈體，不是空白");
 }
