@@ -28,6 +28,22 @@ export function nukePose(ms: number): number {
   if (ms < T.hit + 760) return 2;           // 命中前一瞬到爆完：摀耳朵
   return 3;                                 // 收尾：大笑比讚
 }
+/** 換姿勢的過渡時間（ms）：太長會看到兩隻手臂疊影，太短又等於硬切 */
+const POSE_XFADE = 90;
+/** 每個姿勢是從第幾毫秒開始的（和 nukePose 同一組判斷，換姿勢只改上面那支） */
+const POSE_AT = [0, NUKE_TL.launch, NUKE_TL.hit - 60, NUKE_TL.hit + 760];
+/**
+ * 這一刻的姿勢混合（老闆 2026-11-12）：原本是整數、瞬間換格，每個劇情節點都是一刀切。
+ * 改成短暫交叉淡入＋新姿勢先大一點再收回（squash-and-pop），硬切就變成有彈性的動作。
+ * pop 是必要的——單純淡入會看到兩個姿勢的手臂同時存在（疊影），加一下縮放才讀得成「動作」。
+ */
+export function nukePoseMix(ms: number): { from: number; to: number; t: number; pop: number } {
+  const to = nukePose(ms);
+  const since = ms - POSE_AT[to];
+  const t = to === 0 ? 1 : Math.min(1, Math.max(0, since / POSE_XFADE));
+  const e = t * t * (3 - 2 * t);                      // smoothstep，進出都軟
+  return { from: Math.max(0, to - 1), to, t: e, pop: (1 - e) * 0.07 };
+}
 /** 飛彈圖的長寬比（寬÷高）：同上的 missileAR。素材已經轉正成彈頭朝右，畫的時候直接轉到飛行角度 */
 export const NUKE_MISSILE_AR = 3.3355;
 /** 爆炸序列幀（老闆 2026-11-11 出圖，scripts/gen-nuke-boom.mjs 產）：4×4＝16 格，從左上往右逐列排。
@@ -331,14 +347,32 @@ export class NukeCanvas {
     const bp = seg(ms, T.hit, T.hit + NUKE_BOOM.dur);
     const boomOk = !!boom && boom.complete && boom.naturalWidth > 0;
     if (boomOk && bp > 0 && bp < 1) {
-      const idx = Math.min(NUKE_BOOM.frames - 1, Math.floor(bp * NUKE_BOOM.frames));
+      // 補間（老闆 2026-11-12）：16 格 940ms ＝ 17fps，照格子硬跳看得出一格一格。
+      // 同時畫相鄰兩格、依小數位置交叉淡入，等於自己補出中間影格——其他特效是 Web Animations
+      // 在合成器上以螢幕更新率內插的，這一招是畫布這邊最接近的做法，成本只多一個 drawImage。
       const cw = boom!.naturalWidth / NUKE_BOOM.cols, chh = boom!.naturalHeight / NUKE_BOOM.rows;
-      // 畫面上的半徑。素材每格只有 256px，放到滿版（放大 3 倍以上）會看到馬賽克；
-      // 0.72u 大約是放大 2.6 倍，是「夠大又還看得清楚」的折衷。要再大就得換每格 512px 的來源。
+      // 畫面上的半徑。素材每格只有 512px，放到滿版（放大 3 倍以上）會看到馬賽克；
+      // 0.72u 大約是放大 2 倍，是「夠大又還看得清楚」的折衷。
       const R = u * 0.72;
-      x.globalAlpha = fade * (1 - sm(seg(bp, 0.88, 1)));    // 最後一點淡出，接給蕈狀雲
-      x.drawImage(boom!, (idx % NUKE_BOOM.cols) * cw, Math.floor(idx / NUKE_BOOM.cols) * chh, cw, chh,
-        px - R, py - R * 1.04, R * 2, R * 2);
+      const base = fade * (1 - sm(seg(bp, 0.88, 1)));       // 最後一點淡出，接給蕈狀雲
+      const f = bp * (NUKE_BOOM.frames - 1);
+      // 浮點誤差：剛好落在某一格上時 f 可能是 1.9999999，不收斂的話每一格都會多畫一張
+      const fq = Math.abs(f - Math.round(f)) < 0.005 ? Math.round(f) : f;
+      const i0 = Math.min(NUKE_BOOM.frames - 1, Math.floor(fq));
+      const i1 = Math.min(NUKE_BOOM.frames - 1, i0 + 1);
+      const mix = fq - i0;
+      const cell = (k: number) => [(k % NUKE_BOOM.cols) * cw, Math.floor(k / NUKE_BOOM.cols) * chh] as const;
+      const [s0x, s0y] = cell(i0);
+      x.globalAlpha = base;
+      x.drawImage(boom!, s0x, s0y, cw, chh, px - R, py - R * 1.04, R * 2, R * 2);
+      count++;
+      if (mix > 0.01 && i1 !== i0) {
+        // source-over 疊上去＝ i0·(1−mix) + i1·mix，正好是交叉淡入；重疊的那一瞬間看起來像動態模糊
+        const [s1x, s1y] = cell(i1);
+        x.globalAlpha = base * mix;
+        x.drawImage(boom!, s1x, s1y, cw, chh, px - R, py - R * 1.04, R * 2, R * 2);
+        count++;
+      }
       x.globalAlpha = 1;
       count++;
     }
@@ -505,18 +539,27 @@ export class NukeCanvas {
     if (kim && kim.complete && kim.naturalWidth > 0) {
       const inP = sm(seg(ms, T.enter, T.enter + 420));
       if (inP > 0) {
-        const pose = nukePose(ms);
+        const mix = nukePoseMix(ms);
         const cw = kim.naturalWidth / NUKE_POSES.cols, chh = kim.naturalHeight / NUKE_POSES.rows;
-        const sxSrc = (pose % NUKE_POSES.cols) * cw, sySrc = Math.floor(pose / NUKE_POSES.cols) * chh;
+        const srcOf = (k: number) => [(k % NUKE_POSES.cols) * cw, Math.floor(k / NUKE_POSES.cols) * chh] as const;
         const slide = (1 - inP) * u * 0.42;
         const X = kimX + sxDir * slide, Y = kimY + syDir * slide * 0.5;
         // 命中時被往後震一下
         const kick = Math.pow(1 - seg(ms, T.hit, T.hit + 420), 2) * (ms > T.hit ? 1 : 0) * u * 0.05;
         const sc = 0.88 + 0.12 * inP;
-        const w = kimW * sc, h = kimH * sc;
-        const dx = X - w / 2 + sxDir * kick, dy = Y - h + syDir * kick * 0.4;
-        x.globalAlpha = inP * fade;
-        x.drawImage(kim, sxSrc, sySrc, cw, chh, dx, dy, w, h);
+        // 腳底對齊：pop 只放大，不能讓人物浮起來，所以以底邊為基準縮放
+        const put = (k: number, a: number, grow: number) => {
+          const w = kimW * sc * (1 + grow), h = kimH * sc * (1 + grow);
+          const dx = X - w / 2 + sxDir * kick, dy = Y - h + syDir * kick * 0.4;
+          const [sxSrc, sySrc] = srcOf(k);
+          x.globalAlpha = a;
+          x.drawImage(kim, sxSrc, sySrc, cw, chh, dx, dy, w, h);
+          count++;
+          return [dx, dy, w, h, sxSrc, sySrc] as const;
+        };
+        const alpha = inP * fade;
+        if (mix.t < 0.999 && mix.from !== mix.to) put(mix.from, alpha * (1 - mix.t), 0);
+        const [dx, dy, w, h, sxSrc, sySrc] = put(mix.to, alpha * mix.t, mix.pop);
         // 爆炸的暖光打在人物身上
         const lit = (1 - seg(ms, T.hit, T.hit + 700)) * (ms > T.hit ? 1 : 0);
         if (lit > 0.02) {
@@ -526,7 +569,6 @@ export class NukeCanvas {
           x.globalCompositeOperation = "source-over";
         }
         x.globalAlpha = 1;
-        count++;
       }
     }
 

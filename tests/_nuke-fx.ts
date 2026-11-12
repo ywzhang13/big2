@@ -20,7 +20,7 @@ import sharp from "sharp";
 import { ZFX_TL } from "../components/mahjong/ZimoFx";
 import { ZIMO_TITLE_AR, zimoTitleArt } from "../components/mahjong/ZimoTitle";
 import { RULAI_META } from "../lib/mahjong/fx/rulaiMeta";
-import { NUKE_ART, NUKE_BOOM, NUKE_LIMIT, NUKE_MISSILE_AR, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukePose, NUKE_POSES, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
+import { NUKE_ART, NUKE_BOOM, NUKE_LIMIT, NUKE_MISSILE_AR, NUKE_STILL_MS, NUKE_TL, NukeCanvas, nukeCam, nukeDim, nukePose, nukePoseMix, NUKE_POSES, nukeShake, nukeTilePose, nukeTitlePose, runNuke } from "../lib/mahjong/fx/nukeFx";
 import { fxShowsName, fxShowsTile, isCanvasFx, isZimoFxNew, ZIMO_FX_NEW } from "../lib/mahjong/winShow";
 import { canUseExclusiveFx, EXCLUSIVE_FX, isExclusiveFx, isOwner, isSelectableZimoFx, isZimoFx } from "../lib/mahjong/zimoFx/rules";
 import { fxName, ZIMO_FX_LIST } from "../lib/mahjong/zimoFxClient";
@@ -186,6 +186,31 @@ ok(nukeTilePose(T.total - 401).opacity === 1 && nukeCam(T.hit + 460) === 1 && nu
   ok(!!a && !!b && a.dst.w === b.dst.w && a.dst.h === b.dst.h, "N17 不同姿勢畫在畫面上的大小一樣");
   const files = [`nuke-kim-set-v3-d.webp`, `nuke-kim-set-v3-m.webp`];
   ok(files.every((f) => existsSync(new URL(f, NUKE_DIR))), "N17 姿勢表的電腦版、手機版都在");
+}
+// N18 順暢度：序列幀補間與換姿勢過渡
+{
+  // 序列幀：同一格正中間只畫一張，兩格之間同時畫兩張（補間）
+  const boomDraws = (ms: number) => {
+    const { cv, f, boom } = make(0, true, 2);
+    f.draw(ms);
+    return cv.ctx.imgs.filter((d) => d.img === boom).length;
+  };
+  const per = NUKE_BOOM.dur / (NUKE_BOOM.frames - 1);
+  ok(boomDraws(T.hit + per * 2) === 1, "N18 剛好落在某一格上：只畫那一格");
+  ok(boomDraws(T.hit + per * 2.5) === 2, "N18 兩格之間：同時畫相鄰兩格做補間");
+  // 換姿勢：節點當下是交叉淡入（兩個姿勢都畫），過一下就只剩新的
+  const at = (ms: number) => {
+    const { cv, f, kim } = make(0, true, 2);
+    f.draw(ms);
+    const d = cv.ctx.imgs.filter((i) => i.img === kim);
+    return { n: d.length, w: d.length ? d[d.length - 1].w : 0 };
+  };
+  const during = at(T.launch + 20), after = at(T.launch + 300);
+  ok(during.n === 2 && after.n === 1, `N18 換姿勢當下兩個姿勢同時在（${during.n}），過了就只剩一個（${after.n}）`);
+  ok(during.w > after.w, `N18 新姿勢先大一點再收回（pop：${during.w.toFixed(0)} → ${after.w.toFixed(0)}）`);
+  const m0 = nukePoseMix(0), mid = nukePoseMix(T.launch + 45), done = nukePoseMix(T.launch + 200);
+  ok(m0.t === 1 && m0.pop === 0, "N18 開場不做過渡（沒有前一個姿勢可混）");
+  ok(mid.t > 0.1 && mid.t < 0.9 && done.t === 1 && done.pop === 0, `N18 過渡在 90ms 內走完（中間 t=${mid.t.toFixed(2)}）`);
 }
 // N16 爆炸序列幀
 {
