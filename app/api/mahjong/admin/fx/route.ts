@@ -4,7 +4,7 @@
 //     active＝要順便套用的特效（不給＝不改玩家目前的選擇，例如延長）；舊前端送的 fx 清單照樣接受，但一律開全部
 //     斗內和開通是兩個獨立動作，這裡不看金額。老闆自己的帳號 6 種永久全開，不用開通（400 owner_permanent）
 import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
-import { GOLDEN_ZIMO_FX, isOwner, isZimoFx, ZIMO_FX } from "@/lib/mahjong/zimoFx/rules";
+import { canUseExclusiveFx, GOLDEN_ZIMO_FX, isOwner, isZimoFx, ZIMO_FX } from "@/lib/mahjong/zimoFx/rules";
 import { grantFx, lineProfile, nowMs, playerFx } from "@/lib/mahjong/zimoFx/store";
 
 export async function GET(request: Request) {
@@ -18,7 +18,9 @@ export async function GET(request: Request) {
     const active: Record<string, number | null> = {}; // 代號→到期時間，null＝永久
     const until = Math.max(0, ...grants.filter((g) => !g.revokedAt && g.expiresAt > now).map((g) => g.expiresAt));
     if (until > 0) for (const c of ZIMO_FX) active[c] = until === Infinity ? null : until; // 一次全開：有任何有效開通，6 種都有效
-    return ok({ serverNow: now, permanent: isOwner(userId), active, selected: selected === GOLDEN_ZIMO_FX || (selected && (isOwner(userId) || selected in active)) ? selected : GOLDEN_ZIMO_FX, grants });
+    // 選用照實回：金色、老闆的任何一種、這個帳號專屬的那一種（神掌／核彈，開通紀錄裡不會有）、或有效開通裡的那一種；其他一律顯示金色
+    const keep = selected === GOLDEN_ZIMO_FX || (!!selected && (isOwner(userId) || canUseExclusiveFx(userId, selected) || selected in active));
+    return ok({ serverNow: now, permanent: isOwner(userId), active, selected: keep ? selected : GOLDEN_ZIMO_FX, grants });
   } catch (err) {
     console.error("[mj-admin] fx", err instanceof Error ? err.message : err);
     return fail(500, "server_error");

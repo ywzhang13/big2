@@ -44,3 +44,6 @@ qa-*.png
 
 # supabase CLI 的本機連結檔（不 commit）
 supabase/.temp/
+
+# 素材產生器的本機預覽頁（scripts/gen-nuke-assets.mjs --preview）
+.preview/

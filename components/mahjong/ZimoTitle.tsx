@@ -13,10 +13,11 @@ import { RULAI_META } from "@/lib/mahjong/fx/rulaiMeta";
 import "./zimoTitle.css";
 
 /** 每款大字圖的長寬比（寬÷高，切圖時量的原尺寸：雷霆 656×346、風暴 725×363、冰封 647×352、黑洞 696×343、櫻花 646×345） */
-export const ZIMO_TITLE_AR: Record<ZimoFxNew, number> = { thunder: 1.896, storm: 1.997, frost: 1.838, blackhole: 2.029, sakura: 1.872, rulai: RULAI_META.titleAR };
+export const ZIMO_TITLE_AR: Record<ZimoFxNew, number> = { thunder: 1.896, storm: 1.997, frost: 1.838, blackhole: 2.029, sakura: 1.872, rulai: RULAI_META.titleAR, nuke: RULAI_META.titleAR };
 /** 大字高度相對字級（em） */
 export const ZIMO_TITLE_EM = 1.2;
-export const zimoTitleArt = (fx: ZimoFxNew) => `/mahjong-fx/zimo/${fx}/${fx}-title.webp`;
+/** 大字圖的網址。核彈借用如來神掌那張（老闆 2026-11-10：不另外出素材，玩家也可能已經有快取） */
+export const zimoTitleArt = (fx: ZimoFxNew) => `/mahjong-fx/zimo/${fx === "nuke" ? "rulai/rulai" : `${fx}/${fx}`}-title.webp`;
 
 const loads = new Map<ZimoFxNew, Promise<boolean>>();
 /** 先載好、解碼好這一款大字圖（特效本身的預載已經包含；這支給只看大字的地方用） */
@@ -68,7 +69,7 @@ export default function ZimoTitle({ fx, name, t, n, wind = 1, rm, mobile, src, d
       {fx === "sakura" && !driven && PETALS.map((p, i) => (
         <span key={i} className="zz-petal" style={{ "--x0": `${p.x}em`, "--y0": `${p.y}em`, "--dx": `${p.dx}em`, "--r0": `${p.r}deg`, "--pd": `${p.d}ms` } as CSSProperties} />
       ))}
-      <p className="zz-name">{shown}</p>
+      {!!shown && <p className="zz-name">{shown}</p>}
     </div>
   );
 }

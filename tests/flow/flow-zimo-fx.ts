@@ -339,7 +339,7 @@ let idA = "", idB = "";
   const mine = (await get(myFxGet, "/", "boss")).body.available;
   eq([[g1.status, g1.body.error], [g2.status, g2.body.error], [rv.status, rv.body.error], [s1.status, s1.body.error], [s2.status, s2.body.error], sqlTries, "flame" in mine, Object.keys(mine).length],
     [[400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], [400, "bad_request"], ["擋下", "擋下"], false, 8],
-    "Z12 烈焰已移除：後台開通（單選、混在別種裡）、收回、玩家和老闆選用都 400；資料庫直接寫開通和選用都被檢查限制擋下；老闆帳號清單沒有烈焰，另含全帳號金色自摸和專屬神掌預設共 7 種");
+    "Z12 烈焰已移除：後台開通（單選、混在別種裡）、收回、玩家和老闆選用都 400；資料庫直接寫開通和選用都被檢查限制擋下；老闆帳號清單沒有烈焰，另含全帳號金色自摸和專屬神掌共 8 種（核彈專屬別的帳號，不在老闆這份）");
 }
 
 // ---- Z13 金色自摸永久回退 ----
