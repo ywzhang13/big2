@@ -11,6 +11,7 @@
 //     "mahjong/zimoFx/store"（自摸特效庫、斗內）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
 //     "mahjong/spectate/store"（觀戰申請、同意、收回）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
 //     "big2/leaveStore"、"big2/dealStore"、"big2/roomStore"（大老二等人階段退出、發牌、加入房間／讀牌桌狀態的資料存取）換成記憶體版本；
+//     "mahjong/replay/store"（牌局回放）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
 //     "next/server" 的 after() 在測試裡不跑
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -33,6 +34,7 @@ const STUBS = {
   "@/lib/mahjong/chat/store": "tests/support/stub-chat-store.ts",
   "@/lib/mahjong/zimoFx/store": "tests/support/stub-zimofx-store.ts",
   "@/lib/mahjong/spectate/store": "tests/support/stub-spectate-store.ts",
+  "@/lib/mahjong/replay/store": "tests/support/stub-replay-store.ts",
   "@/lib/big2/leaveStore": "tests/support/stub-big2-leave-store.ts",
   "@/lib/big2/dealStore": "tests/support/stub-big2-deal-store.ts",
   "@/lib/big2/roomStore": "tests/support/stub-big2-room-store.ts",
