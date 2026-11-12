@@ -15,8 +15,9 @@
 .mjr-back { justify-self: start; min-height: 44px; padding: 0 8px; border-radius: 8px; color: #F6F0DA; font-size: 14px; }
 /* 牌桌區：transform 讓牌桌裡 position: fixed 的浮層只在這一塊裡，不蓋到頂列和控制區 */
 .mjr-stage { flex: 1 1 auto; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; transform: translateZ(0); }
-/* 手機：照整個畫面的大小畫手機牌桌（.mjm-app 是 fixed; inset: 0，會填滿這一層），再由 JS 等比例縮小放進牌桌區 */
-.mjr-vp { position: absolute; top: 0; left: 50%; width: 100vw; height: 100dvh; margin-left: -50vw; transform-origin: 50% 0; }
+/* 手機牌桌（.mjm-app 是 fixed; inset: 0）直接用原尺寸填滿牌桌區，不整體縮小（小宜 2026-11-13：對手名稱、桌上小牌要看得清楚）。
+   回放沒有吃碰槓按鈕，動作列只放「等待 某某」，高度讓出來給牌桌；只在回放裡生效，不影響打牌畫面 */
+.mjr .mjm-app { --row-action: 24px; }
 .mjr-ctl {
   flex: 0 0 auto; height: 140px; padding: 12px 24px;
   display: flex; flex-direction: column; justify-content: center; gap: 8px;

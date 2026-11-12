@@ -4,7 +4,7 @@
 // 規格：小宜〈麻將回放-UIUX設計與實作規格.md〉＋〈麻將回放-分階段設計補充-2026-11-13.md〉；資料：老柯 lib/mahjong/replay/API.md。
 // 牌桌直接用打牌時的 MjBoard／MjBoardMobile（關掉所有操作），回放控制放在牌桌外面，不蓋牌面。
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
@@ -26,24 +26,6 @@ function useMobileLandscape(): boolean {
   );
 }
 
-/** 手機牌桌照「整個畫面」的大小排版（.mjm-app 用 100dvw、position: fixed）；回放要留頂列和控制區，
- *  所以照原尺寸畫，再整個等比例縮小放進牌桌區，排版和打牌時一模一樣，不會被擠壓 */
-function useFitScale(on: boolean) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const el = ref.current;
-    if (!on || !el) return;
-    const fit = () => setScale(Math.min(1, el.clientHeight / window.innerHeight, el.clientWidth / window.innerWidth));
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    window.addEventListener("resize", fit);
-    return () => { ro.disconnect(); window.removeEventListener("resize", fit); };
-  }, [on]);
-  return { ref, scale };
-}
-
 const WIND = ["東", "南", "西", "北"];
 const SPEEDS = [1, 2, 4];
 const noop = () => {};
@@ -53,7 +35,6 @@ type HandSlot = Loaded | "loading" | "failed";
 
 export default function MjReplay({ matchId, onClose, onUnauthorized }: { matchId: string; onClose: () => void; onUnauthorized: () => void }) {
   const mobile = useMobileLandscape();
-  const fit = useFitScale(mobile);
   const [list, setList] = useState<ReplayList | null>(null);
   const [fatal, setFatal] = useState<ReplayError | null>(null);
   const [hands, setHands] = useState<Record<number, HandSlot>>({});
@@ -243,12 +224,10 @@ export default function MjReplay({ matchId, onClose, onUnauthorized }: { matchId
         </div>
       )}
 
-      <div className="mjr-stage" ref={fit.ref} data-replay-step={cur} data-replay-seat={seat}>
+      <div className="mjr-stage" data-replay-step={cur} data-replay-seat={seat}>
         {boardProps ? (
           mobile ? (
-            <div className="mjr-vp" style={{ transform: `scale(${fit.scale})` }}>
-              <MjBoardMobile {...boardProps} roomCode={list?.roomCode ?? ""} roundLabel={roundLabel} onLeave={onClose} leaveLabel="離開回放" />
-            </div>
+            <MjBoardMobile {...boardProps} roomCode={list?.roomCode ?? ""} roundLabel={roundLabel} onLeave={onClose} leaveLabel="離開回放" />
           ) : (
             <MjBoard {...boardProps} />
           )
