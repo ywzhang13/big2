@@ -21,3 +21,5 @@
 .mss-btn.on { background: #5A4B21; border: 2px solid #E8CE84; color: #FFF5D6; cursor: default; }
 .mss-btn:disabled { cursor: not-allowed; background: #10241a; border-style: dashed; }
 .mss-btn:focus-visible { outline: 2px solid #FFF5D6; outline-offset: 2px; }
+/* 手機按鈕只有 72px：選中時不放看得到的 ✓（會把「西 老王」擠成「✓西 老…」），靠金框＋深金底表示；讀屏照樣有 aria-checked（小宜 2026-11-13） */
+.mss.c .mss-btn .ck { display: none; }
