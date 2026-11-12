@@ -1,5 +1,6 @@
 // 記憶體版 db：模擬 Postgres 的樂觀鎖。讀、寫都會 await 一段時間，讓同時送出的請求真的交錯。
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
+import { afterSave as replayAfter, beforeSave as replayBefore } from "../../lib/mahjong/replay/record";
 export const rooms: Record<string, { id: string; code: string; game_state: MahjongGameState; status?: string; host_id?: string | null; updated_at?: string }> = {};
 export const stats = { conflicts: 0, writes: 0 };
 /** 存檔成功後的掛鉤（真的 db.ts 存檔後會呼叫 recordZimoWins）；flow-donate 設成同一個函式，其他測試不設 */
@@ -25,17 +26,19 @@ export async function loadRoom(id: string) {
 export async function saveGameState(id: string, s: MahjongGameState, status?: string) {
   await wait();
   s.stateVersion = (s.stateVersion ?? 0) + 1;
+  const replay = replayBefore(s); // 和真的 db.ts 一樣：存檔前更新回放紀錄、存檔後寫整局回放
   rooms[id].game_state = clone(s); stats.writes++;
   if (status) rooms[id].status = status;
-  await hooks.onSaved?.(id, s);
+  await Promise.all([hooks.onSaved?.(id, s), replayAfter(id, replay)]);
 }
 export async function saveGameStateIfUnchanged(id: string, base: number | undefined, s: MahjongGameState, status?: string) {
   await wait();
   if (!opts.unsafe && rooms[id].game_state.stateVersion !== base) { stats.conflicts++; throw new StateConflictError(); }
   s.stateVersion = (base ?? 0) + 1;
+  const replay = replayBefore(s);
   rooms[id].game_state = clone(s); stats.writes++;
   if (status) rooms[id].status = status;
-  await hooks.onSaved?.(id, s);
+  await Promise.all([hooks.onSaved?.(id, s), replayAfter(id, replay)]);
   return s.stateVersion; // 和真的 saveGameStateIfUnchanged 一樣：回傳存好的版本號
 }
 export function findSeatByPlayerId(s: MahjongGameState, pid: string) { const p = s.players.find((x) => x.id === pid); return p ? p.seat : -1; }

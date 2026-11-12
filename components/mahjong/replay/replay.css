@@ -1,0 +1,90 @@
+/* 麻將牌局回放（小宜〈麻將回放-分階段設計補充〉：深綠底 #08180E、面板 #173326、金 #E8CE84、主文字 #F6F0DA、邊框 #806B32；
+   桌機頂列 54px、控制區 140px；手機橫向頂列 38px、控制區 92px；觸控區至少 44×44） */
+.mjr {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; flex-direction: column;
+  background: #08180E; color: #F6F0DA; font-size: 14px;
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.mjr-top {
+  height: 54px; flex: 0 0 auto; padding: 0 16px;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  border-bottom: 1px solid rgba(128, 107, 50, .5);
+}
+.mjr-top h1 { font-size: 16px; font-weight: 700; color: #E8CE84; }
+.mjr-back { justify-self: start; min-height: 44px; padding: 0 8px; border-radius: 8px; color: #F6F0DA; font-size: 14px; }
+/* 牌桌區：transform 讓牌桌裡 position: fixed 的浮層只在這一塊裡，不蓋到頂列和控制區 */
+.mjr-stage { flex: 1 1 auto; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; transform: translateZ(0); }
+/* 手機牌桌（.mjm-app 是 fixed; inset: 0）直接用原尺寸填滿牌桌區，不整體縮小（小宜 2026-11-13：對手名稱、桌上小牌要看得清楚）。
+   回放沒有吃碰槓按鈕，動作列只放「等待 某某」，高度讓出來給牌桌；只在回放裡生效，不影響打牌畫面 */
+.mjr .mjm-app { --row-action: 24px; }
+.mjr-ctl {
+  flex: 0 0 auto; height: 140px; padding: 12px 24px;
+  display: flex; flex-direction: column; justify-content: center; gap: 8px;
+  background: #08180E; border-top: 1px solid #806B32;
+}
+.mjr-row { display: flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0; }
+.mjr-row .sp { flex: 1; }
+.mjr-btn {
+  min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 8px;
+  background: #173326; border: 1px solid #806B32; color: #F6F0DA; font-size: 14px; white-space: nowrap;
+}
+/* 金底只給主要動作（播放、重試）；視角切換用共用的 MjSeatSwitch */
+.mjr-btn.gold { background: #E8CE84; border-color: #E8CE84; color: #08180E; font-weight: 700; }
+.mjr-icon {
+  width: 44px; height: 44px; flex: 0 0 auto; border-radius: 8px;
+  background: #173326; border: 1px solid #806B32; color: #F6F0DA; font-size: 16px;
+}
+.mjr-icon.play { background: #E8CE84; color: #08180E; border-color: #E8CE84; }
+.mjr-btn:hover:not(:disabled), .mjr-icon:hover:not(:disabled) { filter: brightness(1.08); }
+.mjr-btn:active:not(:disabled), .mjr-icon:active:not(:disabled) { filter: brightness(.9); }
+.mjr-btn:disabled, .mjr-icon:disabled, .mjr-sel select:disabled { opacity: .4; cursor: not-allowed; }
+.mjr button:focus-visible, .mjr select:focus-visible, .mjr input:focus-visible { outline: 2px solid #E8CE84; outline-offset: 2px; }
+.mjr-sel select {
+  min-height: 44px; padding: 0 28px 0 12px; border-radius: 8px; appearance: none;
+  background: #173326 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23E8CE84'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid #806B32; color: #F6F0DA; font-size: 14px;
+}
+.mjr-sel.speed select { padding-right: 24px; }
+.mjr-bar { flex: 1 1 auto; min-width: 80px; display: flex; flex-direction: column; justify-content: center; }
+.mjr-bar { min-height: 44px; }
+.mjr-bar input { width: 100%; height: 28px; accent-color: #E8CE84; }
+.mjr-bar .t { display: flex; justify-content: space-between; font-size: 12px; color: rgba(246, 240, 218, .75); font-variant-numeric: tabular-nums; }
+/* 局末結算：打牌時的結算畫面（.mjm-result 是 fixed; inset: 0，被牌桌區的 transform 限制在牌桌區裡，不蓋控制列） */
+.mjr-result { position: absolute; inset: 0; z-index: 40; }
+.mjr-result .mjm-result .foot .mjm-btn { display: none; } /* 結算裡的「離開觀戰」：回放用不到，改用「查看牌桌」 */
+.mjr-seetable { position: absolute; top: 8px; right: 8px; z-index: 60; }
+.mjr-result .mjr-seetable { top: auto; bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(12px + env(safe-area-inset-right)); } /* 放在原本結算按鈕的位置 */
+.mjr-exp { color: #E8CE84; white-space: nowrap; }
+.mjr-exp.soon { color: #fca5a5; }
+.mjr-msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; text-align: center; font-size: 15px; }
+.mjr-msg .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.mjr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* 手機橫向（小宜 2026-11-13 調整）：不放頂列、控制區只留一列 44px，空間讓給牌桌；觸控區 44×44、間距至少 4px */
+.mjr.m .mjr-top { height: 38px; padding: 0 8px; } /* 只剩狀態畫面用 */
+.mjr.m .mjr-top h1 { font-size: 14px; }
+/* 手機控制區：上面一列四家視角切換（52px），下面一列返回、選局、播放控制（44px） */
+.mjr.m .mjr-ctl { height: auto; padding: 0 8px calc(3px + env(safe-area-inset-bottom)); gap: 0; }
+.mjr.m .mjr-row { gap: 6px; }
+.mjr.m .mjr-sel select, .mjr.m .mjr-btn { font-size: 14px; padding-left: 10px; }
+.mjr.m .mjr-bar .t { font-size: 12px; align-items: center; }
+.mjr.m .mjr-bar .t .mjr-exp { font-size: 12px; }
+.mjr.m .mjr-bar input { height: 26px; }
+
+/* 直向：請橫向（不強制鎖方向） */
+.mjr-portrait { display: none; }
+@media (orientation: portrait) and (max-width: 820px) and (pointer: coarse) {
+  .mjr-portrait {
+    display: flex; position: fixed; inset: 0; z-index: 10; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: #08180E; color: #F6F0DA; font-size: 15px; padding: 24px; text-align: center;
+  }
+}
+
+/* 場次明細裡的「牌局回放」區塊（統計表之後） */
+.mjl-detail .replay { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,.22); }
+.mjl-detail .replay .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mjl-detail .replay .txt b { font-size: 14px; }
+.mjl-detail .replay .sub { font-size: 12px; color: rgba(255,255,255,.65); }
+.mjl-detail .replay .mjl-btn { width: auto; min-height: 44px; padding: 0 16px; flex: 0 0 auto; }
+.mjl-detail .replay .mjl-btn:disabled { opacity: .4; filter: grayscale(.6); cursor: not-allowed; }

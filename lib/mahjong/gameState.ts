@@ -1,6 +1,7 @@
 // Taiwan Mahjong game state types
 
 import { Tile, TileSuit } from "./tiles";
+import type { ReplayLog } from "./replay/log";
 
 export interface Meld {
   type: "chi" | "pong" | "kong" | "concealed_kong";
@@ -130,6 +131,8 @@ export interface MahjongGameState {
   // 對局紀錄用：新版開局時寫入。上線前開局的房間沒有這兩個欄位 → 不補記紀錄
   startedAt?: string;       // 開局時間（ISO）
   handsCompleted?: number;  // 這場已打完（已結算）幾局，含流局
+  // 回放（lib/mahjong/replay/log.ts）：這一局進行中的紀錄，每次存檔時更新；只在伺服器，公開／本人／觀戰狀態都不帶
+  replayLog?: ReplayLog;
   // --- Round system (圈數系統) ---
   roomSettings?: RoomSettings;
   roundInfo?: RoundInfo;

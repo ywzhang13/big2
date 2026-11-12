@@ -100,27 +100,10 @@
 .spx-card .grow { flex: 1; min-width: 0; }
 .spx-list .hint { text-align: center; font-size: 12px; color: rgba(255,255,255,.55); margin-top: 14px; }
 
-/* ---------- 觀戰中：頂部標籤、視角抽屜 ---------- */
-.spx-bar { position: fixed; z-index: 57; left: 50%; top: 8px; transform: translateX(-50%); height: 34px; padding: 0 22px; border-radius: 17px; display: flex; align-items: center;
-  background: rgba(7,26,18,.92); border: 1px solid rgba(201,169,110,.7); color: #f0d68a; font-size: 14px; font-weight: 700; white-space: nowrap; pointer-events: none; }
-.spx-bar.d { top: 10px; height: 40px; border-radius: 20px; font-size: 16px; }
-.spx-viewbtn { position: fixed; z-index: 57; right: 12px; top: 8px; }
-.spx-drawer { position: fixed; z-index: 59; right: 12px; top: 50px; width: min(242px, 42vw); box-sizing: border-box; padding: 10px; border-radius: 16px;
-  background: rgba(14,43,30,.97); border: 1px solid rgba(201,169,110,.6); color: #fff; animation: spx-slide .18s ease-out; }
-.spx-drawer.d { width: 310px; right: 24px; top: 64px; padding: 14px; }
-.spx-drawer h2 { margin: 0 0 8px; font-size: 13px; color: #f0d68a; }
-.spx-drawer.d h2 { font-size: 15px; }
-.spx-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; margin-bottom: 6px; box-sizing: border-box;
-  border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: #fff; font-size: 13px; font-weight: 700; text-align: left; }
-.spx-drawer.d .spx-opt { min-height: 44px; font-size: 15px; }
-.spx-opt .s { font-size: 11px; font-weight: 400; color: rgba(255,255,255,.62); flex: none; }
-.spx-opt.cur { border-color: #f0d68a; background: rgba(201,169,110,.15); }
-.spx-opt.cur .s { color: #f0d68a; font-weight: 700; }
-.spx-opt.can { cursor: pointer; }
-.spx-opt.can .s { color: #6ee7b7; }
-.spx-opt:disabled { cursor: default; }
-@media (pointer: coarse) { .spx-opt.can { min-height: 44px; } }
-.spx-drawer .spx-btn { width: 100%; margin-top: 4px; }
+/* ---------- 觀戰中：牌桌區（下方是四家視角切換 MjSeatSwitch，老闆 2026-11-13 拿掉頂部大提示條和右上視角抽屜） ---------- */
+/* transform 讓手機牌桌（.mjm-app 是 fixed; inset: 0）只填滿牌桌區，不蓋到下方的切換列 */
+.spx-stage { flex: 1 1 auto; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; transform: translateZ(0); }
+.spx-watch .mss { border-top: 1px solid rgba(201,169,110,.35); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .spx-skel { position: fixed; z-index: 56; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 10px 18px; border-radius: 12px; background: rgba(14,43,30,.9);
   border: 1px solid rgba(201,169,110,.4); color: rgba(255,255,255,.75); font-size: 13px; }
 
@@ -136,8 +119,6 @@
 
 @keyframes spx-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }
 @keyframes spx-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes spx-slide { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   @keyframes spx-in { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes spx-slide { from { opacity: 0; } to { opacity: 1; } }
 }

@@ -5,6 +5,7 @@ import { cacheGameState, getCachedGameState } from "./cache";
 import { allHands, chiForbiddenKeys, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
 import { opponentHands } from "./events";
 import { recordZimoWins } from "./donate/record";
+import { afterSave as saveReplayAfter, beforeSave as stepReplayBefore } from "./replay/record";
 import { selfDrawWinFx } from "./winFx";
 
 // ---------------------------------------------------------------------------
@@ -96,6 +97,7 @@ export async function saveGameState(
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
   state.stateVersion = (state.stateVersion ?? 0) + 1;
+  const replay = stepReplayBefore(state); // 回放：更新進行中的紀錄（跟著這次存檔寫進去）；這局剛結算就拿到整局紀錄
   const update: Record<string, unknown> = { game_state: state };
   if (status) update.status = status;
 
@@ -107,7 +109,8 @@ export async function saveGameState(
   if (error) {
     throw new Error(`Failed to save game state: ${error.message}`);
   }
-  await recordZimoWins(roomId, state); // 這局結算了：記下自摸的人（斗內卡用；失敗只記 log）
+  // 這局結算了：記下自摸的人（斗內卡用）＋寫整局回放（一局只有結算那一次），兩個同時送、失敗都只記 log
+  await Promise.all([recordZimoWins(roomId, state), saveReplayAfter(roomId, replay)]);
   // Fire-and-forget cache write: Postgres is already authoritative, and we
   // don't want to add HTTP latency to the critical path of every action.
   // A dropped cache write just means the next read falls back to Postgres.
@@ -133,6 +136,7 @@ export async function saveGameStateIfUnchanged(
 ): Promise<number> {
   const supabase = getSupabaseAdmin();
   state.stateVersion = (baseVersion ?? 0) + 1;
+  const replay = stepReplayBefore(state); // 回放：同上
   const update: Record<string, unknown> = { game_state: state };
   if (status) update.status = status;
 
@@ -149,7 +153,8 @@ export async function saveGameStateIfUnchanged(
   if (!data || data.length === 0) {
     throw new StateConflictError();
   }
-  await recordZimoWins(roomId, state); // 這局結算了：記下自摸的人（斗內卡用；失敗只記 log）
+  // 這局結算了：記下自摸的人（斗內卡用）＋寫整局回放（一局只有結算那一次），兩個同時送、失敗都只記 log
+  await Promise.all([recordZimoWins(roomId, state), saveReplayAfter(roomId, replay)]);
   void cacheGameState(roomId, state).catch(() => {});
   return state.stateVersion; // 存好的版本號：廣播時帶 sv，前端看到跳號就立刻補抓（lib/mahjong/syncPolicy.ts）
 }

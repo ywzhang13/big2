@@ -1,0 +1,25 @@
+/* 觀戰、回放共用的四家視角切換（小宜〈觀戰與回放-視角切換設計規格-2026-11-13〉）
+   桌機：按鈕 120×44、間距 8、字 16；手機（compact）：按鈕 72×44、間距 4、字 14。牌桌外、正常文件流，不蓋牌 */
+.mss { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 12px; flex: 0 0 auto; color: #F6F0DA; }
+.mss.c { gap: 8px; padding: 4px 8px; }
+.mss-mode { font-size: 14px; color: #F6F0DA; white-space: nowrap; }
+.mss-group { display: flex; gap: 8px; }
+.mss.c .mss-group { gap: 4px; }
+.mss-btn {
+  width: 120px; height: 44px; padding: 0 8px; border-radius: 8px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  background: #173326; border: 1px solid #806B32; color: #F6F0DA; font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.mss.c .mss-btn { width: 72px; font-size: 14px; padding: 0 4px; }
+.mss-btn .l1 { display: flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+.mss-btn .w { flex: 0 0 auto; color: #E8CE84; }
+.mss-btn .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mss-btn .ck { flex: 0 0 auto; }
+.mss-btn .l2 { font-size: 12px; font-weight: 400; color: rgba(246, 240, 218, .8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mss-btn:hover:not(:disabled):not(.on) { background: #294737; }
+.mss-btn:active:not(:disabled) { background: #3A513A; }
+.mss-btn.on { background: #5A4B21; border: 2px solid #E8CE84; color: #FFF5D6; cursor: default; }
+.mss-btn:disabled { cursor: not-allowed; background: #10241a; border-style: dashed; }
+.mss-btn:focus-visible { outline: 2px solid #FFF5D6; outline-offset: 2px; }
+/* 手機按鈕只有 72px：選中時不放看得到的 ✓（會把「西 老王」擠成「✓西 老…」），靠金框＋深金底表示；讀屏照樣有 aria-checked（小宜 2026-11-13） */
+.mss.c .mss-btn .ck { display: none; }
