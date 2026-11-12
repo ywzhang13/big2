@@ -8,6 +8,9 @@ import { mjFetch } from "@/lib/mahjong/clientAuth";
 import type { MjAuthUser } from "@/hooks/useMjAuth";
 import { Avatar } from "./MjLobbyAuth";
 import MjDonate from "./MjDonate";
+import MjReplay from "./replay/MjReplay";
+import { fetchReplayList, ERROR_TEXT, type ReplayError } from "./replay/replayApi";
+import { expiryText } from "./replay/replayView";
 
 interface RecordPlayer {
   seat: number;
@@ -98,8 +101,39 @@ function RecordRow({ r, onOpen }: { r: RecordItem; onOpen: (r: RecordItem, el: H
   );
 }
 
+/** 場次明細裡的「牌局回放」區塊（小宜〈分階段設計補充〉第一階段入口）：以伺服器回應判斷能不能看，不靠倒數文字授權 */
+function ReplayEntry({ matchId, onOpen, onUnauthorized }: { matchId: string; onOpen: () => void; onUnauthorized: () => void }) {
+  const [st, setSt] = useState<{ k: "loading" } | { k: "ok"; expiresAt: string } | { k: "err"; e: ReplayError }>({ k: "loading" });
+  const check = useCallback(async () => {
+    setSt({ k: "loading" });
+    const r = await fetchReplayList(matchId);
+    if (!r.ok) setSt({ k: "err", e: r.error });
+    else if (r.data.hands.length === 0) setSt({ k: "err", e: "no_data" });
+    else setSt({ k: "ok", expiresAt: r.data.expiresAt });
+  }, [matchId]);
+  useEffect(() => { void check(); }, [check]);
+  const exp = st.k === "ok" ? expiryText(st.expiresAt, Date.now()) : null;
+  return (
+    <div className="replay" data-record-replay={st.k === "err" ? st.e : st.k}>
+      <div className="txt">
+        <b>牌局回放</b>
+        <span className="sub" role="status">
+          {st.k === "loading" ? "正在確認回放…" : exp ? `${exp.text}${exp.at ? `・${exp.at}` : ""}` : ERROR_TEXT[(st as { e: ReplayError }).e]}
+        </span>
+      </div>
+      {st.k === "err" && st.e === "failed" ? (
+        <button type="button" className="mjl-btn ghost" onClick={() => void check()}>重試</button>
+      ) : st.k === "err" && st.e === "not_logged_in" ? (
+        <button type="button" className="mjl-btn ghost" onClick={onUnauthorized}>返回登入</button>
+      ) : (
+        <button type="button" className="mjl-btn primary" disabled={st.k !== "ok"} onClick={onOpen} data-record-replay-open>觀看回放</button>
+      )}
+    </div>
+  );
+}
+
 /** 一場明細（A2、A3）：關閉＝×、Esc、點遮罩；關閉後焦點回到那一列 */
-function RecordDetail({ r, onClose }: { r: RecordItem; onClose: () => void }) {
+function RecordDetail({ r, onClose, onReplay, onUnauthorized }: { r: RecordItem; onClose: () => void; onReplay: () => void; onUnauthorized: () => void }) {
   const xRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     xRef.current?.focus();
@@ -144,6 +178,7 @@ function RecordDetail({ r, onClose }: { r: RecordItem; onClose: () => void }) {
             </tbody>
           </table>
           {noHands && <p className="note">這場打的時候還沒有記錄胡牌、放槍</p>}
+          <ReplayEntry matchId={r.id} onOpen={onReplay} onUnauthorized={onUnauthorized} />
         </div>
       </div>
     </div>
@@ -186,6 +221,8 @@ export default function MjRecords({
   const openerRef = useRef<HTMLElement | null>(null);
   const openDetail = useCallback((r: RecordItem, el: HTMLElement) => { openerRef.current = el; setOpen(r); }, []);
   const closeDetail = useCallback(() => { setOpen(null); openerRef.current?.focus(); }, []);
+  // 回放播放器：蓋在整個歷史紀錄上面；關掉回到同一場的明細
+  const [replay, setReplay] = useState(false);
 
   const load = useCallback(
     async (cursor: string | null) => {
@@ -274,7 +311,8 @@ export default function MjRecords({
           </div>
         )}
       </div>
-      {open && <RecordDetail r={open} onClose={closeDetail} />}
+      {open && !replay && <RecordDetail r={open} onClose={closeDetail} onReplay={() => setReplay(true)} onUnauthorized={onUnauthorized} />}
+      {open && replay && <MjReplay matchId={open.id} onClose={() => setReplay(false)} onUnauthorized={onUnauthorized} />}
     </div>
   );
 }
