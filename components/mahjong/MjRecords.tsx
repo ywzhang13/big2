@@ -121,13 +121,14 @@ function ReplayEntry({ matchId, onOpen, onUnauthorized }: { matchId: string; onO
           {st.k === "loading" ? "正在確認回放…" : exp ? `${exp.text}${exp.at ? `・${exp.at}` : ""}` : ERROR_TEXT[(st as { e: ReplayError }).e]}
         </span>
       </div>
+      {/* 只有能看（或還在確認）才放「觀看回放」；過期、無權限、沒資料只留原因文字，不放看起來能按的鈕（小宜 2026-11-13） */}
       {st.k === "err" && st.e === "failed" ? (
         <button type="button" className="mjl-btn ghost" onClick={() => void check()}>重試</button>
       ) : st.k === "err" && st.e === "not_logged_in" ? (
         <button type="button" className="mjl-btn ghost" onClick={onUnauthorized}>返回登入</button>
-      ) : (
+      ) : st.k !== "err" ? (
         <button type="button" className="mjl-btn primary" disabled={st.k !== "ok"} onClick={onOpen} data-record-replay-open>觀看回放</button>
-      )}
+      ) : null}
     </div>
   );
 }

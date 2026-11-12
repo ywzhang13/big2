@@ -4,6 +4,7 @@
 //   P1 手牌、四家吃碰槓（別家暗槓蓋著、自己的看得到）、花、海底（被吃碰胡走的不顯示）、張數、輪到誰、牌牆剩幾張、眼牌／地聽座位
 //   P2 眼牌的人看到的三家手牌（opponentHands）
 //   P3 剛打出的那張（lastDiscard）、自己剛摸進的那張（drawnTileId）
+//   P4 局末結算畫面：四家攤牌（贏家不含胡的那張）、贏家／放槍／台數、每家輸贏、剩下的牌庫，和牌局結算一致
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";
@@ -12,12 +13,12 @@ import { rooms, hooks, opts, saveGameState } from "../support/stub-db";
 import { asSeat } from "../support/stub-auth";
 import { db } from "../support/stub-replay-store";
 import { paceClock } from "../../lib/mahjong/pace";
-import { canDeclareTingNow, dealTiles, getAvailableActions, initGame, isChiForbidden, isLocked, ownTurnActions, eyeDiscardOptions } from "../../lib/mahjong/gameLogic";
+import { allHands, canDeclareTingNow, dealTiles, getAvailableActions, initGame, isChiForbidden, isLocked, ownTurnActions, eyeDiscardOptions } from "../../lib/mahjong/gameLogic";
 import { decodeRecord, replayFrames, snapshot, type ReplayRecord } from "../../lib/mahjong/replay/log";
 import { toPlayerGameState } from "../../lib/mahjong/db";
 import { tileKey, type Tile } from "../../lib/mahjong/tiles";
 import type { MahjongGameState, Meld } from "../../lib/mahjong/gameState";
-import { boardAt, type ReplayBoard } from "../../components/mahjong/replay/replayView";
+import { boardAt, resultAt, type ReplayBoard } from "../../components/mahjong/replay/replayView";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -145,6 +146,7 @@ function fromReplay(b: ReplayBoard, playing: boolean) {
 let hands = 0, steps = 0, eyeSteps = 0, concealedSteps = 0;
 const mismatch: string[] = [];
 let lastMis = 0, drawnMis = 0, drawnChecked = 0;
+const resultMis: string[] = [];
 for (let roomN = 1; roomN <= 4; roomN++) {
   const id = `ac000000-0000-4000-8000-00000000000${roomN}`;
   newRoom(id);
@@ -183,6 +185,16 @@ for (let roomN = 1; roomN <= 4; roomN++) {
         }
       }
     });
+    // P4 局末結算畫面
+    {
+      const res = resultAt(rec, frames);
+      const real = allHands(gs).map((h) => [h.seat, sortedIds(h.hand), melds(h.revealed), ids(h.flowers)]);
+      const mine = res.winner.allHands.map((h) => [h.seat, sortedIds(h.hand), melds(h.revealed), ids(h.flowers)]);
+      const ws = (gs.winners?.length ? gs.winners : gs.winner ? [gs.winner] : []).map((w) => [w.seat, w.from ?? null, w.score.totalFan, w.winTile?.id ?? null]);
+      const want = { hands: real, winners: ws, deltas: gs.settlement!.deltas, wall: ids(gs.wall), zimo: gs.settlement!.reason === "self_draw" };
+      const got = { hands: mine, winners: res.winners.map((w) => [w.seat, w.from ?? null, w.score.totalFan, w.winTile?.id ?? null]), deltas: res.settlement.deltas, wall: ids(res.remainingWall), zimo: res.isZimo };
+      if (JSON.stringify(want) !== JSON.stringify(got) && resultMis.length < 2) resultMis.push(`${id} 第 ${done} 局：\n     實際=${JSON.stringify(want)}\n     回放=${JSON.stringify(got)}`);
+    }
     if (gs.gameOver) break;
     for (const p of gs.players) await call(nextGame, { roomId: id, playerId: p.id });
   }
@@ -194,6 +206,8 @@ eq(mismatch, [], `P1／P2 ${hands} 局每一步、四個視角：手牌、吃碰
 eq(eyeSteps > 0 && concealedSteps > 0, true, `涵蓋：眼牌看三家手牌 ${eyeSteps} 次、畫面上有暗槓 ${concealedSteps} 次`);
 eq(lastMis, 0, "P3 剛打出的那張（lastDiscard）每一步都一致");
 eq([drawnChecked > 0, drawnMis], [true, 0], `P3 自己剛摸進、還沒打出的那張（分開放在手牌右邊）一致（檢查 ${drawnChecked} 次）`);
+
+eq(resultMis, [], `P4 ${hands} 局的局末結算畫面（四家攤牌、贏家、放槍、台數、輸贏、剩下的牌庫）都和牌局結算一致`);
 
 for (const r of results) console.log(r);
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);

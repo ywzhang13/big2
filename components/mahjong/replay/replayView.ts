@@ -2,8 +2,8 @@
 // 純函式、不碰 React，測試見 tests/_replay-view.ts。牌桌元件原封不動，回放畫面才會和打牌時一模一樣。
 import type { Tile } from "@/lib/mahjong/tiles";
 import { sortTiles } from "@/lib/mahjong/tiles";
-import type { Meld } from "@/lib/mahjong/gameState";
-import type { MjOpponentHand, MjPlayer } from "@/hooks/useMahjong";
+import type { Meld, Settlement } from "@/lib/mahjong/gameState";
+import type { MjHandReveal, MjOpponentHand, MjPlayer, MjWinner } from "@/hooks/useMahjong";
 import { safeHand } from "@/lib/mahjong/handOrder";
 import { tileFace, type MeldSnap, type ReplayView, type SeatSnap } from "@/lib/mahjong/replay/log";
 
@@ -130,6 +130,40 @@ export function boardAt(rec: ReplayView, frames: SeatSnap[][], step: number, sea
     dice: rec.dice?.length === 3 ? (rec.dice as [number, number, number]) : undefined,
     doorSeat: rec.door ?? undefined,
     dealerConsecutive: rec.dealerConsecutive,
+  };
+}
+
+/** 局末結算畫面（MjResultMobile）要的資料：和打牌時 mj_game_over 一樣——四家攤牌（贏家不含胡的那張）、贏家台數、輸贏、剩下的牌庫 */
+export interface ReplayResultView {
+  winner: MjWinner & { allHands: MjHandReveal[] };
+  winners: MjWinner[];
+  settlement: Settlement;
+  isZimo: boolean;
+  fromName?: string;
+  remainingWall: Tile[];
+}
+export function resultAt(rec: ReplayView, frames: SeatSnap[][]): ReplayResultView {
+  const last = frames[frames.length - 1];
+  const r = rec.result;
+  const name = (s: number) => rec.seats.find((x) => x.seat === s)?.name ?? "";
+  const winners: MjWinner[] = r.winners.map((w) => ({
+    seat: w.seat, name: name(w.seat), score: { fans: w.fans, totalFan: w.totalFan },
+    ...(w.winTile != null ? { winTile: face(w.winTile) } : {}), from: w.from,
+  }));
+  const allHands: MjHandReveal[] = last.map((s, i) => ({
+    seat: i, name: name(i),
+    hand: faces(s.h.filter((id) => !r.winners.some((w) => w.seat === i && w.winTile === id))),
+    revealed: s.m.map(meld), flowers: faces(s.f),
+  }));
+  const used = new Set(last.flatMap((s) => [...s.h, ...s.f, ...s.d, ...s.m.flatMap((m) => m.slice(2) as number[])]));
+  const first = winners[0];
+  return {
+    winner: { ...(first ?? { seat: -1, name: "", score: { fans: [], totalFan: 0 } }), allHands },
+    winners,
+    settlement: { deltas: r.deltas, reason: r.reason, fanTotal: r.winners.reduce((n, w) => n + w.totalFan, 0), paymentPerPlayer: 0 },
+    isZimo: r.reason === "self_draw",
+    fromName: first?.from != null ? name(first.from) : undefined,
+    remainingWall: faces(rec.init.wall.filter((id) => !used.has(id))),
   };
 }
 
