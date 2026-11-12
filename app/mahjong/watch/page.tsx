@@ -20,6 +20,7 @@ import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
 import { preloadFx, unlockAudio } from "@/lib/mahjong/fx/engine";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
+import MjSeatSwitch from "@/components/mahjong/spectate/MjSeatSwitch";
 import { SpxAvatar, SpxToast, useTick } from "@/components/mahjong/spectate/SpectateHost";
 import {
   clockSkew, fetchView, lookupRoom, requestSpectate, secondsLeft, toSpectateView,
@@ -210,8 +211,10 @@ export default function MahjongWatchPage() {
   // 就加 1，1800ms 那次 setView 之前先比對，序號對不上（同一輪裡又有更新的摸牌、或換視角／離開觀戰）
   // 就不套用，避免舊的重播蓋掉新的狀態
   const revealGenRef = useRef(0);
+  // 四家切換的風位排序：換視角時畫面先清空（view＝null），沿用上一份視角的開門／莊家，按鈕順序才不會跳動
+  const [lastSeats, setLastSeats] = useState<{ doorSeat?: number; dealerSeat: number } | null>(null);
+  if (view && (lastSeats?.doorSeat !== view.doorSeat || lastSeats?.dealerSeat !== view.dealerSeat)) setLastSeats({ doorSeat: view.doorSeat, dealerSeat: view.dealerSeat });
   const [revokedBy, setRevokedBy] = useState<number | null>(null);
-  const [drawer, setDrawer] = useState(true);
   const [slow, setSlow] = useState(false);
   // 胡牌演出：和打牌頁同一份排程（hooks/useWinShow.tsx）——大牌段 → 浮層或隕石 → 結算，播法、順序、跳過都一樣
   const ws = useWinShow({ winner: view?.winner, status: view?.status ?? "", roundInfo: view?.roundInfo, roomId: room?.roomId ?? "", roomOk: !!view });
@@ -520,12 +523,14 @@ export default function MahjongWatchPage() {
     return (
       <div className="spx spx-watch flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative" data-mt-stage data-spectating={viewSeat}>
         <MjPrefsPanel />
-        <div className={`spx-bar${mobile ? "" : " d"}`} role="status" data-spectate-bar>觀戰中・{nameOf(viewSeat)}視角</div>
+        {/* 牌桌區：上方不再放「觀戰中・○○視角」大提示條（老闆 2026-11-13：擋到對家），改在牌桌下方的四家切換旁顯示「觀戰中」。
+            transform 讓手機牌桌（.mjm-app 是 fixed; inset: 0）只填滿這一塊，不蓋到下方的切換列 */}
+        <div className="spx-stage">
         {props && (mobile ? (
           <MjBoardMobile {...props} roomCode={room?.code ?? code} roundLabel={roundLabel} basePoints={v?.roomSettings?.basePoints} fanPoints={v?.roomSettings?.fanPoints} onLeave={leave} leaveLabel="離開觀戰" />
         ) : (
           <>
-            {/* 桌機：左上 ☰（設定、房號、離開觀戰），和打牌時同一個選單；中間留給頂部的觀戰標籤 */}
+            {/* 桌機：左上 ☰（設定、房號、離開觀戰），和打牌時同一個選單 */}
             <div className="flex items-center px-4 py-2 h-14 border-b border-white/10">
               <div className="relative w-10 h-10">
                 <MjTableMenu desk roomCode={room?.code ?? ""} roundLabel={roundLabel} basePoints={v?.roomSettings?.basePoints} fanPoints={v?.roomSettings?.fanPoints} onLeave={leave} leaveLabel="離開觀戰" />
@@ -535,6 +540,20 @@ export default function MahjongWatchPage() {
           </>
         ))}
         {!props && slow && <div className="spx-skel" role="status">正在載入{nameOf(viewSeat)}的視角…</div>}
+        </div>
+        {/* 四家常駐快速切換（小宜〈觀戰與回放-視角切換設計規格〉）：點一下就換，取代右上角的「視角」選單；還沒同意的人停用並寫原因 */}
+        <MjSeatSwitch
+          mode="觀戰中"
+          compact={mobile}
+          current={viewSeat}
+          doorSeat={v?.doorSeat ?? lastSeats?.doorSeat}
+          dealerSeat={v?.dealerSeat ?? lastSeats?.dealerSeat}
+          options={targets.map((t) => ({
+            seat: t.seat, name: t.name,
+            disabledReason: t.seat === viewSeat || t.status === "approved" ? undefined : t.status === "pending" ? "等待回應" : "未同意",
+          }))}
+          onSelect={watch}
+        />
         {/* 別家補花：觀戰畫面照玩家本人視角一樣用補花膠囊（老闆 2026-11-07 第三次更正：拿掉上一輪的摸牌格亮正面） */}
         <MjFlowerFx fx={flowerFx} mySeat={viewSeat ?? -1} desk={!mobile} />
         {/* 胡牌演出（一般胡的浮層、大牌段、隕石）：和玩家本人看到的一樣 */}
@@ -566,31 +585,6 @@ export default function MahjongWatchPage() {
             onNextGame={async () => null}
             onLeave={leave}
           />
-        )}
-        {mobile && (
-          <button type="button" className="spx-btn spx-viewbtn" aria-expanded={drawer} onClick={() => setDrawer((d) => !d)} data-spectate-drawer-toggle>視角</button>
-        )}
-        {!mobile && (
-          <button type="button" className="spx-btn spx-viewbtn" style={{ right: 24, top: 10 }} aria-expanded={drawer} onClick={() => setDrawer((d) => !d)} data-spectate-drawer-toggle>
-            {drawer ? "收合" : "切換視角"}
-          </button>
-        )}
-        {drawer && (
-          <aside className={`spx-drawer${mobile ? "" : " d"}`} aria-label="切換視角" data-spectate-drawer>
-            <h2>切換視角</h2>
-            {targets.map((t) => {
-              const cur = t.seat === viewSeat, can = !cur && t.status === "approved";
-              const s = cur ? "目前視角" : can ? "可切換" : statusOf(t, skew).text;
-              return (
-                <button key={t.seat} type="button" className={`spx-opt${cur ? " cur" : ""}${can ? " can" : ""}`} disabled={!can} aria-current={cur || undefined}
-                  onClick={() => watch(t.seat)} data-spectate-switch={t.seat}>
-                  <span>{t.name}</span>
-                  <span className="s">{s}</span>
-                </button>
-              );
-            })}
-            <button type="button" className="spx-btn" onClick={leave} data-spectate-leave>離開觀戰</button>
-          </aside>
         )}
         <SpxToast text={toast?.text ?? null} assertive={toast?.assertive} />
       </div>

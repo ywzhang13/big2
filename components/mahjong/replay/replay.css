@@ -25,15 +25,12 @@
 }
 .mjr-row { display: flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0; }
 .mjr-row .sp { flex: 1; }
-.mjr-seats { display: flex; align-items: center; gap: 8px; }
-.mjr-seats .k { color: rgba(246, 240, 218, .7); margin-right: 4px; }
 .mjr-btn {
   min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 8px;
   background: #173326; border: 1px solid #806B32; color: #F6F0DA; font-size: 14px; white-space: nowrap;
 }
-/* 金底只給主要動作（播放、重試）；選中的視角用金框＋金字＋勾 */
+/* 金底只給主要動作（播放、重試）；視角切換用共用的 MjSeatSwitch */
 .mjr-btn.gold { background: #E8CE84; border-color: #E8CE84; color: #08180E; font-weight: 700; }
-.mjr-btn.on { border-color: #E8CE84; color: #E8CE84; font-weight: 700; box-shadow: inset 0 0 0 1px #E8CE84; }
 .mjr-icon {
   width: 44px; height: 44px; flex: 0 0 auto; border-radius: 8px;
   background: #173326; border: 1px solid #806B32; color: #F6F0DA; font-size: 16px;
@@ -67,7 +64,8 @@
 /* 手機橫向（小宜 2026-11-13 調整）：不放頂列、控制區只留一列 44px，空間讓給牌桌；觸控區 44×44、間距至少 4px */
 .mjr.m .mjr-top { height: 38px; padding: 0 8px; } /* 只剩狀態畫面用 */
 .mjr.m .mjr-top h1 { font-size: 14px; }
-.mjr.m .mjr-ctl { height: calc(50px + env(safe-area-inset-bottom)); padding: 3px 8px calc(3px + env(safe-area-inset-bottom)); gap: 0; }
+/* 手機控制區：上面一列四家視角切換（52px），下面一列返回、選局、播放控制（44px） */
+.mjr.m .mjr-ctl { height: auto; padding: 0 8px calc(3px + env(safe-area-inset-bottom)); gap: 0; }
 .mjr.m .mjr-row { gap: 6px; }
 .mjr.m .mjr-sel select, .mjr.m .mjr-btn { font-size: 14px; padding-left: 10px; }
 .mjr.m .mjr-bar .t { font-size: 12px; align-items: center; }

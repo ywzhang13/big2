@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
+import MjSeatSwitch from "@/components/mahjong/spectate/MjSeatSwitch";
 import { replayFrames, type ReplayView, type SeatSnap } from "@/lib/mahjong/replay/log";
 import { boardAt, clock, expiryText, resultAt, stepDelay } from "./replayView";
 import { ERROR_TEXT, fetchReplayHand, fetchReplayList, type ReplayError, type ReplayList } from "./replayApi";
@@ -136,7 +137,6 @@ export default function MjReplay({ matchId, onClose, onUnauthorized }: { matchId
   const result = useMemo(() => (loaded ? resultAt(loaded.rec, loaded.frames) : null), [loaded]);
 
   const nameOf = (s: number) => list?.players.find((p) => p.seat === s)?.name ?? `座位 ${s + 1}`;
-  const seatLabel = (s: number) => (s === list?.mySeat ? `自己（${nameOf(s)}）` : nameOf(s));
   const expiry = list ? expiryText(list.expiresAt, Date.now()) : null;
   const rec = loaded?.rec;
   const roundLabel = rec && rec.round != null && rec.game != null ? `${WIND[(rec.round - 1) % 4]}風圈 第${rec.game}局` : undefined;
@@ -171,13 +171,17 @@ export default function MjReplay({ matchId, onClose, onUnauthorized }: { matchId
   const ready = loaded != null;
   const players = boardProps?.players ?? [];
 
-  const seatSelect = (
-    <label className="mjr-sel">
-      <span className="mjr-sr">視角</span>
-      <select value={seat} disabled={!ready} onChange={(e) => setSeat(Number(e.target.value))} aria-label="視角">
-        {[0, 1, 2, 3].map((s) => <option key={s} value={s}>視角：{seatLabel(s)}</option>)}
-      </select>
-    </label>
+  // 四家常駐快速切換（和觀戰頁同一個元件）：換視角不重新載入，局數、步數、播放狀態都保留
+  const seatSwitch = (
+    <MjSeatSwitch
+      mode="回放中"
+      compact={mobile}
+      current={seat}
+      onSelect={setSeat}
+      doorSeat={board?.doorSeat}
+      dealerSeat={board?.dealerSeat}
+      options={[0, 1, 2, 3].map((s) => ({ seat: s, name: nameOf(s), note: s === list?.mySeat ? "自己" : undefined, disabledReason: ready ? undefined : "載入中" }))}
+    />
   );
   const handSelect = (
     <label className="mjr-sel">
@@ -261,23 +265,18 @@ export default function MjReplay({ matchId, onClose, onUnauthorized }: { matchId
 
       <div className="mjr-ctl">
         {mobile ? (
-          <div className="mjr-row">
-            <button type="button" className="mjr-icon" onClick={onClose} aria-label="返回場次明細">‹</button>
-            {seatSelect}
-            {handSelect}
-            {transport}
-          </div>
+          <>
+            {seatSwitch}
+            <div className="mjr-row">
+              <button type="button" className="mjr-icon" onClick={onClose} aria-label="返回場次明細">‹</button>
+              {handSelect}
+              {transport}
+            </div>
+          </>
         ) : (
           <>
             <div className="mjr-row">
-              <div className="mjr-seats" role="group" aria-label="視角">
-                <span className="k">視角</span>
-                {[0, 1, 2, 3].map((s) => (
-                  <button key={s} type="button" className={`mjr-btn${s === seat ? " on" : ""}`} aria-pressed={s === seat} disabled={!ready} onClick={() => setSeat(s)} data-replay-view={s}>
-                    {s === seat && <span aria-hidden>✓ </span>}{seatLabel(s)}
-                  </button>
-                ))}
-              </div>
+              {seatSwitch}
               {handSelect}
               <span className="sp" />
               {expiry && <span className={`mjr-exp${expiry.at ? " soon" : ""}`}>{expiry.text}{expiry.at ? `・${expiry.at}` : ""}</span>}
