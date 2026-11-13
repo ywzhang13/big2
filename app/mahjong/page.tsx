@@ -1156,7 +1156,7 @@ function RoomView({
           <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl">
             <h3 className="text-[#f0d68a] font-bold text-lg text-center mb-2">離開房間？</h3>
             <p className="text-white/60 text-sm text-center mb-4">
-              牌局尚未結束，需要其他玩家同意你才能離開（超過 3 分鐘沒操作的人不計票）。
+              牌局尚未結束，需要其他玩家同意你才能離開（輪到他超過 3 分鐘沒動作的人不計票）。
             </p>
             <div className="flex gap-3">
               <button

@@ -1,24 +1,23 @@
-// 解散投票：超過 3 分鐘沒操作的玩家不計票（老闆 2026-11-13；lib/mahjong/leave/rules.ts）
-//   A 四人都有在操作：照舊要其他三家都同意
-//   B 一人閒置超過 3 分鐘：其他兩家同意就解散；投票畫面列出誰不計票
-//   C 閒置的人回來操作（打牌、聊天、投票）就立刻恢復投票權
-//   D 大家都閒置：不會自動解散；發起者自己也閒置時「重新確認」不會解散
-//   E 其他三家都閒置、發起者有在操作：發起當下就解散（至少一位有在操作的人同意＝發起者本人）
-//   F 中途解散記下的分數和原本四家同意時一樣（對戰紀錄同一個格式）
-//   G 看投票狀態、重新確認都不算操作；只有發起者能重新確認；閒置的人投「不同意」照樣取消（投票本身就是操作）
-//   H 上線當下正在打的房（沒有任何記錄）：維持要大家同意；開始記錄滿 3 分鐘還沒動的人才算閒置
-//   M1（審伯必修 1）聊天／互動時間讀不到：不能把「不知道」當成「沒操作」——發起、最後一票、重新確認都不解散，退回全員同意
-//   M2（審伯必修 2）判斷和解散之間剛好有人聊天：三條路（發起、最後一票、重新確認）× 兩種先後順序
-//       ・活動先：解散交易看到剛發生的活動，不解散、不廣播解散、不寫紀錄，把那位算回來
-//       ・解散先：房間已經關掉，晚到的聊天／互動送不進來（SQL 層的擋法見 tests/_sql-idle-vote.ts）
+// 解散投票：輪到他的牌局動作超過 3 分鐘沒做，就不計票（老闆 2026-11-13 定案；lib/mahjong/leave/rules.ts）
+//   A 沒有人卡住：照舊要其他三家都同意
+//   B 一人在自己回合卡住超過 3 分鐘：其他三家同意就解散（發起者＋兩家）；投票畫面列出他「不計票」
+//   W 正在等別人的玩家不算卡住（就算整桌 4 分鐘沒動）
+//   T 兩人卡住（等吃碰槓胡的窗口兩家都沒決定、或一局結束兩家沒按下一局）：其他兩人同意就解散
+//   R 卡住的人做牌局動作（真的走摸牌 API）就恢復投票權
+//   X 判斷之後卡住的人剛好出牌（牌局版本變了）：不會誤解散——發起、最後一票、重新確認三條路都測
+//   C 聊天、丟互動不影響判斷；發起、投票、看狀態、重新確認也不算牌局動作
+//   D 有投票權的人一個都沒有同意時不解散（大家都卡住、發起者也卡住）；卡住的人投的票不計
+//   E 其他三家都卡住、發起者有投票權：發起當下就解散
+//   F 中途解散記下的分數和原本四家同意時一樣
+//   H 上線當下正在打的房（沒有任何牌局動作紀錄）：判斷不了，照舊要全員同意
 import { POST as leaveRequest } from "../../app/api/mahjong/leave-request/route";
 import { GET as voteStatus, POST as leaveVote } from "../../app/api/mahjong/leave-vote/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";
+import { POST as effectApi } from "../../app/api/mahjong/effect/route";
+import { POST as chatApi } from "../../app/api/mahjong/chat/route";
 import { rooms } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
-import { records, reset as resetRecords } from "../support/stub-records-store";
-import { activity, fail as activityFail, hooks as leaveHooks, dissolveCalls } from "../support/stub-leave-store";
-import { POST as effectApi } from "../../app/api/mahjong/effect/route";
+import { records, reset as resetRecords, opts as recOpts } from "../support/stub-records-store";
 import { asSeat } from "../support/stub-auth";
 import { dealTiles, initGame } from "../../lib/mahjong/gameLogic";
 import { IDLE_VOTE_MS } from "../../lib/mahjong/leave/rules";
@@ -38,27 +37,34 @@ const status = async (roomId: string, pid: string) => {
   return { status: r.status, body: await r.json() };
 };
 const ago = (ms: number) => Date.now() - ms;
-const IDLE = IDLE_VOTE_MS + 30_000; // 超過 3 分鐘
+const STUCK = IDLE_VOTE_MS + 30_000; // 超過 3 分鐘
 let n = 0;
 
-/** 一間打過 2 局、正在打第 3 局的房；lastActive：每家多久前操作過（毫秒） */
-function room(idleMs: [number, number, number, number]): string {
+/**
+ * 一間打過 2 局、正在打第 3 局的房。lastMs＝最後一次牌局動作是多久前（誰做的不重要）；
+ * setup 決定現在輪到誰（預設輪到玩家4（p3）摸牌）。
+ */
+function room(lastMs: number, setup?: (s: MahjongGameState) => void): string {
   const id = `room-idle-${++n}`;
   const s = dealTiles(initGame([0, 1, 2, 3].map((i) => ({ id: "p" + i, name: "玩家" + (i + 1) })), { totalRounds: 2, basePoints: 100, fanPoints: 20 }));
   Object.assign(s, {
     roomCode: String(8100 + n), startedAt: new Date(ago(3600_000)).toISOString(), handsCompleted: 2, playerScores: [120, -40, -60, -20],
-    lastActive: Object.fromEntries(idleMs.map((ms, i) => ["p" + i, ago(ms)])), stateVersion: 1,
+    currentTurn: 3, hasDrawn: false, lastDiscard: null, pendingActions: undefined, drawnTileId: undefined,
+    lastActive: { p2: ago(lastMs) }, activeSince: ago(3600_000), stateVersion: 1,
   });
+  setup?.(s as MahjongGameState);
   rooms[id] = { id, code: s.roomCode, game_state: s as MahjongGameState, status: "playing" };
   return id;
 }
 const alive = (id: string) => !!rooms[id];
 const rec = (id: string) => records.find((r) => r.roomId === id);
 const shape = (id: string) => { const r = rec(id); return r ? { endReason: r.endReason, handsPlayed: r.handsPlayed, scores: r.players.map((p) => [p.seat, p.totalScore]) } : null; };
+const grantedEvents = () => sent.filter((e) => e.event === "mj_leave_vote" && e.payload.result === "granted").length;
+const idleNames = (b: { idleSeats: { name: string }[] }) => b.idleSeats.map((x) => x.name);
 resetRecords();
 
-// ---------- A 四人都有在操作 ----------
-const A = room([0, 0, 0, 0]);
+// ---------- A 沒有人卡住 ----------
+const A = room(10_000);
 {
   const r0 = await post(leaveRequest, { roomId: A, playerId: "p0" });
   const v1 = await post(leaveVote, { roomId: A, playerId: "p1", approve: true });
@@ -66,211 +72,164 @@ const A = room([0, 0, 0, 0]);
   const mid = alive(A);
   const v3 = await post(leaveVote, { roomId: A, playerId: "p3", approve: true });
   eq([r0.body.result, r0.body.needed, v1.body.result, v2.body.result, mid, v3.body.result, alive(A)], ["vote", 3, "vote", "vote", true, "granted", false],
-    "A 四人都有在操作：要其他三家都同意，兩家同意時還沒解散，第三家同意才解散");
+    "A 輪到玩家4 才 10 秒：沒有人卡住，要其他三家都同意");
 }
 
-// ---------- B 一人閒置 ----------
-const B = room([0, 0, 0, IDLE]);
+// ---------- B 一人卡住 ----------
+const B = room(STUCK);
 {
   const r0 = await post(leaveRequest, { roomId: B, playerId: "p0" });
   const st = await status(B, "p1");
-  eq([r0.body.result, r0.body.needed, st.body.needed, st.body.idleSeats.map((x: { seat: number; name: string }) => [x.seat, x.name])], ["vote", 2, 2, [[3, "玩家4"]]],
-    "B1 玩家4 超過 3 分鐘沒操作：只需要另外兩家同意；投票狀態列出玩家4「不計票」");
-  const v1 = await post(leaveVote, { roomId: B, playerId: "p1", approve: true });
+  eq([r0.body.needed, st.body.needed, idleNames(st.body)], [2, 2, ["玩家4"]],
+    "B1 輪到玩家4 摸牌、超過 3 分鐘沒動：他不計票，只需要玩家2、玩家3 同意；投票狀態列出玩家4");
+  await post(leaveVote, { roomId: B, playerId: "p1", approve: true });
   const v2 = await post(leaveVote, { roomId: B, playerId: "p2", approve: true });
   const ev = sent.filter((e) => e.event === "mj_leave_vote").at(-1)?.payload;
-  eq([v1.body.result, v2.body.result, alive(B), ev?.result, ev?.needed, (ev?.idleSeats as { seat: number }[])?.map((x) => x.seat)], ["vote", "granted", false, "granted", 2, [3]],
-    "B2 其他兩家同意就解散，關房；廣播也帶需要人數和不計票的座位");
+  eq([v2.body.result, alive(B), ev?.result, (ev?.idleSeats as { seat: number }[])?.map((x) => x.seat)], ["granted", false, "granted", [3]],
+    "B2 其他三家（發起者＋兩家）同意就解散；廣播帶不計票的座位");
 }
 
-// ---------- F 分數紀錄和原本一樣 ----------
+// ---------- F 分數紀錄 ----------
 eq([shape(A), shape(B)], [
   { endReason: "dissolved", handsPlayed: 2, scores: [[0, 120], [1, -40], [2, -60], [3, -20]] },
   { endReason: "dissolved", handsPlayed: 2, scores: [[0, 120], [1, -40], [2, -60], [3, -20]] },
-], "F 有人閒置時解散，對戰紀錄和四家同意解散完全同一個格式：中途解散、打完的局數、當下四家總分");
+], "F 有人卡住時解散，對戰紀錄和四家同意解散完全同一個格式：中途解散、打完的局數、當下四家總分");
 
-// ---------- C 閒置的人回來操作就恢復投票權 ----------
+// ---------- W 等待中的玩家不算卡住 ----------
 {
-  // C1 回來打牌：輪到玩家4 摸牌（真的走摸牌 API）
-  const C = room([0, 0, 0, IDLE]);
-  const s = rooms[C].game_state;
-  Object.assign(s, { currentTurn: 3, hasDrawn: false, lastDiscard: null, pendingActions: undefined, drawnTileId: undefined });
+  const W = room(STUCK); // 整桌 4 分鐘沒動，但只有輪到的玩家4 算卡住
+  await post(leaveRequest, { roomId: W, playerId: "p1" });
+  const st = await status(W, "p0");
+  eq([st.body.needed, idleNames(st.body)], [2, ["玩家4"]], "W 整桌 4 分鐘沒動作，只有輪到的玩家4 算卡住；玩家1、玩家3 在等別人，照樣要他們同意");
+}
+
+// ---------- T 兩人卡住 ----------
+{
+  // T1 玩家2 打出一張牌，玩家3、玩家4 都能碰／胡、4 分鐘都沒決定
+  const T1 = room(STUCK, (s) => { s.currentTurn = 1; s.lastDiscard = { tile: s.players[1].hand[0], from: 1 }; s.pendingActions = { discardFrom: 1, potentialActors: [2, 3], passedActors: [] }; });
+  const r0 = await post(leaveRequest, { roomId: T1, playerId: "p0" });
+  const st = await status(T1, "p1");
+  const v1 = await post(leaveVote, { roomId: T1, playerId: "p1", approve: true });
+  eq([r0.body.needed, idleNames(st.body), v1.body.result, alive(T1)], [1, ["玩家3", "玩家4"], "granted", false],
+    "T1 等吃碰槓胡的窗口兩家（玩家3、玩家4）都卡住：扣兩位，剩下玩家2 同意就解散");
+  // T2 一局結束，玩家3、玩家4 4 分鐘沒按下一局
+  const T2 = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = ["p0", "p1"]; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; });
+  const r2 = await post(leaveRequest, { roomId: T2, playerId: "p0" });
+  const v2 = await post(leaveVote, { roomId: T2, playerId: "p1", approve: true });
+  eq([r2.body.needed, v2.body.result, alive(T2)], [1, "granted", false], "T2 一局結束、玩家3 玩家4 超過 3 分鐘沒按下一局：扣兩位，玩家2 同意就解散");
+}
+
+// ---------- R 卡住的人做牌局動作就恢復 ----------
+{
+  const R = room(STUCK);
+  await post(leaveRequest, { roomId: R, playerId: "p0" });
+  const before = (await status(R, "p0")).body.needed;
+  const d = await post(draw, { roomId: R, playerId: "p3" }); // 玩家4 摸牌（真的牌局動作）
+  const after = (await status(R, "p0")).body;
+  await post(leaveVote, { roomId: R, playerId: "p1", approve: true });
+  const v2 = await post(leaveVote, { roomId: R, playerId: "p2", approve: true });
+  eq([before, d.status, after.needed, after.idleSeats.length, v2.body.result, alive(R)], [2, 200, 3, 0, "vote", true],
+    "R 玩家4 回來摸牌：馬上恢復投票權（需要 3 人），兩家同意不會解散");
+  const v3 = await post(leaveVote, { roomId: R, playerId: "p3", approve: true });
+  eq([v3.body.result, alive(R)], ["granted", false], "R 玩家4 也同意才解散");
+}
+
+// ---------- X 判斷之後卡住的人剛好出牌 ----------
+{
+  /** 關房交易開始前（判斷已經做完），玩家4 剛好摸了牌：牌局版本 +1、最後動作時間更新、輪到誰不變 */
+  const actsJustNow = (roomId: string) => {
+    let once = true;
+    recOpts.beforeClose = (_g, id) => {
+      if (id !== roomId || !once) return;
+      once = false;
+      const s = rooms[id].game_state;
+      s.stateVersion = (s.stateVersion ?? 0) + 1;
+      s.lastActive = { ...(s.lastActive ?? {}), p3: Date.now() };
+      s.hasDrawn = true;
+    };
+  };
+  const g0 = grantedEvents();
+  // 發起：一局結束，只有發起者玩家1 按了下一局，其他三家卡住 → 本來發起當下就會解散
+  const X1b = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = ["p0"]; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; });
+  actsJustNow(X1b);
+  const x1 = await post(leaveRequest, { roomId: X1b, playerId: "p0" });
+  recOpts.beforeClose = undefined;
+
+  const X2 = room(STUCK);
+  await post(leaveRequest, { roomId: X2, playerId: "p0" });
+  await post(leaveVote, { roomId: X2, playerId: "p1", approve: true });
+  actsJustNow(X2);
+  const x2 = await post(leaveVote, { roomId: X2, playerId: "p2", approve: true });
+  recOpts.beforeClose = undefined;
+
+  const X3 = room(10_000);
+  await post(leaveRequest, { roomId: X3, playerId: "p0" });
+  await post(leaveVote, { roomId: X3, playerId: "p1", approve: true });
+  await post(leaveVote, { roomId: X3, playerId: "p2", approve: true });
+  rooms[X3].game_state.lastActive = { p2: ago(STUCK) }; // 等待中玩家4 卡住超過 3 分鐘
+  actsJustNow(X3);
+  const x3 = await post(leaveVote, { roomId: X3, playerId: "p0", check: true });
+  recOpts.beforeClose = undefined;
+
+  eq([[x1.body.result, x2.body.result, x3.body.result], [alive(X1b), alive(X2), alive(X3)], [rec(X1b) ?? null, rec(X2) ?? null, rec(X3) ?? null], grantedEvents() - g0],
+    [["vote", "vote", "vote"], [true, true, true], [null, null, null], 0],
+    "X 判斷之後、關房交易前卡住的人剛好做了牌局動作（版本變了）：發起、最後一票、重新確認三條路都不解散、不寫紀錄、不廣播解散，重判後他恢復投票權");
+  const after = (await status(X2, "p0")).body;
+  eq([after.needed, after.idleSeats.length, rooms[X2].game_state.leaveRequest?.approvedBy], [3, 0, ["p1", "p2"]], "X 重判後玩家4 要同意（需要 3 人），已同意的兩票保留");
+}
+
+// ---------- C 聊天、互動、投票類請求都不算牌局動作 ----------
+{
+  const C = room(STUCK);
   await post(leaveRequest, { roomId: C, playerId: "p0" });
-  const before = (await status(C, "p0")).body.needed;
-  const d = await post(draw, { roomId: C, playerId: "p3" });
-  const after = (await status(C, "p0")).body;
+  const fx = await post(effectApi, { roomId: C, playerId: "p3", effect: "heart", to: "p1" });
+  const ch = await post(chatApi, { roomId: C, playerId: "p3", text: "我還在喔" });
+  await status(C, "p3");
+  const no = await post(leaveVote, { roomId: C, playerId: "p3", approve: false }); // 卡住的人按不同意：不計
+  const st = (await status(C, "p1")).body;
+  eq([fx.status, ch.status, st.needed, idleNames(st), no.body.result, alive(C)], [200, 200, 2, ["玩家4"], "vote", true],
+    "C 卡住的玩家4 聊天、丟互動、看投票狀態、按不同意：都不是牌局動作，他還是不計票，不同意也不計（不會取消）");
   await post(leaveVote, { roomId: C, playerId: "p1", approve: true });
   const v2 = await post(leaveVote, { roomId: C, playerId: "p2", approve: true });
-  eq([before, d.status, after.needed, after.idleSeats.length, v2.body.result, alive(C)], [2, 200, 3, 0, "vote", true],
-    "C1 玩家4 回來摸牌：馬上恢復投票權（需要 3 人），兩家同意不會解散");
-  const v3 = await post(leaveVote, { roomId: C, playerId: "p3", approve: true });
-  eq([v3.body.result, alive(C)], ["granted", false], "C1 玩家4 也同意才解散");
-
-  // C2 回來聊天（聊天、丟互動的時間從冷卻紀錄讀）
-  const C2 = room([0, 0, 0, IDLE]);
-  await post(leaveRequest, { roomId: C2, playerId: "p0" });
-  activity[C2] = { "u:p3": Date.now() };
-  const v1b = await post(leaveVote, { roomId: C2, playerId: "p1", approve: true });
-  const v2b = await post(leaveVote, { roomId: C2, playerId: "p2", approve: true });
-  eq([v1b.body.needed, v2b.body.result, alive(C2)], [3, "vote", true], "C2 玩家4 剛剛聊過天：算有在操作，要他也同意");
-
-  // C3 閒置的人投「不同意」：投票本身就是操作，照樣取消
-  const C3 = room([0, 0, 0, IDLE]);
-  await post(leaveRequest, { roomId: C3, playerId: "p0" });
-  const no = await post(leaveVote, { roomId: C3, playerId: "p3", approve: false });
-  eq([no.body.result, alive(C3), rooms[C3].game_state.leaveRequest ?? null], ["denied", true, null], "C3 閒置的玩家4 回來按不同意：照樣取消解散");
+  eq([v2.body.result, alive(C)], ["granted", false], "C 另外兩家同意就解散");
+  // 發起、投票不會讓卡住的人重新起算：玩家2 發起後玩家4 照樣卡住
+  const C2 = room(STUCK);
+  const t = rooms[C2].game_state.lastActive!.p2;
+  await post(leaveRequest, { roomId: C2, playerId: "p1" });
+  await post(leaveVote, { roomId: C2, playerId: "p0", approve: true });
+  eq([rooms[C2].game_state.lastActive!.p2 === t, Object.keys(rooms[C2].game_state.lastActive!)], [true, ["p2"]], "C 發起、投票都不更新最後牌局動作時間");
 }
 
-// ---------- D 大家都閒置 ----------
+// ---------- D 沒有有投票權的人同意就不解散 ----------
 {
-  const D = room([IDLE, IDLE, IDLE, IDLE]);
+  // 一局結束，四家都 4 分鐘沒按下一局（發起者自己也卡住）
+  const D = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = []; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; });
   const st0 = await status(D, "p1");
-  eq([st0.body.active, alive(D)], [false, true], "D1 四人都閒置、沒有人發起：房間不會自己解散");
-  // 發起後發起者也走開了（發起時間已超過 3 分鐘），其他人也都閒置
-  rooms[D].game_state.leaveRequest = { requesterId: "p0", requesterName: "玩家1", requesterSeat: 0, approvedBy: [], deniedBy: [] };
+  const r0 = await post(leaveRequest, { roomId: D, playerId: "p0" });
   const chk = await post(leaveVote, { roomId: D, playerId: "p0", check: true });
-  eq([chk.body.result, alive(D), chk.body.needed], ["vote", true, 0],
-    "D2 發起者和其他三家都超過 3 分鐘沒操作：重新確認也不會解散（至少要一位有在操作的人同意）");
+  const v = await post(leaveVote, { roomId: D, playerId: "p1", approve: true }); // 卡住的人同意：不計
+  eq([st0.body.active, r0.body.result, chk.body.result, v.body.result, alive(D)], [false, "vote", "vote", "vote", true],
+    "D 四家都卡住（含發起者）：沒人發起不會解散；發起、重新確認、卡住的人按同意都不解散（至少要一位有投票權的人同意）");
 }
 
-// ---------- E 其他三家都閒置 ----------
+// ---------- E 其他三家都卡住 ----------
 {
-  const E = room([0, IDLE, IDLE, IDLE]);
+  const E = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = ["p0"]; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; });
+  const g = grantedEvents();
   const r0 = await post(leaveRequest, { roomId: E, playerId: "p0" });
-  eq([r0.body.result, alive(E), shape(E)?.endReason, sent.filter((e) => e.event === "mj_leave_vote").at(-1)?.payload.result],
-    ["granted", false, "dissolved", "granted"], "E 其他三家都閒置、玩家1 有在操作：發起當下就解散（記成中途解散，前端收到和投票解散同一個事件）");
-}
-
-// ---------- G 不算操作的請求、權限 ----------
-{
-  const G = room([0, 0, 0, IDLE]);
-  await post(leaveRequest, { roomId: G, playerId: "p0" });
-  const t3 = rooms[G].game_state.lastActive!.p3;
-  await status(G, "p3"); // 閒置的人只是開著畫面看投票狀態
-  const notMine = await post(leaveVote, { roomId: G, playerId: "p1", check: true });
-  const t0 = rooms[G].game_state.lastActive!.p0;
-  await new Promise((r) => setTimeout(r, 5));
-  const chk = await post(leaveVote, { roomId: G, playerId: "p0", check: true });
-  eq([rooms[G].game_state.lastActive!.p3 === t3, `${notMine.status}`, chk.body.result, rooms[G].game_state.lastActive!.p0 === t0, alive(G)],
-    [true, "403", "vote", true, true],
-    "G 看投票狀態不算操作（閒置的人還是閒置）；只有發起者能重新確認；重新確認結果沒變時不存檔、不算操作");
-  // 等待中有人變成閒置：發起者重新確認就解散
-  await post(leaveVote, { roomId: G, playerId: "p1", approve: true });
-  await post(leaveVote, { roomId: G, playerId: "p2", approve: true });
-  eq(alive(G), false, "G 玩家4 一開始就閒置：兩家同意即解散（對照 C1）");
-  const G2 = room([0, 0, 0, 0]);
-  await post(leaveRequest, { roomId: G2, playerId: "p0" });
-  await post(leaveVote, { roomId: G2, playerId: "p1", approve: true });
-  await post(leaveVote, { roomId: G2, playerId: "p2", approve: true });
-  rooms[G2].game_state.lastActive!.p3 = ago(IDLE); // 玩家4 在等待期間走開超過 3 分鐘
-  const chk2 = await post(leaveVote, { roomId: G2, playerId: "p0", check: true });
-  eq([chk2.body.result, alive(G2)], ["granted", false], "G 等待期間玩家4 走開超過 3 分鐘：發起者畫面自動重新確認時就解散");
+  eq([r0.body.result, alive(E), shape(E)?.endReason, grantedEvents() - g], ["granted", false, "dissolved", 1],
+    "E 一局結束，玩家1 已按下一局、其他三家 4 分鐘沒按：玩家1 發起當下就解散（記成中途解散）");
 }
 
 // ---------- H 上線當下正在打的房 ----------
 {
-  const H = room([0, 0, 0, 0]);
-  const s = rooms[H].game_state;
-  delete s.lastActive; delete s.activeSince; // 舊房：完全沒有記錄
+  const H = room(STUCK);
+  delete rooms[H].game_state.lastActive; delete rooms[H].game_state.activeSince;
   await post(leaveRequest, { roomId: H, playerId: "p0" });
-  const v1 = await post(leaveVote, { roomId: H, playerId: "p1", approve: true });
-  eq([v1.body.needed, v1.body.result, alive(H), rooms[H].game_state.activeSince !== undefined], [3, "vote", true, true],
-    "H1 舊房第一次有人操作才開始記錄：沒記到的玩家先當成有在操作，照舊要三家同意");
-  rooms[H].game_state.activeSince = ago(IDLE); // 開始記錄已經超過 3 分鐘，玩家3、玩家4 都沒動過
-  rooms[H].game_state.lastActive = { p0: Date.now(), p1: Date.now() };
-  const chk = await post(leaveVote, { roomId: H, playerId: "p0", check: true });
-  eq([chk.body.result, alive(H)], ["granted", false], "H2 開始記錄滿 3 分鐘還沒動過的玩家3、玩家4 算閒置：玩家2 已同意，重新確認就解散");
-}
-
-// ---------- M1 聊天／互動時間讀不到 ----------
-{
-  const grantedEvents = () => sent.filter((e) => e.event === "mj_leave_vote" && e.payload.result === "granted").length;
-  activityFail.on = true;
-  const g0 = grantedEvents(), d0 = dissolveCalls.length;
-  // 發起：其他三家看起來都閒置，但讀不到聊天時間 → 不能直接解散
-  const M1a = room([0, IDLE, IDLE, IDLE]);
-  const r = await post(leaveRequest, { roomId: M1a, playerId: "p0" });
-  // 最後一票：玩家4 看起來閒置，兩家同意也不能解散
-  const M1b = room([0, 0, 0, IDLE]);
-  await post(leaveRequest, { roomId: M1b, playerId: "p0" });
-  await post(leaveVote, { roomId: M1b, playerId: "p1", approve: true });
-  const v = await post(leaveVote, { roomId: M1b, playerId: "p2", approve: true });
-  // 重新確認
-  const chk = await post(leaveVote, { roomId: M1b, playerId: "p0", check: true });
-  const st = await status(M1b, "p1");
-  activityFail.on = false;
-  eq([r.body.result, r.body.needed, alive(M1a), v.body.result, v.body.needed, chk.body.result, alive(M1b), st.body.activityUnknown, st.body.idleSeats.length,
-    grantedEvents() - g0, dissolveCalls.length - d0, rec(M1a) ?? null, rec(M1b) ?? null],
-  ["vote", 3, true, "vote", 3, "vote", true, true, 0, 0, 0, null, null],
-  "M1 聊天／互動時間讀不到：發起、最後一票、重新確認都不解散，退回其他三家都要同意；沒有廣播解散、沒有寫紀錄、沒有呼叫解散");
-  const ok = await post(leaveVote, { roomId: M1b, playerId: "p3", approve: true });
-  eq([ok.body.result, alive(M1b)], ["granted", false], "M1 讀不到時，第三家也同意就照常解散（全員同意）");
-}
-
-// ---------- M2 判斷和解散之間剛好有人聊天 ----------
-{
-  const grantedEvents = () => sent.filter((e) => e.event === "mj_leave_vote" && e.payload.result === "granted").length;
-  const chatJustNow = (roomId: string) => { leaveHooks.beforeDissolve = (id) => { if (id === roomId) (activity[roomId] ??= {})["u:p3"] = Date.now(); }; };
-  const results2: unknown[] = [];
-
-  // 活動先 × 發起：玩家2～4 都閒置，判斷完的瞬間玩家4 聊天
-  const A1 = room([0, IDLE, IDLE, IDLE]);
-  chatJustNow(A1);
-  let g = grantedEvents();
-  const a1 = await post(leaveRequest, { roomId: A1, playerId: "p0" });
-  leaveHooks.beforeDissolve = undefined;
-  results2.push([a1.body.result, a1.body.needed, alive(A1), rec(A1) ?? null, grantedEvents() - g, rooms[A1].game_state.leaveRequest?.requesterId]);
-
-  // 活動先 × 最後一票：玩家4 閒置，玩家3 投下最後一票的瞬間玩家4 聊天
-  const A2 = room([0, 0, 0, IDLE]);
-  await post(leaveRequest, { roomId: A2, playerId: "p0" });
-  await post(leaveVote, { roomId: A2, playerId: "p1", approve: true });
-  chatJustNow(A2);
-  g = grantedEvents();
-  const a2 = await post(leaveVote, { roomId: A2, playerId: "p2", approve: true });
-  leaveHooks.beforeDissolve = undefined;
-  results2.push([a2.body.result, a2.body.needed, alive(A2), rec(A2) ?? null, grantedEvents() - g, rooms[A2].game_state.leaveRequest?.approvedBy]);
-
-  // 活動先 × 重新確認：兩家同意後玩家4 才變閒置，發起者重新確認的瞬間玩家4 聊天
-  const A3 = room([0, 0, 0, 0]);
-  await post(leaveRequest, { roomId: A3, playerId: "p0" });
-  await post(leaveVote, { roomId: A3, playerId: "p1", approve: true });
-  await post(leaveVote, { roomId: A3, playerId: "p2", approve: true });
-  rooms[A3].game_state.lastActive!.p3 = ago(IDLE);
-  chatJustNow(A3);
-  g = grantedEvents();
-  const a3 = await post(leaveVote, { roomId: A3, playerId: "p0", check: true });
-  leaveHooks.beforeDissolve = undefined;
-  results2.push([a3.body.result, a3.body.needed, alive(A3), rec(A3) ?? null, grantedEvents() - g]);
-
-  eq(results2, [
-    ["vote", 1, true, null, 0, "p0"],
-    ["vote", 3, true, null, 0, ["p1", "p2"]],
-    ["vote", 3, true, null, 0],
-  ], "M2 活動先（發起／最後一票／重新確認）：解散交易看到玩家4 剛聊天 → 不解散、不廣播解散、不寫紀錄，玩家4 被算回來（發起時另兩家仍閒置，需要 1 人；其他兩種需要 3 人），投票照常繼續");
-
-  // 解散先 × 三條路：解散完成後玩家4 才送聊天／互動 → 房間已經不在，送不進來，紀錄只有一筆
-  const late = async (roomId: string) => {
-    const fx = await post(effectApi, { roomId, playerId: "p3", effect: "heart", to: "p1" });
-    return `${fx.status}:${fx.body.error}`;
-  };
-  const B1 = room([0, IDLE, IDLE, IDLE]);
-  const b1 = await post(leaveRequest, { roomId: B1, playerId: "p0" });
-  const B2 = room([0, 0, 0, IDLE]);
-  await post(leaveRequest, { roomId: B2, playerId: "p0" });
-  await post(leaveVote, { roomId: B2, playerId: "p1", approve: true });
-  const b2 = await post(leaveVote, { roomId: B2, playerId: "p2", approve: true });
-  const B3 = room([0, 0, 0, 0]);
-  await post(leaveRequest, { roomId: B3, playerId: "p0" });
-  await post(leaveVote, { roomId: B3, playerId: "p1", approve: true });
-  await post(leaveVote, { roomId: B3, playerId: "p2", approve: true });
-  rooms[B3].game_state.lastActive!.p3 = ago(IDLE);
-  const b3 = await post(leaveVote, { roomId: B3, playerId: "p0", check: true });
-  const lates = [await late(B1), await late(B2), await late(B3)];
-  eq([[b1.body.result, b2.body.result, b3.body.result], [alive(B1), alive(B2), alive(B3)], lates,
-    [B1, B2, B3].map((id) => records.filter((r) => r.roomId === id).length)],
-    [["granted", "granted", "granted"], [false, false, false], ["404:room_not_found", "404:room_not_found", "404:room_not_found"], [1, 1, 1]],
-    "M2 解散先（發起／最後一票／重新確認）：解散完成、房間已關，玩家4 晚到的互動送不進來（404），每場只有一筆中途解散紀錄");
+  const st = (await status(H, "p1")).body;
+  await post(leaveVote, { roomId: H, playerId: "p1", approve: true });
+  const v2 = await post(leaveVote, { roomId: H, playerId: "p2", approve: true });
+  eq([st.needed, st.activityUnknown, v2.body.result, alive(H)], [3, true, "vote", true], "H 舊房沒有任何牌局動作紀錄：判斷不了誰卡住，照舊要三家同意");
 }
 
 for (const r of results) console.log(r);

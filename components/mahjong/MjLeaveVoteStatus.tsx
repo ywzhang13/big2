@@ -1,5 +1,5 @@
 "use client";
-// 解散投票的計票狀態（老闆 2026-11-13：超過 3 分鐘沒操作的玩家不計票）。放在投票視窗裡，取代原本固定的「已同意 x / 3」。
+// 解散投票的計票狀態（老闆 2026-11-13：輪到他的牌局動作超過 3 分鐘沒做，就不計票）。放在投票視窗裡，取代原本固定的「已同意 x / 3」。
 //   ・每 5 秒讀一次 GET /api/mahjong/leave-vote（只讀，不算操作），顯示需要幾人同意、已同意幾人、哪幾位「不計票」
 //   ・發起者那邊每 10 秒送一次「重新確認」：等待中有人變成閒置，就重新判斷能不能解散（結果沒變伺服器什麼都不存）
 //   ・分頁在背景時兩個都暫停，回到前景立刻補讀一次
@@ -52,7 +52,7 @@ export default function MjLeaveVoteStatus({ roomId, playerId, isRequester, fallb
           {idle.map((p) => (
             <li key={p.seat} data-leave-idle-seat={p.seat} className="inline-flex items-center gap-1.5 mx-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/15 text-[11px] text-white/55">
               <span className="text-white/75 max-w-[7em] truncate">{p.name}</span>
-              <span>超過 {mins} 分鐘未操作，不計票</span>
+              <span>輪到他超過 {mins} 分鐘未動作，不計票</span>
             </li>
           ))}
         </ul>

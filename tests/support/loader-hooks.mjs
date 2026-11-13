@@ -34,7 +34,6 @@ const STUBS = {
   "@/lib/mahjong/chat/store": "tests/support/stub-chat-store.ts",
   "@/lib/mahjong/zimoFx/store": "tests/support/stub-zimofx-store.ts",
   "@/lib/mahjong/spectate/store": "tests/support/stub-spectate-store.ts",
-  "@/lib/mahjong/leave/store": "tests/support/stub-leave-store.ts",
   "@/lib/mahjong/replay/store": "tests/support/stub-replay-store.ts",
   "@/lib/big2/leaveStore": "tests/support/stub-big2-leave-store.ts",
   "@/lib/big2/dealStore": "tests/support/stub-big2-deal-store.ts",

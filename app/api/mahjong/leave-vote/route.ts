@@ -1,22 +1,21 @@
-// 解散投票（老闆 2026-11-13 起：超過 3 分鐘沒操作的玩家不計票，規則見 lib/mahjong/leave/rules.ts）
-//   POST { roomId, playerId, approve: boolean }：投票（投票本身也算操作，閒置的人投票就恢復投票權）
-//   POST { roomId, playerId, check: true }：發起者「重新確認」——有人在等待期間變成閒置時，用這個重新判斷能不能解散
-//                                          （判斷結果沒變就不存檔，所以自動重試不會讓發起者一直算成「有操作」）
-//   GET  ?roomId=&playerId=：目前的投票狀態（需要幾人同意、已同意幾人、哪些人閒置不計票），給投票畫面顯示；只讀
+// 解散投票（老闆 2026-11-13 定案：輪到他的牌局動作超過 3 分鐘沒做，就不計票；規則見 lib/mahjong/leave/rules.ts）
+//   POST { roomId, playerId, approve: boolean }：投票（投票不是牌局動作：卡住的人投票不會恢復投票權，他的票也不計）
+//   POST { roomId, playerId, check: true }：發起者「重新確認」——等待期間有人卡住超過時間，用這個重新判斷能不能解散（結果沒變就不存檔）
+//   GET  ?roomId=&playerId=：目前的投票狀態（需要幾人同意、已同意幾人、哪些人卡住不計票），給投票畫面顯示；只讀
+// 發起、投票、看狀態、重新確認都不是牌局動作：seatOwnerError 順手記的時間一律還原，不會讓卡住的人重新起算。
 // 解散時照原本的中途解散流程（打過至少一局就記下當下總分，再關房），但改成原子解散：lib/mahjong/leave/dissolve.ts。
 import { loadRoom, saveGameStateIfUnchanged, retryOnConflict } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
-import { evaluateLeave, IDLE_VOTE_MS, restoreActive, type LeaveEval } from "@/lib/mahjong/leave/rules";
+import { activeBefore, evaluateLeave, IDLE_VOTE_MS, restoreActive, type LeaveEval } from "@/lib/mahjong/leave/rules";
 import { decideLeave, idleSeatsOf } from "@/lib/mahjong/leave/dissolve";
-import { socialActivity } from "@/lib/mahjong/leave/activity";
 
 const view = (e: LeaveEval) => ({
   needed: e.needed, approvedCount: e.approvedCount, deniedCount: e.deniedCount,
   idleSeats: idleSeatsOf(e),
   idleAfterSec: IDLE_VOTE_MS / 1000,
-  activityUnknown: e.activityUnknown, // 聊天、互動時間這次讀不到：一律要全員同意
+  activityUnknown: e.activityUnknown, // 這房還沒有牌局動作紀錄（上線前的舊房）：判斷不了誰卡住，一律要全員同意
 });
 
 export async function GET(request: Request) {
@@ -25,12 +24,12 @@ export async function GET(request: Request) {
   if (!roomId || !playerId) return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   const room = await loadRoom(roomId);
   if (!room || !room.game_state) return Response.json({ error: "找不到遊戲" }, { status: 404 });
-  const before = (room.game_state as MahjongGameState).lastActive?.[playerId];
+  const before = activeBefore(room.game_state as MahjongGameState, playerId);
   const notOwner = await seatOwnerError(request, room.game_state, playerId);
   if (notOwner) return notOwner;
   const s = room.game_state as MahjongGameState;
-  restoreActive(s, playerId, before); // 看狀態不算操作：還原 seatOwnerError 順手記的時間（這份也不會存檔）
-  const e = evaluateLeave(s, Date.now(), await socialActivity(roomId, s));
+  restoreActive(s, playerId, before); // 看狀態不是牌局動作（這份也不會存檔）
+  const e = evaluateLeave(s, Date.now());
   if (!e || !s.leaveRequest) return Response.json({ active: false });
   return Response.json({ active: true, requesterSeat: s.leaveRequest.requesterSeat, ...view(e) });
 }
@@ -60,12 +59,13 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
   if (!room || !room.game_state) {
     return Response.json({ error: "找不到遊戲" }, { status: 404 });
   }
-  const before = (room.game_state as MahjongGameState).lastActive?.[playerId];
-  // 確認是這個座位的本人（一律要登入）；同時記下這次操作的時間
+  const before = activeBefore(room.game_state as MahjongGameState, playerId);
+  // 確認是這個座位的本人（一律要登入）
   const notOwner = await seatOwnerError(request, room.game_state, playerId);
   if (notOwner) return notOwner;
 
   const state = room.game_state as MahjongGameState;
+  restoreActive(state, playerId, before); // 投票、重新確認不是牌局動作：不更新最後牌局動作時間
   if (!state.leaveRequest) {
     return Response.json({ error: "沒有離開請求" }, { status: 400 });
   }
@@ -76,9 +76,8 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
 
   const lr = { ...state.leaveRequest };
   if (check) {
-    // 重新確認只給發起者；不算操作（還原剛剛順手記的時間）
+    // 重新確認只給發起者
     if (lr.requesterId !== playerId) return Response.json({ error: "只有發起者可以重新確認" }, { status: 403 });
-    restoreActive(state, playerId, before);
   } else {
     if (lr.requesterId === playerId) {
       return Response.json({ error: "不能投給自己" }, { status: 403 });
@@ -86,7 +85,7 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
     if (approve) {
       if (!lr.approvedBy.includes(playerId)) lr.approvedBy = [...lr.approvedBy, playerId];
     } else {
-      lr.deniedBy = [...lr.deniedBy, playerId]; // 任何一位（有在操作的人）不同意就取消
+      lr.deniedBy = [...lr.deniedBy, playerId]; // 有投票權的人不同意就取消（卡住的人按不同意不計）
     }
   }
 
