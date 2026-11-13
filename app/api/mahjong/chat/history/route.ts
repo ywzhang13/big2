@@ -1,7 +1,7 @@
 // 聊天紀錄：GET /api/mahjong/chat/history?roomId=<房間 id>
 // 回這房目前保存的聊天（舊到新，最多 CHAT_HISTORY_LIMIT 則），重新整理、斷線重連、中途回來都用這支補齊。
 //   ・同桌玩家（含訪客）：可以讀
-//   ・觀戰者：在這房至少被一位玩家同意觀戰，才可以讀；另外回 spectatorChannel，訂閱它就能即時收到聊天和互動特效
+//   ・觀戰者：在這房至少被一位玩家同意觀戰，才可以讀；另外回 spectatorChannel（他自己的、綁這一場），訂閱它就能即時收到聊天和互動特效
 //   ・其他人 403 not_allowed；沒登入 401；房間不在 404（關房時紀錄一起刪掉）
 // 只在進房、重連時呼叫，打牌當下不會呼叫。格式見 lib/social/README.md。
 import { getAuthUser } from "@/lib/auth";
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const messages = await loadHistory(roomId);
     return Response.json({
       roomId, limit: CHAT_HISTORY_LIMIT, role: seated ? "player" : "spectator", messages,
-      ...(spectator ? { spectatorChannel: spectatorChannelName(room.code) } : {}),
+      ...(spectator ? { spectatorChannel: spectatorChannelName(room.code, roomId, user.id) } : {}),
     });
   } catch (err) {
     console.error("[mj-chat] history", err instanceof Error ? err.message : err);

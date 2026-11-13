@@ -43,9 +43,12 @@ export async function saveVoice(roomId: string, voiceId: string, data: Buffer): 
 // supabase-js 的 FileObject 型別把 id 寫成 string，實際上資料夾的 id 是 null，所以轉成 storage-ops 的介面
 const voiceBucket = (): VoiceBucket => getSupabaseAdmin().storage.from(VOICE_BUCKET) as unknown as VoiceBucket;
 
+/** postText 回傳：房間已經關掉（mj_rooms 沒有這一列），什麼都沒寫 */
+export const ROOM_CLOSED = -1;
+
 /**
  * 文字聊天：檢查冷卻、記下、存進這房的聊天紀錄，一次資料庫呼叫完成（mj_chat_post）。
- * 回 0＝已存，可以廣播；> 0＝冷卻中還要等幾毫秒（什麼都沒寫）
+ * 回 0＝已存，可以廣播；> 0＝冷卻中還要等幾毫秒（什麼都沒寫）；ROOM_CLOSED＝房間已關（什麼都沒寫）
  */
 export async function postText(roomId: string, userId: string, message: ChatMessage): Promise<number> {
   const r = RATE.text;
@@ -58,12 +61,13 @@ export async function postText(roomId: string, userId: string, message: ChatMess
   return Number(data) || 0;
 }
 
-/** 語音：冷卻已經扣過、檔案已經存好，把這則存進聊天紀錄（存檔案路徑，不存會過期的網址） */
-export async function appendVoice(roomId: string, message: ChatMessage): Promise<void> {
-  const { error } = await getSupabaseAdmin().rpc("mj_chat_append", {
+/** 語音：冷卻已經扣過、檔案已經存好，把這則存進聊天紀錄（存檔案路徑，不存會過期的網址）。房間已關回 false、什麼都沒寫 */
+export async function appendVoice(roomId: string, message: ChatMessage): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin().rpc("mj_chat_append", {
     p_room: roomId, p_msg: toStored(message, voiceKeyOf(roomId, message.id)), p_keep: CHAT_HISTORY_LIMIT,
   });
   if (error) throw new Error(`儲存語音紀錄失敗：${error.message}`);
+  return data === true;
 }
 
 /** 這房保存的聊天（舊到新，最多 CHAT_HISTORY_LIMIT 則）；語音重新簽發播放網址，檔案不在就給 null */

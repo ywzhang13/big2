@@ -3,11 +3,11 @@
 // 發送者由登入帳號認定，名字、座位都用伺服器的；不過濾髒話；發太快 429（retryAfterMs）。
 // 確認後走同桌四人各自的座位頻道和觀戰頻道廣播 mj_chat（公開頻道 mj-<房號> 收不到）。
 // 2026-11-13 起存進這房的聊天紀錄（最多最近 CHAT_HISTORY_LIMIT 則，關房就刪）；冷卻檢查和存檔是同一次資料庫呼叫。
-// 觀戰者不在這桌 → 403 not_in_room（只能讀，不能發言）。
+// 觀戰者不在這桌 → 403 not_in_room（只能讀，不能發言）。房間在送出當下已經關掉 → 410 room_closed（什麼都不存、不送）。
 import { fail, resolveMember } from "@/lib/mahjong/effects/members";
 import { cleanText, isPhrase, PHRASES } from "@/lib/mahjong/chat/rules";
-import { broadcastMessage, buildMessage } from "@/lib/mahjong/chat/send";
-import { postText } from "@/lib/mahjong/chat/store";
+import { approvedSpectators, broadcastMessage, buildMessage } from "@/lib/mahjong/chat/send";
+import { postText, ROOM_CLOSED } from "@/lib/mahjong/chat/store";
 
 export async function POST(request: Request) {
   try {
@@ -47,8 +47,10 @@ async function handle(request: Request): Promise<Response> {
   }
 
   const message = buildMessage(me, { kind: "text", text, ...(phrase && { phrase }) });
-  const wait = await postText(roomId, user.id, message);
+  // 存檔（含冷卻）和查觀戰者同時送，不多等
+  const [wait, spectators] = await Promise.all([postText(roomId, user.id, message), approvedSpectators(roomId)]);
+  if (wait === ROOM_CLOSED) return fail(410, "room_closed");
   if (wait > 0) return fail(429, "rate_limited", { retryAfterMs: wait, retryAfterSec: Math.ceil(wait / 1000) });
-  await broadcastMessage(roomCode, members, message);
+  await broadcastMessage(roomCode, roomId, members, spectators, message);
   return Response.json({ ok: true, message });
 }
