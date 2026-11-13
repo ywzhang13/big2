@@ -5,6 +5,7 @@
 import { createHmac } from "node:crypto";
 import { getAuthUser } from "@/lib/auth";
 import type { MahjongGameState } from "./gameState";
+import { touchActive } from "./leave/rules";
 
 export const notLoggedIn = () => Response.json({ error: "not_logged_in" }, { status: 401 });
 export const notYourSeat = () => Response.json({ error: "not_your_seat" }, { status: 403 });
@@ -23,6 +24,9 @@ export async function seatOwnerError(
   if (!user) return notLoggedIn();
   const bound = owner !== undefined ? owner : gs?.players?.find((p) => p.id === playerId)?.userId;
   if (!bound || bound !== user.id) return notYourSeat();
+  // 本人的操作：記下時間（解散投票判斷誰閒置用）。直接改傳進來的牌局狀態，跟著這次動作的存檔一起寫進去，不多任何請求；
+  // 不存檔的路由（例如讀狀態）只改到讀出來的那份，不會留下（所以輪詢不算操作）
+  if (gs && gs.players) touchActive(gs as Partial<Pick<MahjongGameState, "lastActive" | "activeSince">>, playerId);
   return null;
 }
 
