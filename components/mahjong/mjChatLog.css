@@ -1,0 +1,3 @@
+/* 麻將聊天室的版面配合（小宜 2026-11-13 視覺複核）：桌機聊天室開在牌桌右邊（.scb.side，寬 340）時，
+   吃碰槓胡按鈕列（MjClaimBanner，position: fixed 全寬）右緣收到聊天室左邊，「過」不會跑進聊天室 */
+body:has(.scb.side) .mjm-claimbar.desk { right: 340px; }
