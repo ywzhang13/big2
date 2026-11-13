@@ -18,6 +18,7 @@ export interface LeaveEval {
   deniedCount: number;
   idle: { playerId: string; seat: number; name: string; idleMs: number }[]; // 超過時間沒操作、不計票的其他玩家
   requesterIdle: boolean;
+  activityUnknown: boolean; // 聊天、互動時間讀不到：這次一律要全員同意
 }
 
 /**
@@ -30,20 +31,25 @@ export function lastActiveAt(s: Pick<MahjongGameState, "lastActive" | "activeSin
   return Math.max(own, social[playerId] ?? 0);
 }
 
-export function evaluateLeave(s: MahjongGameState, now: number, social: Record<string, number> = {}): LeaveEval | null {
+/**
+ * social：聊天、互動的最後時間；null＝這次讀不到（審伯 2026-11-13 必修 1）。
+ * 讀不到時「不知道」不能當成「沒操作」：不排除任何人，退回成其他三家都要同意。
+ */
+export function evaluateLeave(s: MahjongGameState, now: number, social: Record<string, number> | null = {}): LeaveEval | null {
   const lr = s.leaveRequest;
   if (!lr) return null;
-  const idleOf = (pid: string) => now - lastActiveAt(s, pid, social);
+  const idleOf = (pid: string) => now - lastActiveAt(s, pid, social ?? {});
   const others = s.players.filter((p) => p.id !== lr.requesterId);
-  const idle = others.filter((p) => idleOf(p.id) > IDLE_VOTE_MS).map((p) => ({ playerId: p.id, seat: p.seat, name: p.name, idleMs: idleOf(p.id) }));
-  const active = others.filter((p) => idleOf(p.id) <= IDLE_VOTE_MS);
+  const isIdle = (pid: string) => social !== null && idleOf(pid) > IDLE_VOTE_MS;
+  const idle = others.filter((p) => isIdle(p.id)).map((p) => ({ playerId: p.id, seat: p.seat, name: p.name, idleMs: idleOf(p.id) }));
+  const active = others.filter((p) => !isIdle(p.id));
   const approvedActive = active.filter((p) => lr.approvedBy.includes(p.id));
   const requesterIdle = idleOf(lr.requesterId) > IDLE_VOTE_MS;
   const deniedCount = lr.deniedBy.length;
   let result: LeaveEval["result"] = "vote";
   if (deniedCount > 0) result = "denied";
   else if (approvedActive.length === active.length && (!requesterIdle || approvedActive.length > 0)) result = "granted";
-  return { result, needed: active.length, approvedCount: approvedActive.length, deniedCount, idle, requesterIdle };
+  return { result, needed: active.length, approvedCount: approvedActive.length, deniedCount, idle, requesterIdle, activityUnknown: social === null };
 }
 
 /** 這位玩家剛做了一個操作：記下時間（直接改傳進來的牌局狀態，跟著這次動作的存檔一起寫） */

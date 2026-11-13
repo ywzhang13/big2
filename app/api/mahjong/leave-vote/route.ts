@@ -3,19 +3,20 @@
 //   POST { roomId, playerId, check: true }：發起者「重新確認」——有人在等待期間變成閒置時，用這個重新判斷能不能解散
 //                                          （判斷結果沒變就不存檔，所以自動重試不會讓發起者一直算成「有操作」）
 //   GET  ?roomId=&playerId=：目前的投票狀態（需要幾人同意、已同意幾人、哪些人閒置不計票），給投票畫面顯示；只讀
-// 解散時照原本的中途解散流程：打過至少一局就記下當下總分，再關房。
+// 解散時照原本的中途解散流程（打過至少一局就記下當下總分，再關房），但改成原子解散：lib/mahjong/leave/dissolve.ts。
 import { loadRoom, saveGameStateIfUnchanged, retryOnConflict } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
-import { closeMahjongRoom } from "@/lib/records/close";
 import { evaluateLeave, IDLE_VOTE_MS, restoreActive, type LeaveEval } from "@/lib/mahjong/leave/rules";
+import { decideLeave, idleSeatsOf } from "@/lib/mahjong/leave/dissolve";
 import { socialActivity } from "@/lib/mahjong/leave/activity";
 
 const view = (e: LeaveEval) => ({
   needed: e.needed, approvedCount: e.approvedCount, deniedCount: e.deniedCount,
-  idleSeats: e.idle.map((x) => ({ seat: x.seat, name: x.name, idleSec: Math.floor(x.idleMs / 1000) })),
+  idleSeats: idleSeatsOf(e),
   idleAfterSec: IDLE_VOTE_MS / 1000,
+  activityUnknown: e.activityUnknown, // 聊天、互動時間這次讀不到：一律要全員同意
 });
 
 export async function GET(request: Request) {
@@ -90,17 +91,16 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
   }
 
   const evalState: MahjongGameState = { ...state, leaveRequest: lr };
-  const e = evaluateLeave(evalState, Date.now(), await socialActivity(roomId, state))!;
-  const broadcastEvent = e.result;
+  const d = await decideLeave(roomId, room.code, state, evalState);
+  if (d.kind === "gone") return Response.json({ error: "找不到遊戲" }, { status: 404 });
+  if (d.kind === "closed") return Response.json({ success: true, result: "granted", ...view(d.e) });
+  const e = d.e;
+  const broadcastEvent = e.result; // "denied" | "vote"
 
   // 重新確認、結果沒變：什麼都不存、不廣播
   if (check && broadcastEvent === "vote") return Response.json({ success: true, result: "vote", ...view(e) });
 
-  let newState: MahjongGameState;
-  if (broadcastEvent === "denied") newState = { ...state, leaveRequest: undefined };
-  else if (broadcastEvent === "granted") newState = { ...state, leaveRequest: undefined, status: "finished" };
-  else newState = { ...state, leaveRequest: lr };
-
+  const newState: MahjongGameState = broadcastEvent === "denied" ? { ...state, leaveRequest: undefined } : { ...state, leaveRequest: lr };
   const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, newState.status);
 
   await mjBroadcast(room.code, "mj_leave_vote", {
@@ -109,17 +109,12 @@ async function handleLeaveVote(request: Request, body: unknown, fresh: boolean):
     approve: check ? null : approve,
     approvedCount: e.approvedCount,
     deniedCount: e.deniedCount,
-    result: broadcastEvent, // "granted" | "denied" | "vote"
+    result: broadcastEvent,
     requesterSeat: lr.requesterSeat,
     requesterName: lr.requesterName,
     needed: e.needed,
-    idleSeats: view(e).idleSeats,
+    idleSeats: idleSeatsOf(e),
   }, sv);
-
-  // 解散：打過至少一局就記下當下總分（中途解散），再關房；一局都沒打完的直接刪
-  if (broadcastEvent === "granted") {
-    await closeMahjongRoom(roomId, room.code, newState, "dissolved");
-  }
 
   return Response.json({ success: true, result: broadcastEvent, ...view(e) });
 }

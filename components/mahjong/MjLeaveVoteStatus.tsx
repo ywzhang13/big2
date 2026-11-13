@@ -2,6 +2,7 @@
 // 解散投票的計票狀態（老闆 2026-11-13：超過 3 分鐘沒操作的玩家不計票）。放在投票視窗裡，取代原本固定的「已同意 x / 3」。
 //   ・每 5 秒讀一次 GET /api/mahjong/leave-vote（只讀，不算操作），顯示需要幾人同意、已同意幾人、哪幾位「不計票」
 //   ・發起者那邊每 10 秒送一次「重新確認」：等待中有人變成閒置，就重新判斷能不能解散（結果沒變伺服器什麼都不存）
+//   ・分頁在背景時兩個都暫停，回到前景立刻補讀一次
 // 讀不到時退回原本的「已同意 x / 3」，不影響投票。
 import { useEffect, useState } from "react";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
@@ -15,6 +16,7 @@ export default function MjLeaveVoteStatus({ roomId, playerId, isRequester, fallb
   useEffect(() => {
     if (!roomId || !playerId) return;
     let alive = true;
+    let timers: ReturnType<typeof setInterval>[] = [];
     const q = `roomId=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(playerId)}`;
     const pull = async () => {
       try {
@@ -22,16 +24,20 @@ export default function MjLeaveVoteStatus({ roomId, playerId, isRequester, fallb
         if (r.ok && alive) setSt(await r.json());
       } catch { /* 讀不到就維持上一次 */ }
     };
-    const recheck = async () => {
-      try {
-        await mjFetch("/api/mahjong/leave-vote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roomId, playerId, check: true }) });
-      } catch { /* 下次再試 */ }
+    // 重新確認只送出、不另外讀：下一次固定輪詢就會拿到新狀態（解散的話會收到房間關閉事件）
+    const recheck = () => { void mjFetch("/api/mahjong/leave-vote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roomId, playerId, check: true }) }).catch(() => {}); };
+    const stop = () => { timers.forEach(clearInterval); timers = []; };
+    const start = () => {
+      stop();
       void pull();
+      timers.push(setInterval(pull, 5000));
+      if (isRequester) timers.push(setInterval(recheck, 10000));
     };
-    void pull();
-    const a = setInterval(pull, 5000);
-    const b = isRequester ? setInterval(recheck, 10000) : null;
-    return () => { alive = false; clearInterval(a); if (b) clearInterval(b); };
+    // 背景分頁不輪詢；回到前景馬上補讀一次再繼續
+    const onVisibility = () => (document.hidden ? stop() : start());
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { alive = false; stop(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [roomId, playerId, isRequester, tick]);
 
   const needed = st?.active && typeof st.needed === "number" ? st.needed : 3;

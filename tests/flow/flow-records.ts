@@ -134,7 +134,13 @@ async function dissolve(roomId: string) {
   mjRoom("G", "1007", { handsCompleted: 1 });
   rs.opts.failClose = true;
   await dissolve("G");
-  eq([rs.records.length, !!rooms.G, rooms.G?.game_state.status], [0, true, "finished"], "M11 解散時交易中途失敗：房間保留、沒有紀錄（之後清理會再試）");
+  // 2026-11-13 起解散改成原子交易（lib/mahjong/leave/dissolve.ts）：失敗時什麼都不改——房間照舊在打、解散投票還在，
+  // 不會留下「狀態已結束但沒關房」的半套；資料庫恢復後發起者畫面的重新確認或再投一次就會解散
+  eq([rs.records.length, !!rooms.G, rooms.G?.game_state.status, rooms.G?.game_state.leaveRequest?.requesterId], [0, true, "playing", "p0"],
+    "M11 解散時交易中途失敗：房間保留、沒有紀錄、解散投票還在（不留半套狀態）");
+  rs.opts.failClose = false;
+  await call(leaveVote, "G", { playerId: "p3", approve: true });
+  eq([rs.records.length, rooms.G ?? null], [1, null], "M11 資料庫恢復後最後一票再送一次：照常記 dissolved 並關房");
 }
 
 // --- ④ 建房時清理閒置房 ---
