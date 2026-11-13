@@ -83,7 +83,7 @@ const alive = (id: string) => !!rooms[id];
 const rec = (id: string) => records.find((r) => r.roomId === id);
 const shape = (id: string) => { const r = rec(id); return r ? { endReason: r.endReason, handsPlayed: r.handsPlayed, scores: r.players.map((p) => [p.seat, p.totalScore]) } : null; };
 const grantedEvents = () => sent.filter((e) => e.event === "mj_leave_vote" && e.payload.result === "granted").length;
-const idleNames = (b: { idleSeats: { name: string }[] }) => b.idleSeats.map((x) => x.name);
+const idleNames = (b: { idleSeats?: { name: string }[] }) => (b.idleSeats ?? []).map((x) => x.name); // 房間已被關掉時狀態沒有這欄
 resetRecords();
 
 // ---------- A 沒有人卡住 ----------
@@ -262,7 +262,7 @@ eq([shape(A), shape(B)], [
   const P1 = room(STUCK, claimWindow(1, { 0: WIN_M5, 2: CHI_M5, 3: PONG_M5 }));
   const r1 = await post(leaveRequest, { roomId: P1, playerId: "p1" });
   const s1 = (await status(P1, "p1")).body;
-  eq([rooms[P1].game_state.pendingActions?.potentialActors.slice().sort(), r1.body.result, r1.body.needed, idleNames(s1), alive(P1)],
+  eq([rooms[P1]?.game_state.pendingActions?.potentialActors.slice().sort(), r1.body.result, r1.body.needed, idleNames(s1), alive(P1)],
     [[0, 2, 3], "vote", 2, ["玩家1"], true],
     "P1 能胡的玩家1 卡住、能吃的玩家3 能碰的玩家4 在等他：只扣玩家1，要玩家3、玩家4 同意，玩家2 單獨發起不會解散（修之前三家都被排除、當場關房）");
 
@@ -276,21 +276,21 @@ eq([shape(A), shape(B)], [
   // P3 交棒：P1 的情境，玩家1 按過（真的走 action 的 pass）→ 輪到能碰的玩家4，能吃的玩家3 還在等
   const P3 = room(10_000, claimWindow(1, { 0: WIN_M5, 2: CHI_M5, 3: PONG_M5 }));
   const pass = await post(action, { roomId: P3, playerId: "p0", actionType: "pass" });
-  const t = rooms[P3].game_state.lastActive?.p0;
-  for (const k of Object.keys(rooms[P3].game_state.lastActive!)) rooms[P3].game_state.lastActive![k] = ago(STUCK); // 按過之後 4 分鐘
+  const t = rooms[P3]?.game_state.lastActive?.p0;
+  { const la = rooms[P3]?.game_state.lastActive; if (la) for (const k of Object.keys(la)) la[k] = ago(STUCK); } // 按過之後 4 分鐘
   const r3 = await post(leaveRequest, { roomId: P3, playerId: "p1" });
   const s3 = (await status(P3, "p1")).body;
-  eq([pass.status, typeof t === "number", rooms[P3].game_state.pendingActions?.passedActors, r3.body.result, r3.body.needed, idleNames(s3), alive(P3)],
+  eq([pass.status, typeof t === "number", rooms[P3]?.game_state.pendingActions?.passedActors, r3.body.result, r3.body.needed, idleNames(s3), alive(P3)],
     [200, true, [0], "vote", 2, ["玩家4"], true],
     "P3 胡的玩家1 按過（有效動作，重新起算）→ 交棒給能碰的玩家4；4 分鐘後只扣玩家4，能吃的玩家3 還在等、要他同意，已按過的玩家1 也要同意");
 
   // P4 一炮多響進行中：玩家1 已經胡了、玩家3 也能胡還沒決定，能碰的玩家4 在等
   const P4 = room(10_000, claimWindow(1, { 0: WIN_M5, 2: WIN_M5, 3: PONG_M5 }));
   const win = await post(action, { roomId: P4, playerId: "p0", actionType: "win" });
-  for (const k of Object.keys(rooms[P4].game_state.lastActive!)) rooms[P4].game_state.lastActive![k] = ago(STUCK);
+  { const la = rooms[P4]?.game_state.lastActive; if (la) for (const k of Object.keys(la)) la[k] = ago(STUCK); }
   const r4 = await post(leaveRequest, { roomId: P4, playerId: "p1" });
   const s4 = (await status(P4, "p1")).body;
-  eq([win.body.partial, rooms[P4].game_state.status, r4.body.result, r4.body.needed, idleNames(s4), alive(P4)],
+  eq([win.body.partial, rooms[P4]?.game_state.status, r4.body.result, r4.body.needed, idleNames(s4), alive(P4)],
     [true, "playing", "vote", 2, ["玩家3"], true],
     "P4 一炮多響：玩家1 已胡、玩家3 還沒決定 → 只扣玩家3；已胡的玩家1、在等的玩家4 都要同意，玩家2 單獨發起不會解散");
 }
@@ -303,14 +303,14 @@ eq([shape(A), shape(B)], [
     for (const p of s.players) { p.discards = []; p.revealed = []; }
   });
   const S1 = fresh(STUCK);
-  const dealer = rooms[S1].game_state.players[rooms[S1].game_state.dealerSeat];
-  const req = rooms[S1].game_state.players.find((p) => p.id !== dealer.id)!;
+  const dealer = rooms[S1]!.game_state.players[rooms[S1]!.game_state.dealerSeat];
+  const req = rooms[S1]?.game_state.players.find((p) => p.id !== dealer.id)!;
   const r1 = await post(leaveRequest, { roomId: S1, playerId: req.id });
   const s1 = (await status(S1, req.id)).body;
   eq([r1.body.needed, idleNames(s1), s1.activityUnknown], [2, [dealer.name], false],
     "S1 這場剛開局、莊家 4 分鐘沒打第一張：以開局時間起算，莊家不計票；其他等待中的兩家要同意");
   const S2 = fresh(60_000);
-  const req2 = rooms[S2].game_state.players.find((p) => p.seat !== rooms[S2].game_state.dealerSeat)!;
+  const req2 = rooms[S2]?.game_state.players.find((p) => p.seat !== rooms[S2]?.game_state.dealerSeat)!;
   const r2 = await post(leaveRequest, { roomId: S2, playerId: req2.id });
   eq(r2.body.needed, 3, "S2 剛開局 1 分鐘：還沒超過 3 分鐘，莊家照樣要同意");
 }
@@ -319,30 +319,30 @@ eq([shape(A), shape(B)], [
 {
   // 一局結束：玩家1 在 4 分鐘前按了下一局，玩家2、3、4 都沒按
   const U = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = ["p0"]; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; s.lastActive = { p0: ago(STUCK) }; });
-  const before = { ...rooms[U].game_state.lastActive };
+  const before = { ...rooms[U]?.game_state.lastActive };
   // 已按過的玩家1 重送「下一局」
   const dup = await post(nextGame, { roomId: U, playerId: "p0" });
-  const after = { ...rooms[U].game_state.lastActive };
-  rooms[U].game_state.leaveRequest = { requesterId: "p1", requesterName: "玩家2", requesterSeat: 1, approvedBy: [], deniedBy: [] };
+  const after = { ...rooms[U]?.game_state.lastActive };
+  if (rooms[U]) rooms[U].game_state.leaveRequest = { requesterId: "p1", requesterName: "玩家2", requesterSeat: 1, approvedBy: [], deniedBy: [] };
   const s1 = (await status(U, "p0")).body;
   eq([dup.status, JSON.stringify(after) === JSON.stringify(before), idleNames(s1), s1.needed], [200, true, ["玩家3", "玩家4"], 1],
     "U1 已按過下一局的玩家1 重送：最後動作時間不變，不計票名單（玩家3、玩家4）和需要票數（1）都不變");
   // 第一次按的人（玩家3）正常更新：輪到他的動作做完了，計時重新起算
-  rooms[U].game_state.leaveRequest = undefined;
+  if (rooms[U]) rooms[U].game_state.leaveRequest = undefined;
   const first = await post(nextGame, { roomId: U, playerId: "p2" });
-  const t = rooms[U].game_state.lastActive?.p2 ?? 0;
-  rooms[U].game_state.leaveRequest = { requesterId: "p1", requesterName: "玩家2", requesterSeat: 1, approvedBy: [], deniedBy: [] };
+  const t = rooms[U]?.game_state.lastActive?.p2 ?? 0;
+  if (rooms[U]) rooms[U].game_state.leaveRequest = { requesterId: "p1", requesterName: "玩家2", requesterSeat: 1, approvedBy: [], deniedBy: [] };
   const s2 = (await status(U, "p0")).body;
   eq([first.status, Date.now() - t < 5000, s2.idleSeats.length, s2.needed], [200, true, 0, 3],
     "U2 玩家3 第一次按下一局：時間正常更新，計時重新起算（沒有人卡住，其他三家都要同意）");
 
   // 在等別人優先決定的人送請求（被擋下的吃）、輪不到的人摸牌（被拒絕）：都不延長計時
   const V = room(STUCK, claimWindow(1, { 0: WIN_M5, 2: CHI_M5, 3: PONG_M5 }));
-  const vb = JSON.stringify(rooms[V].game_state.lastActive);
-  const chi = await post(action, { roomId: V, playerId: "p2", actionType: "chi", tiles: rooms[V].game_state.players[2].hand.filter((x) => x.display === "m3" || x.display === "m4").map((x) => x.id) });
+  const vb = JSON.stringify(rooms[V]?.game_state.lastActive);
+  const chi = await post(action, { roomId: V, playerId: "p2", actionType: "chi", tiles: rooms[V]?.game_state.players[2].hand.filter((x) => x.display === "m3" || x.display === "m4").map((x) => x.id) });
   const dr = await post(draw, { roomId: V, playerId: "p3" });
   await status(V, "p3");
-  eq([chi.status, dr.status >= 400, JSON.stringify(rooms[V].game_state.lastActive) === vb], [409, true, true],
+  eq([chi.status, dr.status >= 400, JSON.stringify(rooms[V]?.game_state.lastActive) === vb], [409, true, true],
     "U3 在等胡的人決定時去吃（409 被擋）、輪不到的人去摸牌（被拒絕）、看投票狀態：最後動作時間都不變");
 }
 
