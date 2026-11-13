@@ -2,11 +2,12 @@
 // 只有同一桌、LINE 登入的玩家能送；訪客 403 guest_not_allowed（照樣聽得到別人的語音）。
 // 伺服器一律轉成 m4a（iPhone、Android 都能播），存到私有 bucket mj-voice，用 1 小時有效的網址送給同桌四人。
 // 冷卻：轉檔前只檢查不扣（擋洗版、不白跑轉檔），轉檔成功才真的扣；壞檔、太短不扣冷卻。
+// 2026-11-13 起也存進這房的聊天紀錄（存檔案路徑，讀歷史時重新簽發網址）；送給同桌四人和觀戰頻道。關房就刪。
 import { randomUUID } from "node:crypto";
 import { fail, resolveMember } from "@/lib/mahjong/effects/members";
 import { MAX_VOICE_BYTES, MIN_VOICE_MS } from "@/lib/mahjong/chat/rules";
-import { sendToTable } from "@/lib/mahjong/chat/send";
-import { checkRate, saveVoice } from "@/lib/mahjong/chat/store";
+import { approvedSpectators, broadcastMessage, buildMessage } from "@/lib/mahjong/chat/send";
+import { appendVoice, checkRate, saveVoice } from "@/lib/mahjong/chat/store";
 import { BadAudioError, transcodeToM4a } from "@/lib/mahjong/chat/voice";
 
 export const runtime = "nodejs";
@@ -58,6 +59,8 @@ async function handle(request: Request): Promise<Response> {
   if (wait > 0) return rateLimited(wait);
   const id = randomUUID();
   const url = await saveVoice(roomId, id, voice.data);
-  const message = await sendToTable(roomCode, members, me, { id, kind: "voice", url, durationMs: voice.durationMs });
+  const message = buildMessage(me, { id, kind: "voice", url, durationMs: voice.durationMs });
+  if (!(await appendVoice(roomId, message))) return fail(410, "room_closed"); // 轉檔期間房間關了：不存、不送（檔案由定期清除刪掉）
+  await broadcastMessage(roomCode, roomId, members, await approvedSpectators(roomId), message);
   return Response.json({ ok: true, message });
 }

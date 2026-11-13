@@ -2,37 +2,44 @@
 
 // 打字聊天與語音訊息的畫面（小宜〈麻將聊天與語音訊息-UIUX設計規格-2026-10-21〉＋兩張設計稿；老闆 2026-10-22 確認）。
 //   ・訊息泡泡貼在說話的人名牌旁邊（左家往右、右家往左、對家往下、自己往上），每家最多三則，文字 5 秒淡出
-//   ・自己資訊列右側的「聊天」鈕打開底板：四個快捷短語、輸入框、按住說話（手機在左下、桌機在自己名牌上方）
+//   ・自己資訊列右側的「聊天」鈕打開底板：四個快捷短語、輸入框、按住說話（手機在左下、左家名牌右邊，聊天室接在它上方；桌機在自己名牌上方）
 //   ・輪到自己出牌、吃碰槓胡時底板照樣能開、錄音不中斷（老闆 2026-10-21）；吃碰槓胡按鈕列（z-index 70）疊在底板上面
 //   ・底板開著時，自己的泡泡改貼在底板右側（不被底板、鍵盤蓋住），不低於手機動作列（打出鈕）和吃碰槓胡按鈕列的上緣
-//   ・訪客、觀戰：看得到、聽得到，按「聊天」只顯示提示
+//   ・訪客、觀戰：看得到、聽得到，按「聊天」只打開聊天框（只能看）
+//   ・按「聊天」同時打開本場聊天框（components/social/SocialChatBox，見 MjChatLog.tsx）；收起時鈕上顯示未讀數（2026-11-13）
 // 狀態都在 lib/mahjong/chatClient.ts（綁「帳號＋房間＋座位」，換場全部清空）。
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import {
   PHRASES, TEXT_MAX, VOICE_MAX_MS, bindChatSession, dismissFailed, noteText, retryFailed, sendPhrase, sendText, sendVoice,
   setChatOpen, startRecording, toggleVoice, useChatState, type Bubble, type MicError,
 } from "@/lib/mahjong/chatClient";
 import { createChatMic } from "@/lib/mahjong/chatMic";
 import { SpeakerIcon } from "./MjIcons";
+import { mjDockLeft, toggleMjChatBox } from "./MjChatLog";
+import { useChatLog } from "@/components/social/chatLog";
+import { UnreadBadge } from "@/components/social/SocialChatBox";
 
-const GUEST_TIP = "登入 LINE 後就能聊天與傳語音。";
 const mmss = (ms: number) => `00:${String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, "0")}`;
 
 /** 自己資訊列右側的「聊天」鈕（放在牌桌元件的 chatButton 位置） */
 export function MjChatButton({ canSend, desk }: { canSend: boolean; desk: boolean }) {
   const st = useChatState();
+  const log = useChatLog();
+  const open = canSend ? st.open || log.open : log.open;
   return (
     <button
       type="button"
-      className={`mjc-btn ${desk ? "d" : "m"} ${st.open ? "on" : ""}`}
+      className={`mjc-btn ${desk ? "d" : "m"} ${open ? "on" : ""}`}
       data-chat-btn
-      aria-expanded={st.open}
-      onClick={() => (canSend ? setChatOpen(!st.open) : noteText(GUEST_TIP, 2500))}
+      aria-expanded={open}
+      onClick={() => toggleMjChatBox(canSend, !open)}
     >
       <svg viewBox="0 0 24 24" width={desk ? 16 : 13} height={desk ? 16 : 13} aria-hidden>
         <path d="M4 5h16v10H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       </svg>
       聊天
+      <UnreadBadge />
     </button>
   );
 }
@@ -138,8 +145,20 @@ export default function MjChat({
   const coolLeft = Math.ceil((st.readyAt - st.now) / 1000);
   const locked = cooling || st.sending;
 
-  // 底板位置：手機在左下（自己資訊列上方，不蓋手牌）；桌機在自己名牌上方。鍵盤出現時貼著鍵盤上緣
+  // 桌機：底板放進聊天室側欄底部的那一格（SocialChatBox 的 data-chat-slot），接在訊息下面（小宜 2026-11-13 必修）
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!open || !desk) { setSlot(null); return; }
+    const find = () => setSlot(document.querySelector<HTMLElement>("[data-chat-slot]"));
+    find();
+    const raf = requestAnimationFrame(find); // 側欄和底板同一批畫出來；萬一還沒掛上，下一格再找一次
+    return () => cancelAnimationFrame(raf);
+  }, [open, desk]);
+  const inSlot = !!slot && slot.isConnected;
+
+  // 底板位置：手機在左下（自己資訊列上方，不蓋手牌）；桌機在聊天室側欄底部（inSlot，正常版面，不用量）。鍵盤出現時貼著鍵盤上緣
   const placePanel = useCallback(() => {
+    if (inSlot) { panelPosRef.current = null; place(); return; }
     const me = rectOf(desk ? '[data-fx-seat].mjm-me-who' : ".mjm-me");
     if (!me) return;
     const vv = window.visualViewport;
@@ -149,11 +168,18 @@ export default function MjChat({
     const bar = claiming ? rectOf("[data-claim-banner] .bar") : null;
     const info = bar ? rectOf(desk ? "[data-my-info]" : ".mjm-me-info") : null;
     const above = bar && info ? vh - info.top + (bar.bottom - bar.top) + 4 : 0;
-    const bottom = kb || Math.max(vh - me.top + (desk ? 8 : 4), above);
-    panelPosRef.current = { left: desk ? 12 : 8, bottom };
+    // 手機：左緣在左家名牌右邊，聊天室（MjChatLog）接在面板正上方、同一個左緣，不擋左家名牌（老闆 2026-11-13）
+    const left = desk ? 12 : mjDockLeft(mySeat);
+    // 手機動作列裡的按鈕（眼牌、打出）落在面板範圍內：面板移到它上面，不擋按鈕（狀態文字可以蓋）
+    const pw = panelRef.current?.offsetWidth ?? 0;
+    const btnTop = desk || !pw ? Infinity : Math.min(Infinity, ...[...document.querySelectorAll(".mjm-action button")]
+      .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0 && r.left < left + pw && r.right > left).map((r) => r.top));
+    const overBtn = Number.isFinite(btnTop) ? vh - btnTop + 4 : 0;
+    const bottom = kb || Math.max(vh - me.top + (desk ? 8 : 4), above, overBtn);
+    panelPosRef.current = { left, bottom };
     setPos(panelRef.current, panelPosRef.current);
     place();
-  }, [desk, place, claiming]);
+  }, [desk, place, claiming, mySeat, inSlot]);
   useLayoutEffect(() => {
     if (open) { placePanel(); return; }
     panelPosRef.current = null;
@@ -164,7 +190,8 @@ export default function MjChat({
     const vv = window.visualViewport;
     window.addEventListener("resize", placePanel);
     vv?.addEventListener("resize", placePanel);
-    return () => { window.removeEventListener("resize", placePanel); vv?.removeEventListener("resize", placePanel); };
+    const t = setInterval(placePanel, 400); // 動作列的按鈕（眼牌、打出）會隨牌局出現、消失
+    return () => { window.removeEventListener("resize", placePanel); vv?.removeEventListener("resize", placePanel); clearInterval(t); };
   }, [open, placePanel]);
 
   // 點底板和聊天鈕以外的地方：收起（錄音中不收）
@@ -172,7 +199,7 @@ export default function MjChat({
     if (!open) return;
     const down = (e: PointerEvent) => {
       const t = e.target as Element | null;
-      if (rec || t?.closest?.("[data-chat-panel], [data-chat-btn], [data-chat-status]")) return;
+      if (rec || t?.closest?.("[data-chat-panel], [data-chat-btn], [data-chat-status], [data-chat-log]")) return;
       setChatOpen(false);
     };
     document.addEventListener("pointerdown", down, true);
@@ -270,8 +297,8 @@ export default function MjChat({
       <ChatStatus desk={desk} />
 
       {/* 底板 */}
-      {open && (
-        <div ref={panelRef} className={`mjc-panel ${desk ? "d" : "m"} ${focus ? "typing" : ""}`} style={{ visibility: "hidden" }} data-chat-panel>
+      {open && portalTo(inSlot ? slot : null,
+        <div ref={panelRef} className={`mjc-panel ${desk ? "d" : "m"} ${focus ? "typing" : ""}`} style={inSlot ? undefined : { visibility: "hidden" }} data-chat-panel>
           <div className="main">
             <div className="phrases">
               {PHRASES.map((p) => (
@@ -360,6 +387,9 @@ function ChatStatus({ desk }: { desk: boolean }) {
     </div>
   );
 }
+
+/** 有目標就用 portal 放進去（桌機聊天室側欄的那一格），沒有就照原本的位置畫 */
+const portalTo = (target: HTMLElement | null, node: React.ReactNode) => (target ? createPortal(node, target) : node);
 
 function MicIcon() {
   return (

@@ -29,7 +29,8 @@ async function call(body: unknown, tok?: string, raw = false) {
 const as = (pid: string) => `as:${pid}`; // stub-auth：以座位本人登入（帳號 u:<pid>）
 const send = (pid: string, effect: string, to: unknown, extra: object = {}, roomId = "R") => call({ roomId, effect, to, ...extra }, as(pid));
 const tick = (ms: number) => (clock.now += ms);
-const fx = () => sent.filter((e) => e.event === "mj_effect");
+// 座位頻道的那幾份（2026-11-13 起另外會送一份到觀戰頻道，見 flow-chat-history.ts）
+const fx = () => sent.filter((e) => e.event === "mj_effect" && e.payload.playerId !== "*spectators");
 const st = (r: { status: number; body: { error?: string; reason?: string; retryAfterMs?: number } }) =>
   r.status === 429 ? `429:${r.body.reason}:${r.body.retryAfterMs}` : r.body.error ? `${r.status}:${r.body.error}` : r.status;
 

@@ -25,7 +25,9 @@ export function db(): Promise<PGlite> {
   dbp ??= (async () => {
     const d = new PGlite();
     await d.exec(SUPABASE_SETUP);
-    for (const f of ["20261022_mahjong_prefs.sql", "20261023_mahjong_chat.sql", "20261024_mahjong_prefs_v4.sql"]) await d.exec(readFileSync(path.join(MIGRATIONS, f), "utf8"));
+    // 聊天紀錄要用 mj_rooms 判斷房間還在不在（正式庫 id 是 uuid；這裡用 text，測試的房間 id 是 "R" 這種字串，SQL 比的是 id::text）
+    await d.exec("create table if not exists public.mj_rooms (id text primary key)");
+    for (const f of ["20261022_mahjong_prefs.sql", "20261023_mahjong_chat.sql", "20261024_mahjong_prefs_v4.sql", "20261113_mahjong_chat_history.sql"]) await d.exec(readFileSync(path.join(MIGRATIONS, f), "utf8"));
     return d;
   })();
   return dbp;

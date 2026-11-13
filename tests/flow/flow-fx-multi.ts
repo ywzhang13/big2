@@ -20,6 +20,7 @@ const mem = () => { const m = new Map<string, string>(); return { getItem: (k: s
 let actor = "p0";
 const { POST: effectApi } = await import("../../app/api/mahjong/effect/route");
 await db(); // 記憶體 PostgreSQL 要在裝假 window 之前先起來（它看到 window 會以為在瀏覽器）
+await (await import("../support/stub-spectate-store")).db(); // 2026-11-13 起互動也會查同意觀戰名單（觀戰者各自的頻道），同理先起來
 const assetFetch = async () => ({ ok: true, blob: async () => new Blob(["x"]), text: async () => JSON.stringify({ w: 700, h: 525, fr: 30, op: 121 }), arrayBuffer: async () => new ArrayBuffer(8) });
 installFakeDom({
   fetch: async (url: string, init?: RequestInit) => {

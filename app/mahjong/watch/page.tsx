@@ -3,7 +3,8 @@
 // 獨立路由 /mahjong/watch：一般打牌頁和大老二頁都不載入這支。
 //   入口（輸入房號）→ 錯誤（房號不存在、未開局、沒有 LINE 登入、自己在這桌、已結束、網路）→ 選玩家申請（等待／拒絕／冷卻，倒數用伺服器時間）
 //   → 觀戰（頂部「觀戰中・○○視角」、右側視角抽屜切換、離開觀戰）→ 被收回：先清掉手牌再顯示提示
-// 觀戰中牌桌用一般牌桌元件畫，但所有操作都不接（不出牌、不吃碰槓胡、不眼牌），聊天、語音、互動特效都不掛。
+// 觀戰中牌桌用一般牌桌元件畫，但所有操作都不接（不出牌、不吃碰槓胡、不眼牌）。
+// 聊天、語音、互動（2026-11-13）：看得到、聽得到（名牌旁泡泡、互動動畫、聊天室），不能說、不能丟，聊天室寫「觀戰中，僅能觀看」。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Tile } from "@/lib/mahjong/tiles";
 import type { MjHandReveal } from "@/hooks/useMahjong";
@@ -26,6 +27,9 @@ import {
   clockSkew, fetchView, lookupRoom, requestSpectate, secondsLeft, toSpectateView,
   type SpectateLookupError, type SpectateRoom, type SpectateTarget, type SpectateView,
 } from "@/lib/mahjong/spectateClient";
+import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
+import MjChatLogBox, { useMjChatFeed } from "@/components/mahjong/MjChatLog";
+import MjFx from "@/components/mahjong/MjFx";
 import "@/components/mahjong/spectate/spectate.css";
 
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -226,6 +230,10 @@ export default function MahjongWatchPage() {
     return () => evs.forEach((e) => document.removeEventListener(e, unlock, true));
   }, []);
   const skew = room ? clockSkew(room.serverNow) : 0;
+  // 本場聊天、互動：開始觀戰才讀歷史、訂閱觀戰頻道；離開觀戰清空
+  const account = auth.status === "in" ? auth.user?.id ?? "" : "";
+  const chatRoomId = viewSeat != null && room ? room.roomId : "";
+  const chatRetry = useMjChatFeed({ account, roomId: chatRoomId, roomCode: room?.code ?? "", me: null, spectator: true });
   const targets = room?.players ?? [];
   useTick(!!room);
 
@@ -516,6 +524,7 @@ export default function MahjongWatchPage() {
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
       drawnTileId: v.drawnTileId, slowDraw, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
+      chatButton: <MjChatButton canSend={false} desk={!mobile} />,
       // 觀戰者看被觀戰的人（老闆 2026-11-08 定案）：暗槓要跟本人看到的一樣，最左邊一張翻開；
       // mySeat 就是被觀戰的那家，自然走同一條 MjBoard／MjBoardMobile 的「自己」渲染邏輯，不用特別標記
     } : null;
@@ -523,9 +532,14 @@ export default function MahjongWatchPage() {
     return (
       <div className="spx spx-watch flex flex-col flex-1 h-dvh max-h-dvh overflow-hidden bg-[#0f2a1a] relative" data-mt-stage data-spectating={viewSeat}>
         <MjPrefsPanel />
+        {/* 互動特效、名牌旁的聊天泡泡：只播、只看，不能丟、不能說 */}
+        {v && <MjFx players={v.players} mySeat={v.mySeat} suspended={v.status === "finished"} desk={!mobile} viewOnly roomId=""
+          hand={`${v.roundInfo?.currentRound}-${v.roundInfo?.currentGame}-${v.roundInfo?.dealerConsecutive}`} />}
+        <MjChat mySeat={viewSeat} myId="*spectator" roomId={chatRoomId} roomCode={room?.code ?? ""} account={account} canSend={false} claiming={false} desk={!mobile} />
+        <div className="flex flex-1 min-h-0">
         {/* 牌桌區：上方不再放「觀戰中・○○視角」大提示條（老闆 2026-11-13：擋到對家），改在牌桌下方的四家切換旁顯示「觀戰中」。
             transform 讓手機牌桌（.mjm-app 是 fixed; inset: 0）只填滿這一塊，不蓋到下方的切換列 */}
-        <div className="spx-stage">
+        <div className="spx-stage" style={{ minWidth: 0 }}>
         {props && (mobile ? (
           <MjBoardMobile {...props} roomCode={room?.code ?? code} roundLabel={roundLabel} basePoints={v?.roomSettings?.basePoints} fanPoints={v?.roomSettings?.fanPoints} onLeave={leave} leaveLabel="離開觀戰" />
         ) : (
@@ -540,6 +554,9 @@ export default function MahjongWatchPage() {
           </>
         ))}
         {!props && slow && <div className="spx-skel" role="status">正在載入{nameOf(viewSeat)}的視角…</div>}
+        </div>
+        {/* 聊天室：手機在左下輸入面板的位置（fixed，放在 spx-stage 外面才不會被它的 transform 框住）、桌機牌桌右邊 */}
+        <MjChatLogBox variant={mobile ? "dock" : "side"} mySeat={viewSeat} canSend={false} spectator onRetry={chatRetry} />
         </div>
         {/* 四家常駐快速切換（小宜〈觀戰與回放-視角切換設計規格〉）：點一下就換，取代右上角的「視角」選單；還沒同意的人停用並寫原因 */}
         <MjSeatSwitch

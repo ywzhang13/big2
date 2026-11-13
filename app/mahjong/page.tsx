@@ -23,6 +23,7 @@ import { isZimoFxNew } from "@/lib/mahjong/winShow";
 import { setBgWarmPaused } from "@/components/mahjong/FxBgWarm";
 import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
 import MjChat, { MjChatButton } from "@/components/mahjong/MjChat";
+import MjChatLogBox, { useMjChatFeed } from "@/components/mahjong/MjChatLog";
 import { useTableSounds } from "@/hooks/useTableSounds";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
@@ -790,6 +791,8 @@ function RoomView({
   const spectateActive = !!roomId && state.status === "playing" && state.mySeat >= 0 && !closed;
   const spectateManage = useSpectateManage(roomId, state.myId, state.spectateTick, spectateActive);
   const isMobileLandscape = useMobileLandscape();
+  // 本場聊天清單：進房、重新整理時用歷史補齊（hook 要在下面任何 return 之前）
+  const chatRetry = useMjChatFeed({ account: accountId, roomId: closed ? "" : roomId, roomCode: code, me: state.myId || null });
 
   // 胡牌演出（浮層、大牌段、隕石、結算先等）：和觀戰頁共用 hooks/useWinShow.tsx（老馬 2026-10-30 原封搬出，邏輯沒改）
   // 整場打完（completed）時伺服器結算後馬上關房：最後一局照樣播，播完才出最終結算；解散等其他原因關房不播（審伯 2026-10-23）
@@ -1037,6 +1040,11 @@ function RoomView({
   // 打字聊天與語音訊息：LINE 登入、已入座才能發；輪到自己、可以吃碰槓胡時底板收起
   const chatCanSend = !guest && state.mySeat >= 0;
   const chatButton = <MjChatButton canSend={chatCanSend} desk={!isMobileLandscape} />;
+  // 聊天室（components/social/）：手機接在輸入面板正上方、桌機放牌桌右邊；點聊天室外面就關
+  const chatBox = (
+    <MjChatLogBox variant={isMobileLandscape ? "dock" : "side"} mySeat={state.mySeat} canSend={chatCanSend} guest={guest}
+      myTurn={needsDiscard} claiming={state.availableActions.length > 0} onRetry={chatRetry} />
+  );
   // 觀戰：四家被觀戰人數（公開，state／mj_spectators 帶的 spectatorCounts）補進名牌；申請卡、觀戰管理只有座位本人看得到
   const spectatorCounts = state.spectatorCounts;
   const playersWithViewers = spectatorCounts ? state.players.map((p) => ({ ...p, viewerCount: spectatorCounts[p.id] ?? 0 })) : state.players;
@@ -1109,6 +1117,7 @@ function RoomView({
       <PortraitHint label="離開房間" onClick={handleLeave} />
 
       {isMobileLandscape ? (
+        <>
         <MjBoardMobile
           {...boardProps}
           roomCode={code}
@@ -1118,8 +1127,11 @@ function RoomView({
           onLeave={handleLeave}
           spectateMenu={spectateMenu}
         />
+        {chatBox}
+        </>
       ) : (
-      <>
+      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
         {/* 左上 ☰：設定、房號、圈局、底台、離開房間（和手機版同一個選單；唯一的設定入口） */}
@@ -1143,7 +1155,9 @@ function RoomView({
       </div>
 
       <MjBoard {...boardProps} />
-      </>
+      </div>
+      {chatBox}
+      </div>
       )}
 
       {/* 補花特效：掛在 body，貼著補花那一家的名牌（桌機、手機共用；自己補花已經在手牌最右邊顯示，這裡只播別家的） */}

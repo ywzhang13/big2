@@ -1,0 +1,55 @@
+/* 三遊戲共用聊天室（components/social/SocialChatBox.tsx）。色彩照小宜〈三遊戲共用聊天-UIUX規格-2026-11-13〉：
+   底 #081E14、訊息底 #173B2A、文字 #F6F1DD、次要 #C6D2C6、強調 #E7C66C、邊線 #94752E。
+   老闆 2026-11-13：訊息字大、名字／時間／標題字小，盡量多顯示幾則（訊息 15/20；名字、時間 11/14；標題 12） */
+.scb { display: flex; flex-direction: column; min-height: 0; background: #081E14; color: #F6F1DD; font-size: 15px; line-height: 20px; }
+/* 手機：接在遊戲輸入面板正上方（left／width／top／bottom 由遊戲量好寫進 style）。
+   z-index 59：和輸入面板同層，低於牌桌對話框（60）、吃碰槓胡按鈕列（70） */
+.scb.dock { position: fixed; z-index: 59; border: 1px solid rgba(201,169,110,.55); border-radius: 12px; box-shadow: 0 8px 22px rgba(0,0,0,.5); overflow: hidden; }
+/* 桌機：牌桌右邊的欄（正常版面，不疊在牌桌上） */
+.scb.side { flex: 0 0 340px; width: 340px; align-self: stretch; border-left: 1px solid #94752E; }
+
+.scb-top { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid rgba(148,117,46,.4); font-size: 12px; line-height: 16px; }
+.scb.side .scb-top { padding: 10px 16px; }
+.scb-top b { color: #E7C66C; font-weight: 700; }
+.scb-top .ro { color: #C6D2C6; font-size: 11px; }
+
+.scb button { cursor: pointer; border-radius: 10px; border: 1px solid #94752E; background: #0F3324; color: #F6F1DD; font: inherit; }
+.scb button:hover { background: #24543B; }
+.scb button:active { background: #316A49; }
+.scb button:focus-visible { outline: 2px solid #F5D77A; outline-offset: 1px; }
+
+/* 輪到自己出牌、可以吃碰槓胡：標題列右邊的金色小標籤（沒有按鈕，點外面就收起） */
+.scb-alert { margin-left: auto; padding: 1px 8px; border-radius: 999px; background: #E7C66C; color: #1A1408; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap; }
+/* 遊戲自己的輸入面板放在訊息下面（桌機側欄） */
+.scb-slot { flex: 0 0 auto; border-top: 1px solid rgba(148,117,46,.4); }
+
+.scb-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 6px 8px 8px; }
+.scb.side .scb-list { padding: 12px 14px; }
+.scb-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.scb.side .scb-list ul { gap: 8px; }
+.scb-begin { align-self: center; color: #C6D2C6; font-size: 11px; line-height: 14px; padding: 1px 8px; border-radius: 999px; background: rgba(23,59,42,.6); }
+.scb-msg { align-self: flex-start; max-width: 94%; padding: 3px 9px 4px; border-radius: 10px; background: #173B2A; overflow-wrap: anywhere; }
+.scb-msg.mine { align-self: flex-end; background: #24543B; }
+.scb-msg .hd { display: flex; align-items: baseline; gap: 6px; font-size: 11px; line-height: 14px; color: #C6D2C6; }
+.scb-msg .who { color: #E7C66C; font-weight: 700; }
+.scb time { color: #C6D2C6; font-size: 11px; line-height: 14px; margin-left: auto; }
+.scb-msg .tx { margin: 1px 0 0; white-space: pre-wrap; }
+.scb-msg .vx { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin-top: 2px; padding: 0 12px 0 4px; font-size: 14px; }
+.scb-msg .vx .pp { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #E7C66C; color: #1A1408; font-size: 12px; }
+.scb-msg .vx.on .pp { background: #F5D77A; }
+.scb-msg .vx.dead { margin: 2px 0 0; min-height: 0; padding: 0; color: #C6D2C6; font-size: 13px; }
+.scb-fx { align-self: center; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; max-width: 100%; padding: 2px 8px; border-radius: 8px; border: 1px dashed rgba(148,117,46,.6); color: #C6D2C6; font-size: 12px; line-height: 16px; }
+.scb-fx .who { color: #F6F1DD; font-weight: 700; }
+.scb-fx time { margin-left: 6px; }
+
+.scb-state { height: 100%; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 0; text-align: center; color: #C6D2C6; font-size: 13px; }
+.scb-state b { color: #F6F1DD; font-size: 15px; }
+.scb-state button { height: 40px; padding: 0 18px; margin-top: 2px; }
+
+.scb-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.scb-new { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); height: 30px; padding: 0 12px; font-size: 12px; border-radius: 999px !important; background: #E7C66C !important; color: #1A1408 !important; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.scb-foot { flex: 0 0 auto; padding: 4px 10px; display: flex; align-items: center; color: #C6D2C6; font-size: 12px; line-height: 16px; border-top: 1px solid rgba(148,117,46,.35); }
+
+/* 「聊天」鈕右上角的未讀數 */
+.scb-badge { position: absolute; top: -7px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #E5484D; color: #fff;
+  font-size: 11px; line-height: 18px; font-weight: 700; text-align: center; box-shadow: 0 0 0 2px #081E14; pointer-events: none; }

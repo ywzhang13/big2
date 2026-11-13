@@ -26,7 +26,7 @@ const MIN_HIT = 44; // 手機點擊範圍至少 44px
  *  選單最下面「關閉互動」：不播這位玩家丟給自己的特效，只在這一房有效（lib/mahjong/fx/block.ts）。
  *  互動音效的音量、靜音跟著設定（usePrefs），改了立刻生效 */
 export default function MjFx({
-  players, mySeat, suspended, desk, hand, roomId,
+  players, mySeat, suspended, desk, hand, roomId, viewOnly = false,
 }: {
   players: { id: string; name: string; seat: number }[];
   mySeat: number;
@@ -35,6 +35,8 @@ export default function MjFx({
   hand: string;
   /** 目前的房間 id（關閉互動只在這一房有效；換房、離開就清空） */
   roomId: string;
+  /** 觀戰：只播別人丟的特效，不能點名牌丟（2026-11-13） */
+  viewOnly?: boolean;
 }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ export default function MjFx({
   // 結算畫面出現：整層清空
   useEffect(() => { if (suspended) abortFx(); }, [suspended]);
 
-  const enabled = canUseFx({ guest, mySeat, suspended });
+  const enabled = !viewOnly && canUseFx({ guest, mySeat, suspended });
   // 進結算、換局、不能用了、卸載：選單和提示立刻清空（畫面畫出來之前），計時器全部取消，送出中的結果作廢
   useLayoutEffect(() => () => menu.reset(), [menu, hand, suspended, enabled]);
 
