@@ -24,28 +24,28 @@
 /* 手機按鈕只有 72px：選中時不放看得到的 ✓（會把「西 老王」擠成「✓西 老…」），靠金框＋深金底表示；讀屏照樣有 aria-checked（小宜 2026-11-13） */
 .mss.c .mss-btn .ck { display: none; }
 
-/* 收合式（手機觀戰，老闆 2026-11-13）：平常只有一條細列「觀戰中｜視角・○○ ▾」，牌桌多出高度；
-   按下去四家在「視角」鈕下面長出來（審伯 2026-11-13：照老闆說的往下長）。展開時切換列的版面高度不變（元件把高度固定在收起時），
-   兩行面板貼齊切換列底部浮起、往上蓋住手牌下半部：牌桌、手牌不縮、不跳（小宜 2026-11-13）。選好或點旁邊就收回。
-   按鈕加寬到名字至少看得到 4 個字 */
-.mss.fold { position: relative; padding-top: 3px; padding-bottom: 3px; }
-.mss-sheet { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; row-gap: 6px; column-gap: 8px; width: 100%; }
-.mss.fold.open .mss-sheet {
-  position: absolute; z-index: 61; left: 0; right: 0; bottom: 0; box-sizing: border-box; width: auto;
-  padding: 6px 0 0; padding-bottom: inherit; padding-left: inherit; padding-right: inherit;
-  background: #0f2a1a; border-top: 1px solid rgba(201, 169, 110, .6); box-shadow: 0 -6px 16px rgba(0, 0, 0, .45);
-}
+/* 收合式（手機觀戰，老闆 2026-11-14）：一顆「視角・○○」小鈕放在被看那家名牌列（聊天鈕旁），和聊天鈕同高；
+   按下去四家在同一列、鈕的左邊橫向展開，底邊對齊名牌列底，往上最多蓋到動作列（只有「等待 ○○」字樣），不蓋手牌、牌桌。
+   名牌列左邊的名字、分數、眼牌、補花不會被擠走（選單是浮層，不佔版面） */
+.mss-pick { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; }
 .mss-toggle {
-  position: relative; display: flex; align-items: center; min-width: 0; max-width: 240px; height: 30px; padding: 0 12px; box-sizing: border-box;
-  border-radius: 999px; background: #173326; border: 1px solid #806B32; color: #F6F0DA; font-size: 14px; font-weight: 600; cursor: pointer;
+  position: relative; display: flex; align-items: center; min-width: 0; max-width: 132px; height: 22px; padding: 0 8px; box-sizing: border-box;
+  border-radius: 999px; background: rgba(8,27,47,.7); border: 1px solid rgba(201,169,110,.55); color: #f0d68a; font-size: 11px; font-weight: 700; cursor: pointer;
 }
-.mss-toggle::before { content: ""; position: absolute; inset: -7px 0; } /* 看起來 30 高，點擊範圍補到 44 */
-.mss-toggle .lb { flex: 0 0 auto; color: #E8CE84; }
-.mss-toggle .dot { flex: 0 0 auto; color: #E8CE84; }
-.mss-toggle .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mss-toggle .car { flex: 0 0 auto; margin-left: 6px; font-size: 11px; color: #E8CE84; }
+.mss-toggle::before { content: ""; position: absolute; inset: -9px -2px; } /* 看起來 22 高（和聊天鈕一樣），點擊範圍補到 40 */
+.mss-toggle .lb, .mss-toggle .dot { flex: 0 0 auto; }
+.mss-toggle .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #F6F0DA; }
+.mss-toggle .car { flex: 0 0 auto; margin-left: 4px; font-size: 9px; }
 .mss-toggle:focus-visible { outline: 2px solid #FFF5D6; outline-offset: 2px; }
-.mss.fold.open .mss-toggle { background: #5A4B21; border-color: #E8CE84; }
-/* 展開：四家排成第二行，在「視角」鈕正下方 */
-.mss.fold .mss-group { flex: 0 0 100%; justify-content: center; gap: 6px; }
-.mss.fold .mss-btn { width: 104px; }
+.mss-pick.open .mss-toggle { background: #5A4B21; border-color: #E8CE84; }
+.mss-pick .mss-group {
+  position: absolute; z-index: 61; right: calc(100% + 6px); bottom: 0; display: flex; gap: 6px; padding: 3px; box-sizing: border-box;
+  border-radius: 10px; background: rgba(14, 36, 26, .97); border: 1px solid #806B32; box-shadow: 0 -4px 14px rgba(0, 0, 0, .45);
+}
+/* 四家按鈕：32 高、字 13（小宜 2026-11-14：拇指好點）；停用原因（未同意、等待回應）放第二行小字，不橫向撐寬。
+   名字最多 5 字寬（至少看得到 4 個中文字），選單被限寬時名字先截短 */
+.mss-pick .mss-btn { flex: 0 1 auto; width: auto; min-width: 0; height: 32px; padding: 0 8px; gap: 0; font-size: 13px; border-radius: 7px; }
+.mss-pick .mss-btn .l1 { gap: 3px; line-height: 15px; }
+.mss-pick .mss-btn .n { max-width: 5em; }
+.mss-pick .mss-btn .l2 { font-size: 10px; line-height: 11px; }
+.mss-pick .mss-btn .ck { display: none; } /* 目前那家靠金框＋深金底（.on），不放 ✓ 擠名字 */

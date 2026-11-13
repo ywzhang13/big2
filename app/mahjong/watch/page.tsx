@@ -517,6 +517,26 @@ export default function MahjongWatchPage() {
   // ---------- 觀戰中 ----------
   if (viewSeat != null) {
     const v = view;
+    // 手機視角選單往左最多到手牌左緣（安全區內）
+    const handLeft = () => document.querySelector("[data-mj-myhand]")?.getBoundingClientRect().left ?? 0;
+    // 四家視角切換：還沒同意的人停用並寫原因。手機（老闆 2026-11-14）：不佔底部一整條、不寫「觀戰中」，
+    // 收成一顆「視角・○○」放在被看那家名牌列的聊天鈕旁邊，按下去四家在同一列展開；桌機照舊四家平鋪在牌桌下方
+    const seatSwitch = (collapsible: boolean) => (
+      <MjSeatSwitch
+        mode="觀戰中"
+        compact={collapsible}
+        collapsible={collapsible}
+        boundLeft={collapsible ? handLeft : undefined}
+        current={viewSeat}
+        doorSeat={v?.doorSeat ?? lastSeats?.doorSeat}
+        dealerSeat={v?.dealerSeat ?? lastSeats?.dealerSeat}
+        options={targets.map((t) => ({
+          seat: t.seat, name: t.name,
+          disabledReason: t.seat === viewSeat || t.status === "approved" ? undefined : t.status === "pending" ? "等待回應" : "未同意",
+        }))}
+        onSelect={watch}
+      />
+    );
     const props = v ? {
       players: v.players, mySeat: v.mySeat, myHand: v.myHand, currentTurn: v.currentTurn, dealerSeat: v.dealerSeat, lastDiscard: v.lastDiscard,
       focusDiscard: v.focusDiscard, paceNote: null, availableActions: [], pendingAddKong: null, robKong: false, pendingFlowerRob: null, robFlower: false,
@@ -524,7 +544,7 @@ export default function MahjongWatchPage() {
       wallRemaining: v.wallRemaining, hasDrawn: v.hasDrawn, needsDraw: false, needsDiscard: false, isMyTurn: false, playerName: nameOf(viewSeat),
       drawnTileId: v.drawnTileId, slowDraw, actionNotice: null, onDraw: noop, onDiscard: noop, onAction: noop,
       dice: v.dice, doorSeat: v.doorSeat, playerScores: v.playerScores, dealerConsecutive: v.roundInfo?.dealerConsecutive,
-      chatButton: <MjChatButton canSend={false} desk={!mobile} />,
+      chatButton: mobile ? <>{seatSwitch(true)}<MjChatButton canSend={false} desk={false} /></> : <MjChatButton canSend={false} desk />,
       // 觀戰者看被觀戰的人（老闆 2026-11-08 定案）：暗槓要跟本人看到的一樣，最左邊一張翻開；
       // mySeat 就是被觀戰的那家，自然走同一條 MjBoard／MjBoardMobile 的「自己」渲染邏輯，不用特別標記
     } : null;
@@ -537,7 +557,7 @@ export default function MahjongWatchPage() {
           hand={`${v.roundInfo?.currentRound}-${v.roundInfo?.currentGame}-${v.roundInfo?.dealerConsecutive}`} />}
         <MjChat mySeat={viewSeat} myId="*spectator" roomId={chatRoomId} roomCode={room?.code ?? ""} account={account} canSend={false} claiming={false} desk={!mobile} />
         <div className="flex flex-1 min-h-0">
-        {/* 牌桌區：上方不再放「觀戰中・○○視角」大提示條（老闆 2026-11-13：擋到對家），改在牌桌下方的四家切換旁顯示「觀戰中」。
+        {/* 牌桌區：上方不再放「觀戰中・○○視角」大提示條（老闆 2026-11-13：擋到對家），桌機在牌桌下方的四家切換旁顯示「觀戰中」，手機連這一條都不放（老闆 2026-11-14），視角鈕在名牌列。
             transform 讓手機牌桌（.mjm-app 是 fixed; inset: 0）只填滿這一塊，不蓋到下方的切換列 */}
         <div className="spx-stage" style={{ minWidth: 0 }}>
         {props && (mobile ? (
@@ -558,20 +578,8 @@ export default function MahjongWatchPage() {
         {/* 聊天室：手機在左下輸入面板的位置（fixed，放在 spx-stage 外面才不會被它的 transform 框住）、桌機牌桌右邊 */}
         <MjChatLogBox variant={mobile ? "dock" : "side"} mySeat={viewSeat} canSend={false} spectator onRetry={chatRetry} />
         </div>
-        {/* 四家快速切換（小宜〈觀戰與回放-視角切換設計規格〉）：桌機四家常駐；手機收成一顆「視角・○○」，按下去才長出四家（老闆 2026-11-13）；還沒同意的人停用並寫原因 */}
-        <MjSeatSwitch
-          mode="觀戰中"
-          compact={mobile}
-          collapsible={mobile}
-          current={viewSeat}
-          doorSeat={v?.doorSeat ?? lastSeats?.doorSeat}
-          dealerSeat={v?.dealerSeat ?? lastSeats?.dealerSeat}
-          options={targets.map((t) => ({
-            seat: t.seat, name: t.name,
-            disabledReason: t.seat === viewSeat || t.status === "approved" ? undefined : t.status === "pending" ? "等待回應" : "未同意",
-          }))}
-          onSelect={watch}
-        />
+        {/* 四家快速切換（小宜〈觀戰與回放-視角切換設計規格〉）：桌機四家常駐在牌桌下方；手機收成名牌列上的「視角」鈕（見 props.chatButton） */}
+        {!mobile && seatSwitch(false)}
         {/* 別家補花：觀戰畫面照玩家本人視角一樣用補花膠囊（老闆 2026-11-07 第三次更正：拿掉上一輪的摸牌格亮正面） */}
         <MjFlowerFx fx={flowerFx} mySeat={viewSeat ?? -1} desk={!mobile} />
         {/* 胡牌演出（一般胡的浮層、大牌段、隕石）：和玩家本人看到的一樣 */}
