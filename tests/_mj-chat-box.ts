@@ -41,17 +41,20 @@ const msg = (id: string, from = "p2"): Msg => ({ id, kind: "text", from, fromNam
   C.bindChatSession(null);
 }
 
-// 聊天鈕：未讀、開關
+// 聊天鈕：不顯示未讀數字（老闆 2026-11-13）、開關
 {
   L.__resetChatLog();
   L.bindChatLog("acc|r1|me", "me");
   const btn = (canSend: boolean) => renderToStaticMarkup(createElement(MjChatButton, { canSend, desk: false }));
-  check(!btn(true).includes("data-chat-unread"), "沒有未讀：聊天鈕沒有數字");
   L.addChatMessage({ ...msg("x"), ts: 1 });
   L.addChatMessage({ ...msg("y"), ts: 2 });
-  check(/data-chat-unread="2"/.test(btn(true)) && btn(true).includes("聊天"), "收起時收到 2 則：聊天鈕右上顯示 2");
+  for (const [canSend, desk] of [[true, false], [true, true], [false, false], [false, true]] as const) {
+    const h = renderToStaticMarkup(createElement(MjChatButton, { canSend, desk }));
+    check(h.includes("聊天") && !h.includes("data-chat-unread") && !h.includes("scb-badge") && !/>\s*2\s*</.test(h),
+      `收起時收到 2 則：聊天鈕不顯示紅色數字（${canSend ? "打牌" : "觀戰／訪客"}、${desk ? "桌機" : "手機"}）`);
+  }
   toggleMjChatBox(true, true);
-  check(L.__peekChatLog().open && L.__peekChatLog().unread === 0, "玩家按聊天：清單打開、未讀歸零");
+  check(L.__peekChatLog().open, "玩家按聊天：清單打開");
   check(/aria-expanded="true"/.test(btn(true)), "打開後聊天鈕標成展開");
   toggleMjChatBox(true, false);
   check(!L.__peekChatLog().open, "收起聊天：清單關上");
@@ -90,7 +93,7 @@ const msg = (id: string, from = "p2"): Msg => ({ id, kind: "text", from, fromNam
   const off2 = subscribeFx((m) => L.addChatEffect({ id: m.id, ts: 1, fromName: m.fromName, toName: m.toName, label: FX_LABEL[m.kind] }));
   onSpectatorEvent("mj_chat", { playerId: "*spectators", message: { ...msg("s1"), ts: 10 } }, "5555");
   onSpectatorEvent("mj_chat", { playerId: "*spectators", message: { ...msg("s1"), ts: 10 } }, "5555");
-  check(L.__peekChatLog().entries.length === 1 && L.__peekChatLog().unread === 1, "觀戰頻道的聊天：進聊天室、同一則只一則、算未讀（觀戰者 me＝null）");
+  check(L.__peekChatLog().entries.length === 1, "觀戰頻道的聊天：進聊天室、同一則只一則");
   check(C.__peekChat().bubbles.some((b) => b.id === "s1"), "觀戰頻道的聊天：名牌旁泡泡照常出現");
   onSpectatorEvent("mj_chat", { playerId: "*spectators", message: { ...msg("s2"), ts: 11 } }, "9999");
   check(L.__peekChatLog().entries.length === 1, "別房（房號不同）的觀戰事件：丟掉");

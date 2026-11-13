@@ -171,10 +171,3 @@ export default function SocialChatBox({
     </aside>
   );
 }
-
-/** 「聊天」鈕上的未讀數字（最多 99+）；各遊戲把它放在自己的聊天鈕裡 */
-export function UnreadBadge() {
-  const { unread } = useChatLog();
-  if (unread <= 0) return null;
-  return <b className="scb-badge" aria-label={`${unread} 則未讀`} data-chat-unread={unread}>{unread > 99 ? "99+" : unread}</b>;
-}

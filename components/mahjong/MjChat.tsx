@@ -6,7 +6,7 @@
 //   ・輪到自己出牌、吃碰槓胡時底板照樣能開、錄音不中斷（老闆 2026-10-21）；吃碰槓胡按鈕列（z-index 70）疊在底板上面
 //   ・底板開著時，自己的泡泡改貼在底板右側（不被底板、鍵盤蓋住），不低於手機動作列（打出鈕）和吃碰槓胡按鈕列的上緣
 //   ・訪客、觀戰：看得到、聽得到，按「聊天」只打開聊天框（只能看）
-//   ・按「聊天」同時打開本場聊天框（components/social/SocialChatBox，見 MjChatLog.tsx）；收起時鈕上顯示未讀數（2026-11-13）
+//   ・按「聊天」同時打開本場聊天框（components/social/SocialChatBox，見 MjChatLog.tsx）（2026-11-13）；鈕上不顯示未讀數字（老闆 2026-11-13）
 // 狀態都在 lib/mahjong/chatClient.ts（綁「帳號＋房間＋座位」，換場全部清空）。
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
@@ -18,7 +18,6 @@ import { createChatMic } from "@/lib/mahjong/chatMic";
 import { SpeakerIcon } from "./MjIcons";
 import { mjDockLeft, toggleMjChatBox } from "./MjChatLog";
 import { useChatLog } from "@/components/social/chatLog";
-import { UnreadBadge } from "@/components/social/SocialChatBox";
 
 const mmss = (ms: number) => `00:${String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, "0")}`;
 
@@ -39,7 +38,6 @@ export function MjChatButton({ canSend, desk }: { canSend: boolean; desk: boolea
         <path d="M4 5h16v10H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       </svg>
       聊天
-      <UnreadBadge />
     </button>
   );
 }

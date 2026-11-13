@@ -558,10 +558,11 @@ export default function MahjongWatchPage() {
         {/* 聊天室：手機在左下輸入面板的位置（fixed，放在 spx-stage 外面才不會被它的 transform 框住）、桌機牌桌右邊 */}
         <MjChatLogBox variant={mobile ? "dock" : "side"} mySeat={viewSeat} canSend={false} spectator onRetry={chatRetry} />
         </div>
-        {/* 四家常駐快速切換（小宜〈觀戰與回放-視角切換設計規格〉）：點一下就換，取代右上角的「視角」選單；還沒同意的人停用並寫原因 */}
+        {/* 四家快速切換（小宜〈觀戰與回放-視角切換設計規格〉）：桌機四家常駐；手機收成一顆「視角・○○」，按下去才長出四家（老闆 2026-11-13）；還沒同意的人停用並寫原因 */}
         <MjSeatSwitch
           mode="觀戰中"
           compact={mobile}
+          collapsible={mobile}
           current={viewSeat}
           doorSeat={v?.doorSeat ?? lastSeats?.doorSeat}
           dealerSeat={v?.dealerSeat ?? lastSeats?.dealerSeat}

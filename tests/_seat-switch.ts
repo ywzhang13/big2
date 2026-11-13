@@ -42,4 +42,18 @@ const label = (h: string, seat: number) => h.match(new RegExp(`aria-label="([^"]
   check(!b0.includes("disabled") && b0.includes("自己") && r.includes("回放中"), "回放：自己那家有「自己」小字、可以按，模式文字「回放中」");
 }
 
+// 收合式（手機觀戰，老闆 2026-11-13）：平常只有「視角・目前那家」，四家要按下去才出現；回放、桌機不傳就照舊平鋪
+{
+  const h = html({ doorSeat: 2, dealerSeat: 2, current: 2, collapsible: true, compact: true });
+  const tg = h.match(/<button[^>]*data-seat-switch-toggle[^>]*>.*?<\/button>/)?.[0] ?? "";
+  check(!!tg && tg.includes("視角") && tg.includes("老王") && tg.includes('aria-expanded="false"'), "收起時：一顆「視角・老王」按鈕（目前看的那家），標成未展開");
+  check(seats(h).length === 0 && !h.includes('role="radiogroup"'), "收起時：四家按鈕不畫（切換列只剩一條細列）");
+  check(/class="mss[^"]*\bfold\b/.test(h) && h.includes('class="mss-mode">觀戰中<'), "收起時：仍顯示「觀戰中」");
+  const flat = html({ doorSeat: 2, dealerSeat: 2, compact: true });
+  check(seats(flat).length === 4 && !flat.includes("data-seat-switch-toggle"), "不傳 collapsible（回放、桌機觀戰）：照舊四家平鋪，沒有視角按鈕");
+  const none = html({ current: null, collapsible: true });
+  const tg2 = none.match(/<button[^>]*data-seat-switch-toggle[^>]*>.*?<\/button>/)?.[0] ?? "";
+  check(tg2.includes("視角") && !tg2.includes("・"), "還沒選視角：按鈕只寫「視角」");
+}
+
 if (failed) process.exit(1);

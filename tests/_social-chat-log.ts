@@ -5,7 +5,7 @@ import type { ChatMessage } from "../lib/social/events";
 import {
   __peekChatLog, __resetChatLog, addChatEffect, addChatMessage, bindChatLog, loadChatHistory, setChatLogOpen, type HistoryResult,
 } from "../components/social/chatLog";
-import SocialChatBox, { UnreadBadge } from "../components/social/SocialChatBox";
+import SocialChatBox from "../components/social/SocialChatBox";
 
 let failed = 0;
 const check = (ok: boolean, msg: string) => { if (!ok) failed++; console.log(`${ok ? "✅" : "❌"} ${msg}`); };
@@ -17,26 +17,27 @@ const box = (p: Partial<Parameters<typeof SocialChatBox>[0]> = {}) =>
   renderToStaticMarkup(createElement(SocialChatBox, { variant: "dock", open: true, onClose: () => {}, emptyHint: "說句話，和大家聊聊吧", ...p }));
 
 async function main() {
-  // 歷史＋即時：依伺服器時間排序、同一則（歷史和即時各收到一次）只留一則；歷史不算未讀
+  // 歷史＋即時：依伺服器時間排序、同一則（歷史和即時各收到一次）只留一則
   {
     __resetChatLog();
     bindChatLog("acc|room1|me", "me");
     addChatMessage(msg("c", 300));
-    check(__peekChatLog().unread === 1, "收合時別人的新訊息：未讀 +1");
+    check(ids() === "c", "收到別人的新訊息：進清單");
     await loadChatHistory(ok([msg("a", 100), msg("b", 200), msg("c", 300)]));
     check(ids() === "a,b,c", "歷史和即時合併：由舊到新、同一個 id 只留一則");
-    check(__peekChatLog().unread === 1 && __peekChatLog().status === "ready", "歷史裡的訊息不算未讀");
+    check(__peekChatLog().status === "ready", "讀完歷史：狀態 ready");
     addChatMessage(msg("c", 300));
-    check(__peekChatLog().unread === 1, "重複收到同一則：不重複計未讀");
+    check(ids() === "a,b,c", "重複收到同一則：不重複加");
     addChatMessage(msg("d", 400, "me"));
-    check(__peekChatLog().unread === 1 && ids().endsWith("d"), "自己發的訊息：進清單但不算未讀");
+    check(ids().endsWith("d"), "自己發的訊息：進清單");
     addChatEffect({ id: "fx1", ts: 500, fromName: "阿德", toName: "老王", label: "拍手" });
-    check(__peekChatLog().unread === 1 && ids().endsWith("fx1"), "互動紀錄：進清單、不算未讀");
+    check(ids().endsWith("fx1"), "互動紀錄：進清單");
     setChatLogOpen(true);
-    check(__peekChatLog().unread === 0, "打開聊天框：未讀歸零");
+    check(__peekChatLog().open, "打開聊天框");
     addChatMessage(msg("e", 600));
-    check(__peekChatLog().unread === 0, "開著時收到新訊息：不算未讀");
+    check(ids().endsWith("e"), "開著時收到新訊息：進清單");
     setChatLogOpen(false);
+    check(!("unread" in __peekChatLog()), "不再計算未讀數（老闆 2026-11-13：聊天鈕不顯示幾則未讀的紅色數字）");
   }
   // 換場清空；舊的一場晚回來的歷史丟掉
   {
@@ -64,16 +65,15 @@ async function main() {
     const v = (url: string | null) => msg("v1", 100, "p2", { kind: "voice", text: undefined, url, durationMs: 3000 });
     addChatMessage(v("https://v/old?sig=1"));
     addChatMessage(msg("t1", 200));
-    const unread = __peekChatLog().unread;
     await loadChatHistory(ok([v("https://v/old?sig=2"), msg("t1", 200)]));
     const e1 = __peekChatLog().entries[0];
     check(e1.type === "msg" && e1.msg.url === "https://v/old?sig=2", "重新讀歷史：同一則語音換成新簽發的網址");
-    check(ids() === "v1,t1" && __peekChatLog().unread === unread, "換網址：仍然只有一則、順序不變、未讀數不變");
+    check(ids() === "v1,t1", "換網址：仍然只有一則、順序不變");
     await loadChatHistory(ok([v(null), msg("t1", 200)]));
     const e2 = __peekChatLog().entries[0];
     check(e2.type === "msg" && e2.msg.url === null, "檔案已清掉（null）：取代舊網址，顯示「語音已過期」");
     check(box().includes("語音已過期") && !box().includes("data-chat-log-voice"), "畫面：過期的語音不顯示成能播放");
-    check(ids() === "v1,t1" && __peekChatLog().unread === unread, "換成 null：仍然只有一則、順序不變、未讀數不變");
+    check(ids() === "v1,t1", "換成 null：仍然只有一則、順序不變");
     await loadChatHistory(ok([v("https://v/back?sig=3"), msg("t1", 200)]));
     const e3 = __peekChatLog().entries[0];
     check(e3.type === "msg" && e3.msg.url === "https://v/back?sig=3", "再讀到新網址：恢復可播放");
@@ -96,7 +96,7 @@ async function main() {
     addChatMessage(msg("a", 1));
     const { markChatLogClosed } = await import("../components/social/chatLog");
     markChatLogClosed();
-    check(__peekChatLog().status === "closed" && ids() === "" && __peekChatLog().unread === 0, "markChatLogClosed：清掉內容和未讀，狀態改成已關閉");
+    check(__peekChatLog().status === "closed" && ids() === "", "markChatLogClosed：清掉內容，狀態改成已關閉");
     check(box().includes("房間已關閉，本場聊天已清除"), "畫面：房間已關閉，本場聊天已清除");
     bindChatLog(null);
     markChatLogClosed();
@@ -105,7 +105,7 @@ async function main() {
   // 關房競態（審伯 2026-11-13 必修）：關閉後晚到的歷史、聊天、互動都不能把內容補回來
   {
     const { markChatLogClosed } = await import("../components/social/chatLog");
-    const closedEmpty = () => __peekChatLog().status === "closed" && ids() === "" && __peekChatLog().unread === 0;
+    const closedEmpty = () => __peekChatLog().status === "closed" && ids() === "";
     // 1. 歷史請求送出 → 410 關房 → 舊的歷史回應（成功）才到
     __resetChatLog();
     bindChatLog("k1", "me");
@@ -114,7 +114,7 @@ async function main() {
     markChatLogClosed();
     release({ ok: true, messages: [msg("old1", 1), msg("old2", 2)] });
     await p1;
-    check(closedEmpty(), "關房後才到的歷史（成功）：不會把訊息補回來，維持已關閉、零訊息、零未讀");
+    check(closedEmpty(), "關房後才到的歷史（成功）：不會把訊息補回來，維持已關閉、零訊息");
     // 2. 一樣的順序，舊回應是失敗
     __resetChatLog();
     bindChatLog("k1", "me");
@@ -139,7 +139,7 @@ async function main() {
     // 5. 同一場關閉後收到聊天、互動
     addChatMessage(msg("late-msg", 4));
     addChatEffect({ id: "late-fx", ts: 5, fromName: "阿德", toName: "老王", label: "拍手" });
-    check(closedEmpty(), "同一場關閉後收到聊天、互動：不加進清單、不算未讀");
+    check(closedEmpty(), "同一場關閉後收到聊天、互動：不加進清單");
     // 6. 兩個歷史請求同時在讀：一個回報房間不在（404），另一個晚一點成功回來
     __resetChatLog();
     bindChatLog("k2", "me");
@@ -157,7 +157,7 @@ async function main() {
     await loadChatHistory(ok([msg("n1", 1)]));
     addChatMessage(msg("n2", 2));
     addChatEffect({ id: "nfx", ts: 3, fromName: "阿德", label: "愛心" });
-    check(__peekChatLog().status === "ready" && ids() === "n1,n2,nfx" && __peekChatLog().unread === 1, "新的一場：歷史、聊天、互動都正常，未讀照算");
+    check(__peekChatLog().status === "ready" && ids() === "n1,n2,nfx", "新的一場：歷史、聊天、互動都正常");
     // 8. 舊場關閉前發出、換場後才到的歷史：也不會混進新場
     __resetChatLog();
     bindChatLog("k4", "me");
@@ -180,7 +180,7 @@ async function main() {
     await loadChatHistory(async () => ({ ok: false, reason: "failed" }));
     check(__peekChatLog().status === "ready" && ids() === "a", "已有訊息時重連讀不到：保留現有內容");
     await loadChatHistory(async () => ({ ok: false, reason: "closed" }));
-    check(__peekChatLog().status === "closed" && ids() === "" && __peekChatLog().unread === 0, "房間已關閉：舊內容和未讀都清掉");
+    check(__peekChatLog().status === "closed" && ids() === "", "房間已關閉：舊內容清掉");
   }
   // 畫面：各種狀態
   {
@@ -228,18 +228,6 @@ async function main() {
     check(e.includes("聊天暫時無法載入") && e.includes("重試"), "讀取失敗：聊天暫時無法載入＋重試");
     await loadChatHistory(async () => ({ ok: false, reason: "closed" }));
     check(box().includes("房間已關閉，本場聊天已清除"), "房間關閉：房間已關閉，本場聊天已清除");
-  }
-  // 未讀徽章
-  {
-    __resetChatLog();
-    bindChatLog("k", "me");
-    const badge = () => renderToStaticMarkup(createElement(UnreadBadge));
-    check(badge() === "", "沒有未讀：不顯示徽章");
-    addChatMessage(msg("a", 1));
-    addChatMessage(msg("b", 2));
-    check(/data-chat-unread="2"/.test(badge()) && badge().includes("2 則未讀"), "有未讀：顯示數字與讀屏文字");
-    for (let i = 0; i < 120; i++) addChatMessage(msg(`n${i}`, 10 + i));
-    check(badge().includes(">99+<"), "超過 99：顯示 99+");
   }
   console.log(failed ? `❌ 失敗 ${failed} 項` : "全部通過");
   process.exit(failed ? 1 : 0);

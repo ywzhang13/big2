@@ -49,7 +49,3 @@
 .scb-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .scb-new { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); height: 30px; padding: 0 12px; font-size: 12px; border-radius: 999px !important; background: #E7C66C !important; color: #1A1408 !important; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
 .scb-foot { flex: 0 0 auto; padding: 4px 10px; display: flex; align-items: center; color: #C6D2C6; font-size: 12px; line-height: 16px; border-top: 1px solid rgba(148,117,46,.35); }
-
-/* 「聊天」鈕右上角的未讀數 */
-.scb-badge { position: absolute; top: -7px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #E5484D; color: #fff;
-  font-size: 11px; line-height: 18px; font-weight: 700; text-align: center; box-shadow: 0 0 0 2px #081E14; pointer-events: none; }
