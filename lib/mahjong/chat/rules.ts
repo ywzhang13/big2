@@ -19,6 +19,8 @@ export const RATE: Record<ChatKind, { cooldownMs: number; burstCount: number; bu
 };
 
 export const MAX_TEXT_CHARS = 40;
+/** 每間房保存的聊天則數上限：只留最近這麼多則（老闆 2026-11-13：保存在這一場；一則約 200 bytes，200 則約 40KB） */
+export const CHAT_HISTORY_LIMIT = 200;
 export const MAX_VOICE_SECONDS = 10;
 export const MIN_VOICE_MS = 400; // 前端不到 0.5 秒就不送；轉檔後的長度會差一點，伺服器放寬到 0.4 秒
 export const MAX_VOICE_BYTES = 512 * 1024; // 上傳原檔上限（10 秒 Opus 約 40KB、AAC 約 160KB）

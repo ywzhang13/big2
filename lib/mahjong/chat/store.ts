@@ -2,7 +2,9 @@
 // 測試時整個檔案會被換成 tests/support/stub-chat-store.ts（冷卻照樣跑真的 SQL 函式，Storage 用記憶體模擬）。
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { existingRoomIds } from "@/lib/mahjong/db";
-import { RATE, VOICE_MAX_AGE_MS, VOICE_URL_TTL_S, type ChatKind } from "./rules";
+import { CHAT_HISTORY_LIMIT, RATE, VOICE_MAX_AGE_MS, VOICE_URL_TTL_S, type ChatKind } from "./rules";
+import { fromStored, toStored, voiceKeyOf, type StoredMessage } from "./history";
+import type { ChatMessage } from "@/lib/social/events";
 import { removeFolder, sweep, type VoiceBucket } from "./storage-ops";
 
 export const VOICE_BUCKET = "mj-voice";
@@ -30,7 +32,7 @@ export async function checkRate(roomId: string, userId: string, kind: ChatKind, 
 /** 存一則語音（已轉成 m4a），回傳 1 小時有效的播放網址。路徑 <roomId>/<voiceId>.m4a */
 export async function saveVoice(roomId: string, voiceId: string, data: Buffer): Promise<string> {
   const bucket = getSupabaseAdmin().storage.from(VOICE_BUCKET);
-  const key = `${roomId}/${voiceId}.m4a`;
+  const key = voiceKeyOf(roomId, voiceId);
   const up = await bucket.upload(key, data, { contentType: "audio/mp4", upsert: false });
   if (up.error) throw new Error(`上傳語音失敗：${up.error.message}`);
   const signed = await bucket.createSignedUrl(key, VOICE_URL_TTL_S);
@@ -41,11 +43,51 @@ export async function saveVoice(roomId: string, voiceId: string, data: Buffer): 
 // supabase-js 的 FileObject 型別把 id 寫成 string，實際上資料夾的 id 是 null，所以轉成 storage-ops 的介面
 const voiceBucket = (): VoiceBucket => getSupabaseAdmin().storage.from(VOICE_BUCKET) as unknown as VoiceBucket;
 
-/** 房間關閉：刪掉這房的語音檔和冷卻紀錄。回傳刪掉幾個語音檔 */
+/**
+ * 文字聊天：檢查冷卻、記下、存進這房的聊天紀錄，一次資料庫呼叫完成（mj_chat_post）。
+ * 回 0＝已存，可以廣播；> 0＝冷卻中還要等幾毫秒（什麼都沒寫）
+ */
+export async function postText(roomId: string, userId: string, message: ChatMessage): Promise<number> {
+  const r = RATE.text;
+  const { data, error } = await getSupabaseAdmin().rpc("mj_chat_post", {
+    p_room: roomId, p_user: userId, p_kind: "text",
+    p_cooldown_ms: r.cooldownMs, p_burst_count: r.burstCount, p_burst_window_ms: r.burstWindowMs, p_burst_cooldown_ms: r.burstCooldownMs,
+    p_msg: toStored(message), p_keep: CHAT_HISTORY_LIMIT,
+  });
+  if (error) throw new Error(`送出聊天失敗：${error.message}`);
+  return Number(data) || 0;
+}
+
+/** 語音：冷卻已經扣過、檔案已經存好，把這則存進聊天紀錄（存檔案路徑，不存會過期的網址） */
+export async function appendVoice(roomId: string, message: ChatMessage): Promise<void> {
+  const { error } = await getSupabaseAdmin().rpc("mj_chat_append", {
+    p_room: roomId, p_msg: toStored(message, voiceKeyOf(roomId, message.id)), p_keep: CHAT_HISTORY_LIMIT,
+  });
+  if (error) throw new Error(`儲存語音紀錄失敗：${error.message}`);
+}
+
+/** 這房保存的聊天（舊到新，最多 CHAT_HISTORY_LIMIT 則）；語音重新簽發播放網址，檔案不在就給 null */
+export async function loadHistory(roomId: string): Promise<ChatMessage[]> {
+  const { data, error } = await getSupabaseAdmin().rpc("mj_chat_history", { p_room: roomId });
+  if (error) throw new Error(`讀取聊天紀錄失敗：${error.message}`);
+  const rows = ((data ?? []) as { msg: StoredMessage }[]).map((r) => r.msg);
+  const keys = rows.map((m) => m.voiceKey).filter((k): k is string => !!k);
+  const urls = new Map<string, string | null>();
+  if (keys.length > 0) {
+    const signed = await getSupabaseAdmin().storage.from(VOICE_BUCKET).createSignedUrls(keys, VOICE_URL_TTL_S);
+    if (signed.error) throw new Error(`簽發語音網址失敗：${signed.error.message}`);
+    for (const x of signed.data ?? []) if (x.path) urls.set(x.path, x.error ? null : x.signedUrl);
+  }
+  return rows.map((m) => fromStored(m, (k) => urls.get(k) ?? null));
+}
+
+/** 房間關閉：刪掉這房的語音檔、冷卻紀錄和聊天紀錄。回傳刪掉幾個語音檔 */
 export async function deleteRoomChat(roomId: string): Promise<number> {
   const removed = await removeFolder(voiceBucket(), roomId);
   const del = await getSupabaseAdmin().from("mj_chat_rate").delete().eq("room_id", roomId);
   if (del.error) throw new Error(`刪除聊天冷卻紀錄失敗：${del.error.message}`);
+  const msgs = await getSupabaseAdmin().from("mj_chat_messages").delete().eq("room_id", roomId);
+  if (msgs.error) throw new Error(`刪除聊天紀錄失敗：${msgs.error.message}`);
   return removed;
 }
 

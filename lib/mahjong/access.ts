@@ -45,6 +45,20 @@ export function privateChannelName(roomCode: string, playerId: string): string {
   return `mj-${roomCode}-p-${h}`;
 }
 
+/** 觀戰頻道的收件人代號：payload.playerId 設成這個，事件就送到這房的觀戰頻道（聊天、互動特效給觀戰者看） */
+export const SPECTATORS = "*spectators";
+
+/**
+ * 觀戰頻道名稱：和座位頻道一樣用伺服器金鑰做 HMAC，只透過「已同意觀戰」的人讀聊天紀錄 API 時告訴前端；
+ * 知道房號、沒被同意的人猜不到。觀戰者在這裡只收聊天和互動特效（牌局狀態照舊走觀戰 API）。
+ */
+export function spectatorChannelName(roomCode: string): string {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY 未設定，無法建立觀戰頻道");
+  const h = createHmac("sha256", key).update(`mj-spectators:${roomCode}`).digest("base64url").slice(0, 32);
+  return `mj-${roomCode}-s-${h}`;
+}
+
 /** 每個事件的 payload 加上這次存檔後的牌局版本號 sv（沒給就原樣）。
  *  前端記住看過的最大版本，跳號＝中間漏了事件，立刻補抓一次狀態（lib/mahjong/syncPolicy.ts；老馬 2026-11-01） */
 export function withVersion<T extends { event: string; payload: Record<string, unknown> }>(events: T[], sv?: number): T[] {
@@ -61,7 +75,7 @@ export function routeEvents(
     const isPrivate = PRIVATE_EVENTS.has(event);
     if (isPrivate && typeof pid !== "string") throw new Error(`私人事件 ${event} 缺少 playerId`);
     return {
-      channel: isPrivate ? privateChannelName(roomCode, pid as string) : `mj-${roomCode}`,
+      channel: !isPrivate ? `mj-${roomCode}` : pid === SPECTATORS ? spectatorChannelName(roomCode) : privateChannelName(roomCode, pid as string),
       event,
       payload,
     };

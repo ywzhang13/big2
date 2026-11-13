@@ -1,8 +1,10 @@
 // 遊戲內互動特效：POST { roomId, effect: "heart"|"money"|"egg"|"water"|"punch"|"clap", to: <同桌另一位的 playerId> }
 // 只有同一桌、LINE 登入的玩家能送（訪客 403 guest_not_allowed，和前端「訪客點名牌沒反應」一致）；發送者由登入帳號認定，目標必須是同桌的另一位。
 // 冷卻在伺服器擋（429）：發送者同組冷卻中 reason="cooldown"、目標在重組保護期 reason="target_protected"。
-// 確認後走同桌四人各自的座位頻道廣播 mj_effect（公開頻道 mj-<房號> 收不到）。不入庫。
+// 確認後走同桌四人各自的座位頻道和觀戰頻道廣播 mj_effect（公開頻道 mj-<房號> 收不到）。不入庫。
+// 觀戰者不在這桌 → 403 not_in_room（看得到、不能丟）。
 import { randomUUID } from "node:crypto";
+import { SPECTATORS } from "@/lib/mahjong/access";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { fail, resolveMember } from "@/lib/mahjong/effects/members";
 import { EFFECT_GROUP, GROUP_COOLDOWN_MS, isEffect } from "@/lib/mahjong/effects/rules";
@@ -53,6 +55,6 @@ async function handle(request: Request): Promise<Response> {
     to: target.playerId, toName: target.name, toSeat: target.seat,
     ts: Date.now(),
   };
-  await mjBroadcastBatch(roomCode, members.map((m) => ({ event: "mj_effect", payload: { playerId: m.playerId, effect } })));
+  await mjBroadcastBatch(roomCode, [...members.map((m) => m.playerId), SPECTATORS].map((playerId) => ({ event: "mj_effect", payload: { playerId, effect } })));
   return Response.json({ ok: true, effect, cooldownMs: GROUP_COOLDOWN_MS[EFFECT_GROUP[body.effect]] });
 }

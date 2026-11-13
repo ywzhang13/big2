@@ -34,7 +34,8 @@ async function call(fn: (r: Request) => Promise<Response>, body: unknown, tok?: 
 }
 const say = (pid: string, text: unknown, extra: object = {}) => call(chat, { roomId: "R", text, ...extra }, as(pid));
 const tick = (ms: number) => (clock.now += ms);
-const chats = () => sent.filter((e) => e.event === "mj_chat");
+// 座位頻道的那幾份（2026-11-13 起另外會送一份到觀戰頻道，見 flow-chat-history.ts）
+const chats = () => sent.filter((e) => e.event === "mj_chat" && e.payload.playerId !== "*spectators");
 const st = (r: { status: number; body: { error?: string } }) => `${r.status}:${r.body.error ?? "ok"}`;
 const rateRows = async () => (await (await db()).query<{ room_id: string; user_id: string; kind: string }>("select room_id, user_id, kind from mj_chat_rate order by 1, 2, 3")).rows;
 
