@@ -25,7 +25,7 @@ export async function mjBroadcast(
  */
 export async function mjBroadcastBatch(
   roomCode: string,
-  events: { event: string; payload: Record<string, unknown> }[],
+  events: { event: string; payload: Record<string, unknown>; channel?: string }[],
   sv?: number
 ): Promise<void> {
   if (events.length === 0) return;

@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { fail, resolveMember } from "@/lib/mahjong/effects/members";
 import { MAX_VOICE_BYTES, MIN_VOICE_MS } from "@/lib/mahjong/chat/rules";
-import { broadcastMessage, buildMessage } from "@/lib/mahjong/chat/send";
+import { approvedSpectators, broadcastMessage, buildMessage } from "@/lib/mahjong/chat/send";
 import { appendVoice, checkRate, saveVoice } from "@/lib/mahjong/chat/store";
 import { BadAudioError, transcodeToM4a } from "@/lib/mahjong/chat/voice";
 
@@ -60,7 +60,7 @@ async function handle(request: Request): Promise<Response> {
   const id = randomUUID();
   const url = await saveVoice(roomId, id, voice.data);
   const message = buildMessage(me, { id, kind: "voice", url, durationMs: voice.durationMs });
-  await appendVoice(roomId, message);
-  await broadcastMessage(roomCode, members, message);
+  if (!(await appendVoice(roomId, message))) return fail(410, "room_closed"); // 轉檔期間房間關了：不存、不送（檔案由定期清除刪掉）
+  await broadcastMessage(roomCode, roomId, members, await approvedSpectators(roomId), message);
   return Response.json({ ok: true, message });
 }

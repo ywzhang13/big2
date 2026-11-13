@@ -45,17 +45,21 @@ export function privateChannelName(roomCode: string, playerId: string): string {
   return `mj-${roomCode}-p-${h}`;
 }
 
-/** 觀戰頻道的收件人代號：payload.playerId 設成這個，事件就送到這房的觀戰頻道（聊天、互動特效給觀戰者看） */
+/** 送到觀戰頻道的事件，payload.playerId 都是這個（前端可以忽略） */
 export const SPECTATORS = "*spectators";
 
 /**
- * 觀戰頻道名稱：和座位頻道一樣用伺服器金鑰做 HMAC，只透過「已同意觀戰」的人讀聊天紀錄 API 時告訴前端；
- * 知道房號、沒被同意的人猜不到。觀戰者在這裡只收聊天和互動特效（牌局狀態照舊走觀戰 API）。
+ * 觀戰頻道名稱：每位「已同意觀戰」的人各一個，綁這一場（房間 id）＋觀戰者帳號，用伺服器金鑰做 HMAC。
+ * 只透過讀聊天紀錄 API 告訴本人（審伯 2026-11-13 必修 1、5）：
+ *   ・綁房間 id：房號重用開新場，名稱就不同，舊觀戰者收不到新場
+ *   ・每人一個：Realtime 的廣播頻道用公開金鑰也能發，觀戰者頂多能對「自己的」頻道發假訊息，騙不到別人
+ *   ・同意被收回後，伺服器下一則就不再送到他的頻道
+ * 觀戰者在這裡只收聊天和互動特效（牌局狀態照舊走觀戰 API）。
  */
-export function spectatorChannelName(roomCode: string): string {
+export function spectatorChannelName(roomCode: string, roomId: string, userId: string): string {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY 未設定，無法建立觀戰頻道");
-  const h = createHmac("sha256", key).update(`mj-spectators:${roomCode}`).digest("base64url").slice(0, 32);
+  const h = createHmac("sha256", key).update(`mj-spectator:${roomId}:${userId}`).digest("base64url").slice(0, 32);
   return `mj-${roomCode}-s-${h}`;
 }
 
@@ -68,14 +72,15 @@ export function withVersion<T extends { event: string; payload: Record<string, u
 /** 每個事件要送到哪個頻道：私人事件送到本人頻道，其他都送房間公開頻道 */
 export function routeEvents(
   roomCode: string,
-  events: { event: string; payload: Record<string, unknown> }[]
+  events: { event: string; payload: Record<string, unknown>; channel?: string }[]
 ): { channel: string; event: string; payload: Record<string, unknown> }[] {
-  return events.map(({ event, payload }) => {
+  return events.map(({ event, payload, channel }) => {
+    if (channel) return { channel, event, payload }; // 呼叫端已經指定頻道（觀戰者各自的頻道）
     const pid = payload.playerId;
     const isPrivate = PRIVATE_EVENTS.has(event);
     if (isPrivate && typeof pid !== "string") throw new Error(`私人事件 ${event} 缺少 playerId`);
     return {
-      channel: !isPrivate ? `mj-${roomCode}` : pid === SPECTATORS ? spectatorChannelName(roomCode) : privateChannelName(roomCode, pid as string),
+      channel: isPrivate ? privateChannelName(roomCode, pid as string) : `mj-${roomCode}`,
       event,
       payload,
     };

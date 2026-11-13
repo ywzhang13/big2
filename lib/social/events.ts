@@ -33,6 +33,6 @@ export interface EffectEvent {
 
 /** 即時事件的 payload：
  *  ・送到座位頻道時 playerId＝收件的座位（前端可以忽略）
- *  ・送到觀戰頻道時 playerId＝SPECTATORS（"*spectators"） */
+ *  ・送到觀戰頻道（每位已同意觀戰者各自一個）時 playerId＝"*spectators" */
 export type ChatEventPayload = { playerId: string; message: ChatMessage };
 export type EffectEventPayload = { playerId: string; effect: EffectEvent };
