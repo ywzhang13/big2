@@ -5,7 +5,7 @@
 import { createHmac } from "node:crypto";
 import { getAuthUser } from "@/lib/auth";
 import type { MahjongGameState } from "./gameState";
-import { touchActive } from "./leave/rules";
+import { owesAction, touchActive } from "./leave/rules";
 
 export const notLoggedIn = () => Response.json({ error: "not_logged_in" }, { status: 401 });
 export const notYourSeat = () => Response.json({ error: "not_your_seat" }, { status: 403 });
@@ -26,7 +26,10 @@ export async function seatOwnerError(
   if (!bound || bound !== user.id) return notYourSeat();
   // 本人的牌局動作：記下時間（解散投票判斷誰輪到他卡住用，lib/mahjong/leave/rules.ts）。直接改傳進來的牌局狀態，跟著這次動作的存檔
   // 一起寫進去，不多任何請求；不存檔的路由（例如讀狀態）只改到讀出來的那份，不會留下；發起、投票路由會自己還原（不是牌局動作）
-  if (gs && gs.players) touchActive(gs as Partial<Pick<MahjongGameState, "lastActive" | "activeSince">>, playerId);
+  // 只有「當下確實輪到他」的請求才記（審伯 2026-11-13 必修 3）：已按過下一局又重送、在等別人優先決定的人送的請求，都不延長其他人的計時
+  if (gs && Array.isArray(gs.players) && gs.players.length > 0 && owesAction(gs as MahjongGameState, playerId)) {
+    touchActive(gs as Partial<Pick<MahjongGameState, "lastActive" | "activeSince">>, playerId);
+  }
   return null;
 }
 

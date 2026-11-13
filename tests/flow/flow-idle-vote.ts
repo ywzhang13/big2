@@ -10,6 +10,9 @@
 //   E 其他三家都卡住、發起者有投票權：發起當下就解散
 //   F 中途解散記下的分數和原本四家同意時一樣
 //   H 上線當下正在打的房（沒有任何牌局動作紀錄）：判斷不了，照舊要全員同意
+//   P（審伯必修 1）吃碰槓胡的窗口照伺服器優先序（胡＞碰槓＞吃）：只有最優先那一級還沒決定的人算輪到；同級多家、交棒、一炮多響都不能單人解散
+//   S（審伯必修 2）這場第一局還沒有人動作：以開局時間起算，莊家超過 3 分鐘不打第一張就不計票
+//   U（審伯必修 3）重複按下一局、被擋下或被拒絕的請求、唯讀請求都不延長計時；第一次按下一局正常更新
 import { POST as leaveRequest } from "../../app/api/mahjong/leave-request/route";
 import { GET as voteStatus, POST as leaveVote } from "../../app/api/mahjong/leave-vote/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";
@@ -19,7 +22,10 @@ import { rooms } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
 import { records, reset as resetRecords, opts as recOpts } from "../support/stub-records-store";
 import { asSeat } from "../support/stub-auth";
-import { dealTiles, initGame } from "../../lib/mahjong/gameLogic";
+import { dealTiles, getAvailableActions, initGame } from "../../lib/mahjong/gameLogic";
+import { POST as action } from "../../app/api/mahjong/action/route";
+import { POST as nextGame } from "../../app/api/mahjong/next-game/route";
+import type { Tile, TileSuit } from "../../lib/mahjong/tiles";
 import { IDLE_VOTE_MS } from "../../lib/mahjong/leave/rules";
 import type { MahjongGameState } from "../../lib/mahjong/gameState";
 
@@ -55,6 +61,23 @@ function room(lastMs: number, setup?: (s: MahjongGameState) => void): string {
   setup?.(s as MahjongGameState);
   rooms[id] = { id, code: s.roomCode, game_state: s as MahjongGameState, status: "playing" };
   return id;
+}
+/** 讓某家打出 discard（牌面代號如 "m5"），各家手牌換成指定的牌（真的牌型：能胡、能碰、能吃由伺服器自己判斷） */
+let tid = 5000;
+const tile = (k: string): Tile => ({ id: tid++, suit: k[0] as TileSuit, rank: Number(k.slice(1)), display: k });
+const tiles = (x: string) => x.split(" ").map(tile);
+const WIN_M5 = "m1 m2 m3 m4 m6 p7 p8 p9 s2 s3 s4 z4 z4 s5 s6 s7";   // 胡 m5（m4 m5 m6）
+const PONG_M5 = "m5 m5 m1 m3 m7 m9 p1 p3 p5 p7 s1 s3 s5 s7 z1 z2"; // 只能碰 m5
+const CHI_M5 = "m3 m4 m1 m8 p1 p3 p5 p7 s1 s3 s5 s7 z1 z2 z3 z5";  // 只能吃 m5（m3 m4 m5）
+const NONE = "m1 m8 p1 p3 p5 p7 p9 s1 s3 s5 s7 s9 z1 z2 z3 z5";    // 什麼都不能做
+function claimWindow(from: number, hands: Record<number, string>) {
+  return (s: MahjongGameState) => {
+    for (let seat = 0; seat < 4; seat++) s.players[seat].hand = tiles(hands[seat] ?? NONE);
+    const d = tile("m5");
+    s.players[from].discards.push(d);
+    s.currentTurn = from; s.lastDiscard = { tile: d, from };
+    s.pendingActions = { discardFrom: from, potentialActors: getAvailableActions(s).map((a) => a.playerSeat).filter((x, i, a) => a.indexOf(x) === i), passedActors: [] };
+  };
 }
 const alive = (id: string) => !!rooms[id];
 const rec = (id: string) => records.find((r) => r.roomId === id);
@@ -105,13 +128,13 @@ eq([shape(A), shape(B)], [
 
 // ---------- T 兩人卡住 ----------
 {
-  // T1 玩家2 打出一張牌，玩家3、玩家4 都能碰／胡、4 分鐘都沒決定
-  const T1 = room(STUCK, (s) => { s.currentTurn = 1; s.lastDiscard = { tile: s.players[1].hand[0], from: 1 }; s.pendingActions = { discardFrom: 1, potentialActors: [2, 3], passedActors: [] }; });
+  // T1 玩家2 打出 m5，玩家3、玩家4 都能胡（同級、一炮多響），4 分鐘都沒決定
+  const T1 = room(STUCK, claimWindow(1, { 2: WIN_M5, 3: WIN_M5 }));
   const r0 = await post(leaveRequest, { roomId: T1, playerId: "p0" });
   const st = await status(T1, "p1");
   const v1 = await post(leaveVote, { roomId: T1, playerId: "p1", approve: true });
   eq([r0.body.needed, idleNames(st.body), v1.body.result, alive(T1)], [1, ["玩家3", "玩家4"], "granted", false],
-    "T1 等吃碰槓胡的窗口兩家（玩家3、玩家4）都卡住：扣兩位，剩下玩家2 同意就解散");
+    "T1 等胡的窗口兩家（玩家3、玩家4）都能胡、都卡住：扣兩位，剩下玩家2 同意就解散");
   // T2 一局結束，玩家3、玩家4 4 分鐘沒按下一局
   const T2 = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = ["p0", "p1"]; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; });
   const r2 = await post(leaveRequest, { roomId: T2, playerId: "p0" });
@@ -230,6 +253,97 @@ eq([shape(A), shape(B)], [
   await post(leaveVote, { roomId: H, playerId: "p1", approve: true });
   const v2 = await post(leaveVote, { roomId: H, playerId: "p2", approve: true });
   eq([st.needed, st.activityUnknown, v2.body.result, alive(H)], [3, true, "vote", true], "H 舊房沒有任何牌局動作紀錄：判斷不了誰卡住，照舊要三家同意");
+}
+
+// ---------- P 動作優先序（審伯必修 1）：只有現在真正輪到要決定的人才算卡住 ----------
+{
+  // P1 審伯的情境：玩家2 打出 m5，玩家1 能胡、玩家3 只能吃、玩家4 只能碰。4 分鐘後只有玩家1（能胡）真的輪到；
+  //    玩家3、玩家4 在等他決定，不算卡住。玩家2 單獨發起不能解散
+  const P1 = room(STUCK, claimWindow(1, { 0: WIN_M5, 2: CHI_M5, 3: PONG_M5 }));
+  const r1 = await post(leaveRequest, { roomId: P1, playerId: "p1" });
+  const s1 = (await status(P1, "p1")).body;
+  eq([rooms[P1].game_state.pendingActions?.potentialActors.slice().sort(), r1.body.result, r1.body.needed, idleNames(s1), alive(P1)],
+    [[0, 2, 3], "vote", 2, ["玩家1"], true],
+    "P1 能胡的玩家1 卡住、能吃的玩家3 能碰的玩家4 在等他：只扣玩家1，要玩家3、玩家4 同意，玩家2 單獨發起不會解散（修之前三家都被排除、當場關房）");
+
+  // P2 同級多家：玩家1、玩家3 都能胡（一炮多響），玩家4 能碰在等 → 扣兩位，玩家4 要同意
+  const P2 = room(STUCK, claimWindow(1, { 0: WIN_M5, 2: WIN_M5, 3: PONG_M5 }));
+  const r2 = await post(leaveRequest, { roomId: P2, playerId: "p1" });
+  const s2 = (await status(P2, "p1")).body;
+  eq([r2.body.result, r2.body.needed, idleNames(s2), alive(P2)], ["vote", 1, ["玩家1", "玩家3"], true],
+    "P2 同級兩家都能胡、都卡住：兩家都扣；能碰的玩家4 在等，要他同意，玩家2 單獨發起不會解散");
+
+  // P3 交棒：P1 的情境，玩家1 按過（真的走 action 的 pass）→ 輪到能碰的玩家4，能吃的玩家3 還在等
+  const P3 = room(10_000, claimWindow(1, { 0: WIN_M5, 2: CHI_M5, 3: PONG_M5 }));
+  const pass = await post(action, { roomId: P3, playerId: "p0", actionType: "pass" });
+  const t = rooms[P3].game_state.lastActive?.p0;
+  for (const k of Object.keys(rooms[P3].game_state.lastActive!)) rooms[P3].game_state.lastActive![k] = ago(STUCK); // 按過之後 4 分鐘
+  const r3 = await post(leaveRequest, { roomId: P3, playerId: "p1" });
+  const s3 = (await status(P3, "p1")).body;
+  eq([pass.status, typeof t === "number", rooms[P3].game_state.pendingActions?.passedActors, r3.body.result, r3.body.needed, idleNames(s3), alive(P3)],
+    [200, true, [0], "vote", 2, ["玩家4"], true],
+    "P3 胡的玩家1 按過（有效動作，重新起算）→ 交棒給能碰的玩家4；4 分鐘後只扣玩家4，能吃的玩家3 還在等、要他同意，已按過的玩家1 也要同意");
+
+  // P4 一炮多響進行中：玩家1 已經胡了、玩家3 也能胡還沒決定，能碰的玩家4 在等
+  const P4 = room(10_000, claimWindow(1, { 0: WIN_M5, 2: WIN_M5, 3: PONG_M5 }));
+  const win = await post(action, { roomId: P4, playerId: "p0", actionType: "win" });
+  for (const k of Object.keys(rooms[P4].game_state.lastActive!)) rooms[P4].game_state.lastActive![k] = ago(STUCK);
+  const r4 = await post(leaveRequest, { roomId: P4, playerId: "p1" });
+  const s4 = (await status(P4, "p1")).body;
+  eq([win.body.partial, rooms[P4].game_state.status, r4.body.result, r4.body.needed, idleNames(s4), alive(P4)],
+    [true, "playing", "vote", 2, ["玩家3"], true],
+    "P4 一炮多響：玩家1 已胡、玩家3 還沒決定 → 只扣玩家3；已胡的玩家1、在等的玩家4 都要同意，玩家2 單獨發起不會解散");
+}
+
+// ---------- S 新開局第一張牌之前（審伯必修 2） ----------
+{
+  const fresh = (startedMsAgo: number) => room(0, (s) => {
+    delete s.lastActive; delete s.activeSince;
+    Object.assign(s, { handsCompleted: 0, startedAt: new Date(ago(startedMsAgo)).toISOString(), currentTurn: s.dealerSeat, hasDrawn: true });
+    for (const p of s.players) { p.discards = []; p.revealed = []; }
+  });
+  const S1 = fresh(STUCK);
+  const dealer = rooms[S1].game_state.players[rooms[S1].game_state.dealerSeat];
+  const req = rooms[S1].game_state.players.find((p) => p.id !== dealer.id)!;
+  const r1 = await post(leaveRequest, { roomId: S1, playerId: req.id });
+  const s1 = (await status(S1, req.id)).body;
+  eq([r1.body.needed, idleNames(s1), s1.activityUnknown], [2, [dealer.name], false],
+    "S1 這場剛開局、莊家 4 分鐘沒打第一張：以開局時間起算，莊家不計票；其他等待中的兩家要同意");
+  const S2 = fresh(60_000);
+  const req2 = rooms[S2].game_state.players.find((p) => p.seat !== rooms[S2].game_state.dealerSeat)!;
+  const r2 = await post(leaveRequest, { roomId: S2, playerId: req2.id });
+  eq(r2.body.needed, 3, "S2 剛開局 1 分鐘：還沒超過 3 分鐘，莊家照樣要同意");
+}
+
+// ---------- U 重複、無效的請求不延長計時（審伯必修 3） ----------
+{
+  // 一局結束：玩家1 在 4 分鐘前按了下一局，玩家2、3、4 都沒按
+  const U = room(STUCK, (s) => { s.status = "finished"; s.nextGameReady = ["p0"]; s.settlement = { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 }; s.lastActive = { p0: ago(STUCK) }; });
+  const before = { ...rooms[U].game_state.lastActive };
+  // 已按過的玩家1 重送「下一局」
+  const dup = await post(nextGame, { roomId: U, playerId: "p0" });
+  const after = { ...rooms[U].game_state.lastActive };
+  rooms[U].game_state.leaveRequest = { requesterId: "p1", requesterName: "玩家2", requesterSeat: 1, approvedBy: [], deniedBy: [] };
+  const s1 = (await status(U, "p0")).body;
+  eq([dup.status, JSON.stringify(after) === JSON.stringify(before), idleNames(s1), s1.needed], [200, true, ["玩家3", "玩家4"], 1],
+    "U1 已按過下一局的玩家1 重送：最後動作時間不變，不計票名單（玩家3、玩家4）和需要票數（1）都不變");
+  // 第一次按的人（玩家3）正常更新：輪到他的動作做完了，計時重新起算
+  rooms[U].game_state.leaveRequest = undefined;
+  const first = await post(nextGame, { roomId: U, playerId: "p2" });
+  const t = rooms[U].game_state.lastActive?.p2 ?? 0;
+  rooms[U].game_state.leaveRequest = { requesterId: "p1", requesterName: "玩家2", requesterSeat: 1, approvedBy: [], deniedBy: [] };
+  const s2 = (await status(U, "p0")).body;
+  eq([first.status, Date.now() - t < 5000, s2.idleSeats.length, s2.needed], [200, true, 0, 3],
+    "U2 玩家3 第一次按下一局：時間正常更新，計時重新起算（沒有人卡住，其他三家都要同意）");
+
+  // 在等別人優先決定的人送請求（被擋下的吃）、輪不到的人摸牌（被拒絕）：都不延長計時
+  const V = room(STUCK, claimWindow(1, { 0: WIN_M5, 2: CHI_M5, 3: PONG_M5 }));
+  const vb = JSON.stringify(rooms[V].game_state.lastActive);
+  const chi = await post(action, { roomId: V, playerId: "p2", actionType: "chi", tiles: rooms[V].game_state.players[2].hand.filter((x) => x.display === "m3" || x.display === "m4").map((x) => x.id) });
+  const dr = await post(draw, { roomId: V, playerId: "p3" });
+  await status(V, "p3");
+  eq([chi.status, dr.status >= 400, JSON.stringify(rooms[V].game_state.lastActive) === vb], [409, true, true],
+    "U3 在等胡的人決定時去吃（409 被擋）、輪不到的人去摸牌（被拒絕）、看投票狀態：最後動作時間都不變");
 }
 
 for (const r of results) console.log(r);
