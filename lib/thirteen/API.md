@@ -26,8 +26,14 @@ interface Card { id: string; suit: "S" | "H" | "D" | "C"; rank: number; deck: 1 
 | 函式 | 說明 |
 |---|---|
 | `buildDeck(): Card[]` | 回傳 65 張牌：一副 52 張，再加第二副黑桃 13 張 |
-| `deal(rng?): { hands: Card[][]; rest: Card[] }` | 洗牌後發 4 家，每家 13 張；`rest` 是剩下的 13 張，收起來、不公開。`rng` 預設是 `Math.random` |
+| `deal(rng?): { hands: Card[][]; rest: Card[] }` | 洗牌後發 4 家，每家 13 張；`rest` 是剩下的 13 張，收起來、不公開 |
 | `shuffle(xs, rng?)` | Fisher-Yates 洗牌 |
+| `secureRandomInt(n)` | 回傳 0～n−1 的密碼學安全隨機整數，洗牌預設用它 |
+
+**洗牌的亂數**（審伯 2026-11-13 必修）：
+- 不帶 `rng` 時，一律用密碼學安全亂數 `crypto.getRandomValues`。瀏覽器和 Node 19 以上都有。
+- 取不到 `crypto` 時會直接丟錯，**絕不會**退回 `Math.random`。
+- `rng` 只給測試注入固定種子用，正式的發牌流程不要傳。
 | `parseCards("AS AS 9H")` | 把文字轉成牌，測試和除錯用。同一手裡第二次出現的黑桃，自動當成第 2 副 |
 
 ## 排法和送出
@@ -39,7 +45,7 @@ interface Arrangement { front: Card[]; middle: Card[]; back: Card[] }  // 頭道
 | 函式 | 說明 |
 |---|---|
 | `checkArrangement(a)` | **前端用來決定能不能按送出。** 合法時回 `{ ok: true, values: { front, middle, back } }`，每一道是 `{ cat, keys }`；不合法時回 `{ ok: false, error, message }` |
-| `validateSubmission(dealt, { front: id[], middle: id[], back: id[] })` | **後端收到送出時要再擋一次。** 會檢查：張數是不是 3／5／5、有沒有重複的 id、送來的牌是不是發給這位玩家的、有沒有倒水。通過時回 `{ ok: true, arrangement }` |
+| `validateSubmission(dealt, input: unknown)` | **後端收到送出時要再擋一次。** `input` 可以直接放網路送來、還沒驗證過的內容，函式自己會先檢查格式：必須是物件，`front`、`middle`、`back` 三道都是陣列，裡面每個元素都是字串。任何格式錯誤都回 `bad_input`，不會丟錯。格式對了才接著檢查張數是不是 3／5／5、有沒有重複的 id、送來的牌是不是發給這位玩家的、有沒有倒水。通過時回 `{ ok: true, arrangement }` |
 | `autoArrange(cards)` | 理牌時間到了（30／45／60 秒）時呼叫，自動排出一組不倒水的組合 |
 
 `autoArrange` 的做法：先從 13 張裡挑最大的 5 張當尾道，再從剩下的 8 張挑最大的 5 張當中道，最後 3 張當頭道。這個排法一定不會倒水，但它只是保底，不會去追求最高分。
@@ -48,6 +54,7 @@ interface Arrangement { front: Card[]; middle: Card[]; back: Card[] }  // 頭道
 
 | error | message |
 |---|---|
+| `bad_input` | 送出的資料格式不對 |
 | `bad_size` | 頭道要 3 張、中道和尾道各 5 張 |
 | `duplicate_card` | 同一張牌不能用兩次 |
 | `not_your_card` | 有不是你的牌 |
@@ -129,6 +136,16 @@ SCORING.BONUS                  // 特殊加分，輸掉那一道的人付給贏�
 - 動畫照「頭道 → 中道 → 尾道」的順序播。這只影響畫面演出，不影響計分。
 
 ## 測試
+
+- `tests/_thirteen-coverage.ts`（2026-11-13 補）：
+  - 審伯兩項必修：用安全亂數發牌；送出資料格式錯時回失敗、不丟錯。
+  - 12 級牌型兩兩相鄰的大小。
+  - 各牌型同型逐項比較，核心牌和踢腳都有測。
+  - 兩張一模一樣的黑桃平手。
+  - 倒水邊界和中文提示。
+  - 加分牌型平手時不加分；不在加分表上的牌型不加分。
+  - 一家同時被三家打槍。
+  - 一條龍照一般三道計分。
 
 - `tests/_thirteen-examples.ts`：
   - 規則書 14 個範例，用新的打槍規則重算後全部通過。

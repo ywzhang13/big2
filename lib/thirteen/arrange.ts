@@ -10,6 +10,7 @@ export interface Arrangement {
 }
 
 export type ArrangeError =
+  | "bad_input"           // 送來的資料格式不對（不是物件、某道不是陣列、牌 id 不是字串）
   | "bad_size"            // 張數不對（頭 3、中 5、尾 5）
   | "duplicate_card"      // 同一張牌（同一個 id）送了兩次
   | "not_your_card"       // 送出的牌不是發給這位玩家的
@@ -20,6 +21,7 @@ export type ArrangeFail = { ok: false; error: ArrangeError; message: string };
 export type ArrangeCheck = { ok: true; values: { front: HandValue; middle: HandValue; back: HandValue } } | ArrangeFail;
 
 const MESSAGES: Record<ArrangeError, string> = {
+  bad_input: "送出的資料格式不對",
   bad_size: "頭道要 3 張、中道和尾道各 5 張",
   duplicate_card: "同一張牌不能用兩次",
   not_your_card: "有不是你的牌",
@@ -43,9 +45,11 @@ export function checkArrangement(a: Arrangement): ArrangeCheck {
  */
 export function validateSubmission(
   dealt: Card[],
-  ids: { front: string[]; middle: string[]; back: string[] },
+  ids: unknown,
 ): { ok: true; arrangement: Arrangement } | ArrangeFail {
-  if (ids.front?.length !== 3 || ids.middle?.length !== 5 || ids.back?.length !== 5) return fail("bad_size");
+  // 審伯 2026-11-13 必修：送來的內容來自網路，先驗結構，任何怪輸入都回失敗、不能丟錯
+  if (!isSubmission(ids)) return fail("bad_input");
+  if (ids.front.length !== 3 || ids.middle?.length !== 5 || ids.back?.length !== 5) return fail("bad_size");
   const all = [...ids.front, ...ids.middle, ...ids.back];
   if (new Set(all).size !== all.length) return fail("duplicate_card");
   const byId = new Map(dealt.map((c) => [c.id, c]));
@@ -55,6 +59,14 @@ export function validateSubmission(
   const check = checkArrangement(arrangement);
   if (!check.ok) return check;
   return { ok: true, arrangement };
+}
+
+type SubmissionIds = { front: string[]; middle: string[]; back: string[] };
+/** 必須是物件，三道都是真的陣列（不接受只有 length 的假陣列），每個元素都是字串 */
+function isSubmission(x: unknown): x is SubmissionIds {
+  if (typeof x !== "object" || x === null || Array.isArray(x)) return false;
+  const o = x as Record<string, unknown>;
+  return (["front", "middle", "back"] as const).every((k) => Array.isArray(o[k]) && (o[k] as unknown[]).every((id) => typeof id === "string"));
 }
 
 /** 從 cards 裡挑 5 張最大的組合 */

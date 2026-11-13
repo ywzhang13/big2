@@ -28,18 +28,38 @@ export function buildDeck(): Card[] {
   return out;
 }
 
-/** Fisher-Yates 洗牌；rng 預設 Math.random（伺服器可以換成 crypto 亂數） */
-export function shuffle<T>(xs: readonly T[], rng: () => number = Math.random): T[] {
+/**
+ * 密碼學安全的隨機整數 0～n-1（審伯 2026-11-13 必修：洗牌不能用 Math.random，可被預測）。
+ * 用 Web Crypto（瀏覽器、Node 19+ 的 globalThis.crypto）；取不到就直接丟錯，絕不退回 Math.random。
+ * 用拒絕取樣避免取餘數造成的偏差。
+ */
+export function secureRandomInt(n: number): number {
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint32Array) => Uint32Array } }).crypto;
+  if (!c || typeof c.getRandomValues !== "function") throw new Error("沒有密碼學安全的亂數來源（crypto.getRandomValues），不能洗牌");
+  if (!Number.isInteger(n) || n <= 0 || n > 0x100000000) throw new Error("secureRandomInt：n 必須是 1～2^32 的整數");
+  const limit = 0x100000000 - (0x100000000 % n); // 小於 limit 的值才收，確保每個結果機率相同
+  const buf = new Uint32Array(1);
+  for (;;) {
+    c.getRandomValues(buf);
+    if (buf[0] < limit) return buf[0] % n;
+  }
+}
+
+/**
+ * Fisher-Yates 洗牌。預設用密碼學安全亂數（secureRandomInt）。
+ * rng 只給測試明確注入固定種子用（回傳 0 ≤ x < 1）；正式流程不要傳。
+ */
+export function shuffle<T>(xs: readonly T[], rng?: () => number): T[] {
   const a = [...xs];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
+    const j = rng ? Math.floor(rng() * (i + 1)) : secureRandomInt(i + 1);
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
-/** 洗 65 張、4 家各發 13 張；剩下 13 張收起（不公開、不續用） */
-export function deal(rng: () => number = Math.random): { hands: Card[][]; rest: Card[] } {
+/** 洗 65 張、4 家各發 13 張；剩下 13 張收起（不公開、不續用）。rng 同 shuffle，只給測試用 */
+export function deal(rng?: () => number): { hands: Card[][]; rest: Card[] } {
   const d = shuffle(buildDeck(), rng);
   return { hands: [0, 1, 2, 3].map((i) => d.slice(i * 13, i * 13 + 13)), rest: d.slice(52) };
 }
