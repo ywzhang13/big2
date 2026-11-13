@@ -1,5 +1,6 @@
 "use client";
 
+import MjLeaveVoteStatus from "@/components/mahjong/MjLeaveVoteStatus";
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { useMahjong, getMjId, type MjJoinInfo } from "@/hooks/useMahjong";
 import { useMjAuth } from "@/hooks/useMjAuth";
@@ -1169,7 +1170,7 @@ function RoomView({
           <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl">
             <h3 className="text-[#f0d68a] font-bold text-lg text-center mb-2">離開房間？</h3>
             <p className="text-white/60 text-sm text-center mb-4">
-              牌局尚未結束，需要其他 3 位玩家同意你才能離開。
+              牌局尚未結束，需要其他玩家同意你才能離開（輪到他超過 3 分鐘沒動作的人不計票）。
             </p>
             <div className="flex gap-3">
               <button
@@ -1202,9 +1203,10 @@ function RoomView({
             <p className="text-white/60 text-sm text-center mb-1">
               同意的話遊戲會結束回大廳
             </p>
-            <p className="text-white/40 text-xs text-center mb-4">
-              已同意: {state.leaveRequest.approvedCount ?? 0} / 3
-            </p>
+            <div className="mb-4">
+              <MjLeaveVoteStatus roomId={roomId} playerId={state.myId} isRequester={false}
+                fallbackApproved={state.leaveRequest.approvedCount ?? 0} tick={state.leaveRequest.approvedCount ?? 0} />
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={() => voteLeave(false)}
@@ -1229,9 +1231,10 @@ function RoomView({
           <div className="bg-[#1a1408] border border-[#C9A96E]/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-center">
             <div className="animate-pulse">
               <h3 className="text-[#f0d68a] font-bold text-lg mb-2">等待其他玩家同意...</h3>
-              <p className="text-white/60 text-sm mb-1">
-                已同意: {state.leaveRequest.approvedCount ?? 0} / 3
-              </p>
+            </div>
+            <MjLeaveVoteStatus roomId={roomId} playerId={state.myId} isRequester
+              fallbackApproved={state.leaveRequest.approvedCount ?? 0} tick={state.leaveRequest.approvedCount ?? 0} />
+            <div>
               {(state.leaveRequest.deniedCount ?? 0) > 0 && (
                 <p className="text-red-400 text-sm">已有玩家不同意</p>
               )}
