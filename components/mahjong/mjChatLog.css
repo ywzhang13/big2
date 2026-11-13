@@ -1,3 +1,7 @@
 /* 麻將聊天室的版面配合（小宜 2026-11-13 視覺複核）：桌機聊天室開在牌桌右邊（.scb.side，寬 340）時，
    吃碰槓胡按鈕列（MjClaimBanner，position: fixed 全寬）右緣收到聊天室左邊，「過」不會跑進聊天室 */
 body:has(.scb.side) .mjm-claimbar.desk { right: 340px; }
+/* 桌機：輸入面板（MjChat 的 .mjc-panel）搬進聊天室側欄底部，接在訊息下面（小宜 2026-11-13 必修）：不再固定在牌桌左下 */
+.scb-slot .mjc-panel { position: static; z-index: auto; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.scb-slot .mjc-panel .phrases button { flex: 1 1 0; min-width: 0; padding: 0 2px; font-size: 13px; white-space: nowrap; }
+.scb-slot .mjc-panel .micbox { width: 60px; }

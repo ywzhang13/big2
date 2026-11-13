@@ -9,6 +9,7 @@
 //   ・按「聊天」同時打開本場聊天框（components/social/SocialChatBox，見 MjChatLog.tsx）；收起時鈕上顯示未讀數（2026-11-13）
 // 狀態都在 lib/mahjong/chatClient.ts（綁「帳號＋房間＋座位」，換場全部清空）。
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import {
   PHRASES, TEXT_MAX, VOICE_MAX_MS, bindChatSession, dismissFailed, noteText, retryFailed, sendPhrase, sendText, sendVoice,
   setChatOpen, startRecording, toggleVoice, useChatState, type Bubble, type MicError,
@@ -144,8 +145,20 @@ export default function MjChat({
   const coolLeft = Math.ceil((st.readyAt - st.now) / 1000);
   const locked = cooling || st.sending;
 
-  // 底板位置：手機在左下（自己資訊列上方，不蓋手牌）；桌機在自己名牌上方。鍵盤出現時貼著鍵盤上緣
+  // 桌機：底板放進聊天室側欄底部的那一格（SocialChatBox 的 data-chat-slot），接在訊息下面（小宜 2026-11-13 必修）
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!open || !desk) { setSlot(null); return; }
+    const find = () => setSlot(document.querySelector<HTMLElement>("[data-chat-slot]"));
+    find();
+    const raf = requestAnimationFrame(find); // 側欄和底板同一批畫出來；萬一還沒掛上，下一格再找一次
+    return () => cancelAnimationFrame(raf);
+  }, [open, desk]);
+  const inSlot = !!slot && slot.isConnected;
+
+  // 底板位置：手機在左下（自己資訊列上方，不蓋手牌）；桌機在聊天室側欄底部（inSlot，正常版面，不用量）。鍵盤出現時貼著鍵盤上緣
   const placePanel = useCallback(() => {
+    if (inSlot) { panelPosRef.current = null; place(); return; }
     const me = rectOf(desk ? '[data-fx-seat].mjm-me-who' : ".mjm-me");
     if (!me) return;
     const vv = window.visualViewport;
@@ -166,7 +179,7 @@ export default function MjChat({
     panelPosRef.current = { left, bottom };
     setPos(panelRef.current, panelPosRef.current);
     place();
-  }, [desk, place, claiming, mySeat]);
+  }, [desk, place, claiming, mySeat, inSlot]);
   useLayoutEffect(() => {
     if (open) { placePanel(); return; }
     panelPosRef.current = null;
@@ -284,8 +297,8 @@ export default function MjChat({
       <ChatStatus desk={desk} />
 
       {/* 底板 */}
-      {open && (
-        <div ref={panelRef} className={`mjc-panel ${desk ? "d" : "m"} ${focus ? "typing" : ""}`} style={{ visibility: "hidden" }} data-chat-panel>
+      {open && portalTo(inSlot ? slot : null,
+        <div ref={panelRef} className={`mjc-panel ${desk ? "d" : "m"} ${focus ? "typing" : ""}`} style={inSlot ? undefined : { visibility: "hidden" }} data-chat-panel>
           <div className="main">
             <div className="phrases">
               {PHRASES.map((p) => (
@@ -374,6 +387,9 @@ function ChatStatus({ desk }: { desk: boolean }) {
     </div>
   );
 }
+
+/** 有目標就用 portal 放進去（桌機聊天室側欄的那一格），沒有就照原本的位置畫 */
+const portalTo = (target: HTMLElement | null, node: React.ReactNode) => (target ? createPortal(node, target) : node);
 
 function MicIcon() {
   return (

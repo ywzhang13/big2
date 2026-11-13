@@ -276,6 +276,33 @@ ok(st().voiceFailed === "hist-3" && st().playing === null, "L9 檔案載不到�
 C.toggleLogVoice("hist-3", "https://v/new.m4a", 1000);
 ok(st().voiceFailed === null && st().playing?.id === "hist-3", "L10 重試（換了新網址）：清掉失敗、照常播放");
 
+// ---------- R 送出時房間剛好關掉（410 room_closed，老柯 701d501）----------
+reset();
+C.bindChatSession(ME);
+let closedCalls = 0;
+const offClosed = C.subscribeChatRoomClosed(() => { closedCalls++; });
+const pr = C.sendText("最後一句");
+await flush();
+posts[0].resolve({ status: 410, body: { error: "room_closed" } });
+const rr = await pr;
+ok(rr === "room_closed" && st().failed === null && !st().sending, "R1 送出時回 410 room_closed：不顯示「傳送失敗，點此重試」（重試也送不出去）");
+ok(st().note?.text === "房間已關閉，訊息沒有送出", "R2 提示「房間已關閉，訊息沒有送出」");
+ok(closedCalls === 1, "R3 通知聊天室（顯示「房間已關閉，本場聊天已清除」）");
+C.retryFailed();
+await flush();
+ok(posts.length === 1, "R4 沒有留下重試：不會再送一次");
+advance(3000);
+const pv = C.sendVoice(new Blob(["x"]), 2000);
+await flush();
+voices[0].resolve({ status: 410, body: { error: "room_closed" } });
+ok((await pv) === "room_closed" && closedCalls === 2 && st().failed === null, "R5 語音送出時回 410：一樣當成房間已關閉");
+offClosed();
+advance(3000);
+const p404 = C.sendText("房間早就關了");
+await flush();
+posts[1].resolve({ status: 404, body: { error: "room_not_found" } });
+ok((await p404) === "not_in_room" && closedCalls === 2, "R6 送出前就已經關房（404）：照舊，不重複通知");
+
 console.log(results.join("\n"));
 const failed = results.filter((r) => r.startsWith("❌")).length;
 console.log(`合計：通過 ${results.length - failed}、失敗 ${failed}`);

@@ -66,14 +66,42 @@ const msg = (id: string, from = "p2"): Msg => ({ id, kind: "text", from, fromNam
   check(spx.includes("觀戰中，僅能觀看") && !spx.includes("<input"), "觀戰：觀戰中，僅能觀看，沒有輸入框");
   check(box({ myTurn: true }).includes("輪到你出牌"), "手機、輪到自己出牌：提示條");
   check(box({ claiming: true, myTurn: true }).includes("可以吃碰槓胡"), "手機、有吃碰槓胡：提示條（優先於出牌）");
-  check(box({ variant: "side", myTurn: true }).includes("輪到你出牌"), "桌機側欄：一樣顯示細提示");
-  check(!/<button/.test(box({ myTurn: true, claiming: true })), "提示沒有按鈕、標題列沒有收起鈕");
-  check(box({}).includes(">聊天室<"), "標題：聊天室");
+  check(!box({ variant: "side", myTurn: true, claiming: true }).includes("data-chat-log-alert"), "桌機側欄不蓋牌桌、牌桌上已有「輪到你打牌」：不重複顯示提示（小宜 2026-11-13）");
+  check(box({ variant: "side" }).includes("data-chat-slot") && !box({ variant: "dock" }).includes("data-chat-slot"), "桌機側欄留一格放輸入面板（接在訊息下面）；手機不用（面板本來就在聊天室下面）");
+  check(!box({ variant: "side", canSend: false, spectator: true }).includes("data-chat-slot"), "觀戰、訪客不能發言：側欄不留輸入面板的格子");
+  check(/<header[^>]*>.*data-chat-log-alert.*<\/header>/.test(box({ myTurn: true })), "手機提示併進標題列（不另佔一列）");
   check(!/<button/.test(box({ myTurn: true, claiming: true })), "提示沒有按鈕、標題列沒有收起鈕");
   check(box({}).includes(">聊天室<"), "標題：聊天室");
   check(box({ canSend: false, guest: true }).includes("登入 LINE 後就能聊天"), "訪客：清單下方寫登入 LINE 後就能聊天");
   check(!box({ canSend: false, spectator: true }).includes("登入 LINE"), "觀戰者已是 LINE 登入：不顯示登入提示");
   check(box({}).includes('data-chat-log="dock"') && box({ variant: "side" }).includes('data-chat-log="side"'), "手機接在輸入面板上方（dock）、桌機側欄兩種版型");
+}
+
+// 觀戰頻道（每位觀戰者各自一個，老柯 701d501；payload.playerId＝"*spectators"）：收到的聊天、互動進聊天室
+{
+  const { onSpectatorEvent } = await import("../components/mahjong/MjChatLog");
+  const { subscribeFx } = await import("../lib/mahjong/fx/transport");
+  const { FX_LABEL } = await import("../lib/mahjong/fx/engine");
+  L.__resetChatLog();
+  C.bindChatSession({ account: "watcher", roomId: "r9", roomCode: "5555", myId: "*spectator", mySeat: 2 });
+  L.bindChatLog("watcher|r9|*spectator", null);
+  // 和 useMjChatFeed 一樣的接線
+  const off1 = C.subscribeChat(L.addChatMessage);
+  const off2 = subscribeFx((m) => L.addChatEffect({ id: m.id, ts: 1, fromName: m.fromName, toName: m.toName, label: FX_LABEL[m.kind] }));
+  onSpectatorEvent("mj_chat", { playerId: "*spectators", message: { ...msg("s1"), ts: 10 } }, "5555");
+  onSpectatorEvent("mj_chat", { playerId: "*spectators", message: { ...msg("s1"), ts: 10 } }, "5555");
+  check(L.__peekChatLog().entries.length === 1 && L.__peekChatLog().unread === 1, "觀戰頻道的聊天：進聊天室、同一則只一則、算未讀（觀戰者 me＝null）");
+  check(C.__peekChat().bubbles.some((b) => b.id === "s1"), "觀戰頻道的聊天：名牌旁泡泡照常出現");
+  onSpectatorEvent("mj_chat", { playerId: "*spectators", message: { ...msg("s2"), ts: 11 } }, "9999");
+  check(L.__peekChatLog().entries.length === 1, "別房（房號不同）的觀戰事件：丟掉");
+  onSpectatorEvent("mj_effect", { playerId: "*spectators", effect: { id: "fx-s1", effect: "clap", from: "p1", fromName: "阿德", fromSeat: 1, to: "p3", toName: "老王", toSeat: 3, ts: 12 } }, "5555");
+  const fx = L.__peekChatLog().entries.find((e) => e.id === "fx-s1");
+  check(!!fx && fx.type === "fx" && fx.label === "拍手" && fx.fromName === "阿德" && fx.toName === "老王", "觀戰頻道的互動：聊天室記一筆「阿德 對 老王 使用了 拍手」");
+  onSpectatorEvent("mj_chat", null, "5555");
+  onSpectatorEvent("mj_effect", { playerId: "*spectators" }, "5555");
+  check(L.__peekChatLog().entries.length === 2, "格式不對的事件：忽略、不出錯");
+  off1(); off2();
+  C.bindChatSession(null);
 }
 
 console.log(failed ? `❌ 失敗 ${failed} 項` : "全部通過");

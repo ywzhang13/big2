@@ -89,6 +89,85 @@ async function main() {
     check(vb(null, "v9").includes("語音無法播放，點擊重試"), "遊戲回報播放失敗：顯示「語音無法播放，點擊重試」");
     check(/<button[^>]*disabled=""[^>]*data-chat-log-voice/.test(box()), "沒給播放器：語音鈕停用，不會自己另開播放器");
   }
+  // 遊戲得知房間已關閉（例如送出時回 410 room_closed）
+  {
+    __resetChatLog();
+    bindChatLog("k", "me");
+    addChatMessage(msg("a", 1));
+    const { markChatLogClosed } = await import("../components/social/chatLog");
+    markChatLogClosed();
+    check(__peekChatLog().status === "closed" && ids() === "" && __peekChatLog().unread === 0, "markChatLogClosed：清掉內容和未讀，狀態改成已關閉");
+    check(box().includes("房間已關閉，本場聊天已清除"), "畫面：房間已關閉，本場聊天已清除");
+    bindChatLog(null);
+    markChatLogClosed();
+    check(__peekChatLog().status === "idle", "沒有綁定一場時呼叫：不動作");
+  }
+  // 關房競態（審伯 2026-11-13 必修）：關閉後晚到的歷史、聊天、互動都不能把內容補回來
+  {
+    const { markChatLogClosed } = await import("../components/social/chatLog");
+    const closedEmpty = () => __peekChatLog().status === "closed" && ids() === "" && __peekChatLog().unread === 0;
+    // 1. 歷史請求送出 → 410 關房 → 舊的歷史回應（成功）才到
+    __resetChatLog();
+    bindChatLog("k1", "me");
+    let release: (r: HistoryResult) => void = () => {};
+    const p1 = loadChatHistory(() => new Promise<HistoryResult>((r) => { release = r; }));
+    markChatLogClosed();
+    release({ ok: true, messages: [msg("old1", 1), msg("old2", 2)] });
+    await p1;
+    check(closedEmpty(), "關房後才到的歷史（成功）：不會把訊息補回來，維持已關閉、零訊息、零未讀");
+    // 2. 一樣的順序，舊回應是失敗
+    __resetChatLog();
+    bindChatLog("k1", "me");
+    const p2 = loadChatHistory(() => new Promise<HistoryResult>((r) => { release = r; }));
+    markChatLogClosed();
+    release({ ok: false, reason: "failed" });
+    await p2;
+    check(closedEmpty(), "關房後才到的歷史（失敗）：不會改成「無法載入」，維持已關閉");
+    // 3. 舊回應是例外（網路斷）
+    __resetChatLog();
+    bindChatLog("k1", "me");
+    let rejectIt: (e: Error) => void = () => {};
+    const p3 = loadChatHistory(() => new Promise<HistoryResult>((_, rej) => { rejectIt = rej; }));
+    markChatLogClosed();
+    rejectIt(new Error("net"));
+    await p3;
+    check(closedEmpty(), "關房後才到的歷史（網路例外）：維持已關閉");
+    // 4. 同一場關閉後再讀歷史（回到前景、網路恢復）：不讀、不恢復
+    let called = 0;
+    await loadChatHistory(async () => { called++; return { ok: true, messages: [msg("again", 3)] }; });
+    check(called === 0 && closedEmpty(), "同一場關閉後重讀歷史：不送請求、不恢復內容");
+    // 5. 同一場關閉後收到聊天、互動
+    addChatMessage(msg("late-msg", 4));
+    addChatEffect({ id: "late-fx", ts: 5, fromName: "阿德", toName: "老王", label: "拍手" });
+    check(closedEmpty(), "同一場關閉後收到聊天、互動：不加進清單、不算未讀");
+    // 6. 兩個歷史請求同時在讀：一個回報房間不在（404），另一個晚一點成功回來
+    __resetChatLog();
+    bindChatLog("k2", "me");
+    let relA: (r: HistoryResult) => void = () => {}, relB: (r: HistoryResult) => void = () => {};
+    const pa = loadChatHistory(() => new Promise<HistoryResult>((r) => { relA = r; }));
+    const pb = loadChatHistory(() => new Promise<HistoryResult>((r) => { relB = r; }));
+    relA({ ok: false, reason: "closed" });
+    await pa;
+    relB({ ok: true, messages: [msg("b1", 1)] });
+    await pb;
+    check(closedEmpty(), "兩個請求同時在讀、其中一個回報關房：另一個晚到的成功回應不能把內容補回來");
+    // 7. 換到新的一場：照常讀歷史、收聊天和互動
+    bindChatLog("k3", "me");
+    check(__peekChatLog().status === "idle" && ids() === "", "換到新的一場：重設，不再是已關閉");
+    await loadChatHistory(ok([msg("n1", 1)]));
+    addChatMessage(msg("n2", 2));
+    addChatEffect({ id: "nfx", ts: 3, fromName: "阿德", label: "愛心" });
+    check(__peekChatLog().status === "ready" && ids() === "n1,n2,nfx" && __peekChatLog().unread === 1, "新的一場：歷史、聊天、互動都正常，未讀照算");
+    // 8. 舊場關閉前發出、換場後才到的歷史：也不會混進新場
+    __resetChatLog();
+    bindChatLog("k4", "me");
+    const p8 = loadChatHistory(() => new Promise<HistoryResult>((r) => { release = r; }));
+    markChatLogClosed();
+    bindChatLog("k5", "me");
+    release({ ok: true, messages: [msg("k4-old", 1)] });
+    await p8;
+    check(__peekChatLog().key === "k5" && ids() === "" && __peekChatLog().status === "idle", "舊場關閉、換場後才到的舊歷史：不混進新場");
+  }
   // 讀取失敗、房間關閉
   {
     __resetChatLog();

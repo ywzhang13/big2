@@ -286,7 +286,14 @@ function stopPlaying(next = true) {
 }
 
 // ---- 送 ----
-export type SendError = "cooldown" | "guest" | "not_in_room" | "failed" | "busy" | "too_short" | "empty" | null;
+export type SendError = "cooldown" | "guest" | "not_in_room" | "room_closed" | "failed" | "busy" | "too_short" | "empty" | null;
+
+/** 送出時房間剛好關掉（410 room_closed，老柯 701d501）：通知聊天室顯示「房間已關閉」 */
+const closedTaps = new Set<() => void>();
+export function subscribeChatRoomClosed(l: () => void): () => void {
+  closedTaps.add(l);
+  return () => { closedTaps.delete(l); };
+}
 
 async function send(run: () => Promise<{ status: number; body: Record<string, unknown> }>, label: string): Promise<SendError> {
   if (!session) return "not_in_room";
@@ -324,6 +331,14 @@ async function send(run: () => Promise<{ status: number; body: Record<string, un
     emit({ sending: false });
     noteText("太短了，按住久一點再放開", NOTE_MS);
     return "too_short";
+  }
+  if (res.status === 410 && res.body.error === "room_closed") {
+    // 送出的同時房間剛好關掉：這則沒存、沒送。當成房間已關閉，不顯示「點此重試」（重試也送不出去）
+    lastFailed = null;
+    emit({ sending: false, failed: null });
+    noteText("房間已關閉，訊息沒有送出", 2500);
+    closedTaps.forEach((l) => l());
+    return "room_closed";
   }
   if (res.status === 403 || res.status === 404) {
     emit({ sending: false });

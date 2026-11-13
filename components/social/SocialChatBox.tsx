@@ -19,7 +19,7 @@ const HISTORY_CAP = 200;
 const secs = (ms?: number) => `${Math.max(1, Math.round((ms ?? 0) / 1000))} 秒`;
 
 export default function SocialChatBox({
-  variant, open, onClose, readOnlyText, emptyHint, alert, voice, onRetry, place, inside = "", ignoreDismiss, footer,
+  variant, open, onClose, readOnlyText, emptyHint, alert, voice, onRetry, place, inside = "", ignoreDismiss, slot = false, footer,
 }: {
   /** dock＝手機：position: fixed，位置由 place 算（接在輸入面板上方）；side＝桌機牌桌旁（正常版面） */
   variant: "dock" | "side";
@@ -42,6 +42,8 @@ export default function SocialChatBox({
   inside?: string;
   /** true 時點外面不關（例如正在按住錄音） */
   ignoreDismiss?: () => boolean;
+  /** 清單下方留一格（data-chat-slot）給遊戲放自己的輸入面板（桌機：快捷句、輸入框、按住說話接在訊息下面，小宜 2026-11-13） */
+  slot?: boolean;
   /** 清單下方的附註（例如訪客「登入 LINE 後就能聊天」） */
   footer?: React.ReactNode;
 }) {
@@ -142,8 +144,9 @@ export default function SocialChatBox({
       <header className="scb-top">
         <b>聊天室</b>
         {readOnlyText && <span className="ro" data-chat-log-readonly>{readOnlyText}</span>}
+        {/* 提示併進標題列（小宜 2026-11-13：省下一列，訊息多一點） */}
+        {alert && <span className="scb-alert" role="status" data-chat-log-alert>{alert}</span>}
       </header>
-      {alert && <p className="scb-alert" role="status" data-chat-log-alert>{alert}</p>}
       <div className="scb-body">
       <div className="scb-list" ref={listRef} onScroll={onScroll} aria-live="polite">
         {log.status === "loading" && count === 0 ? (
@@ -163,6 +166,7 @@ export default function SocialChatBox({
       </div>
         {newBelow && <button type="button" className="scb-new" onClick={toBottom} data-chat-log-new>有新訊息</button>}
       </div>
+      {slot && <div className="scb-slot" data-chat-slot />}
       {footer && <div className="scb-foot">{footer}</div>}
     </aside>
   );

@@ -50,14 +50,16 @@ export function bindChatLog(key: string | null, me: string | null = null): void 
 
 /** 讀這一場的歷史並合併進來（進房、重新整理、斷線重連、開始觀戰時各呼叫一次）。歷史裡的訊息不算未讀 */
 export async function loadChatHistory(load: () => Promise<HistoryResult>): Promise<void> {
-  if (!state.key) return;
+  if (!state.key || state.status === "closed") return; // 這一場已經關了：不再讀（換新的一場由 bindChatLog 重設）
   const mine = gen;
   emit({ status: state.status === "ready" ? "ready" : "loading" });
   let r: HistoryResult;
   try { r = await load(); } catch { r = { ok: false, reason: "failed" }; }
-  if (mine !== gen) return; // 讀的時候換場了
+  // 讀的時候換場了、或這一場已經關了（markChatLogClosed 或另一個請求回報關房都會讓 gen 加 1）：結果丟掉
+  if (mine !== gen) return;
   if (!r.ok) {
-    emit(r.reason === "closed" ? { status: "closed", entries: [], unread: 0 } : { status: state.entries.length ? "ready" : "error" });
+    if (r.reason === "closed") { markChatLogClosed(); return; } // 也作廢其他還沒回來的請求
+    emit({ status: state.entries.length ? "ready" : "error" });
     return;
   }
   // 已經在清單裡的同一則：用歷史這份換掉語音資料（播放網址會重新簽發、檔案清掉時是 null；審伯 2026-11-13 必修②）。
@@ -74,9 +76,16 @@ export async function loadChatHistory(load: () => Promise<HistoryResult>): Promi
   emit({ status: "ready", ...(merged ? { entries: merged } : {}) });
 }
 
+/** 遊戲得知房間已關閉（例如送出時回 410 room_closed）：清掉這一場的內容，顯示「房間已關閉，本場聊天已清除」 */
+export function markChatLogClosed(): void {
+  if (!state.key) return;
+  gen++; // 還沒回來的歷史請求全部作廢：成功、失敗都不能蓋掉「已關閉」（審伯 2026-11-13 必修）
+  emit({ status: "closed", entries: [], unread: 0 });
+}
+
 /** 即時收到一則聊天（別人或自己的）。沒開著時別人的訊息算未讀 */
 export function addChatMessage(m: ChatMessage): void {
-  if (!state.key || !m?.id) return;
+  if (!state.key || state.status === "closed" || !m?.id) return; // 關房後晚到的不收
   const merged = add(state.entries, [{ type: "msg", id: m.id, ts: m.ts, msg: m }]);
   if (!merged) return;
   const unread = !state.open && m.from !== state.me ? state.unread + 1 : state.unread;
@@ -85,7 +94,7 @@ export function addChatMessage(m: ChatMessage): void {
 
 /** 即時收到一次互動（只放清單，不算未讀；現場動畫各遊戲自己播） */
 export function addChatEffect(e: { id: string; ts: number; fromName: string; toName?: string; label: string }): void {
-  if (!state.key || !e?.id) return;
+  if (!state.key || state.status === "closed" || !e?.id) return; // 關房後晚到的不收
   const merged = add(state.entries, [{ type: "fx", ...e }]);
   if (merged) emit({ entries: merged });
 }

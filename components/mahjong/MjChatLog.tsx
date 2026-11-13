@@ -9,11 +9,11 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
-import { receiveChat, setChatOpen, subscribeChat, toggleLogVoice, useChatState, type ChatMessage as LiveChat } from "@/lib/mahjong/chatClient";
+import { receiveChat, setChatOpen, subscribeChat, subscribeChatRoomClosed, toggleLogVoice, useChatState, type ChatMessage as LiveChat } from "@/lib/mahjong/chatClient";
 import { FX_LABEL } from "@/lib/mahjong/fx/engine";
 import { receiveFx, subscribeFx, type FxEvent } from "@/lib/mahjong/fx/transport";
 import type { ChatMessage } from "@/lib/social/events";
-import { addChatEffect, addChatMessage, bindChatLog, loadChatHistory, setChatLogOpen, useChatLog, type HistoryResult } from "@/components/social/chatLog";
+import { addChatEffect, addChatMessage, bindChatLog, loadChatHistory, markChatLogClosed, setChatLogOpen, useChatLog, type HistoryResult } from "@/components/social/chatLog";
 import SocialChatBox from "@/components/social/SocialChatBox";
 import "./mjChatLog.css";
 
@@ -40,6 +40,8 @@ export function useMjChatFeed({ account, roomId, roomCode, me, spectator }: {
   useEffect(() => { bindChatLog(key, me); }, [key, me]);
   useEffect(() => () => bindChatLog(null), []);
   useEffect(() => subscribeChat(addChatMessage), []);
+  // 送出時房間剛好關掉（410 room_closed）：聊天室顯示「房間已關閉，本場聊天已清除」
+  useEffect(() => subscribeChatRoomClosed(markChatLogClosed), []);
   useEffect(() => subscribeFx((m) => addChatEffect({ id: m.id, ts: Date.now(), fromName: m.fromName, toName: m.toName, label: FX_LABEL[m.kind] })), []);
 
   // 歷史：進房、重新整理、回到前景、網路恢復時各讀一次（同一則用 id 去重）
@@ -63,19 +65,25 @@ export function useMjChatFeed({ account, roomId, roomCode, me, spectator }: {
     if (!spectator || !spxChannel || !roomCode) return;
     const supabase = getSupabase();
     const ch = supabase.channel(spxChannel);
-    ch.on("broadcast", { event: "mj_chat" }, ({ payload }) => {
-      const m = (payload as { message?: LiveChat } | null)?.message;
-      if (m) receiveChat(m, undefined, roomCode);
-    });
-    ch.on("broadcast", { event: "mj_effect" }, ({ payload }) => {
-      const e = (payload as { effect?: FxEvent } | null)?.effect;
-      if (e) receiveFx(e);
-    });
+    ch.on("broadcast", { event: "mj_chat" }, ({ payload }) => onSpectatorEvent("mj_chat", payload, roomCode));
+    ch.on("broadcast", { event: "mj_effect" }, ({ payload }) => onSpectatorEvent("mj_effect", payload, roomCode));
     ch.subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [spectator, spxChannel, roomCode]);
 
   return () => setTick((t) => t + 1);
+}
+
+/** 觀戰頻道收到的事件（每位觀戰者各自一個頻道，老柯 701d501；payload.playerId 是 "*spectators"，不用看）：
+ *  聊天交給 chatClient（泡泡、自動播放、聊天室清單），互動交給特效模組（動畫、聊天室互動紀錄） */
+export function onSpectatorEvent(event: "mj_chat" | "mj_effect", payload: unknown, roomCode: string) {
+  if (event === "mj_chat") {
+    const m = (payload as { message?: LiveChat } | null)?.message;
+    if (m) receiveChat(m, undefined, roomCode);
+  } else {
+    const e = (payload as { effect?: FxEvent } | null)?.effect;
+    if (e) receiveFx(e);
+  }
 }
 
 /** 聊天框開關：玩家（能發）時和輸入底板一起開關；訪客、觀戰只開清單 */
@@ -149,7 +157,9 @@ export default function MjChatLogBox({ variant, mySeat, canSend, guest, spectato
       onClose={() => toggleMjChatBox(canSend, false)}
       readOnlyText={spectator ? "觀戰中，僅能觀看" : undefined}
       emptyHint={canSend ? "說句話，和大家聊聊吧" : "玩家的聊天會顯示在這裡"}
-      alert={alert}
+      // 桌機側欄不蓋牌桌，牌桌上本來就有「輪到你打牌」：只有手機顯示提示（小宜 2026-11-13）
+      alert={variant === "dock" ? alert : null}
+      slot={variant === "side" && canSend}
       // 語音交給 chatClient：和名牌旁泡泡、自動播放共用同一個播放器（一次只播一段），音量、靜音即時跟著設定
       voice={{ playingId: chat.playing?.id ?? null, failedId: chat.voiceFailed, toggle: toggleLogVoice }}
       onRetry={onRetry}
