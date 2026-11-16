@@ -95,16 +95,16 @@ const { closeRoom } = await import("../lib/records/store"); // 直接用真的�
 let roomId = "";
 {
   const settings = { arrangeSec: 45 as const, totalHands: 4 };
-  const r = await T.insertRoom({ code: "5201", host_id: "p0", settings });
+  const r = await T.insertRoom({ code: "5201", host_id: "p0", host_user_id: "00000000-0000-4000-8000-0000000000a0", settings });
   roomId = typeof r === "object" ? r.id : "";
   const room = await T.loadRoom(roomId);
-  eq([room?.code, room?.status, room?.host_id, room?.game_state?.settings, room?.game_state?.phase, room?.game_state?.stateVersion, room?.game_state?.playerScores],
-    ["5201", "waiting", "p0", settings, "waiting", 0, [0, 0, 0, 0]], "R1 開房：房號、等人中、房主；理牌時間 45 秒和局數存進牌局狀態，版本 0、累計分數 0");
+  eq([room?.code, room?.status, room?.host_id, room?.game_state?.hostUserId, room?.game_state?.settings, room?.game_state?.phase, room?.game_state?.stateVersion, room?.game_state?.playerScores],
+    ["5201", "waiting", "p0", "00000000-0000-4000-8000-0000000000a0", settings, "waiting", 0, [0, 0, 0, 0]], "R1 開房：房號、等人中、房主（含開房帳號）；理牌時間 45 秒和局數存進牌局狀態，版本 0、累計分數 0");
   eq((await T.loadRoomByCode("5201"))?.id === roomId, true, "R2 用房號找得到同一間");
-  eq(await T.insertRoom({ code: "5201", host_id: "p9", settings }), "duplicate", "R3 房號重複回 duplicate（呼叫端換一個再試）");
+  eq(await T.insertRoom({ code: "5201", host_id: "p9", host_user_id: "00000000-0000-4000-8000-0000000000a0", settings }), "duplicate", "R3 房號重複回 duplicate（呼叫端換一個再試）");
   const okSecs = [];
-  for (const [i, sec] of [30, 60].entries()) okSecs.push(typeof (await T.insertRoom({ code: `530${i}`, host_id: "x", settings: { arrangeSec: sec as 30 | 60, totalHands: 1 } })) === "object");
-  const bad = await errOf(T.insertRoom({ code: "5309", host_id: "x", settings: { arrangeSec: 40 as unknown as 30, totalHands: 1 } }));
+  for (const [i, sec] of [30, 60].entries()) okSecs.push(typeof (await T.insertRoom({ code: `530${i}`, host_id: "x", host_user_id: "00000000-0000-4000-8000-0000000000a0", settings: { arrangeSec: sec as 30 | 60, totalHands: 1 } })) === "object");
+  const bad = await errOf(T.insertRoom({ code: "5309", host_id: "x", host_user_id: "00000000-0000-4000-8000-0000000000a0", settings: { arrangeSec: 40 as unknown as 30, totalHands: 1 } }));
   eq([okSecs, bad, await T.loadRoomByCode("5309")], [[true, true], "理牌時間只能是 30、45 或 60 秒", null], "R4 理牌時間 30、60 秒也能開；40 秒丟錯，而且沒有建出房間");
   eq([T.isArrangeSec(30), T.isArrangeSec(45), T.isArrangeSec(60), T.isArrangeSec(15), T.isArrangeSec("30")], [true, true, true, false, false], "R5 isArrangeSec 只認 30、45、60（數字）");
   eq(await T.loadRoom("00000000-0000-4000-8000-00000000dead"), null, "R6 不存在的房間回 null");

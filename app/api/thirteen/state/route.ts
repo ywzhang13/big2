@@ -1,0 +1,27 @@
+// 十三支讀狀態：GET ?roomId=&playerId=。要登入。
+//   帶 playerId（必須是本人座位）→ 玩家畫面：亮牌前只有自己的手牌和三墩，別家只看得到送出了沒
+//   不帶 playerId → 觀戰畫面：亮牌前誰的牌都看不到
+// 每次讀都先推進牌局（截止時間到了就代排、亮牌、開下一局），截止時間只看伺服器時間
+import { getAuthUser } from "@/lib/auth";
+import { loadPlayers } from "@/lib/thirteen/db";
+import { clock, viewFor } from "@/lib/thirteen/flow";
+import { advanceAndSave, goneResponse, fail, json, seatOwnerError, withRoom } from "@/lib/thirteen/server";
+
+export async function GET(request: Request) {
+  const q = new URL(request.url).searchParams;
+  const playerId = q.get("playerId");
+  const user = await getAuthUser(request);
+  if (!user) return fail(401, "not_logged_in");
+  return withRoom(q.get("roomId"), async (room) => {
+    if (room.status === "waiting") {
+      const seats = await loadPlayers(room.id);
+      if (playerId && !seats.some((p) => p.player_id === playerId && p.user_id === user.id)) return fail(403, "not_your_seat");
+      return json({ status: "waiting", code: room.code, hostId: room.host_id, settings: room.game_state.settings,
+        seats: seats.map((p) => ({ seat: p.seat, name: p.name, playerId: p.player_id })) });
+    }
+    if (playerId) { const e = await seatOwnerError(request, room.game_state, playerId); if (e) return e; }
+    const { s, sv, closed } = await advanceAndSave(room);
+    if (closed) return goneResponse(room.id);
+    return json({ status: room.status, code: room.code, sv, ...viewFor(s, playerId, clock.now()) });
+  });
+}

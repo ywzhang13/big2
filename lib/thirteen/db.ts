@@ -3,7 +3,7 @@
 // 和麻將不同：沒有 Redis 快取（十三支一局只有發牌、送出、亮牌幾次寫入，直接讀資料庫）。
 // 關房＋寫對局紀錄走共用的 lib/records/store.ts closeRoom("thirteen", …)，紀錄內容用這裡的 buildThirteenRecord 組。
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { MatchRecordInput, EndReason } from "@/lib/records/types";
+import type { MatchRecordInput, EndReason, MatchRecordSummary } from "@/lib/records/types";
 import type { Card } from "./cards";
 import type { Arrangement } from "./arrange";
 import type { RoundResult } from "./score";
@@ -37,6 +37,7 @@ export interface ThirteenHandResult {
 export interface ThirteenGameState {
   stateVersion: number;             // 樂觀鎖：每次存檔 +1
   settings: ThirteenSettings;
+  hostUserId: string | null;        // 開房的帳號：房主的座位只有這個帳號能坐、只有他能開局（審伯 2026-11-16 必修 2）
   phase: "waiting" | "arranging" | "revealed";
   handNo: number;                   // 第幾局（等人時 0）
   startedAt: string | null;         // 這場開局時間（寫紀錄用）
@@ -45,6 +46,9 @@ export interface ThirteenGameState {
   rest: Card[];                     // 沒發出去的 13 張：只存伺服器，不給前端
   hands: ThirteenHandResult[];      // 每局結果
   playerScores: number[];           // 多局累計（依座位）
+  nextReady?: string[];             // 這局亮牌後按了「下一局」的玩家 id
+  nextHandAt?: number | null;       // 亮牌後到這個時間沒人按也自動開下一局（斷線的人不會卡住牌局）
+  leaveRequest?: { requesterId: string; approvedBy: string[] } | null; // 中途解散投票（四家都同意才解散）
 }
 
 export interface ThRoom {
@@ -65,8 +69,8 @@ export interface ThPlayer {
 }
 
 /** 剛開好、還在等人的房間狀態 */
-export function newRoomState(settings: ThirteenSettings): ThirteenGameState {
-  return { stateVersion: 0, settings, phase: "waiting", handNo: 0, startedAt: null, arrangeDeadline: null,
+export function newRoomState(settings: ThirteenSettings, hostUserId: string | null = null): ThirteenGameState {
+  return { stateVersion: 0, settings, hostUserId, phase: "waiting", handNo: 0, startedAt: null, arrangeDeadline: null,
     players: [], rest: [], hands: [], playerScores: [0, 0, 0, 0] };
 }
 
@@ -78,11 +82,11 @@ export class StateConflictError extends Error {
 }
 
 /** 開房：房號重複回 "duplicate"（呼叫端換一個再試）；理牌時間不是 30／45／60 丟錯 */
-export async function insertRoom(row: { code: string; host_id: string; settings: ThirteenSettings }): Promise<{ id: string } | "duplicate"> {
+export async function insertRoom(row: { code: string; host_id: string; host_user_id: string; settings: ThirteenSettings }): Promise<{ id: string } | "duplicate"> {
   if (!isArrangeSec(row.settings.arrangeSec)) throw new Error("理牌時間只能是 30、45 或 60 秒");
   const { data, error } = await getSupabaseAdmin()
     .from("th_rooms")
-    .insert({ code: row.code, status: "waiting", host_id: row.host_id, game_state: newRoomState(row.settings) })
+    .insert({ code: row.code, status: "waiting", host_id: row.host_id, game_state: newRoomState(row.settings, row.host_user_id) })
     .select("id")
     .single();
   if (error) {
@@ -183,4 +187,44 @@ export function buildThirteenRecord(roomId: string, roomCode: string, s: Thirtee
       totalScore: s.playerScores[p.seat] ?? 0,
     })),
   };
+}
+
+export type CloseResult = "closed" | "already_closed" | "changed" | "not_found";
+
+/**
+ * 寫對局紀錄＋刪房（同一個交易，close_room_with_record 的 thirteen 分支）：牌局版本不是 expectVersion 就不關（回 changed）。
+ * 紀錄內容的欄位和 lib/records/store.ts closeRoom 送的一樣；十三支自己呼叫，流程測試才能跑在真的 migration 上。
+ */
+export async function closeThirteen(roomId: string, rec: MatchRecordInput | null, expectVersion: number): Promise<CloseResult> {
+  const { data, error } = await getSupabaseAdmin().rpc("close_room_with_record", {
+    p_game: "thirteen",
+    p_room_id: roomId,
+    p_record: rec
+      ? {
+          room_code: rec.roomCode, started_at: rec.startedAt, end_reason: rec.endReason,
+          total_rounds: rec.totalRounds, base_points: rec.basePoints, fan_points: rec.fanPoints,
+          settings: rec.settings, hands_played: rec.handsPlayed,
+          players: rec.players.map((p) => ({ seat: p.seat, player_name: p.playerName, player_id: p.playerId, user_id: p.userId ?? null, total_score: p.totalScore })),
+        }
+      : null,
+    p_expected_row_version: null,
+    p_expected_version: expectVersion,
+  });
+  if (error) throw new Error(`close_room_with_record 失敗：${error.message}`);
+  return data as CloseResult;
+}
+
+/** 房間已經關掉時，用房間 id 找這場的紀錄（重新整理、晚到的請求用）；沒有回 null。finalHand：最後亮的那一局（有的話） */
+export async function findThirteenRecord(roomId: string): Promise<(MatchRecordSummary & { finalHand: unknown }) | null> {
+  const db = getSupabaseAdmin();
+  const { data: m, error } = await db.from("match_records").select("id, room_code, end_reason, ended_at, settings")
+    .eq("game", "thirteen").eq("room_id", roomId).maybeSingle();
+  if (error) throw new Error(`讀取十三支紀錄失敗：${error.message}`);
+  if (!m) return null;
+  const { data: ps, error: e2 } = await db.from("match_record_players").select("seat, player_name, total_score")
+    .eq("match_id", m.id).order("seat", { ascending: true });
+  if (e2) throw new Error(`讀取十三支紀錄失敗：${e2.message}`);
+  return { game: "thirteen", roomCode: m.room_code, endReason: m.end_reason, endedAt: m.ended_at,
+    players: (ps ?? []).map((p) => ({ seat: p.seat, playerName: p.player_name, totalScore: p.total_score })),
+    finalHand: (m.settings as { finalHand?: unknown } | null)?.finalHand ?? null };
 }
