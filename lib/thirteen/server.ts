@@ -11,9 +11,11 @@ import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
 import { SPECTATORS, spectatorChannelName } from "@/lib/mahjong/access";
 import type { Member } from "@/lib/mahjong/effects/members";
 import type { ChatMessage } from "@/lib/social/events";
+import { deleteRoomSpectate } from "@/lib/mahjong/spectate/store";
+import { IDLE_ACTIVE_MS, IDLE_WAITING_MS } from "@/lib/records/types";
 import { deleteThirteenChat } from "./chat";
-import { buildThirteenRecord, closeThirteen, findThirteenRecord, loadPlayers, loadRoom, saveGameStateIfUnchanged, StateConflictError,
-  type ThirteenGameState, type ThRoom } from "./db";
+import { buildThirteenRecord, closeThirteen, findThirteenRecord, listIdleThirteenRooms, loadPlayers, loadRoom, saveGameStateIfUnchanged, StateConflictError,
+  type CloseResult, type ThirteenGameState, type ThRoom } from "./db";
 import { advance, cancelIfDenied, clock, evaluateLeave, revealPayload, isOver } from "./flow";
 
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -115,12 +117,50 @@ export async function finishMatch(room: ThRoom, s: ThirteenGameState, sv: number
   // 只有已經亮牌的牌（52 張發出去的），沒發出去的 13 張不在裡面；紀錄只寫一次（close_room_with_record 重送不會重寫）
   if (rec && s.phase === "revealed") rec.settings = { ...rec.settings, finalHand: revealPayload(s) };
   const r = await closeThirteen(room.id, rec, sv);
-  if (r === "closed") {
-    await deleteThirteenChat(room.id); // 和麻將關房一樣，聊天紀錄只保存在這一場
-    await send(room, [...before, { event: "th_room_closed", payload: { endReason, recorded: !!rec,
-      players: (rec?.players ?? []).map((p) => ({ seat: p.seat, playerName: p.playerName, totalScore: p.totalScore })) } }]);
-  }
+  if (r === "closed") await afterClosed(room, endReason, rec, before);
   return r;
+}
+
+/**
+ * 房間剛關掉之後：清這房的聊天紀錄和觀戰申請／同意（和麻將關房一樣只保存在這一場），再廣播房間關了。
+ * 清除失敗只記 log（房間已經關了；聊天孤兒由 mj_chat_append 清，觀戰列由 mj_spectate_request／麻將關房清舊的）
+ */
+async function afterClosed(room: Pick<ThRoom, "id" | "code">, endReason: "completed" | "dissolved",
+  rec: ReturnType<typeof buildThirteenRecord>, before: Ev[] = []): Promise<void> {
+  for (const [what, fn] of [["聊天", deleteThirteenChat], ["觀戰", deleteRoomSpectate]] as const) {
+    try { await fn(room.id); } catch (err) { console.error(`[th-close] 房 ${room.id} 刪除${what}資料失敗：`, err instanceof Error ? err.message : err); }
+  }
+  await send(room, [...before, { event: "th_room_closed", payload: { endReason, recorded: !!rec,
+    players: (rec?.players ?? []).map((p) => ({ seat: p.seat, playerName: p.playerName, totalScore: p.totalScore })) } }]);
+}
+
+/** 等人階段最後一個人離開、房間已由 th_lobby_leave 刪掉之後：清聊天和觀戰資料、通知（一局都沒打，沒有紀錄） */
+export const emptyLobbyClosed = (room: Pick<ThRoom, "id" | "code">) => afterClosed(room, "dissolved", null);
+
+/**
+ * 閒置清除的一間（規則同麻將 lib/records/close.ts closeMahjongRow）：整場已打完記 completed、打過至少一局記 dissolved、一局都沒打完直接刪。
+ * 用選中時的 row_version 關：選中之後有任何寫入（有人送出、入座後開局、投票…）就不關（回 changed），進行中的房不會被刪
+ */
+export async function closeIdleRoom(r: ThRoom & { row_version: number }): Promise<CloseResult> {
+  const s = r.game_state;
+  const reason = s && isOver(s) ? "completed" : "dissolved";
+  const rec = s ? buildThirteenRecord(r.id, r.code, s, reason) : null;
+  if (rec && s?.phase === "revealed") rec.settings = { ...rec.settings, finalHand: revealPayload(s) };
+  const res = await closeThirteen(r.id, rec, null, r.row_version);
+  if (res === "closed") await afterClosed(r, reason, rec);
+  return res;
+}
+
+/** 清閒置房（開房時在回應送出後順便跑，同麻將）：等人中超過 2 小時、開局後超過 12 小時沒有任何寫入。回傳關掉幾間 */
+export async function sweepIdleThirteenRooms(nowMs = Date.now(), limit = 10): Promise<number> {
+  let n = 0;
+  try {
+    const rows = await listIdleThirteenRooms(new Date(nowMs - IDLE_WAITING_MS).toISOString(), new Date(nowMs - IDLE_ACTIVE_MS).toISOString(), limit);
+    for (const r of rows) if ((await closeIdleRoom(r)) === "closed") n++;
+  } catch (err) {
+    console.error("[th-sweep] 清理十三支閒置房失敗：", err instanceof Error ? err.message : err);
+  }
+  return n;
 }
 
 /** 解散投票已經成立（沒閒置的人都同意了；票已經存檔，判定只看存好的票和伺服器時間） */

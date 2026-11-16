@@ -1,7 +1,7 @@
 // 測試用（老柯 2026-11-16，十三支 db 層）：攔下 supabase-js 送出的 PostgREST 請求，翻成 SQL 在記憶體 PostgreSQL（PGlite）執行。
 // 目的：lib/thirteen/db.ts、lib/records/store.ts 的真程式碼（真的 supabase-js 組出來的請求）直接打在跑過真 migration 的資料庫上，
 // 驗到資料表結構、限制、權限、trigger 和 close_room_with_record，而不是只驗一個假的記憶體版本。
-// 只支援十三支 db 層用到的那一小部分：select／insert／update／delete、eq／is／in 篩選、order、single／maybeSingle、rpc。
+// 只支援十三支 db 層用到的那一小部分：select／insert／update／delete、eq／neq／lt／is／in 篩選、order、limit、single／maybeSingle、rpc。
 // 遇到不認得的參數直接丟錯（測試會變紅），不會默默當成沒篩選。每個請求都以 service_role 身分執行（和正式站伺服器一樣）。
 import type { PGlite } from "@electric-sql/pglite";
 
@@ -55,24 +55,30 @@ async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog
     }
     if (!IDENT.test(path)) throw new Error(`假 PostgREST：不支援的路徑 ${path}`);
     const table = `public."${path}"`;
-    let select = "*", order = "";
+    let select = "*", order = "", limit = "";
     const where: string[] = [];
     for (const [k, v] of url.searchParams) {
       if (k === "select") select = v.split(",").map((c) => col(c.trim())).join(", ");
       else if (k === "order") order = " order by " + v.split(",").map((o) => { const [c, dir] = o.split("."); return `${col(c)} ${dir === "desc" ? "desc" : "asc"}`; }).join(", ");
       else if (k === "columns") continue;
+      else if (k === "limit") { if (!/^\d+$/.test(v)) throw new Error(`假 PostgREST：limit ${v}`); limit = ` limit ${v}`; }
       else {
-        const m = v.match(/^(eq|is|in)\.([\s\S]*)$/);
+        const m = v.match(/^(eq|neq|lt|is|in)\.([\s\S]*)$/);
         if (!m) throw new Error(`假 PostgREST：不支援的篩選 ${k}=${v}`);
         if (m[1] === "eq") where.push(`${col(k)} = ${p(m[2])}`);
+        else if (m[1] === "neq") where.push(`${col(k)} <> ${p(m[2])}`);
+        else if (m[1] === "lt") where.push(`${col(k)} < ${p(m[2])}`);
         else if (m[1] === "is" && m[2] === "null") where.push(`${col(k)} is null`);
-        else if (m[1] === "in") where.push(`${col(k)}::text = any(${p(m[2].replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, "")))}::text[])`);
+        else if (m[1] === "in") { // 陣列直接當參數（toParam 會把陣列轉成 JSON 字串，Postgres 認不得）
+          params.push(m[2].replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, "")));
+          where.push(`${col(k)}::text = any($${params.length}::text[])`);
+        }
         else throw new Error(`假 PostgREST：不支援的篩選 ${k}=${v}`);
       }
     }
     const cond = where.length ? ` where ${where.join(" and ")}` : "";
     const wantRows = (headers.get("Prefer") ?? "").includes("return=representation") || method === "GET";
-    if (method === "GET") sql = `select ${select} from ${table}${cond}${order}`;
+    if (method === "GET") sql = `select ${select} from ${table}${cond}${order}${limit}`;
     else if (method === "POST") {
       const rows: Record<string, unknown>[] = Array.isArray(body) ? body : [body];
       const cols = Object.keys(rows[0]);
