@@ -1,8 +1,10 @@
 // 十三支開房：POST { hostId, arrangeSec: 30|45|60, totalHands } → { roomId, code }。要登入；開完房主再呼叫 join 入座
+// 開房時順便清閒置太久的十三支房（同麻將：回應送出後才跑，不拖慢開房；規則見 lib/thirteen/server.ts sweepIdleThirteenRooms）
 import { randomInt } from "node:crypto";
+import { after } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { insertRoom, isArrangeSec } from "@/lib/thirteen/db";
-import { fail, json } from "@/lib/thirteen/server";
+import { fail, json, sweepIdleThirteenRooms } from "@/lib/thirteen/server";
 
 const MAX_HANDS = 16;
 
@@ -18,7 +20,10 @@ export async function POST(request: Request) {
     for (let i = 0; i < 10; i++) {
       const code = String(randomInt(0, 10000)).padStart(4, "0");
       const r = await insertRoom({ code, host_id: hostId, host_user_id: user.id, settings: { arrangeSec, totalHands: totalHands as number } });
-      if (r !== "duplicate") return json({ roomId: r.id, code });
+      if (r !== "duplicate") {
+        after(() => sweepIdleThirteenRooms().then(() => undefined));
+        return json({ roomId: r.id, code });
+      }
     }
     return fail(503, "no_code", "房號用完了，請再試一次");
   } catch (err) {

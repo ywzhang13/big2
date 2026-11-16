@@ -127,11 +127,12 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const v0 = await state(m1.roomId, "p0", "p0");
   const others = hands.slice(1).flat().map((c) => c.id);
   const leak0 = others.filter((id) => JSON.stringify(v0.body).includes(`"${id}"`));
-  const watch = await state(m1.roomId, "watch");
+  const watch = await state(m1.roomId, "p2");     // 不帶座位的畫面（和被同意的觀戰者看到的一樣，觀戰流程見 flow-thirteen-room.ts）
   const leakW = hands.flat().filter((c) => JSON.stringify(watch.body).includes(`"${c.id}"`));
-  eq([leak0, v0.body.players.map((p: { submitted: boolean }) => p.submitted), v0.body.reveal, watch.status, watch.body.me, leakW],
-    [[], [false, true, false, false], null, 200, null, []],
-    "V1 亮牌前：0 號的畫面裡沒有任何一張別家的牌（只看得到 1 號已送出）；觀戰的人一張都看不到");
+  const outsider = await state(m1.roomId, "watch"); // 沒被同意觀戰的外人（2026-11-18 起要先申請觀戰）
+  eq([leak0, v0.body.players.map((p: { submitted: boolean }) => p.submitted), v0.body.reveal, watch.status, watch.body.me, leakW, outsider.status, outsider.body.error],
+    [[], [false, true, false, false], null, 200, null, [], 403, "not_allowed"],
+    "V1 亮牌前：0 號的畫面裡沒有任何一張別家的牌（只看得到 1 號已送出）；不帶座位的畫面一張都看不到；沒被同意觀戰的外人 403");
   const peek = await state(m1.roomId, "p0", "p1");
   eq([peek.status, peek.body.error, (await state(m1.roomId)).status, (await state(m1.roomId, undefined, "p0")).status],
     [403, "not_your_seat", 401, 401], "V2 拿別人的 playerId 讀狀態 403；沒登入 401");

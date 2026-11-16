@@ -117,7 +117,7 @@ export async function loadRoomByCode(code: string): Promise<ThRoom | null> {
   return (data as ThRoom | null) ?? null;
 }
 
-/** 坐下：座位或玩家 id 重複回 "duplicate"，其他錯誤丟出 */
+/** 直接寫一個座位（只剩 db 層單元測試用；路由入座一律走 lobbyJoin）：座位或玩家 id 重複回 "duplicate"，其他錯誤丟出 */
 export async function insertPlayer(row: { room_id: string; player_id: string; name: string; seat: number; user_id: string | null }): Promise<"ok" | "duplicate"> {
   const { error } = await getSupabaseAdmin().from("th_players").insert(row);
   if (error) {
@@ -125,6 +125,27 @@ export async function insertPlayer(row: { room_id: string; player_id: string; na
     throw new Error(`加入十三支房間失敗：${error.message}`);
   }
   return "ok";
+}
+
+/**
+ * 入座、離開（等人階段）：交給資料庫函式 th_lobby_join／th_lobby_leave（20261118_thirteen_lobby.sql），
+ * 在同一個交易裡鎖住房間那一列再改座位和房間（房主交接、版本 +1、最後一人離開就刪房），和開局存檔、關房、閒置清除不會交錯。
+ */
+export type LobbyJoinResult =
+  | { ok: true; rejoined: boolean; seat: number; player_id: string; state_version?: number }
+  | { error: "room_not_found" | "started" | "full" | "player_taken" | "host_reserved" };
+export async function lobbyJoin(roomId: string, playerId: string, name: string, userId: string): Promise<LobbyJoinResult> {
+  const { data, error } = await getSupabaseAdmin().rpc("th_lobby_join", { p_room_id: roomId, p_player_id: playerId, p_name: name, p_user_id: userId });
+  if (error) throw new Error(`加入十三支房間失敗：${error.message}`);
+  return data as LobbyJoinResult;
+}
+export type LobbyLeaveResult =
+  | { ok: true; closed: boolean; host_id: string | null; player_id: string; seat: number; player_count?: number; state_version?: number }
+  | { error: "not_in_room" | "game_in_progress" };
+export async function lobbyLeave(roomId: string, userId: string): Promise<LobbyLeaveResult> {
+  const { data, error } = await getSupabaseAdmin().rpc("th_lobby_leave", { p_room_id: roomId, p_user_id: userId });
+  if (error) throw new Error(`離開十三支房間失敗：${error.message}`);
+  return data as LobbyLeaveResult;
 }
 
 /** 房裡的座位，依座位排（查詢失敗丟出，不當成空房） */
@@ -136,6 +157,37 @@ export async function loadPlayers(roomId: string): Promise<ThPlayer[]> {
     .order("seat", { ascending: true });
   if (error) throw new Error(`查詢十三支玩家失敗：${error.message}`);
   return (data ?? []) as ThPlayer[];
+}
+
+/** 這個帳號目前坐著的十三支房間（找回房間用），最近有動作的在前；開局後座位以牌局狀態為準 */
+export async function loadSeatsByUser(userId: string): Promise<{ roomId: string; code: string; status: ThRoom["status"]; seat: number; playerId: string }[]> {
+  const db = getSupabaseAdmin();
+  const { data: mine, error } = await db.from("th_players").select("room_id, player_id, seat").eq("user_id", userId);
+  if (error) throw new Error(`查詢十三支座位失敗：${error.message}`);
+  if (!mine?.length) return [];
+  const { data: rooms, error: e2 } = await db.from("th_rooms").select("id, code, status, updated_at, game_state")
+    .in("id", mine.map((p) => p.room_id));
+  if (e2) throw new Error(`查詢十三支房間失敗：${e2.message}`);
+  return (rooms ?? [])
+    .map((r) => {
+      const p = mine.find((x) => x.room_id === r.id)!;
+      const seat = (r.game_state as ThirteenGameState | null)?.players?.find((x) => x.id === p.player_id)?.seat ?? p.seat;
+      return { roomId: r.id as string, code: r.code as string, status: r.status as ThRoom["status"], seat, playerId: p.player_id as string, at: r.updated_at as string };
+    })
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .map(({ at: _at, ...x }) => x);
+}
+
+/** 閒置太久的房間（規則同麻將 sweepIdleRooms）：等人中 waitingBefore 之前、其他狀態 activeBefore 之前就沒更新過。row_version 給關房時比對 */
+export async function listIdleThirteenRooms(waitingBefore: string, activeBefore: string, limit: number): Promise<(ThRoom & { row_version: number })[]> {
+  const db = getSupabaseAdmin();
+  const cols = "id, code, status, host_id, game_state, row_version";
+  const [w, a] = await Promise.all([
+    db.from("th_rooms").select(cols).eq("status", "waiting").lt("updated_at", waitingBefore).order("updated_at", { ascending: true }).limit(limit),
+    db.from("th_rooms").select(cols).neq("status", "waiting").lt("updated_at", activeBefore).order("updated_at", { ascending: true }).limit(limit),
+  ]);
+  if (w.error || a.error) throw new Error(`查詢閒置十三支房間失敗：${(w.error ?? a.error)!.message}`);
+  return [...(w.data ?? []), ...(a.data ?? [])].slice(0, limit).map((r) => ({ ...r, row_version: Number(r.row_version) })) as (ThRoom & { row_version: number })[];
 }
 
 /**
@@ -194,9 +246,10 @@ export type CloseResult = "closed" | "already_closed" | "changed" | "not_found";
 
 /**
  * 寫對局紀錄＋刪房（同一個交易，close_room_with_record 的 thirteen 分支）：牌局版本不是 expectVersion 就不關（回 changed）。
+ * 閒置清除改用 expectRowVersion（選中時的 row_version；中間有任何寫入就不關），這時 expectVersion 給 null。
  * 紀錄內容的欄位和 lib/records/store.ts closeRoom 送的一樣；十三支自己呼叫，流程測試才能跑在真的 migration 上。
  */
-export async function closeThirteen(roomId: string, rec: MatchRecordInput | null, expectVersion: number): Promise<CloseResult> {
+export async function closeThirteen(roomId: string, rec: MatchRecordInput | null, expectVersion: number | null, expectRowVersion: number | null = null): Promise<CloseResult> {
   const { data, error } = await getSupabaseAdmin().rpc("close_room_with_record", {
     p_game: "thirteen",
     p_room_id: roomId,
@@ -208,7 +261,7 @@ export async function closeThirteen(roomId: string, rec: MatchRecordInput | null
           players: rec.players.map((p) => ({ seat: p.seat, player_name: p.playerName, player_id: p.playerId, user_id: p.userId ?? null, total_score: p.totalScore })),
         }
       : null,
-    p_expected_row_version: null,
+    p_expected_row_version: expectRowVersion,
     p_expected_version: expectVersion,
   });
   if (error) throw new Error(`close_room_with_record 失敗：${error.message}`);
@@ -228,4 +281,19 @@ export async function findThirteenRecord(roomId: string): Promise<(MatchRecordSu
   return { game: "thirteen", roomCode: m.room_code, endReason: m.end_reason, endedAt: m.ended_at,
     players: (ps ?? []).map((p) => ({ seat: p.seat, playerName: p.player_name, totalScore: p.total_score })),
     finalHand: (m.settings as { finalHand?: unknown } | null)?.finalHand ?? null };
+}
+
+/** 我的十三支對局紀錄（一頁）＋累計（th_my_matches，20261118_thirteen_records.sql）。cursor＝上一頁最後一筆的 endedAt 和 id */
+export interface ThirteenMyMatch {
+  id: string; roomCode: string; endedAt: string; endReason: EndReason; handsPlayed: number | null;
+  arrangeSec: number | null; totalHands: number | null; myScore: number;
+  players: { seat: number; playerName: string; totalScore: number; isMe: boolean }[];
+}
+export async function listMyThirteenMatches(userId: string, limit: number, cursor: { endedAt: string; id: string } | null):
+  Promise<{ items: ThirteenMyMatch[]; summary: { matches: number; totalScore: number } }> {
+  const { data, error } = await getSupabaseAdmin().rpc("th_my_matches", {
+    p_user_id: userId, p_limit: limit, p_cursor_ended_at: cursor?.endedAt ?? null, p_cursor_id: cursor?.id ?? null,
+  });
+  if (error) throw new Error(`查詢十三支紀錄失敗：${error.message}`);
+  return data as { items: ThirteenMyMatch[]; summary: { matches: number; totalScore: number } };
 }
