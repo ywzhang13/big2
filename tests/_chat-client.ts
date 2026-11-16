@@ -38,7 +38,7 @@ type Res = { status: number; body: Record<string, unknown> };
 let posts: { body: object; resolve: (r: Res) => void }[] = [];
 let voices: { roomId: string; resolve: (r: Res) => void }[] = [];
 // ---- 假播放器 ----
-let plays: { url: string; volume: number; end: (r?: { blocked?: boolean }) => void; stopped: boolean }[] = [];
+let plays: { url: string; volume: number; end: (r?: { blocked?: boolean; failed?: boolean }) => void; stopped: boolean }[] = [];
 const io: ChatIO = {
   now: () => t,
   setTimer: (f, ms) => { const id = ++tid; timers.set(id, { at: t + ms, f }); return id as unknown as ReturnType<typeof setTimeout>; },
@@ -46,7 +46,7 @@ const io: ChatIO = {
   postJSON: (body) => new Promise((resolve) => posts.push({ body, resolve })),
   postVoice: (roomId) => new Promise((resolve) => voices.push({ roomId, resolve })),
   play: (url, volume, onEnd) => {
-    const p = { url, volume, end: (r: { blocked?: boolean } = {}) => onEnd(r), stopped: false };
+    const p = { url, volume, end: (r: { blocked?: boolean; failed?: boolean } = {}) => onEnd(r), stopped: false };
     plays.push(p);
     return () => { p.stopped = true; };
   },
@@ -244,6 +244,64 @@ C.receiveChat(voice("p1", 1), "p0", "1001");
 ok(st().bubbles.length === 0 && plays.length === 0, "X10 同帳號、同玩家、同座位換到 B 房：之後才送達的 A 房文字、語音都丟掉（不顯示、不播）");
 C.receiveChat(msg({ text: "B 房的" }), "p0", "2002");
 ok(st().bubbles.length === 1 && st().bubbles[0].text === "B 房的", "X11 B 房頻道來的 mj_chat 照常顯示");
+
+// ---------- L 聊天室的語音列（toggleLogVoice）和泡泡、自動播放共用同一個播放器（審伯 2026-11-13 必修③）----------
+reset();
+volumeSets = [];
+C.bindChatSession(ME);
+const lv1 = voice("p1", 1, 3000);
+C.receiveChat(lv1, "p0"); // 自動播放泡泡
+ok(plays.length === 1 && st().playing?.id === lv1.id, "L1 泡泡語音自動播放中");
+C.toggleLogVoice("hist-1", "https://v/hist-1.m4a", 2000);
+ok(plays[0].stopped && plays.length === 2 && plays[1].url === "https://v/hist-1.m4a" && st().playing?.id === "hist-1",
+  "L2 播放中在聊天室按另一則（歷史語音）：先停掉泡泡那段，再播這則，同時只有一段");
+ok(plays.filter((p) => !p.stopped).length === 1, "L3 任何時候只有一段在播");
+C.toggleVoice(lv1.id);
+ok(plays[1].stopped && plays.length === 3 && plays[2].url === lv1.url && st().playing?.id === lv1.id, "L4 反過來：聊天室語音播放中按泡泡，先停聊天室那段再播泡泡");
+C.toggleLogVoice("hist-1", "https://v/hist-1.m4a", 2000);
+P.setPrefs({ voiceVol: 30 });
+ok(volumeSets.at(-1) === 0.3, "L5 聊天室語音播放中拉語音拉霸：正在播的那段馬上變成 0.3");
+P.setPrefs({ voiceMuted: true });
+ok(plays.at(-1)!.stopped && st().playing === null, "L6 聊天室語音播放中按語音靜音：馬上停");
+const before = plays.length;
+C.toggleLogVoice("hist-2", "https://v/hist-2.m4a", 1000);
+ok(plays.length === before && st().note?.text === "語音已靜音", "L7 靜音時在聊天室按語音：不播，提示「語音已靜音」");
+P.setPrefs({ voiceMuted: false, voiceVol: 70 });
+C.toggleLogVoice("hist-2", "https://v/hist-2.m4a", 1000);
+C.toggleLogVoice("hist-2", "https://v/hist-2.m4a", 1000);
+ok(plays.at(-1)!.stopped && st().playing === null, "L8 聊天室同一則再按一次：停");
+C.toggleLogVoice("hist-3", "https://v/expired.m4a", 1000);
+plays.at(-1)!.end({ failed: true });
+ok(st().voiceFailed === "hist-3" && st().playing === null, "L9 檔案載不到：記下這一則（聊天室顯示「語音無法播放，點擊重試」）");
+C.toggleLogVoice("hist-3", "https://v/new.m4a", 1000);
+ok(st().voiceFailed === null && st().playing?.id === "hist-3", "L10 重試（換了新網址）：清掉失敗、照常播放");
+
+// ---------- R 送出時房間剛好關掉（410 room_closed，老柯 701d501）----------
+reset();
+C.bindChatSession(ME);
+let closedCalls = 0;
+const offClosed = C.subscribeChatRoomClosed(() => { closedCalls++; });
+const pr = C.sendText("最後一句");
+await flush();
+posts[0].resolve({ status: 410, body: { error: "room_closed" } });
+const rr = await pr;
+ok(rr === "room_closed" && st().failed === null && !st().sending, "R1 送出時回 410 room_closed：不顯示「傳送失敗，點此重試」（重試也送不出去）");
+ok(st().note?.text === "房間已關閉，訊息沒有送出", "R2 提示「房間已關閉，訊息沒有送出」");
+ok(closedCalls === 1, "R3 通知聊天室（顯示「房間已關閉，本場聊天已清除」）");
+C.retryFailed();
+await flush();
+ok(posts.length === 1, "R4 沒有留下重試：不會再送一次");
+advance(3000);
+const pv = C.sendVoice(new Blob(["x"]), 2000);
+await flush();
+voices[0].resolve({ status: 410, body: { error: "room_closed" } });
+ok((await pv) === "room_closed" && closedCalls === 2 && st().failed === null, "R5 語音送出時回 410：一樣當成房間已關閉");
+offClosed();
+advance(3000);
+const p404 = C.sendText("房間早就關了");
+await flush();
+posts[1].resolve({ status: 404, body: { error: "room_not_found" } });
+ok((await p404) === "not_in_room" && closedCalls === 2, "R6 送出前就已經關房（404）：照舊，不重複通知");
 
 console.log(results.join("\n"));
 const failed = results.filter((r) => r.startsWith("❌")).length;

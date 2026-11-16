@@ -5,6 +5,7 @@
 import { createHmac } from "node:crypto";
 import { getAuthUser } from "@/lib/auth";
 import type { MahjongGameState } from "./gameState";
+import { owesAction, touchActive } from "./leave/rules";
 
 export const notLoggedIn = () => Response.json({ error: "not_logged_in" }, { status: 401 });
 export const notYourSeat = () => Response.json({ error: "not_your_seat" }, { status: 403 });
@@ -23,6 +24,12 @@ export async function seatOwnerError(
   if (!user) return notLoggedIn();
   const bound = owner !== undefined ? owner : gs?.players?.find((p) => p.id === playerId)?.userId;
   if (!bound || bound !== user.id) return notYourSeat();
+  // 本人的牌局動作：記下時間（解散投票判斷誰輪到他卡住用，lib/mahjong/leave/rules.ts）。直接改傳進來的牌局狀態，跟著這次動作的存檔
+  // 一起寫進去，不多任何請求；不存檔的路由（例如讀狀態）只改到讀出來的那份，不會留下；發起、投票路由會自己還原（不是牌局動作）
+  // 只有「當下確實輪到他」的請求才記（審伯 2026-11-13 必修 3）：已按過下一局又重送、在等別人優先決定的人送的請求，都不延長其他人的計時
+  if (gs && Array.isArray(gs.players) && gs.players.length > 0 && owesAction(gs as MahjongGameState, playerId)) {
+    touchActive(gs as Partial<Pick<MahjongGameState, "lastActive" | "activeSince">>, playerId);
+  }
   return null;
 }
 
@@ -45,6 +52,24 @@ export function privateChannelName(roomCode: string, playerId: string): string {
   return `mj-${roomCode}-p-${h}`;
 }
 
+/** 送到觀戰頻道的事件，payload.playerId 都是這個（前端可以忽略） */
+export const SPECTATORS = "*spectators";
+
+/**
+ * 觀戰頻道名稱：每位「已同意觀戰」的人各一個，綁這一場（房間 id）＋觀戰者帳號，用伺服器金鑰做 HMAC。
+ * 只透過讀聊天紀錄 API 告訴本人（審伯 2026-11-13 必修 1、5）：
+ *   ・綁房間 id：房號重用開新場，名稱就不同，舊觀戰者收不到新場
+ *   ・每人一個：Realtime 的廣播頻道用公開金鑰也能發，觀戰者頂多能對「自己的」頻道發假訊息，騙不到別人
+ *   ・同意被收回後，伺服器下一則就不再送到他的頻道
+ * 觀戰者在這裡只收聊天和互動特效（牌局狀態照舊走觀戰 API）。
+ */
+export function spectatorChannelName(roomCode: string, roomId: string, userId: string): string {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY 未設定，無法建立觀戰頻道");
+  const h = createHmac("sha256", key).update(`mj-spectator:${roomId}:${userId}`).digest("base64url").slice(0, 32);
+  return `mj-${roomCode}-s-${h}`;
+}
+
 /** 每個事件的 payload 加上這次存檔後的牌局版本號 sv（沒給就原樣）。
  *  前端記住看過的最大版本，跳號＝中間漏了事件，立刻補抓一次狀態（lib/mahjong/syncPolicy.ts；老馬 2026-11-01） */
 export function withVersion<T extends { event: string; payload: Record<string, unknown> }>(events: T[], sv?: number): T[] {
@@ -54,9 +79,10 @@ export function withVersion<T extends { event: string; payload: Record<string, u
 /** 每個事件要送到哪個頻道：私人事件送到本人頻道，其他都送房間公開頻道 */
 export function routeEvents(
   roomCode: string,
-  events: { event: string; payload: Record<string, unknown> }[]
+  events: { event: string; payload: Record<string, unknown>; channel?: string }[]
 ): { channel: string; event: string; payload: Record<string, unknown> }[] {
-  return events.map(({ event, payload }) => {
+  return events.map(({ event, payload, channel }) => {
+    if (channel) return { channel, event, payload }; // 呼叫端已經指定頻道（觀戰者各自的頻道）
     const pid = payload.playerId;
     const isPrivate = PRIVATE_EVENTS.has(event);
     if (isPrivate && typeof pid !== "string") throw new Error(`私人事件 ${event} 缺少 playerId`);

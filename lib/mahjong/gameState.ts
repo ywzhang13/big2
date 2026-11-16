@@ -148,6 +148,9 @@ export interface MahjongGameState {
   paceUntil?: number;              // 伺服器時間（毫秒）：補花／眼牌摸牌的特效播完前，摸牌、打牌、吃碰胡都等到這時才處理
   // --- Next-game ready check (下一局四家同意) ---
   nextGameReady?: string[];        // playerIds who have confirmed ready for next game
+  // 每位玩家最後一次遊戲操作的時間（毫秒，playerId → 時間）；解散投票判斷誰閒置用（lib/mahjong/leave/rules.ts）。只在伺服器
+  lastActive?: Record<string, number>;
+  activeSince?: number; // 這房開始記 lastActive 的時間：從沒操作過的玩家以這個時間起算
   // --- Leave request (離開需他家同意) ---
   leaveRequest?: {
     requesterId: string;            // playerId who wants to leave

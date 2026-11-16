@@ -65,6 +65,8 @@ export interface ChatState {
   note: { text: string; until: number } | null; // 小提示：已取消、回合開始錄音已取消、登入 LINE 後…
   autoOffNotice: { seat: number; until: number } | null; // 首次收到語音而自動播放關閉：名牌上方提示一次
   open: boolean; // 聊天底板開著
+  /** 最近一次播放失敗（檔案載不到）的那一則 id：聊天室的語音列顯示「語音無法播放，點擊重試」 */
+  voiceFailed: string | null;
   now: number;
 }
 
@@ -75,8 +77,8 @@ export type ChatIO = {
   clearTimer(t: ReturnType<typeof setTimeout>): void;
   postJSON(body: object): Promise<{ status: number; body: Record<string, unknown> }>;
   postVoice(roomId: string, blob: Blob): Promise<{ status: number; body: Record<string, unknown> }>;
-  /** 播一段語音；回傳停止函式。onEnd 播完（或失敗）時呼叫；blocked＝瀏覽器擋了自動播放 */
-  play(url: string, volume: number, onEnd: (r: { blocked?: boolean }) => void): () => void;
+  /** 播一段語音；回傳停止函式。onEnd 播完（或失敗）時呼叫；blocked＝瀏覽器擋了自動播放、failed＝檔案載不到／播不了 */
+  play(url: string, volume: number, onEnd: (r: { blocked?: boolean; failed?: boolean }) => void): () => void;
   /** 正在播的那一段改音量（設定裡拉語音拉霸時，播放中的也馬上跟著變） */
   setVolume?(volume: number): void;
 };
@@ -103,10 +105,10 @@ const browserIO: ChatIO = {
     a.volume = volume;
     playingAudio = a;
     let done = false;
-    const end = (r: { blocked?: boolean } = {}) => { if (!done) { done = true; if (playingAudio === a) playingAudio = null; onEnd(r); } };
+    const end = (r: { blocked?: boolean; failed?: boolean } = {}) => { if (!done) { done = true; if (playingAudio === a) playingAudio = null; onEnd(r); } };
     a.onended = () => end();
-    a.onerror = () => end();
-    a.play().catch((e: { name?: string }) => end({ blocked: e?.name === "NotAllowedError" }));
+    a.onerror = () => end({ failed: true });
+    a.play().catch((e: { name?: string }) => end(e?.name === "NotAllowedError" ? { blocked: true } : { failed: true }));
     return () => { done = true; if (playingAudio === a) playingAudio = null; a.pause(); a.src = ""; };
   },
   setVolume(volume) { if (playingAudio) playingAudio.volume = volume; },
@@ -127,7 +129,7 @@ let autoOffShown = false;
 let lastFailed: (() => Promise<void>) | null = null;
 
 function fresh(): ChatState {
-  return { bubbles: [], playing: null, sending: false, failed: null, readyAt: 0, note: null, autoOffNotice: null, open: false, now: io?.now() ?? 0 };
+  return { bubbles: [], playing: null, sending: false, failed: null, readyAt: 0, note: null, autoOffNotice: null, open: false, voiceFailed: null, now: io?.now() ?? 0 };
 }
 function emit(patch: Partial<ChatState>) {
   state = { ...state, ...patch };
@@ -210,6 +212,14 @@ export function receiveChat(m: ChatMessage, forPlayer?: string, roomCode?: strin
   if (seen.has(m.id)) return;
   seen.add(m.id);
   addBubble(m);
+  taps.forEach((l) => l(m));
+}
+
+/** 收到（並通過這一場的檢查、去重後）的每一則都通知：聊天框的訊息清單用（components/social/chatLog.ts） */
+const taps = new Set<(m: ChatMessage) => void>();
+export function subscribeChat(l: (m: ChatMessage) => void): () => void {
+  taps.add(l);
+  return () => { taps.delete(l); };
 }
 
 // ---- 播放 ----
@@ -229,6 +239,15 @@ export function toggleVoice(id: string) {
   if (b?.url) { stopPlaying(false); play(b); }
 }
 
+/** 聊天室（components/social）的語音列：和泡泡、自動播放共用同一個播放器，一次只播一段（審伯 2026-11-13 必修③）。
+ *  沒在播就先停掉正在播的那段再播這則；正在播這一則就停。語音靜音時不播。音量、靜音的即時變更和泡泡一樣跟著設定走 */
+export function toggleLogVoice(id: string, url: string, durationMs?: number) {
+  if (state.playing?.id === id) { stopPlaying(false); return; }
+  if (getPrefs().voiceMuted) { noteText("語音已靜音", NOTE_MS); return; }
+  stopPlaying(false);
+  play({ id, url, durationMs });
+}
+
 // 設定改了：播放中的語音馬上跟著改音量；按了語音靜音就停掉，排隊的也不播
 let prefsHooked = false;
 function onPrefs() {
@@ -237,18 +256,19 @@ function onPrefs() {
   io.setVolume?.(voiceGain(getPrefs()));
 }
 
-function play(b: Bubble) {
+function play(b: Pick<Bubble, "id" | "url" | "durationMs">) {
   if (!prefsHooked) { prefsHooked = true; onPrefsChange(onPrefs); }
   const mine = epoch;
   const now = io.now();
   const vol = voiceGain(getPrefs());
-  emit({ playing: { id: b.id, startedAt: now, durationMs: b.durationMs ?? 0 }, bubbles: state.bubbles.map((x) => (x.id === b.id ? { ...x, blocked: false } : x)) });
+  emit({ playing: { id: b.id, startedAt: now, durationMs: b.durationMs ?? 0 }, voiceFailed: null, bubbles: state.bubbles.map((x) => (x.id === b.id ? { ...x, blocked: false } : x)) });
   stopAudio = io.play(b.url!, vol, (r) => {
     if (mine !== epoch) return;
     stopAudio = null;
     const end = io.now();
     emit({
       playing: null,
+      ...(r.failed ? { voiceFailed: b.id } : {}),
       bubbles: state.bubbles.map((x) => (x.id === b.id ? { ...x, blocked: !!r.blocked, until: r.blocked ? Math.max(x.until, end + VOICE_TTL) : end + (x.mine ? MINE_AFTER : AFTER_PLAY) } : x)),
     });
     if (!r.blocked) playNext(); else queue = []; // 被擋了：之後的也會被擋，改成等人按
@@ -266,7 +286,14 @@ function stopPlaying(next = true) {
 }
 
 // ---- 送 ----
-export type SendError = "cooldown" | "guest" | "not_in_room" | "failed" | "busy" | "too_short" | "empty" | null;
+export type SendError = "cooldown" | "guest" | "not_in_room" | "room_closed" | "failed" | "busy" | "too_short" | "empty" | null;
+
+/** 送出時房間剛好關掉（410 room_closed，老柯 701d501）：通知聊天室顯示「房間已關閉」 */
+const closedTaps = new Set<() => void>();
+export function subscribeChatRoomClosed(l: () => void): () => void {
+  closedTaps.add(l);
+  return () => { closedTaps.delete(l); };
+}
 
 async function send(run: () => Promise<{ status: number; body: Record<string, unknown> }>, label: string): Promise<SendError> {
   if (!session) return "not_in_room";
@@ -304,6 +331,14 @@ async function send(run: () => Promise<{ status: number; body: Record<string, un
     emit({ sending: false });
     noteText("太短了，按住久一點再放開", NOTE_MS);
     return "too_short";
+  }
+  if (res.status === 410 && res.body.error === "room_closed") {
+    // 送出的同時房間剛好關掉：這則沒存、沒送。當成房間已關閉，不顯示「點此重試」（重試也送不出去）
+    lastFailed = null;
+    emit({ sending: false, failed: null });
+    noteText("房間已關閉，訊息沒有送出", 2500);
+    closedTaps.forEach((l) => l());
+    return "room_closed";
   }
   if (res.status === 403 || res.status === 404) {
     emit({ sending: false });
