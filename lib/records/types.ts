@@ -1,6 +1,6 @@
 // 對局總結算紀錄（只記整場總分，不記每局明細與手牌）
 
-export type GameKind = "mahjong" | "big2";
+export type GameKind = "mahjong" | "big2" | "thirteen";
 export type EndReason = "completed" | "dissolved"; // 正常打完／中途解散
 
 export interface MatchRecordPlayer {
