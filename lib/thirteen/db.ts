@@ -48,7 +48,8 @@ export interface ThirteenGameState {
   playerScores: number[];           // 多局累計（依座位）
   nextReady?: string[];             // 這局亮牌後按了「下一局」的玩家 id
   nextHandAt?: number | null;       // 亮牌後到這個時間沒人按也自動開下一局（斷線的人不會卡住牌局）
-  leaveRequest?: { requesterId: string; approvedBy: string[] } | null; // 中途解散投票（四家都同意才解散）
+  leaveRequest?: { requesterId: string; approvedBy: string[]; deniedBy?: string[] } | null; // 中途解散投票（判定見 flow.ts evaluateLeave）
+  lastActive?: Record<string, number>; // 每位玩家最後一次「牌局動作」的時間（閒置不計票用，見 flow.ts）
 }
 
 export interface ThRoom {

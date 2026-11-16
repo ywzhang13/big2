@@ -14,6 +14,63 @@ export const dealer = { deal: (): { hands: Card[][]; rest: Card[] } => deal() };
 /** 亮牌後多久沒人按「下一局」也自動開（斷線的人不會卡住牌局） */
 export const NEXT_HAND_MS = 20_000;
 
+// ---- 閒置不計票（精神同麻將 lib/mahjong/leave/rules.ts：超過 3 分鐘沒做牌局動作的人不計票，剩下的人都同意就解散）----
+// 和麻將刻意不同的兩點（審伯 2026-11-17 建議寫明，前端請照十三支的規則做，不要照麻將）：
+//   ① 閒置的判定：麻將看「現在輪到他、卻卡住超過 3 分鐘」；十三支沒有輪流（四家同時理牌、截止自動代排），改看「這個人最後一次牌局動作」
+//      ——所以十三支在等別人的人也可能被判閒置，只要他 3 分鐘沒自己送牌、沒按下一局
+//   ② 判定的時機：麻將只在發起、投票、發起者重新確認時判定；十三支每次讀狀態、tick、送出、投票都判定，
+//      投票途中有人變成閒置，下一次讀狀態就可能成立並解散（不必有人再投票）；有人的不同意恢復算數時也立刻取消投票
+// 每人只留最後一票（改投會換掉先前的票）。
+// 十三支的「牌局動作」：截止前自己送出三墩、亮牌後按「下一局」、房主開局。被系統代排（截止前沒送出）、讀狀態、發起或投票都不算。
+// 計時起點：這位玩家最後一次牌局動作；還沒做過就從這場開局時間算。斷線的人每局都被代排、不會按下一局，3 分鐘後就不計票，
+// 投票不會因為他卡住。每次讀狀態、tick、投票都重新判定（時間一到不必有人再投票）。
+/** 超過多久沒做牌局動作就不計票（毫秒）：3 分鐘，和麻將 IDLE_VOTE_MS 一樣 */
+export const IDLE_VOTE_MS = 3 * 60 * 1000;
+
+/** 這位玩家剛做了牌局動作 */
+export function touch(s: ThirteenGameState, playerId: string, now: number): void {
+  s.lastActive = { ...(s.lastActive ?? {}), [playerId]: now };
+}
+const lastActionAt = (s: ThirteenGameState, playerId: string) =>
+  s.lastActive?.[playerId] ?? (s.startedAt ? Date.parse(s.startedAt) : null);
+/** 超過 3 分鐘沒做牌局動作（還沒開局的房間沒有人算閒置） */
+export const isIdle = (s: ThirteenGameState, playerId: string, now: number) => {
+  const at = lastActionAt(s, playerId);
+  return at !== null && now - at > IDLE_VOTE_MS;
+};
+
+export interface LeaveEval {
+  result: "granted" | "denied" | "vote";
+  needed: number;          // 需要同意的人數（沒閒置的其他三家）
+  approvedCount: number;   // 其中已經同意的
+  idleSeats: number[];     // 不計票的座位（發起人除外）
+  requesterIdle: boolean;
+}
+/** 解散投票現況：沒閒置的其他玩家都同意 → granted；其中有人不同意 → denied；閒置的人投什麼都不算。發起人自己閒置時，至少要有一位有投票權的人同意 */
+export function evaluateLeave(s: ThirteenGameState, now: number): LeaveEval | null {
+  const lr = s.leaveRequest;
+  if (!lr) return null;
+  const others = s.players.filter((p) => p.id !== lr.requesterId);
+  const eligible = others.filter((p) => !isIdle(s, p.id, now));
+  const approved = eligible.filter((p) => lr.approvedBy.includes(p.id)).length;
+  const denied = eligible.some((p) => (lr.deniedBy ?? []).includes(p.id));
+  const requesterIdle = isIdle(s, lr.requesterId, now);
+  const result = denied ? "denied" : approved === eligible.length && (!requesterIdle || approved > 0) ? "granted" : "vote";
+  return { result, needed: eligible.length, approvedCount: approved,
+    idleSeats: others.filter((p) => isIdle(s, p.id, now)).map((p) => p.seat), requesterIdle };
+}
+
+/**
+ * 投票已經被否決就取消（審伯 2026-11-17 必修）：閒置時按的不同意先記著不算，那個人一做牌局動作恢復投票權，
+ * 他的不同意就算數——這時要立刻取消投票，不能讓投票停在「否決」卻沒人取消（之後別人再同意也不能解散、也不能重新發起）。
+ * 每個可能讓人恢復投票權的地方（送出、按下一局）和每次推進牌局都要呼叫。回傳是否取消了
+ */
+export function cancelIfDenied(s: ThirteenGameState, now: number): boolean {
+  if (evaluateLeave(s, now)?.result !== "denied") return false;
+  s.leaveRequest = null;
+  return true;
+}
+
 /** 開局：把入座的四家放進牌局狀態（依座位） */
 export function seatPlayers(s: ThirteenGameState, seats: ThPlayer[]): void {
   s.players = [...seats].sort((a, b) => a.seat - b.seat)
@@ -125,6 +182,6 @@ export function viewFor(s: ThirteenGameState, playerId: string | null, now: numb
     players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat, submitted: p.arrangement !== null })),
     me: me ? { seat: me.seat, hand: me.hand, arrangement: me.arrangement } : null,
     reveal: revealed ? revealPayload(s) : null,
-    leaveRequest: s.leaveRequest ?? null,
+    leaveRequest: s.leaveRequest ? { requesterId: s.leaveRequest.requesterId, approvedBy: s.leaveRequest.approvedBy, ...evaluateLeave(s, now)! } : null,
   };
 }

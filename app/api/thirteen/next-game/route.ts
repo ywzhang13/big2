@@ -1,5 +1,5 @@
 // 十三支下一局：POST { roomId, playerId }。亮牌後按「下一局」；四家都按了就開，沒按的人（例如斷線）等時間到也會自動開
-import { clock, isOver, shouldStartNext, startHand } from "@/lib/thirteen/flow";
+import { cancelIfDenied, clock, isOver, shouldStartNext, startHand, touch } from "@/lib/thirteen/flow";
 import { advanceAndSave, goneResponse, fail, json, saveAndAnnounce, seatOwnerError, withRoom } from "@/lib/thirteen/server";
 
 export async function POST(request: Request) {
@@ -14,10 +14,13 @@ export async function POST(request: Request) {
     if ((s.nextReady ?? []).includes(pid)) return json({ ok: true, phase: s.phase, handNo: s.handNo, sv: sv0 });
     const base = s.stateVersion;
     s.nextReady = [...(s.nextReady ?? []), pid];
+    touch(s, pid, clock.now()); // 按下一局＝牌局動作
+    const leaveCancelled = cancelIfDenied(s, clock.now()); // 他閒置時按過的不同意現在算數 → 取消投票
     const nextStarted = shouldStartNext(s, clock.now());
     if (nextStarted) startHand(s, clock.now());
     const seat = s.players.find((p) => p.id === pid)!.seat;
-    const sv = await saveAndAnnounce(room, s, base, { autoSeats: [], revealed: false, nextStarted }, [{ event: "th_next_ready", payload: { seat } }]);
-    return json({ ok: true, phase: s.phase, handNo: s.handNo, sv });
+    const sv = await saveAndAnnounce(room, s, base, { autoSeats: [], revealed: false, nextStarted }, [{ event: "th_next_ready", payload: { seat } },
+      ...(leaveCancelled ? [{ event: "th_leave_vote", payload: { voterSeat: seat, approve: false, result: "denied" } }] : [])]);
+    return json({ ok: true, phase: s.phase, handNo: s.handNo, sv, leaveCancelled });
   });
 }

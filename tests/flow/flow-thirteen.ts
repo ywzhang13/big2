@@ -348,8 +348,8 @@ const duel = async (a: Ex, b: Ex) => {
   const rec = (await db.query<{ end_reason: string; hands_played: number }>(`select end_reason, hands_played from match_records where room_id = $1`, [m.roomId])).rows[0];
   const ev = sent.filter((e) => e.event === "th_room_closed").pop();
   eq([v1.body.result, v2.body.approvedCount, still, v3.body.result, rec, (ev?.payload as { endReason: string }).endReason, (await state(m.roomId, "p0", "p0")).status],
-    ["vote", 3, 1, "granted", { end_reason: "dissolved", hands_played: 1 }, "dissolved", 410],
-    "Q3 四家都同意才解散：寫中途解散紀錄（只算打完的 1 局）並關房，之後讀狀態 410");
+    ["vote", 2, 1, "granted", { end_reason: "dissolved", hands_played: 1 }, "dissolved", 410],
+    "Q3 四家都同意才解散（approvedCount＝其他三家裡已同意的人數，和麻將一樣不含發起人）：寫中途解散紀錄（只算打完的 1 局）並關房，之後讀狀態 410");
   // 一局都沒打完就解散：只關房、不寫紀錄
   const m2 = await newMatch({ totalHands: 2 });
   await post(leaveReqRoute, { roomId: m2.roomId, playerId: "p0" }, "p0");
@@ -474,7 +474,7 @@ const duel = async (a: Ex, b: Ex) => {
   await post(leaveVoteRoute, { roomId: m3.roomId, playerId: "p3", approve: false }, "p3");
   await post(leaveReqRoute, { roomId: m3.roomId, playerId: "p1" }, "p1");
   const v = await post(leaveVoteRoute, { roomId: m3.roomId, playerId: "p0", approve: true }, "p0");
-  eq([v.body.result, v.body.approvedCount, await roomN(m3.roomId)], ["vote", 2, 1], "S3 投票被否決後重新發起：之前的同意票不沿用（只算新發起人＋這一票＝2），不會用舊票關房");
+  eq([v.body.result, v.body.approvedCount, v.body.needed, await roomN(m3.roomId)], ["vote", 1, 3, 1], "S3 投票被否決後重新發起：之前的同意票不沿用（其他三家只有這一票＝1／3），不會用舊票關房");
 }
 
 console.log(results.join("\n"));

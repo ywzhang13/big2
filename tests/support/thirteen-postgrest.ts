@@ -1,7 +1,7 @@
 // 測試用（老柯 2026-11-16，十三支 db 層）：攔下 supabase-js 送出的 PostgREST 請求，翻成 SQL 在記憶體 PostgreSQL（PGlite）執行。
 // 目的：lib/thirteen/db.ts、lib/records/store.ts 的真程式碼（真的 supabase-js 組出來的請求）直接打在跑過真 migration 的資料庫上，
 // 驗到資料表結構、限制、權限、trigger 和 close_room_with_record，而不是只驗一個假的記憶體版本。
-// 只支援十三支 db 層用到的那一小部分：select／insert／update、eq／is／in 篩選、order、single／maybeSingle、rpc。
+// 只支援十三支 db 層用到的那一小部分：select／insert／update／delete、eq／is／in 篩選、order、single／maybeSingle、rpc。
 // 遇到不認得的參數直接丟錯（測試會變紅），不會默默當成沒篩選。每個請求都以 service_role 身分執行（和正式站伺服器一樣）。
 import type { PGlite } from "@electric-sql/pglite";
 
@@ -47,6 +47,9 @@ async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog
       const fn = path.slice(4);
       if (!IDENT.test(fn) || method !== "POST") throw new Error(`假 PostgREST：不支援的 rpc ${method} ${fn}`);
       const args = Object.entries(body ?? {}).map(([k, v]) => { if (!IDENT.test(k)) throw new Error(`參數名 ${k}`); return `${k} => ${p(v)}`; });
+      // 回傳多列的函式（returns table／setof）PostgREST 回陣列；單一值的回那個值
+      const set = (await db.query<{ s: boolean }>(`select bool_or(proretset) s from pg_proc where proname = $1`, [fn])).rows[0]?.s === true;
+      if (set) return json(200, (await db.query(`select * from ${fn}(${args.join(", ")})`, params)).rows);
       const r = await db.query<{ r: unknown }>(`select ${fn}(${args.join(", ")}) as r`, params);
       return json(200, r.rows[0].r);
     }
@@ -79,6 +82,9 @@ async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog
     } else if (method === "PATCH") {
       const sets = Object.entries(body).map(([c, v]) => { if (!IDENT.test(c)) throw new Error("欄位名"); return `"${c}" = ${p(v)}`; });
       sql = `update ${table} set ${sets.join(", ")}${cond}${wantRows ? ` returning ${select}` : ""}`;
+    } else if (method === "DELETE") {
+      if (!where.length) throw new Error("假 PostgREST：DELETE 一定要有篩選條件");
+      sql = `delete from ${table}${cond}${wantRows ? ` returning ${select}` : ""}`;
     } else throw new Error(`假 PostgREST：不支援的方法 ${method}`);
     const r = await db.query<Record<string, unknown>>(sql, params);
     if (!wantRows) return new Response(null, { status: 201 });

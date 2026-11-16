@@ -8,12 +8,16 @@ import { createHmac } from "node:crypto";
 import { getAuthUser } from "@/lib/auth";
 import { withRoomLock } from "@/lib/mahjong/cache";
 import { mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import { buildThirteenRecord, closeThirteen, findThirteenRecord, loadRoom, saveGameStateIfUnchanged, StateConflictError,
+import { SPECTATORS, spectatorChannelName } from "@/lib/mahjong/access";
+import type { Member } from "@/lib/mahjong/effects/members";
+import type { ChatMessage } from "@/lib/social/events";
+import { deleteThirteenChat } from "./chat";
+import { buildThirteenRecord, closeThirteen, findThirteenRecord, loadPlayers, loadRoom, saveGameStateIfUnchanged, StateConflictError,
   type ThirteenGameState, type ThRoom } from "./db";
-import { advance, clock, revealPayload, isOver } from "./flow";
+import { advance, cancelIfDenied, clock, evaluateLeave, revealPayload, isOver } from "./flow";
 
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
-export const fail = (status: number, error: string, message?: string) => json({ error, ...(message ? { message } : {}) }, status);
+export const fail = (status: number, error: string, message?: string, extra: Record<string, unknown> = {}) => json({ error, ...(message ? { message } : {}), ...extra }, status);
 
 /** 公開頻道：房裡每個人（含觀戰）都收得到，只放不洩漏手牌的事件 */
 export const publicChannel = (code: string) => `th-${code}`;
@@ -112,30 +116,57 @@ export async function finishMatch(room: ThRoom, s: ThirteenGameState, sv: number
   if (rec && s.phase === "revealed") rec.settings = { ...rec.settings, finalHand: revealPayload(s) };
   const r = await closeThirteen(room.id, rec, sv);
   if (r === "closed") {
+    await deleteThirteenChat(room.id); // 和麻將關房一樣，聊天紀錄只保存在這一場
     await send(room, [...before, { event: "th_room_closed", payload: { endReason, recorded: !!rec,
       players: (rec?.players ?? []).map((p) => ({ seat: p.seat, playerName: p.playerName, totalScore: p.totalScore })) } }]);
   }
   return r;
 }
 
-/** 四家都同意解散了（最後一票已經存檔） */
-export const allApproved = (s: ThirteenGameState) => !!s.leaveRequest && s.leaveRequest.approvedBy.length >= s.players.length;
+/** 解散投票已經成立（沒閒置的人都同意了；票已經存檔，判定只看存好的票和伺服器時間） */
+export const leaveGranted = (s: ThirteenGameState) => evaluateLeave(s, clock.now())?.result === "granted";
 
 /**
  * 讀狀態、送出、下一局之前都先推進一次牌局（截止代排、亮牌、時間到開下一局）；有變化就存檔並廣播。
- * 上次該關房卻沒關成（整場打完、或四家都同意解散）就先補關：closed＝這次把房間關掉了，呼叫端回 410。
+ * 該關房卻還沒關（整場打完、或解散投票已經成立——包括投完票之後有人超過 3 分鐘沒動作、變成不計票）就先關：
+ * closed＝這次把房間關掉了，呼叫端回 410。
  */
 export async function advanceAndSave(room: ThRoom & { game_state: ThirteenGameState }): Promise<{ s: ThirteenGameState; sv: number; closed: boolean }> {
   const s = room.game_state;
   const base = s.stateVersion;
-  const pending = allApproved(s) ? "dissolved" : isOver(s) ? "completed" : null;
+  const pending = leaveGranted(s) ? "dissolved" : isOver(s) ? "completed" : null;
   if (pending) {
     const r = await finishMatch(room, s, base, pending, pending === "dissolved" ? [{ event: "th_leave_vote", payload: { result: "granted" } }] : []);
     if (r === "changed") throw new StateConflictError();
     return { s, sv: base, closed: true };
   }
+  const leaveCancelled = cancelIfDenied(s, clock.now()); // 保險：投票若已被否決（有人恢復投票權）就取消，不讓它卡著
   const happened = advance(s, clock.now());
-  if (!happened.autoSeats.length && !happened.revealed && !happened.nextStarted) return { s, sv: base, closed: false };
-  const sv = await saveAndAnnounce(room, s, base, happened);
+  if (!leaveCancelled && !happened.autoSeats.length && !happened.revealed && !happened.nextStarted) return { s, sv: base, closed: false };
+  const sv = await saveAndAnnounce(room, s, base, happened, leaveCancelled ? [{ event: "th_leave_vote", payload: { result: "denied" } }] : []);
   return { s, sv, closed: false };
+}
+
+/** 聊天用：這房和同桌的人（開局後以牌局狀態的座位為準，開局前用 th_players）；房間不在回 404 */
+export async function chatMembers(roomId: unknown): Promise<(Pick<ThRoom, "id" | "code"> & { members: Member[] }) | Response> {
+  if (typeof roomId !== "string" || !/^[0-9a-f-]{36}$/i.test(roomId)) return fail(400, "bad_request");
+  const room = await loadRoom(roomId);
+  if (!room) return fail(404, "room_not_found");
+  const gs = room.game_state;
+  const members: Member[] = gs?.players?.length
+    ? gs.players.map((p) => ({ playerId: p.id, name: p.name, seat: p.seat, userId: p.userId }))
+    : (await loadPlayers(roomId)).map((p) => ({ playerId: p.player_id, name: p.name, seat: p.seat, userId: p.user_id }));
+  return { id: room.id, code: room.code, members };
+}
+
+/** 一則聊天送給同桌四人各自的十三支座位頻道＋每位已同意觀戰者自己的觀戰頻道（事件名稱、格式和麻將一樣：mj_chat） */
+export async function sendChat(room: Pick<ThRoom, "id" | "code"> & { members: Member[] }, spectators: string[], message: ChatMessage): Promise<void> {
+  try {
+    await mjBroadcastBatch(room.code, [
+      ...room.members.map((m) => ({ event: "mj_chat", payload: { playerId: m.playerId, message }, channel: privateChannel(room.id, room.code, m.playerId, m.userId) })),
+      ...spectators.map((u) => ({ event: "mj_chat", payload: { playerId: SPECTATORS, message }, channel: spectatorChannelName(room.code, room.id, u) })),
+    ]);
+  } catch (err) {
+    console.error("[th-chat] 廣播失敗（歷史紀錄已存，重新整理補得回來）：", err instanceof Error ? err.message : err);
+  }
 }
