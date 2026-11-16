@@ -36,8 +36,12 @@ users[A] = { name: "瑋", avatarUrl: null }; users[B] = { name: "K", avatarUrl: 
 for (const [u, n] of [[X, "轉永久"], [Y, "過期"], [Z, "收回"], [Q, "qa開通"], [QN, "qa-名稱"], [QM, "qa信箱"], [W, "新開"]]) users[u] = { name: n, avatarUrl: null };
 for (const u of [BOSS, A, B, E, X, Y, Z, Q, QN, QM, W]) await addUser(u);
 const d = await db();
-const T = (s: string) => Date.parse(s + "+08:00");
-const iso = (s: string) => new Date(T(s)).toISOString();
+// 時間一律相對於「跑測試的現在」：migration 和回滾用資料庫真實的 now() 判斷開通還有沒有效，
+// 以前寫死 2026-11-16 到期，過了那天 M1／M2 就變紅（老柯 2026-11-16 修）。NOW 取整到秒，避免和資料庫時間差毫秒
+const NOW = Math.floor(Date.now() / 1000) * 1000;
+const DAY = 86400_000;
+const T = (days: number) => NOW + days * DAY;   // 相對 NOW 幾天（可以是負的、小數）
+const iso = (days: number) => new Date(T(days)).toISOString();
 const auth = (tok?: string): Record<string, string> => (tok ? { authorization: `Bearer ${tok}` } : {});
 const get = async (fn: (r: Request) => Promise<Response>, url: string, tok?: string) => { const r = await fn(new Request("http://x" + url, { headers: auth(tok) })); return { status: r.status, body: await r.json() }; };
 const post = async (fn: (r: Request) => Promise<Response>, body: object, tok?: string) => { const r = await fn(new Request("http://x", { method: "POST", headers: { "content-type": "application/json", ...auth(tok) }, body: JSON.stringify(body) })); return { status: r.status, body: await r.json() }; };
@@ -47,7 +51,7 @@ const allRows = (u: string) => n("select count(*)::int n from mj_fx_grants where
 const auditN = (u: string, action: string) => n("select count(*)::int n from mj_fx_audit where target_user_id = $1 and action = $2", [u, action]);
 const SIX = { meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null };
 const q = (s: string) => get(playersGet, `/?q=${encodeURIComponent(s)}`, "boss");
-clock.now = T("2026-11-04T12:00:00");
+clock.now = T(0);
 
 // ---- S1 搜尋 ----
 const names = async (s: string) => (await q(s)).body.players.map((p: { name: string }) => p.name);
@@ -70,7 +74,7 @@ eq([g1.status, g1.body, await permRows(A), mine1.selected, mine1.available, set1
 const st = { players: [{ userId: A }] } as unknown as MahjongGameState;
 applyZimoFx(st, await prefetchZimoFx(st));
 const round = JSON.parse(JSON.stringify(st)) as MahjongGameState;
-eq([round.players[0].zimoFx, zimoFxValid(round.players[0].zimoFx ?? undefined, T("2036-01-01T00:00:00")), parseFxExpiry("infinity"), parseFxExpiry("2026-11-15T16:00:00+00:00") === Date.parse("2026-11-15T16:00:00Z")],
+eq([round.players[0].zimoFx, zimoFxValid(round.players[0].zimoFx ?? undefined, T(3650)), parseFxExpiry("infinity"), parseFxExpiry("2026-11-15T16:00:00+00:00") === Date.parse("2026-11-15T16:00:00Z")],
   [{ code: "sakura", until: null }, "sakura", Infinity, true], "P2 永久的特效存進牌局（JSON 來回）是 until null，十年後照樣有效；parseFxExpiry 認得 'infinity' 和一般時間");
 
 // ---- P3 大廳入口 ----
@@ -90,15 +94,16 @@ eq([rv.body.revoked, mine2.available, mine2.selected, deny.status, admin2.active
   "P4 收回：6 列都收回、回到只能預覽（只剩金色）、選風暴 403、自摸金色；紀錄 6 列還在、寫 1 筆操作紀錄；再開通又是 6 列永久（共 12 列）");
 
 // ---- M1 migration ----
-const grant = (u: string, by: string, at: string, exp: string, revoked?: string) => d.query("insert into mj_fx_grants (user_id, fx, granted_by, granted_at, expires_at, revoked_at, revoked_by) values ($1, 'storm', $2, $3, $4, $5, $6)", [u, by, iso(at), iso(exp), revoked ? iso(revoked) : null, revoked ? BOSS : null]);
-await grant(X, BOSS, "2026-11-03T12:00:00", "2026-11-16T00:00:00");
+const EXP = 12; // 有期限開通的到期日：NOW 之後 12 天（還有效）
+const grant = (u: string, by: string, at: number, exp: number, revoked?: number) => d.query("insert into mj_fx_grants (user_id, fx, granted_by, granted_at, expires_at, revoked_at, revoked_by) values ($1, 'storm', $2, $3, $4, $5, $6)", [u, by, iso(at), iso(exp), revoked !== undefined ? iso(revoked) : null, revoked !== undefined ? BOSS : null]);
+await grant(X, BOSS, -1, EXP);
 await d.query("insert into mj_fx_prefs (user_id, fx, updated_at) values ($1, 'storm', now())", [X]);
-await grant(Y, BOSS, "2026-10-01T12:00:00", "2026-10-13T00:00:00");
-await grant(Z, BOSS, "2026-11-03T12:00:00", "2026-11-16T00:00:00", "2026-11-03T13:00:00");
-await grant(Q, "qa-actor-小測", "2026-11-03T12:00:00", "2026-11-16T00:00:00");
-await grant(QN, BOSS, "2026-11-03T12:00:00", "2026-11-16T00:00:00");
+await grant(Y, BOSS, -34, -22);
+await grant(Z, BOSS, -1, EXP, -1 + 1 / 24);
+await grant(Q, "qa-actor-小測", -1, EXP);
+await grant(QN, BOSS, -1, EXP);
 await d.query("update auth.users set raw_user_meta_data = '{\"name\":\"qa-小測\"}' where id = $1", [QN]);
-await grant(QM, BOSS, "2026-11-03T12:00:00", "2026-11-16T00:00:00");
+await grant(QM, BOSS, -1, EXP);
 await d.query("update auth.users set email = 'qa-x@example.com' where id = $1", [QM]);
 const mig = readFileSync(path.join(MIG, "20261106_mahjong_fx_permanent.sql"), "utf8");
 const before = { x: await allRows(X), aud: await n("select count(*)::int n from mj_fx_audit") };
@@ -113,12 +118,12 @@ eq([await permRows(X), oldX, await allRows(X) - before.x, others, audX.map((r) =
   "M1 有效的 X 轉永久：新增 6 列、舊列保留、1 筆操作紀錄；過期 Y、收回 Z、qa 開通者 Q、qa 名稱 QN、qa 信箱 QM 都不轉；已經永久的 A 不多寫");
 const audit1 = await n("select count(*)::int n from mj_fx_audit");
 await d.exec(mig);
-const fxAt = async (u: string, at: string) => { clock.now = T(at); const s = { players: [{ userId: u }] } as unknown as MahjongGameState; applyZimoFx(s, await prefetchZimoFx(s)); return zimoFxValid(s.players[0].zimoFx ?? undefined, clock.now); };
+const fxAt = async (u: string, at: number) => { clock.now = T(at); const s = { players: [{ userId: u }] } as unknown as MahjongGameState; applyZimoFx(s, await prefetchZimoFx(s)); return zimoFxValid(s.players[0].zimoFx ?? undefined, clock.now); };
 await d.query("insert into mj_fx_prefs (user_id, fx, updated_at) values ($1, 'storm', now())", [Q]);
-const qBefore = (await get(fxGet, `/?userId=${Q}`, "boss")).body.active.storm === T("2026-11-16T00:00:00");
-const r1 = [await n("select count(*)::int n from mj_fx_audit") === audit1, await permRows(X), qBefore, await fxAt(Q, "2026-11-15T23:59:59"), await fxAt(Q, "2026-11-16T00:00:00"), await fxAt(X, "2026-12-01T00:00:00")];
-clock.now = T("2026-11-04T12:00:00");
-eq(r1, [true, 6, true, "storm", "golden", "storm"], "M1 重跑不多寫；沒轉的 qa 舊開通還是到 11/16 00:00 前有效、之後回金色；轉永久的 X 到 12 月照樣有效");
+const qBefore = (await get(fxGet, `/?userId=${Q}`, "boss")).body.active.storm === T(EXP);
+const r1 = [await n("select count(*)::int n from mj_fx_audit") === audit1, await permRows(X), qBefore, await fxAt(Q, EXP - 1 / 86400), await fxAt(Q, EXP), await fxAt(X, EXP + 15)];
+clock.now = T(0);
+eq(r1, [true, 6, true, "storm", "golden", "storm"], "M1 重跑不多寫；沒轉的 qa 舊開通還是到原本到期前 1 秒有效、到期那一刻回金色；轉永久的 X 過了原本到期日 15 天照樣有效");
 
 // ---- M2 回滾 ----
 await post(fxPost, { userId: W }, "boss"); // 上線後才開的：只有永久列
