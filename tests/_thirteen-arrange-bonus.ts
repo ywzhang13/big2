@@ -37,8 +37,10 @@ const h2 = parseCards("KS KH KD KC 2C 3D 5H 7S 9C JD 4H 6C 8D TS QH AS");
 const h2b = parseCards("AS AH AD AC KS KH KD KC 2C 3D 5H 7S 9C JD 4H 6D");
 {
   const a = autoArrange(h2), b = autoArrange(h2b);
-  eq([evalFive(a.back).cat, a.back.filter((c) => c.rank === 13).length, evalFive(b.back).cat, evalFive(b.middle).cat, bonus(b), checkArrangement(b).ok],
-    [CAT.FOUR_KIND, 4, CAT.FOUR_KIND, CAT.FOUR_KIND, 6, true],
+  // 兩組鐵支：直接數尾墩有 4 張 A、中墩有 4 張 K（小測 2026-11-18 要求直接斷言位置）
+  eq([evalFive(a.back).cat, a.back.filter((c) => c.rank === 13).length, evalFive(b.back).cat, evalFive(b.middle).cat,
+    b.back.filter((c) => c.rank === 14).length, b.middle.filter((c) => c.rank === 13).length, bonus(b), checkArrangement(b).ok],
+    [CAT.FOUR_KIND, 4, CAT.FOUR_KIND, CAT.FOUR_KIND, 4, 4, 6, true],
     "B2 一組鐵支（四張 K）整組放尾墩不被拆散；兩組鐵支時 A 的放尾墩、K 的放中墩（尾墩鐵支 2＋中墩鐵支 4＝加分 6）");
 }
 // B3：同花順、五龍

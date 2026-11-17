@@ -4,7 +4,9 @@
 //      張數不對（12、14 張）擋 bad_size；重複擋 duplicate_card；不用的 3 張不在排法裡
 //   G3 自動排牌：從 16 張挑出 13 張排好，牌都來自本人、不重複、剛好留下 3 張，不倒水
 //   G4（2026-11-18 起拿掉）：原本斷言「尾道一定是 16 張裡最大的 5 張」；判準改成牌型加分優先後，為了保留衝三等加分，尾道可能不是最大的 5 張（判準的證明見 G7）
-//   G5 隨機 1 萬局（4 萬手 16 張）：自動排牌都不倒水、都是 13 張且來自本人
+//   G5 隨機 1,000 局（4,000 手 16 張）：自動排牌都不倒水、都是 13 張且來自本人
+//      原本的 1 萬局（4 萬手，約 7 分半）移到慢測 tests/slow/thirteen-arrange-10k.ts，不在 npm test 裡；
+//      改到排牌邏輯（lib/thirteen/arrange.ts）時要另外跑 npm run test:slow（阿哲 2026-11-18 裁定）
 //   G6 13 張的自動排牌（舊流程、規則書範例）結果和原本一樣：尾道是最大 5 張、中道是剩下最大 5 張、頭道是最後 3 張
 //   G7「最好的 13 張」判準（阿哲 2026-11-18 拍板）：所有不倒水的排法裡先比牌型加分合計，一樣多再比尾道、中道、頭道（字典序最大）。
 //      拿窮舉所有排法的參考答案（tests/support/thirteen-best-ref.ts）對照：
@@ -73,11 +75,11 @@ const safeAuto = (cs: Card[]) => { try { return autoArrange(cs); } catch (e) { r
   eq(res, [13, 13, true, 3, true], "G3 自動排牌從 16 張挑 13 張：都來自本人、不重複、剛好留 3 張、不倒水（挑哪 13 張的判準見 G7）");
 }
 
-// G5：隨機 1 萬局
+// G5：隨機 1,000 局（1 萬局見 npm run test:slow）
 {
   const r = rng(20261118);
   let hands16 = 0, len16 = 0, bad = 0, notThirteen = 0, notMine = 0, threw = "";
-  for (let g = 0; g < 10000; g++) {
+  for (let g = 0; g < 1000; g++) {
     for (const h of deal(r).hands) {
       hands16++;
       if (h.length === 16) len16++;
@@ -89,7 +91,7 @@ const safeAuto = (cs: Card[]) => { try { return autoArrange(cs); } catch (e) { r
       if (!checkArrangement(a).ok) bad++;
     }
   }
-  eq([hands16, len16, bad, notThirteen, notMine, threw], [40000, 40000, 0, 0, 0, ""], "G5 隨機 1 萬局（4 萬手 16 張）：自動排牌都不倒水、都是本人的 13 張");
+  eq([hands16, len16, bad, notThirteen, notMine, threw], [4000, 4000, 0, 0, 0, ""], "G5 隨機 1,000 局（4,000 手 16 張）：自動排牌都不倒水、都是本人的 13 張（1 萬局是慢測 npm run test:slow）");
 }
 
 // G6：13 張照舊

@@ -57,6 +57,8 @@ interface Arrangement { front: Card[]; middle: Card[]; back: Card[] }  // 頭道
 
 只看自己的牌，不考慮對手。做法：先列出每墩可能拿加分的組合（三條、鐵支、同花順、五龍），每墩「不拿加分」或「拿其中一個」的組合都試；固定好的墩以外，尾道挑剩下最大的、中道再挑剩下最大的、頭道再挑剩下最大的（一樣大的選法每一種都試）；加分上限已經不可能超過目前最好的就跳過。16 張時沒挑到的 3 張不用。結果和窮舉所有不倒水排法的最佳完全相同（`tests/_thirteen-arrange-bonus.ts` B4、`tests/_thirteen-deal16.ts` G7）；伺服器單次計算 2000 手 16 張平均約 10 毫秒、最慢約 100 毫秒（B6）。
 
+**改到排牌邏輯（`arrange.ts` 的 `autoArrange`）時要跑慢測 `npm run test:slow`**（`tests/slow/thirteen-arrange-10k.ts`，約 15 分鐘）：隨機 1 萬局（4 萬手 16 張）都不倒水、都是本人的 13 張，另外把 `tests/_thirteen-random.ts` 跑滿 1 萬局。常規 `npm test` 這兩支都只跑 1,000 局（`_thirteen-deal16.ts` G5、`_thirteen-random.ts`）。
+
 `error` 可能的值，`message` 是可以直接顯示給玩家的中文：
 
 | error | message |

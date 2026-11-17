@@ -1,4 +1,5 @@
-// 十三支計分引擎：1 萬局隨機牌局（固定亂數種子，每次跑都一樣）。
+// 十三支計分引擎：隨機牌局（固定亂數種子，每次跑都一樣）。常規 npm test 跑 1,000 局；
+//   1 萬局是慢測（npm run test:slow 會設 THIRTEEN_RANDOM_N=10000 再跑這支），改到排牌邏輯時要跑（阿哲 2026-11-18 裁定）。
 //   每局：65 張不重複也不遺漏（4 家各 13＋剩 13）；四家自動排牌都不倒水、都通過送出檢查；四家總分 0；
 //   另外隨機切三道（不一定合法）檢查倒水判斷和送出檢查一致；壞的送出（重複 id、別人的牌、張數錯）一定被擋。
 import { deal } from "../lib/thirteen/cards";
@@ -9,7 +10,9 @@ import { CAT } from "../lib/thirteen/hand";
 let seed = 13131313;
 const rng = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
-const N = 10000;
+const N = Number(process.env.THIRTEEN_RANDOM_N ?? 1000);
+// 局數一定要是正整數：負數、0、空字串、非數字、小數、無限大都直接失敗，不要跑 0 局卻顯示全綠（審伯 2026-11-18 建議）
+if (!Number.isSafeInteger(N) || N <= 0) { console.log(`❌ THIRTEEN_RANDOM_N 要是正整數，收到「${process.env.THIRTEEN_RANDOM_N}」`); process.exit(1); }
 const fails: string[] = [];
 let badCards = 0, fouled = 0, rejected = 0, nonZero = 0, homeRuns = 0, guns = 0, fiveKinds = 0, randomFoul = 0, mismatch = 0, badSubmitLeak = 0;
 const ids = (xs: { id: string }[]) => xs.map((c) => c.id);
