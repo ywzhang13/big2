@@ -23,7 +23,7 @@ const sign = (n: number) => Math.sign(n);
     const { hands, rest } = deal();
     const ids = [...hands.flat(), ...rest].map((c) => c.id);
     info = `${ids.length} 張、不重複 ${new Set(ids).size}`;
-    ok = ids.length === 65 && new Set(ids).size === 65 && hands.every((h) => h.length === 13) && rest.length === 13;
+    ok = ids.length === 65 && new Set(ids).size === 65 && hands.every((h) => h.length === 16) && rest.length === 1; // 2026-11-18 加一色每人 16 張、剩 1 張
     shuffle([1, 2, 3, 4, 5]);
   } catch (e) { ok = false; info = (e as Error).message; }
   Math.random = orig;

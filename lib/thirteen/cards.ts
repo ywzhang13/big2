@@ -58,10 +58,13 @@ export function shuffle<T>(xs: readonly T[], rng?: () => number): T[] {
   return a;
 }
 
-/** 洗 65 張、4 家各發 13 張；剩下 13 張收起（不公開、不續用）。rng 同 shuffle，只給測試用 */
+/** 每人發幾張（老闆 2026-11-18 拍板：加一色每人 16 張，自己挑 13 張理牌，另外 3 張不用、不公開） */
+export const HAND_SIZE = 16;
+
+/** 洗 65 張、4 家各發 16 張；剩下 1 張收起（不公開、不續用）。rng 同 shuffle，只給測試用 */
 export function deal(rng?: () => number): { hands: Card[][]; rest: Card[] } {
   const d = shuffle(buildDeck(), rng);
-  return { hands: [0, 1, 2, 3].map((i) => d.slice(i * 13, i * 13 + 13)), rest: d.slice(52) };
+  return { hands: [0, 1, 2, 3].map((i) => d.slice(i * HAND_SIZE, (i + 1) * HAND_SIZE)), rest: d.slice(4 * HAND_SIZE) };
 }
 
 /** 文字寫法 → 牌（測試、除錯用）："AS" "TD" "9H"；同一手裡第二次出現的黑桃自動當第 2 副 */

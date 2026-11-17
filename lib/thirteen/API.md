@@ -26,7 +26,7 @@ interface Card { id: string; suit: "S" | "H" | "D" | "C"; rank: number; deck: 1 
 | 函式 | 說明 |
 |---|---|
 | `buildDeck(): Card[]` | 回傳 65 張牌：一副 52 張，再加第二副黑桃 13 張 |
-| `deal(rng?): { hands: Card[][]; rest: Card[] }` | 洗牌後發 4 家，每家 13 張；`rest` 是剩下的 13 張，收起來、不公開 |
+| `deal(rng?): { hands: Card[][]; rest: Card[] }` | 洗牌後發 4 家，每家 16 張（`HAND_SIZE`）；`rest` 是剩下的 1 張，收起來、不公開。老闆 2026-11-18：加一色每人 16 張，自己挑 13 張理牌，另外 3 張不用 |
 | `shuffle(xs, rng?)` | Fisher-Yates 洗牌 |
 | `secureRandomInt(n)` | 回傳 0～n−1 的密碼學安全隨機整數，洗牌預設用它 |
 
@@ -45,10 +45,10 @@ interface Arrangement { front: Card[]; middle: Card[]; back: Card[] }  // 頭道
 | 函式 | 說明 |
 |---|---|
 | `checkArrangement(a)` | **前端用來決定能不能按送出。** 合法時回 `{ ok: true, values: { front, middle, back } }`，每一道是 `{ cat, keys }`；不合法時回 `{ ok: false, error, message }` |
-| `validateSubmission(dealt, input: unknown)` | **後端收到送出時要再擋一次。** `input` 可以直接放網路送來、還沒驗證過的內容，函式自己會先檢查格式：必須是物件，`front`、`middle`、`back` 三道都是陣列，裡面每個元素都是字串。任何格式錯誤都回 `bad_input`，不會丟錯。格式對了才接著檢查張數是不是 3／5／5、有沒有重複的 id、送來的牌是不是發給這位玩家的、有沒有倒水。通過時回 `{ ok: true, arrangement }` |
-| `autoArrange(cards)` | 理牌時間到了（30／45／60 秒）時呼叫，自動排出一組不倒水的組合 |
+| `validateSubmission(dealt, input: unknown)` | **後端收到送出時要再擋一次。** `dealt` 是這位玩家的 16 張；送出的 13 張每一張都要在裡面，沒送的 3 張就是不用的。 `input` 可以直接放網路送來、還沒驗證過的內容，函式自己會先檢查格式：必須是物件，`front`、`middle`、`back` 三道都是陣列，裡面每個元素都是字串。任何格式錯誤都回 `bad_input`，不會丟錯。格式對了才接著檢查張數是不是 3／5／5、有沒有重複的 id、送來的牌是不是發給這位玩家的、有沒有倒水。通過時回 `{ ok: true, arrangement }` |
+| `autoArrange(cards)` | 理牌時間到了（或斷線）時呼叫，從 16 張（也收 13 張）裡挑 13 張排出一組不倒水的組合，沒挑到的就是不用的牌 |
 
-`autoArrange` 的做法：先從 13 張裡挑最大的 5 張當尾道，再從剩下的 8 張挑最大的 5 張當中道，最後 3 張當頭道。這個排法一定不會倒水，但它只是保底，不會去追求最高分。
+`autoArrange` 排出的是「最好」的三墩：在所有不倒水的排法裡先比尾道、再比中道、再比頭道，取最大的（字典序最大）。只看自己的牌，不考慮對手，也不另外追特殊加分。做法是尾道挑最大的 5 張、中道挑剩下最大的 5 張、頭道挑再剩下最大的 3 張；一樣大的選法（例如葫蘆用哪幾張 K）每一種都試，取最好的一組。16 張時沒挑到的 3 張不用。已和窮舉所有排法的結果對照過（`tests/_thirteen-deal16.ts` G7）。
 
 `error` 可能的值，`message` 是可以直接顯示給玩家的中文：
 

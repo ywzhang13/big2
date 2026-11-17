@@ -111,12 +111,12 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   for (const p of PIDS) hands.push((await state(m1.roomId, p, p)).body.me.hand);
   const rest = (await db.query<{ r: Card[] }>(`select game_state->'rest' r from th_rooms where id = $1`, [m1.roomId])).rows[0].r;
   const all = [...hands.flat(), ...rest].map((c) => c.id);
-  eq([hands.map((h) => h.length), rest.length, new Set(all).size, s0.body.phase, s0.body.handNo], [[13, 13, 13, 13], 13, 65, "arranging", 1],
-    "D1 開局發牌：65 張、每人 13 張不重複，剩下 13 張留在伺服器");
+  eq([hands.map((h) => h.length), rest.length, new Set(all).size, s0.body.phase, s0.body.handNo], [[16, 16, 16, 16], 1, 65, "arranging", 1],
+    "D1 開局發牌：65 張、每人 16 張不重複，剩下 1 張留在伺服器（2026-11-18 加一色每人 16 張挑 13 張）");
   const deal = sent.filter((e) => e.event === "th_deal_hand");
   const lastDeal = deal.slice(-4);
   eq(lastDeal.map((e) => [e.channel === privateChannel(m1.roomId, m1.code, e.payload.playerId as string, uid(PIDS.indexOf(e.payload.playerId as string))), (e.payload.hand as Card[]).length]),
-    PIDS.map(() => [true, 13]), "D2 每家的 13 張只送到自己的座位頻道");
+    PIDS.map(() => [true, 16]), "D2 每家的 16 張只送到自己的座位頻道");
   const pub = sent.filter((e) => e.channel === publicChannel(m1.code));
   const leakPub = pub.some((e) => all.some((id) => JSON.stringify(e.payload).includes(`"${id}"`)));
   eq([pub.some((e) => e.event === "th_hand_start"), leakPub, JSON.stringify(s0.body).includes(`"${rest[0].id}"`)], [true, false, false],
@@ -267,8 +267,10 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const { sv: _sv, ...liveReveal } = (live ?? {}) as Record<string, unknown>; // 即時廣播多帶存檔版本號 sv（前端補抓用），不屬於亮牌內容
   eq([!!live, typeof _sv, stable(fh) === stable(liveReveal)], [true, "number", true],
     "S4 紀錄裡的最後一局和當時即時廣播的亮牌（th_reveal，扣掉版本號 sv）逐欄一模一樣：三墩、翻牌順序、結算、累計、代排名單");
-  eq([stable(perSeat), arrs.map((a) => [a.front.length, a.middle.length, a.back.length])], [stable(hands3), [[3, 5, 5], [3, 5, 5], [3, 5, 5], [3, 5, 5]]],
-    "S4 每一家的三墩（頭 3、中 5、尾 5）正好是那一家這局發到的 13 張，沒有混到別家的牌");
+  // 2026-11-18 加一色每人 16 張：三墩是從自己 16 張裡挑的 13 張（另外 3 張不用）
+  eq([perSeat.map((ids, i) => ids.length === 13 && new Set(ids).size === 13 && ids.every((id) => (hands3[i] as string[]).includes(id))), arrs.map((a) => [a.front.length, a.middle.length, a.back.length])],
+    [[true, true, true, true], [[3, 5, 5], [3, 5, 5], [3, 5, 5], [3, 5, 5]]],
+    "S4 每一家的三墩（頭 3、中 5、尾 5）共 13 張，全部是那一家這局發到的 16 張裡的牌，沒有混到別家的牌、沒有重複");
   eq([stable(fh?.result), stable(fh?.order)], [stable(recomputed), stable(arrs.length === 4 ? revealOrder(arrs) : null)],
     "S4 用紀錄裡的四家三墩重新給引擎算：6 組結算（每墩勝負、加分、打槍）、全壘打、本局分、翻牌順序都和紀錄裡的一模一樣");
 }
@@ -370,7 +372,7 @@ const duel = async (a: Ex, b: Ex) => {
   const v = (await state(m.roomId, "p3", "p3")).body;
   const h1 = v.history[0].totals;
   eq([r, twice.body.handNo, last.body.handNo, v.phase, v.me.hand.length, v.playerScores, v.history.length],
-    [[1, 1, 1], 1, 2, "arranging", 13, h1, 1], "N3 亮牌後四家都按下一局才開（重複按不算兩次）；新的一局重新發 13 張、每一家的累計＝第 1 局自己的分數（逐家比對）");
+    [[1, 1, 1], 1, 2, "arranging", 16, h1, 1], "N3 亮牌後四家都按下一局才開（重複按不算兩次）；新的一局重新發 16 張、每一家的累計＝第 1 局自己的分數（逐家比對）");
 }
 
 // ---------- S1 座位頻道綁這一場和座位主人（審伯必修 1） ----------
