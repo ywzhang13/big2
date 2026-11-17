@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from "../supabase-admin";
 import { MahjongGameState, Meld, PlayerState, WinFx } from "./gameState";
 import { Tile } from "./tiles";
 import { cacheGameState, getCachedGameState } from "./cache";
-import { allHands, chiForbiddenKeys, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
+import { allHands, chiForbiddenBy, chiForbiddenKeys, eyeDiscardOptions, canDeclareTingNow, getAvailableActions, ownTurnActions } from "./gameLogic";
 import { opponentHands } from "./events";
 import { recordZimoWins } from "./donate/record";
 import { afterSave as saveReplayAfter, beforeSave as stepReplayBefore } from "./replay/record";
@@ -458,6 +458,7 @@ export function toPlayerGameState(
   myDrawnTileId?: number;
   opponentHands?: ReturnType<typeof opponentHands>;
   chiForbidden?: string[];
+  chiForbiddenBy?: "chi" | "pong" | null;
 } {
   const pub = toPublicGameState(state);
   const player = state.players.find((p) => p.id === playerId);
@@ -513,8 +514,10 @@ export function toPlayerGameState(
     hand,
     myAvailableActions,
     myDrawnTileId,
-    // 食替：輪到我、剛吃完時，這次不能打的牌種（tileKey，例如 "s5"）；平常是空陣列。只在本人的 state 裡
+    // 食替／碰牌限制：輪到我、剛吃或剛碰完時，這次不能打的牌種（tileKey，例如 "s5"）；平常是空陣列。只在本人的 state 裡
     chiForbidden: player ? chiForbiddenKeys(state, player.seat) : [],
+    // 限制是吃（"chi"）還是碰（"pong"）造成的，前端用來選提示文字；沒有限制是 null
+    chiForbiddenBy: player ? chiForbiddenBy(state, player.seat) : null,
     // 眼牌的人才看得到三家手牌（只在本人的 state 裡）
     ...(player && state.status === "playing" && state.eyeSeats?.includes(player.seat)
       ? { opponentHands: opponentHands(state, player.seat) }

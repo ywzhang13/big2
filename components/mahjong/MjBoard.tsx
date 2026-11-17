@@ -17,7 +17,7 @@ import { tileKey } from "@/lib/mahjong/tiles";
 import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
 import { MjAvatar, MjTingStrip } from "./MjTingStrip";
 import SpectateBadge from "./spectate/SpectateBadge";
-import { CHI_FORBID_HINT, useChiHint } from "@/lib/mahjong/chiForbid";
+import { forbidHint, useChiHint } from "@/lib/mahjong/chiForbid";
 
 export interface MjBoardProps {
   players: MjPlayer[];
@@ -35,7 +35,8 @@ export interface MjBoardProps {
   eyeSeats: number[];
   eyeOptions: number[]; // 這次打牌可以一起宣告眼牌的牌
   eyeWithTing: boolean;
-  chiForbidden?: string[]; // 剛吃完這一輪不能打的牌型（例如 "s5"）
+  chiForbidden?: string[]; // 剛吃、碰完這一輪不能打的牌型（例如 "s5"）
+  chiForbiddenBy?: "chi" | "pong"; // 限制是吃還是碰造成的（提示文字用）
   opponentHands: MjOpponentHand[] | null; // 我眼牌時才有
   declareFx: { seat: number; both: boolean }[]; // 正在播宣告特效的座位
   wallRemaining: number;
@@ -477,6 +478,7 @@ export default function MjBoard({
   eyeSeats,
   eyeOptions,
   chiForbidden = [],
+  chiForbiddenBy = "chi",
   opponentHands,
   declareFx,
   wallRemaining,
@@ -797,7 +799,7 @@ export default function MjBoard({
                 return <span className="text-white/40 text-xs">等待其他玩家...</span>;
               }
               if (isMyTurn && chiHint && needsDiscard) {
-                return <span className="text-[#f0d68a] font-bold text-sm" data-chi-hint>{CHI_FORBID_HINT}</span>;
+                return <span className="text-[#f0d68a] font-bold text-sm" data-chi-hint>{forbidHint(chiForbiddenBy)}</span>;
               }
               if (isMyTurn) {
                 return (

@@ -4,7 +4,7 @@
 //   A3 打八條：400、reason chi_forbidden，狀態完全不變、沒有廣播；打別的牌 200
 //   A4 打完之後 chiForbidden 回到空陣列
 //   A5 吃完沒有能打的牌的吃法：不在選項裡；硬送 400 chi_not_allowed、狀態不變
-//   A6 碰：回應和狀態的 chiForbidden 都是空陣列
+//   A6 碰：沒有食替（順子）限制，只有碰的那種牌這輪不能打（chiForbidden [s5]、來源 pong；2026-11-18，詳見 flow-pong-forbid.ts）
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { GET as stateGet } from "../../app/api/mahjong/state/route";
@@ -82,8 +82,8 @@ function eq(a: unknown, e: unknown, msg: string) {
 {
   setup("s5 s5 s6 s7 s8 m3 m5 m7 p1 p3 p5 z1 z2 z3 z4 z5", "s5");
   const r = await call(action, { playerId: "p1", actionType: "pong", tiles: [st().players[1].hand[0].id, st().players[1].hand[1].id] });
-  eq([r.status, r.body.chiForbidden, (await state("p1")).chiForbidden, (await call(discard, { playerId: "p1", tileId: idOf(1, "s8") })).status], [200, [], [], 200],
-    "A6 碰五條：chiForbidden 都是空陣列，八條照打");
+  eq([r.status, r.body.chiForbidden, r.body.chiForbiddenBy, (await state("p1")).chiForbidden, (await call(discard, { playerId: "p1", tileId: idOf(1, "s8") })).status], [200, ["s5"], "pong", ["s5"], 200],
+    "A6 碰五條：沒有食替的順子限制（八條照打），只有五條這輪不能打（來源 pong）");
 }
 
 console.log(results.join("\n"));

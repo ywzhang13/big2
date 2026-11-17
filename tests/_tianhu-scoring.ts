@@ -1,6 +1,7 @@
 // 2026-10-21 老闆規則：天胡不另算門清、自摸、門清自摸，其他台（三暗刻、清一色、四喜、碰碰胡、三元牌、獨聽…）照一般規則算。
 //   T1 固定種子產生 2000 手各式胡牌：非天胡的每一手，台數和台名都和改前（fixtures 基準檔）完全一樣
 //   T2 同一批裡的天胡：剛好等於改前的結果拿掉門清、自摸、門清自摸，其他台一個不少
+//   T8（2026-11-18 暗槓不破壞門清）：副露只有暗槓的手，門清、門清自摸照新規則改；其他手一手都沒變
 //   T3 指定牌型：天胡疊獨聽、三元牌、清一色、碰碰胡、暗刻、大小四喜照算，沒有門清、自摸
 //   T5 河底撈魚（2026-10-21 新增）只出現在「最後一張＋胡別人打的牌」的手，其他台不變
 //   T4 真實結算流程（declareWin）：連 2 拉 2 照加；結算照自摸三家付；整場統計、斗內共用的自摸判斷照樣算自摸
@@ -105,9 +106,27 @@ if (process.env.WRITE_GOLDEN) {
   const explained = (i: number) => out[i] === golden[i] || (isLiguHand(cases[i].concealed, 0) && out[i].includes("嚦咕嚦咕8")) || out[i] === noDuting(golden[i]);
   eq([lg.length, lg.every(explained)], [lg.length, true],
     `T7 嚦咕嚦咕：2000 手裡只有 ${lg.length} 手牽涉嚦咕嚦咕（${lg.map((i) => `#${i} ${golden[i]} → ${out[i]}`).join("；")}）：整手是嚦咕嚦咕的取台數高的拆法，多聽一張嚦咕嚦咕的不再算獨聽；其他手和改前完全一樣（T1）`);
+  // 2026-11-18 暗槓不破壞門清（老闆）：基準檔是改之前產的。副露只有暗槓的手：胡別人的牌多 1 台門清；自摸的「自摸 1」改成「門清自摸 3」
+  // （地聽本來就不另算門清，維持原樣）。這些手比對時不看台名順序，T8 另外驗只有這些手變了
+  const kongOnly = (c: ScoringContext) => c.revealed.length > 0 && c.revealed.every((m) => m.type === "concealed_kong");
+  const menqingAdj = (g: string, c: ScoringContext) => {
+    const f = g.split("|")[1].split(",").filter(Boolean);
+    if (f.includes("地聽8")) return g;
+    if (c.isSelfDraw) f.splice(f.indexOf("自摸1"), 1, "門清自摸3"); else f.push("門清1");
+    return `${f.reduce((n, x) => n + Number(x.match(/\d+$/)![0]), 0)}|${f.join(",")}`;
+  };
+  const sorted = (g: string) => { const [n, f] = g.split("|"); return `${n}|${f.split(",").sort().join(",")}`; };
+  const kongAdjusted = non.filter((i) => kongOnly(cases[i]));
+  const expectOf = (i: number) => (kongOnly(cases[i]) ? sorted(menqingAdj(golden[i], cases[i])) : golden[i]);
+  const gotOf = (i: number) => (kongOnly(cases[i]) ? sorted(out[i]) : out[i]);
+  const diffAfter = non.filter((i) => gotOf(i) !== expectOf(i));
+  const kongChanged = kongAdjusted.filter((i) => out[i] !== golden[i]);
+  eq([kongAdjusted.length > 50, kongChanged.length, kongAdjusted.filter((i) => !golden[i].includes("地聽8")).length, non.filter((i) => !kongOnly(cases[i]) && out[i] !== golden[i]).length],
+    [true, kongChanged.length, kongChanged.length, 0],
+    `T8 暗槓不破壞門清：非天胡、副露只有暗槓的 ${kongAdjusted.length} 手裡，${kongChanged.length} 手（全部不是地聽的手）胡別人多 1 台門清、自摸的自摸 1 改成門清自摸 3；其他手一手都沒變`);
   const names = new Set(non.flatMap((i) => out[i].split("|")[1].split(",").map((f) => f.replace(/\d+$/, "")).filter(Boolean)));
-  eq([golden.length, diff.length, diff.slice(0, 3).map((i) => [i, golden[i], out[i]])], [cases.length, 0, []],
-    `T1 非天胡 ${non.length} 手（含地胡、地聽、門清自摸、獨聽、平胡、四喜、八仙等 ${names.size} 種台）：台數、台名和改前完全一樣`);
+  eq([golden.length, diffAfter.length, diffAfter.slice(0, 3).map((i) => [i, expectOf(i), gotOf(i)])], [cases.length, 0, []],
+    `T1 非天胡 ${non.length} 手（含地胡、地聽、門清自摸、獨聽、平胡、四喜、八仙等 ${names.size} 種台）：台數、台名和改前完全一樣（副露只有暗槓的手照 2026-11-18 新規則調整後比對，見 T8）`);
   const th = cases.map((c, i) => i).filter((i) => isTianhu(cases[i]));
   // 門清、自摸、門清自摸只看整手（不看拆法），每種拆法都少一樣的台，選到的拆法不變：改後應該剛好等於改前拿掉這三種台
   const strip = (g: string) => { const [, f] = g.split("|"); const kept = f.split(",").filter((x) => x && !TIANHU_DROPS.includes(x.replace(/\d+$/, ""))); return `${kept.reduce((n, x) => n + Number(x.match(/\d+$/)![0]), 0)}|${kept.join(",")}`; };

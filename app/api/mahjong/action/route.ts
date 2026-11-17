@@ -30,6 +30,7 @@ import {
   markGuoShuiOnPass,
   markPongPassOnPass,
   claimBlockReason,
+  chiForbiddenBy,
   chiForbiddenKeys,
 } from "@/lib/mahjong/gameLogic";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
@@ -585,8 +586,9 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
         drawnTileId,
         eyeOptions: eyeDiscardOptions(newState, seat).map((t) => t.id),
         eyeWithTing: canDeclareTingNow(newState, seat),
-        // 食替：吃完這次不能打的牌種（碰、槓是空陣列）
+        // 食替／碰牌限制：吃、碰完這次不能打的牌種（槓是空陣列），和限制是吃還是碰造成的（提示文字用）
         chiForbidden: chiForbiddenKeys(newState, seat),
+        chiForbiddenBy: chiForbiddenBy(newState, seat),
         // 暗槓：自己的吃碰槓（有牌面）。公開的 mj_action 是蓋著的，前端拿這份換掉自己那一副
         ...(lastMeld.type === "concealed_kong" ? { myRevealed: updatedPlayer.revealed } : {}),
       },
@@ -598,5 +600,5 @@ async function handleAction(request: Request, body: unknown, fresh: boolean, bud
   ], sv);
   if (auto.finished) await closeMahjongIfOver(roomId, room.code, newState); // 整場打完：寫紀錄後關房
 
-  return Response.json({ success: true, chiForbidden: chiForbiddenKeys(newState, seat) });
+  return Response.json({ success: true, chiForbidden: chiForbiddenKeys(newState, seat), chiForbiddenBy: chiForbiddenBy(newState, seat) });
 }

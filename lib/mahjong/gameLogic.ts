@@ -132,7 +132,7 @@ function chiLeavesDiscard(hand: Tile[], use: Tile[]): boolean {
 }
 
 /**
- * 輪到 seat 打牌時不能打的牌種（剛吃完才有，平常是空陣列）。
+ * 輪到 seat 打牌時不能打的牌種（剛吃或剛碰完才有，平常是空陣列）。
  * 保險：萬一手上全部都是禁打的牌（例如資料被手動改過），就不限制，免得卡局
  */
 export function chiForbiddenKeys(state: MahjongGameState, seat: number): string[] {
@@ -142,10 +142,19 @@ export function chiForbiddenKeys(state: MahjongGameState, seat: number): string[
   return hand.some((t) => !f.keys.includes(tileKey(t))) ? f.keys : [];
 }
 
-/** 打出這張是不是被食替擋下 */
+/** 打出這張是不是被食替（吃）或碰牌限制擋下 */
 export function isChiForbidden(state: MahjongGameState, seat: number, tile: Tile): boolean {
   return chiForbiddenKeys(state, seat).includes(tileKey(tile));
 }
+
+/** 現在的打牌限制是吃還是碰造成的（給提示文字用）；沒有限制回 null */
+export function chiForbiddenBy(state: MahjongGameState, seat: number): "chi" | "pong" | null {
+  return chiForbiddenKeys(state, seat).length ? state.chiForbid?.by ?? "chi" : null;
+}
+
+/** 打了被限制的牌時的錯誤訊息（吃、碰分開；吃的照舊） */
+export const forbiddenDiscardMessage = (by: "chi" | "pong" | null) =>
+  by === "pong" ? "剛碰的牌，這輪不能打" : "吃完這輪不能打出和吃的那兩張湊成順子的牌";
 
 /**
  * 剛摸進（或補進）手牌的那張：hand 最後一張（補花後也是最後補進的那張）。
@@ -683,11 +692,11 @@ export function discardTile(
     throw new Error("Tile not in hand");
   }
   if (isChiForbidden(s, s.currentTurn, player.hand[tileIndex])) {
-    throw new Error("吃完這輪不能打出和吃的那兩張湊成順子的牌");
+    throw new Error(forbiddenDiscardMessage(chiForbiddenBy(s, s.currentTurn)));
   }
 
   const [discarded] = player.hand.splice(tileIndex, 1);
-  s.chiForbid = undefined; // 食替只管吃完後的這一次出牌
+  s.chiForbid = undefined; // 食替、碰牌限制只管吃碰完後的這一次出牌
   player.discards.push(discarded);
   s.lastDiscard = { tile: discarded, from: s.currentTurn };
   s.hasDrawn = false;
@@ -878,7 +887,7 @@ export function executeAction(
     s.drawnTileId = undefined;
     s.lastDiscard = null;
     s.isAfterKong = false;
-    s.chiForbid = { seat: action.playerSeat, keys: chiForbiddenKeysFor(t1, t2) };
+    s.chiForbid = { seat: action.playerSeat, keys: chiForbiddenKeysFor(t1, t2), by: "chi" };
   } else if (action.type === "pong") {
     if (!action.tiles || action.tiles.length < 2) {
       throw new Error("Pong requires at least 2 tiles from hand");
@@ -900,6 +909,9 @@ export function executeAction(
     s.drawnTileId = undefined;
     s.lastDiscard = null;
     s.isAfterKong = false;
+    // 碰牌限制（老闆 2026-11-18）：碰完這一輪不能打碰的那種牌（例：碰八筒，這輪不能打手上剩的八筒）。
+    // 碰完手上一定還有別的牌（碰後手牌 14／11／8／5／2 張，同種牌最多剩 1 張）；萬一都是同種牌，chiForbiddenKeys 會不限制
+    s.chiForbid = { seat: action.playerSeat, keys: [tileKey(disc)], by: "pong" };
   } else if (action.type === "kong") {
     if (action.playerSeat === nextSeat(s.lastDiscard.from)) {
       throw new Error("上家打的牌不能明槓");

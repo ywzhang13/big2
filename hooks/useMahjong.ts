@@ -17,7 +17,7 @@ import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./room
 import { authHeaders, mjStorage } from "@/lib/mahjong/clientAuth";
 import { receiveFx, setFxRoom, type FxEvent } from "@/lib/mahjong/fx/transport";
 import { receiveChat, type ChatMessage } from "@/lib/mahjong/chatClient";
-import { chiKinds } from "@/lib/mahjong/chiForbid";
+import { chiKinds, forbidBy } from "@/lib/mahjong/chiForbid";
 
 /** 兩組按鈕一樣（種類和牌都一樣）：沿用舊的，不換掉陣列 */
 function sameActions(a: { type: string; tiles?: Tile[] }[], b: { type: string; tiles?: Tile[] }[]): boolean {
@@ -166,6 +166,8 @@ export interface MjClientState {
   eyeWithTing: boolean;
   // 剛吃完、輪到我打牌時，不能打的牌型（和吃牌用的兩張湊成順子的牌，例如 "s5"；格式同 tileKind）；空陣列＝沒有限制
   chiForbidden: string[];
+  // chiForbidden 是吃還是碰造成的（只用來選提示文字；chiForbidden 是空陣列時沒有意義）
+  chiForbiddenBy: "chi" | "pong";
   // 我眼牌時才有：其他三家的手牌（暗槓含牌面）；null＝沒有資料，照舊畫牌背
   opponentHands: MjOpponentHand[] | null;
   // 正在播宣告特效的座位（播完自動移除）；both＝第一輪眼牌同時地聽（MIGI）
@@ -267,6 +269,7 @@ export function useMahjong(
     eyeOptions: [],
     eyeWithTing: false,
     chiForbidden: [],
+    chiForbiddenBy: "chi",
     opponentHands: null,
     declareFx: [],
     flowerFx: [],
@@ -699,6 +702,7 @@ export function useMahjong(
         eyeWithTing: polledEye ? polledEye.ting === true : gs.myAvailableActions ? false : stillMyDiscard ? prev.eyeWithTing : false,
         // 吃牌限制：伺服器的牌局狀態為準（剛吃完、輪到我打牌時才有）
         chiForbidden: chiKinds((gs as { chiForbidden?: unknown }).chiForbidden),
+        chiForbiddenBy: forbidBy((gs as { chiForbiddenBy?: unknown }).chiForbiddenBy),
         // 一局結束後 state 會帶四家手牌（allHands）；舊版沒有就保留廣播收到的
         winner: gs.winner
           ? {
@@ -908,14 +912,15 @@ export function useMahjong(
 
       // --- mj_hand_update (private, after action) ---
       onHeld(ch, "mj_hand_update", ({ payload }) => {
-        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing, chiForbidden, myRevealed } = payload as {
+        const { playerId, hand, drawnTileId, eyeOptions, eyeWithTing, chiForbidden, chiForbiddenBy, myRevealed } = payload as {
           playerId: string;
           hand: Tile[];
           myRevealed?: Meld[]; // 自己暗槓時才有：自己的吃碰槓（有牌面）
           drawnTileId?: number;
           eyeOptions?: number[]; // 吃、碰後要打牌：可以一起宣告眼牌的牌
           eyeWithTing?: boolean;
-          chiForbidden?: unknown; // 吃完後這一輪不能打的牌型
+          chiForbidden?: unknown; // 吃、碰完後這一輪不能打的牌型
+          chiForbiddenBy?: unknown; // "chi"／"pong"
         };
         if (playerId !== myId) return;
         if (myRevealed) myRevealedRef.current = myRevealed;
@@ -934,6 +939,7 @@ export function useMahjong(
           drawnTileId: drawnTileId ?? null,
           ...(eyeOptions ? { eyeOptions, eyeWithTing: eyeWithTing === true } : {}),
           chiForbidden: chiKinds(chiForbidden),
+          chiForbiddenBy: forbidBy(chiForbiddenBy),
           // 跟上面的 invalidate() 一起：萬一真的作廢了一段還沒播完的動畫，flowerAnimating／flowerLabel
           // 要跟著歸零，不然 needsDiscard 會卡在 false，玩家收到這份權威手牌後反而不能打牌
           flowerAnimating: false,
