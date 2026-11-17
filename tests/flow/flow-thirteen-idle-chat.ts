@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { requestSpectate, respondSpectate } from "../support/stub-spectate-store";
@@ -53,7 +53,8 @@ async function get(fn: (r: Request) => Promise<Response>, q: string, as?: string
 const state = (roomId: string, as: string) => get(stateRoute, `roomId=${roomId}&playerId=${as}`, as);
 const ids = (cs: Card[]) => cs.map((c) => c.id);
 async function newMatch(seats: string[] = PIDS, totalHands = 16) {
-  const c = await post(createRoute, { hostId: seats[0], arrangeSec: 30, totalHands }, seats[0]);
+  const c = await post(createRoute, { hostId: seats[0], arrangeSec: 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, seats[0]);
+  if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
   for (const [i, p] of seats.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   await post(startRoute, { roomId: c.body.roomId, playerId: seats[0] }, seats[0]);
   return { roomId: c.body.roomId as string, code: c.body.code as string };
@@ -289,7 +290,8 @@ const mc = await newMatch(PIDS, 4);
 }
 {
   // 訪客坐在桌上：讀得到、不能送
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 2 }, "p0");
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 8 }, "p0");
+  await setTotalHands(db, c.body.roomId, 2); // 開房只能選 8／16／32；這裡照舊房的方式改成 2 局
   await post(joinRoute, { code: c.body.code, playerId: "p0", name: "玩家0" }, "p0");
   await post(joinRoute, { code: c.body.code, playerId: "g1", name: "訪客" }, "guest");
   const gRead = await get(historyRoute, `roomId=${c.body.roomId}`, "guest");

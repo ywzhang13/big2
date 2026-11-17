@@ -12,6 +12,11 @@ import { matchStats, type HandStat } from "./flow";
 /** 開房可以選的理牌時間（秒）：最少 15 秒、15 秒一階、最多 120 秒（老闆 2026-11-18；原本只有 30／45／60，舊房間照樣有效） */
 export const ARRANGE_SECS = [15, 30, 45, 60, 75, 90, 105, 120] as const;
 export const ARRANGE_SEC_MESSAGE = "理牌時間要是 15～120 秒，每 15 秒一階（15、30、45、60、75、90、105、120）";
+
+/** 開房可以選的局數（老闆 2026-11-18：8、16、32 局）。只在開房時檢查；已經開的房照它原本的設定打完 */
+export const TOTAL_HANDS = [8, 16, 32] as const;
+export const isTotalHands = (x: unknown): x is (typeof TOTAL_HANDS)[number] => TOTAL_HANDS.includes(x as (typeof TOTAL_HANDS)[number]);
+export const TOTAL_HANDS_MESSAGE = "局數只能選 8、16 或 32 局";
 export type ArrangeSec = (typeof ARRANGE_SECS)[number];
 export const isArrangeSec = (x: unknown): x is ArrangeSec => ARRANGE_SECS.includes(x as ArrangeSec);
 

@@ -6,7 +6,7 @@
 //   F5 紀錄：整場打完寫進對局紀錄的最後一局（finalHand）、關房後回的 410 紀錄，都沒有任何人不用的 3 張和沒發的那張
 //   F6 觀戰（小測 2026-11-18 補驗）：被同意的觀戰者直接讀觀戰畫面 /api/thirteen/spectate/view——
 //      亮牌前 65 張一張都沒有；亮牌後只有四家三墩的 52 張，四家不用的 3 張和沒發的那張都沒有
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { POST as createRoute } from "../../app/api/thirteen/create/route";
@@ -45,7 +45,8 @@ async function state(roomId: string, as: string, playerId: string | null = as) {
 const ids = (cs: Card[]) => cs.map((c) => c.id);
 const leaks = (x: unknown, idList: string[]) => idList.filter((id) => JSON.stringify(x).includes(`"${id}"`));
 async function newMatch(totalHands: number) {
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands }, "p0");
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, "p0");
+  if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
   for (const [i, p] of PIDS.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   sent.length = 0;
   await post(startRoute, { roomId: c.body.roomId, playerId: "p0" }, "p0");

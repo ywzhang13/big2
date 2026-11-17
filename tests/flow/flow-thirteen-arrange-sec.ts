@@ -25,7 +25,7 @@ async function post(fn: (r: Request) => Promise<Response>, body: object, as: str
   const r = await fn(new Request("http://x", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer tk-${as}` }, body: JSON.stringify(body) }));
   return { status: r.status, body: await r.json() };
 }
-const create = (arrangeSec: unknown) => post(createRoute, { hostId: "p0", arrangeSec, totalHands: 2 }, "p0");
+const create = (arrangeSec: unknown) => post(createRoute, { hostId: "p0", arrangeSec, totalHands: 8 }, "p0");
 const savedSec = async (roomId: string) => (await db.query<{ s: number }>(`select (game_state->'settings'->>'arrangeSec')::int s from th_rooms where id = $1`, [roomId])).rows[0]?.s;
 const MSG = "理牌時間要是 15～120 秒，每 15 秒一階（15、30、45、60、75、90、105、120）";
 
@@ -41,7 +41,7 @@ const MSG = "理牌時間要是 15～120 秒，每 15 秒一階（15、30、45�
   const bad: unknown[] = [0, 10, 14, 20, 121, 135, "30", 15.5, -15, null];
   const got = [];
   for (const s of bad) { const r = await create(s); got.push([r.status, r.body.error, r.body.message]); }
-  const noField = await post(createRoute, { hostId: "p0", totalHands: 2 }, "p0");
+  const noField = await post(createRoute, { hostId: "p0", totalHands: 8 }, "p0");
   eq([...got, [noField.status, noField.body.error, noField.body.message]], [...bad, "沒帶"].map(() => [400, "bad_arrange_sec", MSG]),
     "A2 0、10、14、20、121、135 秒、字串 \"30\"、15.5、-15、null、沒帶：都是 400 bad_arrange_sec，附中文提示");
 }

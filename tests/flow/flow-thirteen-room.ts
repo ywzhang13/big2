@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { loadRoomSpectate } from "../support/stub-spectate-store";
@@ -65,7 +65,8 @@ async function get(fn: (r: Request) => Promise<Response>, q: string, as?: string
 const state = (roomId: string, as: string, playerId: string | null = as) => get(stateRoute, `roomId=${roomId}${playerId ? `&playerId=${playerId}` : ""}`, as);
 const ids = (cs: Card[]) => cs.map((c) => c.id);
 async function lobby(seats: string[], totalHands = 16) {
-  const c = await post(createRoute, { hostId: seats[0], arrangeSec: 30, totalHands }, seats[0]);
+  const c = await post(createRoute, { hostId: seats[0], arrangeSec: 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, seats[0]);
+  if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
   for (const [i, p] of seats.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   return { roomId: c.body.roomId as string, code: c.body.code as string };
 }

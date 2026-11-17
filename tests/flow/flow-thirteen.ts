@@ -9,7 +9,7 @@
 //   N  多局累計、斷線（不按下一局）時間到自動開下一局
 //   E  規則書 14 個範例經 API 算出的分數
 //   Q  解散投票、整場打完寫紀錄關房、關房後讀狀態 410
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { POST as createRoute } from "../../app/api/thirteen/create/route";
@@ -66,7 +66,9 @@ const myHand = async (roomId: string, pid: string) => (await state(roomId, pid, 
 
 /** 開房、四家入座、開局；回傳房間 id 和房號 */
 async function newMatch(opts: { arrangeSec?: number; totalHands?: number } = {}) {
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: opts.arrangeSec ?? 30, totalHands: opts.totalHands ?? 3 }, "p0");
+  const totalHands = opts.totalHands ?? 3;
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: opts.arrangeSec ?? 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, "p0");
+  if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
   for (const [i, p] of PIDS.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   const st = await post(startRoute, { roomId: c.body.roomId, playerId: "p0" }, "p0");
   return { roomId: c.body.roomId as string, code: c.body.code as string, start: st };
@@ -83,7 +85,8 @@ const evs = (from: number, name: string) => sent.slice(from).filter((e) => e.eve
 {
   eq((await post(createRoute, { hostId: "p0", arrangeSec: 40, totalHands: 3 }, "p0")).body.error, "bad_arrange_sec", "L1 理牌時間不是 30／45／60 → 擋下");
   eq((await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 3 })).status, 401, "L2 沒登入不能開房");
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: 45, totalHands: 2 }, "p0");
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: 45, totalHands: 8 }, "p0");
+  await setTotalHands(db, c.body.roomId, 2); // 開房只能選 8／16／32；這裡照舊房的方式改成 2 局
   const roomId = c.body.roomId as string;
   for (const [i, p] of PIDS.slice(0, 3).entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   const notFull = await post(startRoute, { roomId, playerId: "p0" }, "p0");
@@ -418,7 +421,8 @@ const duel = async (a: Ex, b: Ex) => {
 
 // ---------- S2 房主綁開房帳號（審伯必修 2） ----------
 {
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 1 }, "p0");
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 8 }, "p0");
+  await setTotalHands(db, c.body.roomId, 1); // 開房只能選 8／16／32；這裡照舊房的方式改成 1 局
   const grab = await post(joinRoute, { code: c.body.code, playerId: "p0", name: "搶房主" }, "watch");
   const w = await post(joinRoute, { code: c.body.code, playerId: "w1", name: "旁人" }, "watch");
   for (const [i, p] of ["p1", "p2"].entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i + 1}` }, p);

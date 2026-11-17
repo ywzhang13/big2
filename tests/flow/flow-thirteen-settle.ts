@@ -7,7 +7,7 @@
 //      讀狀態帶整場累計（每家打槍、被打槍、全壘打、被全壘打次數、總分）
 //   N5 整場打完：對局紀錄（match_records.settings.stats）、th_room_closed 廣播、關房後 410 的紀錄三處，
 //      每家打槍、被打槍、全壘打、被全壘打、總分五個欄位都逐項＝每局明細加總（小測 2026-11-18 補驗要求逐欄比對）
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { POST as createRoute } from "../../app/api/thirteen/create/route";
@@ -55,7 +55,8 @@ const deals = [{ hands: [strong, restDeck.slice(0, 16), restDeck.slice(16, 32), 
 const realDeal = flow.dealer.deal;
 flow.dealer.deal = () => deals.shift() ?? realDeal();
 
-const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 3 }, "p0");
+const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 8 }, "p0");
+await setTotalHands(db, c.body.roomId as string, 3); // 開房只能選 8／16／32；這裡照舊房的方式改成 3 局
 const roomId = c.body.roomId as string;
 for (const [i, p] of PIDS.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
 await post(startRoute, { roomId, playerId: "p0" }, "p0");
@@ -75,7 +76,7 @@ const v1 = (await state(roomId, "p1")).body;
   const d = f.revealDurationMs ? f.revealDurationMs(result) : null;
   // 照 v5 時間軸另外算一次（特效牌型、打槍組數、全壘打從結算結果數；別家隨機牌也可能有特效牌型）
   const specials = result ? result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0) : -1;
-  const v5 = 1200 + 3 * 2600 + specials * 900 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1000 + (result?.homeRun !== null ? 1900 : 0);
+  const v5 = 1200 + 3 * 2600 + specials * 900 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1000 + (result?.homeRun !== null ? 2800 : 0); // 全壘打 2.8 秒（小宜 v7）
   eq([rev1?.revealedAt, rev1?.settleAt, rev1?.nextHandAt, v1.reveal?.revealedAt, v1.reveal?.settleAt, v1.nextHandAt, d],
     [NOW, NOW + v5, NOW + v5 + 30_000, NOW, NOW + v5, NOW + v5 + 30_000, v5],
     `N1 亮牌：revealedAt＝亮牌時間、settleAt＝亮牌＋演出長度（這局 ${specials} 個特效牌型、三組打槍、全壘打＝${v5 / 1000} 秒，照 v5 另外算）、nextHandAt＝settleAt＋30 秒；廣播和讀狀態都有`);
@@ -109,9 +110,13 @@ if (v2.reveal?.stats) handStatsSeen.push(v2.reveal.stats);
     "N3 四家都按確認：馬上開第 3 局（還沒到結算面板出現的時間，也不用等 30 秒）");
   const mid = after.stats as { guns: number; gunned: number; homeRuns: number; homeRunned: number; total: number }[] | undefined;
   const sum = (k: "guns" | "gunned") => [0, 1, 2, 3].map((s) => handStatsSeen.reduce((n, h) => n + h[s][k], 0));
-  eq(mid ? [mid.map((x) => x.guns), mid.map((x) => x.gunned), mid.map((x) => x.homeRuns), mid.map((x) => x.total)] : null,
-    [sum("guns"), sum("gunned"), [0, 1, 2, 3].map((s) => handStatsSeen.filter((h) => h[s].homeRun).length), after.playerScores],
-    "N4 讀狀態帶整場累計：每家打槍、被打槍、全壘打次數＝前兩局每局明細加總，總分＝累計分數");
+  // 小測 2026-11-18 補驗：五個欄位都逐家比對（被全壘打也比；第 1 局有全壘打，所以 1～3 號的被全壘打不是 0）
+  const homeRunnedSum = [0, 1, 2, 3].map((s) => handStatsSeen.filter((h) => h[s].homeRunned).length);
+  const totalSum = [0, 1, 2, 3].map((s) => handStatsSeen.reduce((n, h) => n + h[s].total, 0));
+  eq(mid ? [mid.map((x) => x.guns), mid.map((x) => x.gunned), mid.map((x) => x.homeRuns), mid.map((x) => x.homeRunned), mid.map((x) => x.total), homeRunnedSum.some((n) => n > 0)] : null,
+    [sum("guns"), sum("gunned"), [0, 1, 2, 3].map((s) => handStatsSeen.filter((h) => h[s].homeRun).length), homeRunnedSum, totalSum, true],
+    "N4 讀狀態（進行中）帶整場累計：每家打槍、被打槍、全壘打、被全壘打、總分五個欄位都＝前兩局每局明細逐家加總（這兩局有人被全壘打）");
+  eq(totalSum, after.playerScores, "N4 整場累計的總分也＝讀狀態的累計分數 playerScores");
 }
 
 // 第 3 局（最後一局）：四家送出 → 亮牌就打完，寫紀錄、關房
