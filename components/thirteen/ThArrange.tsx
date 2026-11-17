@@ -6,14 +6,15 @@
 // 拖曳用 Pointer Events，滑鼠和觸控同一套；牌加 touch-action:none，iPhone 上拖的時候畫面不會捲動。
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Arrangement, Card, Row } from "@/lib/thirteen";
-import { CAT_NAME, evalRow } from "@/lib/thirteen";
 import { cardSrc } from "./cardArt";
 import { findCombos, SHORTCUTS, type ShortcutKind } from "./shortcuts";
 import { arrangeReducer, derive, HAND, initArrange, ROW_NAME, ROW_SIZE, ROWS, rowLabel, type ArrangeAction, type Zone } from "./arrangeState";
+import { preloadRevealFx } from "./ThRevealFx";
+import ThFeltMenu from "./ThFeltMenu";
 import "./thArrange.css";
 
 export interface ThArrangeProps {
-  /** 發到的 13 張 */
+  /** 發到的手牌（加一色 16 張，挑 13 張排三墩） */
   cards: Card[];
   /** 理牌截止時間（毫秒時間戳）。到了：排好且不倒水就照目前的送出，否則用引擎的 autoArrange 送出 */
   deadline: number;
@@ -26,7 +27,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
   // 正在拖的那根手指（或滑鼠）和最後一次移動的座標：在事件裡直接記，不等畫面更新
   const ptrRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const { byId, placed, hand, arrangement, full, check, foulMB, foulFM } = derive(state);
+  const { byId, placed, hand, arrangement, full, allFull, check, foulMB, foulFM } = derive(state);
   const { rows, selected, cycle, drag, notice } = state;
   const submitted = state.submitted !== null;
   const foulRows = new Set<Row>([...(foulMB ? (["middle", "back"] as Row[]) : []), ...(foulFM ? (["front", "middle"] as Row[]) : [])]);
@@ -48,6 +49,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
     return () => clearInterval(t);
   }, [submitted]);
   useEffect(() => { if (left === 0) dispatch({ type: "timeout" }); }, [left]);
+  useEffect(() => { void preloadRevealFx(); }, []); // 理牌時先把亮牌要用的牌背、特效圖載好
 
   // ---- 送出：submitted 從 null 變成排法的那一次才呼叫 onSubmit（reducer 保證只會變一次） ----
   const sentRef = useRef(false);
@@ -92,19 +94,18 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
   const act = (a: ArrangeAction) => () => dispatch(a);
   const dragging = drag?.moving ? new Set(drag.ids) : new Set<string>();
 
-  // ---- 提示文字 ----
-  let hint = notice ?? "點牌再點墩放入，或用下面的牌型快捷鈕";
-  let hintKind: "" | "ok" | "bad" = "";
-  const name = (r: Row) => CAT_NAME[evalRow(arrangement[r]).cat];
-  if (submitted) { hint = "已送出 ✓ 等其他人理牌"; hintKind = "ok"; }
-  else if (foulMB) { hint = `倒水：中墩（${name("middle")}）比尾墩（${name("back")}）大。按「對調中尾墩」就能修正`; hintKind = "bad"; }
-  else if (foulFM) { hint = `倒水：頭墩（${name("front")}）比中墩（${name("middle")}）大。把頭墩換小，或把中墩換大`; hintKind = "bad"; }
-  else if (check?.ok && !notice) { hint = "✓ 沒有倒水，可以送出"; hintKind = "ok"; }
+  // ---- 提示文字（老闆 2026-11-18：操作提示字拿掉；倒水只留紅框和一句短提示；放不下這類操作回饋照舊） ----
+  let hint = notice ?? "";
+  let hintKind: "" | "bad" = notice ? "bad" : "";
+  if (submitted) { hint = ""; hintKind = ""; }
+  else if (foulMB) { hint = "倒水：中墩比尾墩大"; hintKind = "bad"; }
+  else if (foulFM) { hint = "倒水：頭墩比中墩大"; hintKind = "bad"; }
 
   const canTake = (r: Row) => selected.length > 0 && ROW_SIZE[r] - rows[r].length >= selected.filter((id) => !rows[r].includes(id)).length;
 
   return (
     <div className={`th-arr${submitted ? " is-done" : ""}${drag?.moving ? " is-dragging" : ""}`}>
+      <ThFeltMenu />{/* 左上角 ⚙ 換牌桌（和牌桌畫面同一個；v7 §1：理牌畫面底色跟著同一款） */}
       <div className="th-arr-main">
         <div className="th-rows">
           {ROWS.map((r) => {
@@ -150,11 +151,13 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
           {hand.map((c) => (
             <div
               key={c.id}
-              className={`th-card th-card-hand${selected.includes(c.id) ? " is-sel" : ""}${dragging.has(c.id) ? " is-ghosted" : ""}`}
+              className={`th-card th-card-hand${selected.includes(c.id) ? " is-sel" : ""}${dragging.has(c.id) ? " is-ghosted" : ""}${allFull ? " is-unused" : ""}`}
+              data-th-unused={allFull ? "" : undefined}
               {...cardProps(c.id, HAND)}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={cardSrc(c)} alt="" draggable={false} />
+              {allFull && <span className="th-unused-tag">不用</span>}{/* 三墩排滿：剩下的 3 張變暗標「不用」（小宜 v6），拖到墩裡的牌上還是可以互換 */}
             </div>
           ))}
         </div>
@@ -174,8 +177,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
 
       <div className="th-side">
         <div className={`th-timer${left <= 10 ? " is-low" : ""}`}>
-          <b>{left}</b>
-          <span>{submitted ? "已送出" : "時間到自動排"}</span>
+          <b>{left}</b>{/* 小宜 v6：倒數下面的「時間到自動排」拿掉 */}
         </div>
         <button type="button" className={`th-btn${foulMB ? " is-alert" : ""}`} disabled={submitted || !(full("middle") && full("back"))} onClick={act({ type: "swapRows" })}>
           ⇅ 對調中尾墩
@@ -184,7 +186,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
           推薦排法
         </button>
         <button type="button" className={`th-btn th-btn-submit${canSubmit ? " is-ready" : ""}`} disabled={!canSubmit} onClick={act({ type: "submit" })}>
-          {submitted ? "已送出 ✓" : foulRows.size ? "倒水，不能送出" : "送出"}
+          {submitted ? "已送出 ✓" : "送出"}{/* 倒水時按鈕變灰就好，字只留上面那一句短提示（老闆 2026-11-18） */}
         </button>
       </div>
 

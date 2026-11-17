@@ -65,11 +65,13 @@ export function derive(s: ArrangeState) {
   const rowCards = (r: Row) => s.rows[r].map((id) => byId.get(id)!).sort(byRank);
   const arrangement: Arrangement = { front: rowCards("front"), middle: rowCards("middle"), back: rowCards("back") };
   const full = (r: Row) => s.rows[r].length === ROW_SIZE[r];
-  const check = hand.length === 0 ? checkArrangement(arrangement) : null;
+  // 加一色 16 選 13（老闆 2026-11-18）：三墩排滿就能檢查、送出，手牌剩下的 3 張就是不用的（小宜 v6）
+  const allFull = full("front") && full("middle") && full("back");
+  const check = allFull ? checkArrangement(arrangement) : null;
   // 兩墩都排滿就先比（引擎 compareValue），不用等 13 張都放好才提示倒水
   const foulMB = full("middle") && full("back") && compareValue(evalFive(arrangement.middle), evalFive(arrangement.back)) > 0;
   const foulFM = full("front") && full("middle") && compareValue(evalThree(arrangement.front), evalFive(arrangement.middle)) > 0;
-  return { byId, placed, hand, arrangement, full, check, foulMB, foulFM };
+  return { byId, placed, hand, arrangement, full, allFull, check, foulMB, foulFM };
 }
 
 /** 一墩排滿時的標籤：牌型和加分都由引擎判斷（evalRow、bonusOf）。頭墩三條顯示「衝三」 */

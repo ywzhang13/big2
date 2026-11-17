@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { loadRoomSpectate } from "../support/stub-spectate-store";
@@ -32,7 +32,7 @@ import { POST as spRespondRoute } from "../../app/api/thirteen/spectate/respond/
 import { GET as spManageRoute } from "../../app/api/thirteen/spectate/manage/route";
 import { POST as spRevokeRoute } from "../../app/api/thirteen/spectate/revoke/route";
 import { GET as spViewRoute } from "../../app/api/thirteen/spectate/view/route";
-import { clock, NEXT_HAND_MS } from "../../lib/thirteen/flow";
+import { clock, NEXT_HAND_MAX_MS } from "../../lib/thirteen/flow";
 import { closeIdleRoom, privateChannel, publicChannel, sweepIdleThirteenRooms } from "../../lib/thirteen/server";
 import { listIdleThirteenRooms } from "../../lib/thirteen/db";
 import { spectatorChannelName } from "../../lib/mahjong/access";
@@ -65,7 +65,8 @@ async function get(fn: (r: Request) => Promise<Response>, q: string, as?: string
 const state = (roomId: string, as: string, playerId: string | null = as) => get(stateRoute, `roomId=${roomId}${playerId ? `&playerId=${playerId}` : ""}`, as);
 const ids = (cs: Card[]) => cs.map((c) => c.id);
 async function lobby(seats: string[], totalHands = 16) {
-  const c = await post(createRoute, { hostId: seats[0], arrangeSec: 30, totalHands }, seats[0]);
+  const c = await post(createRoute, { hostId: seats[0], arrangeSec: 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, seats[0]);
+  if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
   for (const [i, p] of seats.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   return { roomId: c.body.roomId as string, code: c.body.code as string };
 }
@@ -215,7 +216,7 @@ async function ageRoom(id: string, hours: number) {
   const p4View = await state(f.roomId, "p4");
   const p3View = await state(f.roomId, "p3");
   eq([injected, sf.status, snF.room, snF.game, snF.gameMatchesSeats, p4View.body.me?.hand?.length, p3View.status, (await get(myRoomRoute, "", "p3")).body.room?.roomId === f.roomId],
-    [true, 200, "playing", ["0:p0", "1:p1", "2:p2", "3:p4"], true, 13, 403, false],
+    [true, 200, "playing", ["0:p0", "1:p1", "2:p2", "3:p4"], true, 16, 403, false],
     "K6 開局讀完座位後 p3 離開、p4 補位：開局的存檔衝突、重讀後用 p0、p1、p2、p4 開局——牌局玩家和座位表一致，p4 拿得到手牌，p3 不在牌局、找回房間也不會回這間");
   // (a2) 開局讀完座位之後、存檔之前，只有 p3 離開（沒人補）→ 開局的存檔衝突、重讀只剩 3 人而不開局（不會開出一局有 p3、座位表卻沒有他的牌局）
   const f2 = await lobby(["p0", "p1", "p2", "p3"]);
@@ -268,8 +269,8 @@ async function ageRoom(id: string, hours: number) {
   const re = await post(joinRoute, { code: mine.body.room?.code, playerId: "隨便", name: "重進" }, "p2");
   const st = await state(m.roomId, "p2", re.body.playerId);
   eq([mine.status, mine.body.room, re.body.rejoined, re.body.playerId, re.body.channel === privateChannel(m.roomId, m.code, "p2", uid(2)), st.status, st.body.me?.hand?.length],
-    [200, { roomId: m.roomId, code: m.code, status: "playing", seat: 2, playerId: "p2" }, true, "p2", true, 200, 13],
-    "R1 斷線後重新進站：找回自己還在進行中的房（房號、座位、playerId），用房號 join 認回原座位和同一個座位頻道，讀得到自己的 13 張");
+    [200, { roomId: m.roomId, code: m.code, status: "playing", seat: 2, playerId: "p2" }, true, "p2", true, 200, 16],
+    "R1 斷線後重新進站：找回自己還在進行中的房（房號、座位、playerId），用房號 join 認回原座位和同一個座位頻道，讀得到自己的 16 張");
 
   const outsider = await get(myRoomRoute, "", "watch");
   const outJoin = await post(joinRoute, { code: m.code, playerId: "p2", name: "冒充" }, "watch");
@@ -410,7 +411,7 @@ async function ageRoom(id: string, hours: number) {
   NOW += 60_000;
   const diss = await newMatch(["p1", "p0", "p2", "p4"], 3);
   await submitAll(diss.roomId, ["p1", "p0", "p2", "p4"]);
-  NOW += NEXT_HAND_MS; await post(tickRoute, { roomId: diss.roomId, playerId: "p1" }, "p1");
+  NOW += NEXT_HAND_MAX_MS; await post(tickRoute, { roomId: diss.roomId, playerId: "p1" }, "p1");
   await post(leaveReqRoute, { roomId: diss.roomId, playerId: "p1" }, "p1");
   for (const p of ["p0", "p2", "p4"]) await post(leaveVoteRoute, { roomId: diss.roomId, playerId: p, approve: true }, p);
   // 麻將場次（p0 也在）不能混進十三支紀錄

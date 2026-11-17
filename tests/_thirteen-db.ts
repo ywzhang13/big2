@@ -1,7 +1,7 @@
 // 十三支資料庫與 db 層（老柯 2026-11-16）：在記憶體 PostgreSQL（PGlite）跑真的 migration，
 // 再讓 lib/thirteen/db.ts、lib/records/store.ts 的真程式碼（真的 supabase-js）透過 tests/support/thirteen-postgrest.ts 打進去。
 //   M  migration：新表、權限（公開金鑰讀不到也寫不了）、紀錄可記十三支、關房函式的麻將／大老二分支一字不變
-//   R  開房：理牌時間 30／45／60、房號重複、設定存進牌局狀態
+//   R  開房：理牌時間 15～120 秒每 15 秒一階（2026-11-18 起；原本 30／45／60）、房號重複、設定存進牌局狀態
 //   J  入座：四家、座位重複、玩家重複、座位超出範圍
 //   S  存狀態：4 家手牌、理牌截止時間、送出的三墩、每局結果與多局累計；樂觀鎖衝突不覆蓋；trigger 記活動時間
 //   C  寫對局紀錄＋關房：版本不對不關、關房寫紀錄並連座位一起刪、重送、沒打完不記紀錄
@@ -15,6 +15,7 @@ import { installPostgrest } from "./support/thirteen-postgrest";
 import { deal } from "../lib/thirteen/cards";
 import { autoArrange } from "../lib/thirteen/arrange";
 import { scoreRound } from "../lib/thirteen/score";
+import { matchStats } from "../lib/thirteen/flow";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SUPA = path.join(ROOT, "supabase");
@@ -105,8 +106,9 @@ let roomId = "";
   const okSecs = [];
   for (const [i, sec] of [30, 60].entries()) okSecs.push(typeof (await T.insertRoom({ code: `530${i}`, host_id: "x", host_user_id: "00000000-0000-4000-8000-0000000000a0", settings: { arrangeSec: sec as 30 | 60, totalHands: 1 } })) === "object");
   const bad = await errOf(T.insertRoom({ code: "5309", host_id: "x", host_user_id: "00000000-0000-4000-8000-0000000000a0", settings: { arrangeSec: 40 as unknown as 30, totalHands: 1 } }));
-  eq([okSecs, bad, await T.loadRoomByCode("5309")], [[true, true], "理牌時間只能是 30、45 或 60 秒", null], "R4 理牌時間 30、60 秒也能開；40 秒丟錯，而且沒有建出房間");
-  eq([T.isArrangeSec(30), T.isArrangeSec(45), T.isArrangeSec(60), T.isArrangeSec(15), T.isArrangeSec("30")], [true, true, true, false, false], "R5 isArrangeSec 只認 30、45、60（數字）");
+  eq([okSecs, bad, await T.loadRoomByCode("5309")], [[true, true], "理牌時間要是 15～120 秒，每 15 秒一階（15、30、45、60、75、90、105、120）", null], "R4 理牌時間 30、60 秒也能開；40 秒丟錯，而且沒有建出房間");
+  eq([T.isArrangeSec(30), T.isArrangeSec(45), T.isArrangeSec(60), T.isArrangeSec(15), T.isArrangeSec(120), T.isArrangeSec(14), T.isArrangeSec(135), T.isArrangeSec("30")],
+    [true, true, true, true, true, false, false, false], "R5 isArrangeSec 認 15～120 每 15 秒一階（數字）；14、135、字串都不認");
   eq(await T.loadRoom("00000000-0000-4000-8000-00000000dead"), null, "R6 不存在的房間回 null");
 }
 
@@ -188,16 +190,16 @@ let s = (await T.loadRoom(roomId))!.game_state!;
 {
   const rec = T.buildThirteenRecord(roomId, "5201", s, "completed")!;
   eq([rec.game, rec.handsPlayed, rec.settings, rec.totalRounds, rec.basePoints, rec.fanPoints, rec.players.map((p) => [p.seat, p.playerId, p.userId, p.totalScore])],
-    ["thirteen", 2, { arrangeSec: 45, totalHands: 4 }, null, null, null, s.players.map((p) => [p.seat, p.id, p.userId, s.playerScores[p.seat]])],
-    "C1 組紀錄：遊戲 thirteen、打了 2 局、理牌秒數和局數放 settings（麻將的圈、底、台是 null）、四家總分和帳號");
+    ["thirteen", 2, { arrangeSec: 45, totalHands: 4, stats: matchStats(s) }, null, null, null, s.players.map((p) => [p.seat, p.id, p.userId, s.playerScores[p.seat]])],
+    "C1 組紀錄：遊戲 thirteen、打了 2 局、理牌秒數、局數和整場累計（2026-11-18 起）放 settings（麻將的圈、底、台是 null）、四家總分和帳號");
   const changed = await closeRoom("thirteen", roomId, rec, { stateVersion: 3 });
   eq([changed, (await T.loadRoom(roomId)) !== null, Number((await one(`select count(*)::int n from match_records where room_id = $1`, [roomId])).n)],
     ["changed", true, 0], "C2 關房時版本不對（有人剛存了新的）→ changed，房間和紀錄都沒動");
   const closed = await closeRoom("thirteen", roomId, rec, { stateVersion: 4 });
-  const m = await one(`select game, room_code, end_reason, hands_played, settings, total_rounds from match_records where room_id = $1`, [roomId]);
+  const m = await one(`select game, room_code, end_reason, hands_played, settings - 'stats' settings, total_rounds, jsonb_array_length(settings->'stats') nstats from match_records where room_id = $1`, [roomId]);
   const mp = await rows(`select seat, player_name, player_id, total_score, user_id from match_record_players p join match_records r on r.id = p.match_id where r.room_id = $1 order by seat`, [roomId]);
   eq([closed, m, mp.map((x) => [x.seat, x.player_id, x.total_score, x.user_id])],
-    ["closed", { game: "thirteen", room_code: "5201", end_reason: "completed", hands_played: 2, settings: { arrangeSec: 45, totalHands: 4 }, total_rounds: null },
+    ["closed", { game: "thirteen", room_code: "5201", end_reason: "completed", hands_played: 2, settings: { arrangeSec: 45, totalHands: 4 }, total_rounds: null, nstats: 4 },
       s.players.map((p) => [p.seat, p.id, s.playerScores[p.seat], p.userId])],
     "C3 版本對 → closed：同一個交易寫進對局紀錄（十三支、2 局、設定、四家總分和帳號）");
   const left = await one(`select (select count(*)::int from th_rooms where id = $1) r, (select count(*)::int from th_players where room_id = $1) p`, [roomId]);

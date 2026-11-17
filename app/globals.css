@@ -656,6 +656,13 @@
   src: url("/fonts/noto-serif-tc/brand-900.woff2") format("woff2");
   unicode-range: U+53F0, U+5C07, U+7063, U+9EBB;
 }
+/* 十三支大廳標題（老闆 2026-11-18：「十三支」要跟「台灣麻將」同款書法字）：同一個字型、同一個名字，另一個子集只含「十三支」三個字（1KB），
+   靠 unicode-range 分開下載——麻將頁不會載這個，十三支頁也不會載麻將那四個字 */
+@font-face {
+  font-family: "MjBrandSerif"; font-style: normal; font-weight: 900; font-display: swap;
+  src: url("/fonts/noto-serif-tc/brand-th-900.woff2") format("woff2");
+  unicode-range: U+5341, U+4E09, U+652F;
+}
 .mjl-brand { --brand-tile-w: 44px; --brand-tile-h: 60px; display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
 .mjl-brand .tiles { display: flex; gap: 4px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
 .mjl-brand .rule { width: 1px; align-self: stretch; margin: 2px 0; background: linear-gradient(180deg, transparent, rgba(201,169,110,.55), transparent); }

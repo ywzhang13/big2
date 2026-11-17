@@ -17,7 +17,7 @@ const t0 = Date.now();
 for (let i = 0; i < N; i++) {
   const { hands, rest } = deal(rng);
   const all = [...hands.flat(), ...rest].map((c) => c.id);
-  if (all.length !== 65 || new Set(all).size !== 65 || hands.some((h) => h.length !== 13) || rest.length !== 13) badCards++;
+  if (all.length !== 65 || new Set(all).size !== 65 || hands.some((h) => h.length !== 16) || rest.length !== 1) badCards++; // 2026-11-18 每人 16 張、剩 1 張
   const arr = hands.map(autoArrange);
   arr.forEach((a, s) => {
     if (!checkArrangement(a).ok) fouled++;
@@ -53,7 +53,7 @@ function check(cond: boolean, msg: string) {
   console.log(`${cond ? "✅" : "❌"} ${msg}`);
   if (!cond) fails.push(msg);
 }
-check(badCards === 0, `${N} 局：65 張不重複也不遺漏（每家 13、剩 13），自動排牌用的正好是自己那 13 張（問題 ${badCards}）`);
+check(badCards === 0, `${N} 局：65 張不重複也不遺漏（每家 16、剩 1），自動排牌用的 13 張都是自己的牌（問題 ${badCards}）`);
 check(fouled === 0 && rejected === 0, `${N * 4} 手自動排牌：倒水 ${fouled} 手、送出檢查不通過 ${rejected} 手`);
 check(nonZero === 0, `${N} 局四家總分都是 0（不是 0 的 ${nonZero} 局）`);
 check(mismatch === 0, `亮牌順序每道剛好 4 家各一次；隨機切法的倒水判斷和送出檢查一致（不一致 ${mismatch}）`);

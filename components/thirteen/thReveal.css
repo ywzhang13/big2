@@ -1,0 +1,219 @@
+/* 十三支亮牌、特效、結算（小宜 v5；打槍、全壘打照 v4 分鏡）。手機 844×390 為基準，桌機（寬 ≥1100 且高 ≥700）放大 */
+
+/* ---- 亮牌：翻開的那排金色光暈、牌型徽章、這墩得失分、被打槍 ---- */
+.th-blk-row { position: relative; }
+.th-blk-row.is-glow img { animation: th-flip .25s ease-out both; box-shadow: 0 0 10px 3px rgba(240,214,138,.85); }
+@keyframes th-flip { from { transform: scaleX(.05); } to { transform: scaleX(1); } }
+/* 徽章：對齊麻將台數標籤的金色小膠囊（程式畫，不用圖）；有加分的牌型紅金色 */
+.th-badge { position: absolute; left: 50%; top: 50%; z-index: 3; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  font-size: 11px; font-weight: 800; line-height: 1.35; letter-spacing: .04em;
+  background: linear-gradient(180deg, #e8c97a, #C9A96E); color: #0f2a1a; border: 1px solid rgba(255,240,200,.75); box-shadow: 0 2px 6px rgba(0,0,0,.45);
+  animation: th-badge-in .2s ease-out both; }
+.th-badge.is-bonus { background: linear-gradient(180deg, #dc2626, #C9A96E); color: #fff7e6; border-color: rgba(255,220,160,.85); }
+@keyframes th-badge-in { from { opacity: 0; scale: 1.5; } to { opacity: 1; scale: 1; } }
+.th-delta { position: absolute; left: calc(100% + 6px); top: 50%; z-index: 3; font: 800 15px "Chakra Petch", system-ui, sans-serif; color: #f3ead2; text-shadow: 0 1px 3px rgba(0,0,0,.8); animation: th-badge-in .25s ease-out both; }
+.th-delta.is-up { color: #6ee7a0; } .th-delta.is-down { color: #ff7b72; }
+.th-shot { display: inline-flex; align-items: center; gap: 2px; padding: 1px 7px 1px 3px; border-radius: 999px; background: rgba(243,234,210,.92); font: 800 13px "Chakra Petch", system-ui, sans-serif; color: #b91c1c; box-shadow: 0 1px 4px rgba(0,0,0,.4); animation: th-badge-in .25s ease-out both; } /* 淺底小膠囊：彈孔是深色的，直接放在綠桌上看不清楚 */
+.th-shot img { width: 20px; height: 20px; max-width: none; }
+
+/* ---- 特效層：放在牌的上層；不能有 z-index／transform（會自成一組，screen 疊加就只跟透明底疊、露出黑框） ---- */
+/* 特效層是牌桌（.th-table）後面的兄弟元素；本身 display: contents（不成一組），每段特效各自 position: fixed、screen 疊在整個牌桌上 */
+.th-fx-layer { display: contents; }
+.th-fx-at, .th-fx-rot { position: fixed; width: 0; height: 0; pointer-events: none; }
+.th-fx-rot { transform-origin: 0 0; }
+.is-blend { mix-blend-mode: screen; }
+.th-fx { display: block; position: absolute; max-width: none; animation-fill-mode: both; animation-timing-function: linear; }
+
+/* 開始比牌 1.2 秒：0～0.2 由 1.6 倍縮到 1 倍並淡入、停 0.7 秒、0.9～1.2 放大到 1.1 倍並淡出（v5 §1）；畫面正中央 */
+.th-fx-start-at { left: 50%; top: 50%; }
+.th-fx-start { width: 467px; animation-name: th-start; animation-duration: 1.2s; filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); }
+@keyframes th-start {
+  0% { transform: translate(-50%,-50%) scale(1.6); opacity: 0; }
+  16.7% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  75% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
+}
+/* 衝三／鐵支／同花順／五龍 0.9 秒（v7 §2，動作同 v5）：在那一家那副牌的正上面（寬度由程式照座位給）；0.3 倍 → 1.08 倍（0.15 秒）→ 1 倍（0.22 秒）→ 停 → 0.67～0.9 淡出 */
+.th-fx-pat { animation-name: th-pat; animation-duration: .9s; filter: drop-shadow(0 3px 6px rgba(0,0,0,.55)); }
+@keyframes th-pat {
+  0% { transform: translate(-50%,-50%) scale(.3); opacity: 0; }
+  16.7% { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+  24.4% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  74.4% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+}
+
+/* 打槍 1.0 秒（v4 §4）：手槍淡入放大 → 0.18 後座、槍口上揚 6° → 0.6～0.8 淡出 */
+.th-fx-gunbox, .th-fx-muzzle, .th-fx-beam, .th-fx-batbox, .th-fx-ballbox { position: absolute; width: 0; height: 0; }
+.th-fx-gun { left: 0; top: 0; animation-name: th-gun; animation-duration: 1s; }
+@keyframes th-gun {
+  0% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(.6); opacity: 0; }
+  15% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(1); opacity: 1; }
+  18% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(1); opacity: 1; }
+  22% { transform: translate(calc(-50% - 8px),-50%) scaleY(var(--flip)) rotate(-6deg); opacity: 1; }
+  30% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(1); opacity: 1; }
+  60% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(1); opacity: 1; }
+  80%, 100% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(1); opacity: 0; }
+}
+/* 槍口火光：噴口（素材 19.3%, 55.4%）對準槍口；0.18～0.34 由 0.5 倍放大到 1 倍再淡出 */
+.th-fx-muzzle-img { width: 112px; left: 0; top: 0; transform-origin: 19.3% 55.4%; animation-name: th-muzzle; animation-duration: 1s; }
+@keyframes th-muzzle {
+  0%, 18% { transform: translate(-19.3%,-55.4%) scale(.5); opacity: 0; }
+  19% { opacity: 1; }
+  26% { transform: translate(-19.3%,-55.4%) scale(1); opacity: 1; }
+  34%, 100% { transform: translate(-19.3%,-55.4%) scale(1); opacity: 0; }
+}
+/* 子彈光束：左端在槍口、右端到對方牌中心；0.20～0.30 橫向由 0 拉到全長，0.34 淡出 */
+.th-fx-beam { transform: translateY(-50%); }
+.th-fx-bullet { left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 50%; animation-name: th-beam; animation-duration: 1s; }
+@keyframes th-beam {
+  0%, 20% { transform: scaleX(0); opacity: 1; }
+  30% { transform: scaleX(1); opacity: 1; }
+  34% { transform: scaleX(1); opacity: .9; }
+  42%, 100% { transform: scaleX(1); opacity: 0; }
+}
+/* 彈孔 ×3：0.32、0.40、0.48 一個一個出現（1.4 倍縮到 1 倍），0.8～1.0 淡出 */
+.th-fx-hole { left: 0; top: 0; animation-duration: 1s; }
+.th-fx-hole-0 { animation-name: th-hole0; } .th-fx-hole-1 { animation-name: th-hole1; } .th-fx-hole-2 { animation-name: th-hole2; }
+@keyframes th-hole0 { 0%, 31.9% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; } 32% { transform: translate(-50%,-50%) scale(1.4); opacity: 1; } 37%, 80% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+@keyframes th-hole1 { 0%, 39.9% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; } 40% { transform: translate(-50%,-50%) scale(1.4); opacity: 1; } 45%, 80% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+@keyframes th-hole2 { 0%, 47.9% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; } 48% { transform: translate(-50%,-50%) scale(1.4); opacity: 1; } 53%, 80% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+
+/* 全壘打 2.8 秒全螢幕（v7 §3）。百分比＝秒數 ÷ 2.8 */
+/* 球棒：以握把（素材 14.1%, 54.1%）為軸，0～0.15 舉棒淡入、0.15～0.35 揮擊（前慢後快）、0.45～0.6 淡出 */
+.th-fx-bat { left: 0; top: 0; transform-origin: 14.1% 54.1%; animation-name: th-bat; animation-duration: 2.8s; }
+@keyframes th-bat {
+  0% { transform: translate(-14.1%,-54.1%) rotate(-120deg); opacity: 0; }
+  5.4% { transform: translate(-14.1%,-54.1%) rotate(-120deg); opacity: 1; animation-timing-function: cubic-bezier(.6,0,1,1); }
+  12.5% { transform: translate(-14.1%,-54.1%) rotate(30deg); opacity: 1; }
+  16.1% { transform: translate(-14.1%,-54.1%) rotate(30deg); opacity: 1; }
+  21.4%, 100% { transform: translate(-14.1%,-54.1%) rotate(30deg); opacity: 0; }
+}
+/* 棒球：0.30 在棒頭出現，0.35～0.75 朝右上衝出畫面、放大 3.8 倍（像朝鏡頭飛來） */
+.th-fx-ball { width: 170px; left: 0; top: 0; transform-origin: 87% 33.6%; animation-name: th-ball; animation-duration: 2.8s; --fly: 620px; }
+@keyframes th-ball {
+  0%, 10.6% { transform: translate(-87%,-33.6%) rotate(-12deg) scale(1); opacity: 0; }
+  10.7%, 12.5% { transform: translate(-87%,-33.6%) rotate(-12deg) scale(1); opacity: 1; animation-timing-function: cubic-bezier(.5,0,1,1); }
+  26.7% { transform: translate(calc(-87% + var(--fly) * .848), calc(-33.6% - var(--fly) * .53)) rotate(-12deg) scale(3.8); opacity: 1; }
+  26.8%, 100% { transform: translate(calc(-87% + var(--fly) * .848), calc(-33.6% - var(--fly) * .53)) rotate(-12deg) scale(3.8); opacity: 0; }
+}
+/* 金色放射爆發（screen 鋪滿）：0.6～0.75 由 0.6 倍放大到 1.15 倍並淡入，之後每秒慢轉 3°，2.3～2.8 淡出 */
+.th-fx-full-at { left: 50%; top: 50%; }
+.th-fx-burst, .th-fx-fireworks { left: 0; top: 0; width: max(100vw, 179.2vh); animation-duration: 2.8s; }
+.th-fx-burst { animation-name: th-burst; }
+@keyframes th-burst {
+  0%, 21.4% { transform: translate(-50%,-50%) scale(.6) rotate(0deg); opacity: 0; }
+  26.8% { transform: translate(-50%,-50%) scale(1.15) rotate(0deg); opacity: 1; }
+  82.1% { transform: translate(-50%,-50%) scale(1.15) rotate(4.6deg); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1.15) rotate(6deg); opacity: 0; }
+}
+/* 煙火彩帶（screen 鋪滿）：0.95 淡入（0.2 秒），慢慢放大到 1.08 倍，2.4～2.8 淡出；翻面的那份 1.4 秒才出來 */
+.th-fx-fireworks { animation-name: th-fw; --fx-flip: 1; }
+.th-fx-fireworks.is-flip { animation-name: th-fw2; --fx-flip: -1; }
+@keyframes th-fw {
+  0%, 33.9% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+  41.1% { transform: translate(-50%,-50%) scale(1.02); opacity: 1; }
+  85.7% { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1.08); opacity: 0; }
+}
+@keyframes th-fw2 {
+  0%, 50% { transform: translate(-50%,-50%) scale(-1,1); opacity: 0; }
+  57.1% { transform: translate(-50%,-50%) scale(-1.02,1.02); opacity: .85; }
+  85.7% { transform: translate(-50%,-50%) scale(-1.08,1.08); opacity: .85; }
+  100% { transform: translate(-50%,-50%) scale(-1.08,1.08); opacity: 0; }
+}
+/* 「全壘打」大字（實心、最上層）：0.75 由 2.2 倍砸到 0.95 倍（0.12 秒）、回彈到 1 倍（0.08 秒），停住輕微呼吸，2.4～2.8 淡出 */
+.th-fx-hr-at { left: 50%; top: 47.4%; }
+.th-fx-homerun { width: 620px; left: 0; top: 0; animation-name: th-hr; animation-duration: 2.8s; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); }
+@keyframes th-hr {
+  0%, 26.7% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
+  26.8% { transform: translate(-50%,-50%) scale(2.2); opacity: 1; animation-timing-function: cubic-bezier(.55,0,1,.45); }
+  31.1% { transform: translate(-50%,-50%) scale(.95); opacity: 1; }
+  33.9% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  48.2% { transform: translate(-50%,-50%) scale(1.02); opacity: 1; }
+  62.5% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  76.8% { transform: translate(-50%,-50%) scale(1.02); opacity: 1; }
+  85.7% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+}
+
+/* ---- 本局結算／整場總結算（v5 §5～6，比照麻將每局結算：畫面壓暗、左欄標題＋明細＋確認、右欄四家各一列） ---- */
+.th-res { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 10px max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(60px, env(safe-area-inset-left));
+  background: rgba(5,12,8,.86); animation: th-fade .3s ease-out both; }
+.th-res.is-peek { background: transparent; pointer-events: none; }
+.th-res.is-peek > :not(.th-res-peek) { visibility: hidden; }
+.th-res-peek { pointer-events: auto; }
+@keyframes th-fade { from { opacity: 0; } to { opacity: 1; } }
+.th-res-left { width: 204px; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.th-res-title { font-family: "MjBrandSerif", "Noto Serif TC", serif; font-size: 30px; font-weight: 900; letter-spacing: .12em; color: #fff4dc; text-shadow: 0 0 14px rgba(240,214,138,.7), 0 2px 4px rgba(0,0,0,.8); line-height: 1.1; }
+.th-res-sub { font-size: 12px; color: rgba(243,234,210,.6); margin-top: -4px; }
+.th-res-items { width: 100%; border: 1px solid rgba(201,169,110,.35); border-radius: 10px; background: rgba(255,255,255,.04); padding: 6px 10px; font-size: 12px; }
+.th-res-items div { display: flex; justify-content: space-between; line-height: 1.55; color: #f3ead2; }
+.th-res-items b { font-family: "Chakra Petch", system-ui, sans-serif; }
+.th-res-items .is-up { color: #6ee7a0; } .th-res-items .is-down { color: #ff7b72; }
+.th-res-items .th-res-total { border-top: 1px solid rgba(201,169,110,.3); margin-top: 3px; padding-top: 3px; font-weight: 800; font-size: 13px; }
+.th-res-btn { width: 100%; height: 44px; border-radius: 999px; font-weight: 800; font-size: 15px; cursor: pointer; transition: filter .15s; }
+.th-res-btn.primary { background: linear-gradient(180deg, #e8c97a, #C9A96E); color: #0f2a1a; border: 0; }
+.th-res-btn.second { background: rgba(15,42,26,.9); color: #f0d68a; border: 1.5px solid rgba(201,169,110,.7); }
+.th-res-err { width: 100%; font-size: 12px; font-weight: 700; color: #ff9b92; text-align: center; }
+.th-res-btn:disabled { filter: grayscale(.4) brightness(.8); cursor: default; }
+.th-res-right { flex: 1 1 auto; max-width: 560px; display: flex; flex-direction: column; gap: 6px; }
+.th-res-row { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 4px 10px; border-radius: 10px; border: 1px solid rgba(201,169,110,.28); background: rgba(255,255,255,.035); }
+.th-res-row.is-me { border-color: #f0d68a; background: rgba(201,169,110,.14); }
+.th-res-who { width: 64px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 800; color: #f0d68a; overflow: hidden; }
+.th-res-who span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.th-res-mark { display: inline-flex; align-items: center; gap: 2px; font: 800 12px "Chakra Petch", system-ui, sans-serif; color: #ff7b72; }
+.th-res-mark img { width: 14px; height: 14px; max-width: none; }
+.th-res-hr { align-self: flex-start; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 800; background: linear-gradient(180deg, #dc2626, #C9A96E); color: #fff7e6; }
+.th-res-cards { display: flex; gap: 6px; flex: 1 1 auto; }
+.th-res-grp { display: flex; }
+.th-res-grp img { width: 23px; height: 32px; max-width: none; border-radius: 2px; box-shadow: -1px 0 2px rgba(0,0,0,.35); }
+.th-res-grp img + img { margin-left: -7px; }
+.th-res-pts { width: 62px; flex: 0 0 auto; text-align: right; }
+.th-res-pts b { display: block; font: 800 19px "Chakra Petch", system-ui, sans-serif; line-height: 1.1; }
+.th-res-pts small { font-size: 10px; color: rgba(243,234,210,.6); }
+.th-res-pts .is-up { color: #6ee7a0; } .th-res-pts .is-down { color: #ff7b72; }
+.th-res-peek { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(15,42,26,.92); color: #f0d68a; border: 1.5px solid rgba(201,169,110,.8); font-weight: 800; font-size: 14px; cursor: pointer; }
+/* 整場總結算：名次、名字、打槍、全壘打、總分 */
+.th-rank { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 800 12px "Chakra Petch", system-ui, sans-serif; background: rgba(255,255,255,.12); color: #f3ead2; }
+.th-rank.is-1 { background: linear-gradient(180deg, #f0d68a, #C9A96E); color: #0f2a1a; }
+.th-fin-name { flex: 1 1 auto; font-weight: 800; color: #f0d68a; font-size: 14px; }
+.th-fin-stat { font-size: 11px; color: rgba(243,234,210,.7); white-space: nowrap; }
+
+@media (min-width: 1100px) and (min-height: 700px) {
+  .th-badge { font-size: 19px; padding: 3px 14px; }
+  .th-delta { font-size: 24px; left: calc(100% + 10px); }
+  .th-shot { font-size: 20px; } .th-shot img { width: 34px; height: 34px; }
+  .th-fx-start { width: 888px; }
+  .th-fx-muzzle-img { width: 210px; }
+  .th-fx-ball { width: 323px; --fly: 1180px; }
+  .th-fx-homerun { width: 1178px; }
+  .th-res { gap: 28px; }
+  .th-res-left { width: 340px; gap: 14px; }
+  .th-res-title { font-size: 52px; }
+  .th-res-sub { font-size: 16px; }
+  .th-res-items { font-size: 17px; padding: 10px 16px; } .th-res-items .th-res-total { font-size: 19px; }
+  .th-res-btn { height: 56px; font-size: 20px; }
+  .th-res-right { max-width: 900px; gap: 10px; }
+  .th-res-row { min-height: 90px; padding: 6px 16px; gap: 14px; }
+  .th-res-who { width: 110px; font-size: 18px; }
+  .th-res-mark { font-size: 16px; } .th-res-mark img { width: 22px; height: 22px; } .th-res-hr { font-size: 14px; }
+  .th-res-grp img { width: 38px; height: 53px; } .th-res-grp img + img { margin-left: -12px; } .th-res-cards { gap: 12px; }
+  .th-res-pts { width: 100px; } .th-res-pts b { font-size: 32px; } .th-res-pts small { font-size: 14px; }
+  .th-res-peek { height: 56px; font-size: 18px; padding: 0 26px; }
+  .th-rank { width: 34px; height: 34px; font-size: 17px; } .th-fin-name { font-size: 20px; } .th-fin-stat { font-size: 16px; }
+}
+
+/* ---- 特效測試頁（app/thirteen/preview/fx）的按鈕：左上角，收得起來 ---- */
+.th-lab { position: fixed; left: max(8px, env(safe-area-inset-left)); top: 6px; z-index: 60; display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: rgba(0,0,0,.55); max-width: calc(100vw - 16px); }
+.th-lab-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.th-lab button, .th-lab-open { height: 30px; padding: 0 9px; border-radius: 999px; border: 1px solid rgba(201,169,110,.6); background: rgba(15,42,26,.9); color: #f0d68a; font-size: 12px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.th-lab button.is-on { background: linear-gradient(180deg, #e8c97a, #C9A96E); color: #0f2a1a; }
+.th-lab button:disabled { opacity: .4; cursor: default; }
+.th-lab button.is-replay { border-color: #fff4dc; }
+.th-lab-felt i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.6); display: inline-block; }
+.th-lab-open { position: fixed; left: max(8px, env(safe-area-inset-left)); top: 6px; z-index: 60; }
+@media (min-width: 1100px) and (min-height: 700px) {
+  .th-lab button, .th-lab-open { height: 40px; font-size: 16px; padding: 0 14px; }
+}

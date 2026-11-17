@@ -2,21 +2,21 @@
    一個畫面放得下、不捲動；可點的東西至少 44px。 */
 .th-arr {
   --slot-w: 46px; --slot-h: 64px; --slot-gap: 6px; --row-gap: 6px;
-  --hand-w: 54px; --hand-h: 76px; --hand-show: 45px; --lift: 8px;
+  --hand-w: 54px; --hand-h: 76px; --hand-show: 44px; /* 16 張一排 714（小宜 v6） */ --lift: 8px;
   --x: 44px; --side-w: 150px; --btn-h: 44px; --sc-h: 44px;
   --timer: 38px; --pad-l: 60px; --pad-b: 22px; --font: 15px; --pill-w: 64px;
   --gold: #c9a96e; --gold-l: #f0d68a; --red: #d0453c;
   position: fixed; inset: 0; overflow: hidden;
   display: flex; gap: 14px;
   padding: 8px max(14px, env(safe-area-inset-right)) max(var(--pad-b), env(safe-area-inset-bottom)) max(var(--pad-l), env(safe-area-inset-left));
-  background: radial-gradient(ellipse at 50% 40%, var(--mj-felt-1, #1e4a2e), var(--mj-felt-2, #153a22) 60%, var(--mj-felt-3, #0f2a1a));
+  background: radial-gradient(ellipse 75% 85% at 50% 46%, var(--th-c1, #1F6B45) 0%, var(--th-c2, #0F3D28) 55%, var(--th-c3, #06180F) 100%); /* 簡約牌桌四款（小宜 v7 §1），見 thRoom.css 的 --th-c* */
   color: #f3ead2; font-size: var(--font);
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 @media (min-width: 1100px) and (min-height: 700px) {
   .th-arr {
     --slot-w: 104px; --slot-h: 146px; --slot-gap: 12px; --row-gap: 14px;
-    --hand-w: 112px; --hand-h: 157px; --hand-show: 76px; --lift: 14px; /* 規格露出 90，但 13 張會超出主欄寬（1192 > 1034），改 76 */
+    --hand-w: 112px; --hand-h: 157px; --hand-show: 60px; /* 16 張：112＋15×60＝1012，放得進主欄 1034 */ --lift: 14px; /* 規格露出 90，但 13 張會超出主欄寬（1192 > 1034），改 76 */
     --x: 56px; --side-w: 250px; --btn-h: 56px; --sc-h: 56px;
     --timer: 64px; --pad-l: 110px; --pad-b: 24px; --font: 20px; --pill-w: 92px;
     gap: 32px; align-items: flex-start; padding-top: max(24px, calc((100dvh - 800px) / 2)); /* 主欄和右欄一起垂直置中、上緣對齊 */
@@ -87,3 +87,9 @@
 
 /* 預覽頁：送出後印出排法（測試用，畫面下緣一行小字） */
 .th-preview-sent { position: fixed; left: 8px; bottom: 2px; z-index: 60; font-size: 10px; color: rgba(255, 255, 255, .55); pointer-events: none; }
+
+/* 三墩排滿後手牌剩下的 3 張＝不用的牌（小宜 v6）：變暗、標「不用」 */
+.th-card-hand { position: relative; }
+.th-card-hand.is-unused img { filter: brightness(.45) saturate(.6); }
+.th-unused-tag { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); padding: 1px 6px; border-radius: 999px; background: rgba(0,0,0,.72); color: #f3ead2; font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; }
+@media (min-width: 1100px) and (min-height: 700px) { .th-unused-tag { font-size: 18px; padding: 2px 10px; } }

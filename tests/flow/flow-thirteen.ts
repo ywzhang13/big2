@@ -9,7 +9,7 @@
 //   N  多局累計、斷線（不按下一局）時間到自動開下一局
 //   E  規則書 14 個範例經 API 算出的分數
 //   Q  解散投票、整場打完寫紀錄關房、關房後讀狀態 410
-import { setupThirteenDb } from "../support/thirteen-pg";
+import { setupThirteenDb, setTotalHands } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { POST as createRoute } from "../../app/api/thirteen/create/route";
@@ -21,7 +21,7 @@ import { POST as tickRoute } from "../../app/api/thirteen/tick/route";
 import { POST as nextRoute } from "../../app/api/thirteen/next-game/route";
 import { POST as leaveReqRoute } from "../../app/api/thirteen/leave-request/route";
 import { POST as leaveVoteRoute } from "../../app/api/thirteen/leave-vote/route";
-import { clock, dealer, NEXT_HAND_MS } from "../../lib/thirteen/flow";
+import { clock, dealer, NEXT_HAND_MAX_MS } from "../../lib/thirteen/flow";
 import { publicChannel, privateChannel } from "../../lib/thirteen/server";
 import { parseCards, type Card } from "../../lib/thirteen/cards";
 import { autoArrange, type Arrangement } from "../../lib/thirteen/arrange";
@@ -66,7 +66,9 @@ const myHand = async (roomId: string, pid: string) => (await state(roomId, pid, 
 
 /** 開房、四家入座、開局；回傳房間 id 和房號 */
 async function newMatch(opts: { arrangeSec?: number; totalHands?: number } = {}) {
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: opts.arrangeSec ?? 30, totalHands: opts.totalHands ?? 3 }, "p0");
+  const totalHands = opts.totalHands ?? 3;
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: opts.arrangeSec ?? 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, "p0");
+  if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
   for (const [i, p] of PIDS.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   const st = await post(startRoute, { roomId: c.body.roomId, playerId: "p0" }, "p0");
   return { roomId: c.body.roomId as string, code: c.body.code as string, start: st };
@@ -83,7 +85,8 @@ const evs = (from: number, name: string) => sent.slice(from).filter((e) => e.eve
 {
   eq((await post(createRoute, { hostId: "p0", arrangeSec: 40, totalHands: 3 }, "p0")).body.error, "bad_arrange_sec", "L1 理牌時間不是 30／45／60 → 擋下");
   eq((await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 3 })).status, 401, "L2 沒登入不能開房");
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: 45, totalHands: 2 }, "p0");
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: 45, totalHands: 8 }, "p0");
+  await setTotalHands(db, c.body.roomId, 2); // 開房只能選 8／16／32；這裡照舊房的方式改成 2 局
   const roomId = c.body.roomId as string;
   for (const [i, p] of PIDS.slice(0, 3).entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   const notFull = await post(startRoute, { roomId, playerId: "p0" }, "p0");
@@ -111,12 +114,12 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   for (const p of PIDS) hands.push((await state(m1.roomId, p, p)).body.me.hand);
   const rest = (await db.query<{ r: Card[] }>(`select game_state->'rest' r from th_rooms where id = $1`, [m1.roomId])).rows[0].r;
   const all = [...hands.flat(), ...rest].map((c) => c.id);
-  eq([hands.map((h) => h.length), rest.length, new Set(all).size, s0.body.phase, s0.body.handNo], [[13, 13, 13, 13], 13, 65, "arranging", 1],
-    "D1 開局發牌：65 張、每人 13 張不重複，剩下 13 張留在伺服器");
+  eq([hands.map((h) => h.length), rest.length, new Set(all).size, s0.body.phase, s0.body.handNo], [[16, 16, 16, 16], 1, 65, "arranging", 1],
+    "D1 開局發牌：65 張、每人 16 張不重複，剩下 1 張留在伺服器（2026-11-18 加一色每人 16 張挑 13 張）");
   const deal = sent.filter((e) => e.event === "th_deal_hand");
   const lastDeal = deal.slice(-4);
   eq(lastDeal.map((e) => [e.channel === privateChannel(m1.roomId, m1.code, e.payload.playerId as string, uid(PIDS.indexOf(e.payload.playerId as string))), (e.payload.hand as Card[]).length]),
-    PIDS.map(() => [true, 13]), "D2 每家的 13 張只送到自己的座位頻道");
+    PIDS.map(() => [true, 16]), "D2 每家的 16 張只送到自己的座位頻道");
   const pub = sent.filter((e) => e.channel === publicChannel(m1.code));
   const leakPub = pub.some((e) => all.some((id) => JSON.stringify(e.payload).includes(`"${id}"`)));
   eq([pub.some((e) => e.event === "th_hand_start"), leakPub, JSON.stringify(s0.body).includes(`"${rest[0].id}"`)], [true, false, false],
@@ -178,7 +181,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
 
 // ---------- T 送出和截止代排同時發生 ----------
 {
-  NOW += NEXT_HAND_MS; // 斷線（都沒按下一局）時間到 → 自動開第 2 局
+  NOW += NEXT_HAND_MAX_MS; // 斷線（都沒按下一局）時間到 → 自動開第 2 局
   const s2 = await state(m1.roomId, "p0", "p0");
   eq([s2.body.handNo, s2.body.phase, s2.body.history.length], [2, "arranging", 1], "N1 亮牌後沒人按下一局，時間到也會自動開下一局（有人斷線不會卡住）");
   const h0 = s2.body.me.hand as Card[];
@@ -206,7 +209,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
     "T2 送出和截止代排同時發生：代排先寫進去，送出那邊寫入衝突、重讀後已過截止 → 只認代排一個結果");
   eq(cum2, [0, 1, 2, 3].map((i) => m1Totals[0][i] + m1Totals[1][i]), "N4 第 2 局亮牌後，每一家的累計＝第 1 局＋第 2 局自己的本局分（逐家比對）");
 
-  NOW += NEXT_HAND_MS;
+  NOW += NEXT_HAND_MAX_MS;
   const s3 = (await state(m1.roomId, "p0", "p0")).body;
   const h = s3.me.hand as Card[];
   const a1 = autoArrange(h), a2 = autoArrange([...h].reverse());
@@ -242,12 +245,12 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   for (const p of PIDS.slice(1)) await sub(m1.roomId, p, autoArrange(await myHand(m1.roomId, p)));
   const fin = (await state(m1.roomId, "p0", "p0"));
   const closedEv = sent.filter((e) => e.event === "th_room_closed").pop();
-  const rec = (await db.query<{ game: string; end_reason: string; hands_played: number; settings: object }>(`select game, end_reason, hands_played, settings - 'finalHand' settings from match_records where room_id = $1`, [m1.roomId])).rows[0];
+  const rec = (await db.query<{ game: string; end_reason: string; hands_played: number; settings: object; nstats: number }>(`select game, end_reason, hands_played, settings - 'finalHand' - 'stats' settings, jsonb_array_length(settings->'stats') nstats from match_records where room_id = $1`, [m1.roomId])).rows[0];
   const recP = (await db.query<{ seat: number; total_score: number; user_id: string }>(`select seat, total_score, user_id from match_record_players p join match_records r on r.id = p.match_id where r.room_id = $1 order by seat`, [m1.roomId])).rows;
   const gone = (await db.query<{ n: number }>(`select count(*)::int n from th_rooms where id = $1`, [m1.roomId])).rows[0].n;
   eq([fin.status, fin.body.error, fin.body.record?.endReason, rec, gone, (closedEv?.payload as { endReason: string })?.endReason],
-    [410, "ended", "completed", { game: "thirteen", end_reason: "completed", hands_played: 3, settings: { arrangeSec: 30, totalHands: 3 } }, 0, "completed"],
-    "Q1 第 3 局（最後一局）亮牌後自動寫對局紀錄並關房；之後讀狀態回 410 和總結算");
+    [410, "ended", "completed", { game: "thirteen", end_reason: "completed", hands_played: 3, settings: { arrangeSec: 30, totalHands: 3 }, nstats: 4 }, 0, "completed"],
+    "Q1 第 3 局（最後一局）亮牌後自動寫對局紀錄（含四家的整場累計 stats）並關房；之後讀狀態回 410 和總結算");
   const totals = recP.map((p) => p.total_score);
   const fh = fin.body.record?.finalHand ?? null; // 沒有最後一局（必修 4 沒修好）時下面的斷言會變紅，不會讓整支測試當掉
   m1Totals.push(fh?.result?.totals ?? [NaN, NaN, NaN, NaN]);
@@ -267,8 +270,10 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const { sv: _sv, ...liveReveal } = (live ?? {}) as Record<string, unknown>; // 即時廣播多帶存檔版本號 sv（前端補抓用），不屬於亮牌內容
   eq([!!live, typeof _sv, stable(fh) === stable(liveReveal)], [true, "number", true],
     "S4 紀錄裡的最後一局和當時即時廣播的亮牌（th_reveal，扣掉版本號 sv）逐欄一模一樣：三墩、翻牌順序、結算、累計、代排名單");
-  eq([stable(perSeat), arrs.map((a) => [a.front.length, a.middle.length, a.back.length])], [stable(hands3), [[3, 5, 5], [3, 5, 5], [3, 5, 5], [3, 5, 5]]],
-    "S4 每一家的三墩（頭 3、中 5、尾 5）正好是那一家這局發到的 13 張，沒有混到別家的牌");
+  // 2026-11-18 加一色每人 16 張：三墩是從自己 16 張裡挑的 13 張（另外 3 張不用）
+  eq([perSeat.map((ids, i) => ids.length === 13 && new Set(ids).size === 13 && ids.every((id) => (hands3[i] as string[]).includes(id))), arrs.map((a) => [a.front.length, a.middle.length, a.back.length])],
+    [[true, true, true, true], [[3, 5, 5], [3, 5, 5], [3, 5, 5], [3, 5, 5]]],
+    "S4 每一家的三墩（頭 3、中 5、尾 5）共 13 張，全部是那一家這局發到的 16 張裡的牌，沒有混到別家的牌、沒有重複");
   eq([stable(fh?.result), stable(fh?.order)], [stable(recomputed), stable(arrs.length === 4 ? revealOrder(arrs) : null)],
     "S4 用紀錄裡的四家三墩重新給引擎算：6 組結算（每墩勝負、加分、打槍）、全壘打、本局分、翻牌順序都和紀錄裡的一模一樣");
 }
@@ -370,7 +375,7 @@ const duel = async (a: Ex, b: Ex) => {
   const v = (await state(m.roomId, "p3", "p3")).body;
   const h1 = v.history[0].totals;
   eq([r, twice.body.handNo, last.body.handNo, v.phase, v.me.hand.length, v.playerScores, v.history.length],
-    [[1, 1, 1], 1, 2, "arranging", 13, h1, 1], "N3 亮牌後四家都按下一局才開（重複按不算兩次）；新的一局重新發 13 張、每一家的累計＝第 1 局自己的分數（逐家比對）");
+    [[1, 1, 1], 1, 2, "arranging", 16, h1, 1], "N3 亮牌後四家都按下一局才開（重複按不算兩次）；新的一局重新發 16 張、每一家的累計＝第 1 局自己的分數（逐家比對）");
 }
 
 // ---------- S1 座位頻道綁這一場和座位主人（審伯必修 1） ----------
@@ -416,7 +421,8 @@ const duel = async (a: Ex, b: Ex) => {
 
 // ---------- S2 房主綁開房帳號（審伯必修 2） ----------
 {
-  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 1 }, "p0");
+  const c = await post(createRoute, { hostId: "p0", arrangeSec: 30, totalHands: 8 }, "p0");
+  await setTotalHands(db, c.body.roomId, 1); // 開房只能選 8／16／32；這裡照舊房的方式改成 1 局
   const grab = await post(joinRoute, { code: c.body.code, playerId: "p0", name: "搶房主" }, "watch");
   const w = await post(joinRoute, { code: c.body.code, playerId: "w1", name: "旁人" }, "watch");
   for (const [i, p] of ["p1", "p2"].entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i + 1}` }, p);

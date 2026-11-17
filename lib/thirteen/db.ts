@@ -7,9 +7,16 @@ import type { MatchRecordInput, EndReason, MatchRecordSummary } from "@/lib/reco
 import type { Card } from "./cards";
 import type { Arrangement } from "./arrange";
 import type { RoundResult } from "./score";
+import { matchStats, type HandStat } from "./flow";
 
-/** 開房可以選的理牌時間（秒） */
-export const ARRANGE_SECS = [30, 45, 60] as const;
+/** 開房可以選的理牌時間（秒）：最少 15 秒、15 秒一階、最多 120 秒（老闆 2026-11-18；原本只有 30／45／60，舊房間照樣有效） */
+export const ARRANGE_SECS = [15, 30, 45, 60, 75, 90, 105, 120] as const;
+export const ARRANGE_SEC_MESSAGE = "理牌時間要是 15～120 秒，每 15 秒一階（15、30、45、60、75、90、105、120）";
+
+/** 開房可以選的局數（老闆 2026-11-18：8、16、32 局）。只在開房時檢查；已經開的房照它原本的設定打完 */
+export const TOTAL_HANDS = [8, 16, 32] as const;
+export const isTotalHands = (x: unknown): x is (typeof TOTAL_HANDS)[number] => TOTAL_HANDS.includes(x as (typeof TOTAL_HANDS)[number]);
+export const TOTAL_HANDS_MESSAGE = "局數只能選 8、16 或 32 局";
 export type ArrangeSec = (typeof ARRANGE_SECS)[number];
 export const isArrangeSec = (x: unknown): x is ArrangeSec => ARRANGE_SECS.includes(x as ArrangeSec);
 
@@ -32,6 +39,7 @@ export interface ThirteenPlayerState {
 export interface ThirteenHandResult {
   handNo: number;
   result: RoundResult;
+  stats?: HandStat[]; // 這局每家的明細（2026-11-18 起亮牌時記；更早的局沒有，用 handStats(result) 補算）
 }
 
 export interface ThirteenGameState {
@@ -47,7 +55,9 @@ export interface ThirteenGameState {
   hands: ThirteenHandResult[];      // 每局結果
   playerScores: number[];           // 多局累計（依座位）
   nextReady?: string[];             // 這局亮牌後按了「下一局」的玩家 id
-  nextHandAt?: number | null;       // 亮牌後到這個時間沒人按也自動開下一局（斷線的人不會卡住牌局）
+  nextHandAt?: number | null;       // 亮牌後到這個時間沒人按也自動開下一局（＝settleAt＋30 秒；斷線的人不會卡住牌局）
+  revealedAt?: number | null;       // 這局亮牌的時間（伺服器毫秒）
+  settleAt?: number | null;         // 結算面板出現的時間（＝revealedAt＋亮牌演出長度，見 flow.ts revealDurationMs）
   leaveRequest?: { requesterId: string; approvedBy: string[]; deniedBy?: string[] } | null; // 中途解散投票（判定見 flow.ts evaluateLeave）
   lastActive?: Record<string, number>; // 每位玩家最後一次「牌局動作」的時間（閒置不計票用，見 flow.ts）
 }
@@ -82,9 +92,9 @@ export class StateConflictError extends Error {
   }
 }
 
-/** 開房：房號重複回 "duplicate"（呼叫端換一個再試）；理牌時間不是 30／45／60 丟錯 */
+/** 開房：房號重複回 "duplicate"（呼叫端換一個再試）；理牌時間不在 ARRANGE_SECS 裡丟錯 */
 export async function insertRoom(row: { code: string; host_id: string; host_user_id: string; settings: ThirteenSettings }): Promise<{ id: string } | "duplicate"> {
-  if (!isArrangeSec(row.settings.arrangeSec)) throw new Error("理牌時間只能是 30、45 或 60 秒");
+  if (!isArrangeSec(row.settings.arrangeSec)) throw new Error(ARRANGE_SEC_MESSAGE);
   const { data, error } = await getSupabaseAdmin()
     .from("th_rooms")
     .insert({ code: row.code, status: "waiting", host_id: row.host_id, game_state: newRoomState(row.settings, row.host_user_id) })
@@ -230,7 +240,8 @@ export function buildThirteenRecord(roomId: string, roomCode: string, s: Thirtee
     totalRounds: null,
     basePoints: null,
     fanPoints: null,
-    settings: { arrangeSec: s.settings.arrangeSec, totalHands: s.settings.totalHands },
+    // stats：整場累計（每家打槍、被打槍、全壘打、被全壘打次數和總分），總結算畫面和對局紀錄用（2026-11-18）
+    settings: { arrangeSec: s.settings.arrangeSec, totalHands: s.settings.totalHands, stats: matchStats(s) },
     handsPlayed: s.hands.length,
     players: s.players.map((p) => ({
       seat: p.seat,
@@ -268,8 +279,8 @@ export async function closeThirteen(roomId: string, rec: MatchRecordInput | null
   return data as CloseResult;
 }
 
-/** 房間已經關掉時，用房間 id 找這場的紀錄（重新整理、晚到的請求用）；沒有回 null。finalHand：最後亮的那一局（有的話） */
-export async function findThirteenRecord(roomId: string): Promise<(MatchRecordSummary & { finalHand: unknown }) | null> {
+/** 房間已經關掉時，用房間 id 找這場的紀錄（重新整理、晚到的請求用）；沒有回 null。finalHand：最後亮的那一局（有的話）；stats：整場累計 */
+export async function findThirteenRecord(roomId: string): Promise<(MatchRecordSummary & { finalHand: unknown; stats: unknown }) | null> {
   const db = getSupabaseAdmin();
   const { data: m, error } = await db.from("match_records").select("id, room_code, end_reason, ended_at, settings")
     .eq("game", "thirteen").eq("room_id", roomId).maybeSingle();
@@ -280,7 +291,8 @@ export async function findThirteenRecord(roomId: string): Promise<(MatchRecordSu
   if (e2) throw new Error(`讀取十三支紀錄失敗：${e2.message}`);
   return { game: "thirteen", roomCode: m.room_code, endReason: m.end_reason, endedAt: m.ended_at,
     players: (ps ?? []).map((p) => ({ seat: p.seat, playerName: p.player_name, totalScore: p.total_score })),
-    finalHand: (m.settings as { finalHand?: unknown } | null)?.finalHand ?? null };
+    finalHand: (m.settings as { finalHand?: unknown } | null)?.finalHand ?? null,
+    stats: (m.settings as { stats?: unknown } | null)?.stats ?? null };
 }
 
 /** 我的十三支對局紀錄（一頁）＋累計（th_my_matches，20261118_thirteen_records.sql）。cursor＝上一頁最後一筆的 endedAt 和 id */

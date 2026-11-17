@@ -27,3 +27,11 @@ export async function setupThirteenDb(): Promise<PGlite> {
   installPostgrest(db, base);
   return db;
 }
+
+/**
+ * 測試用：把房間（還在等人）的局數直接改成 n（2026-11-18 起開房只能選 8／16／32 局；
+ * 測試要快速打完時，照「舊房照原設定打完」的方式，用資料庫直接改成較少的局數）
+ */
+export async function setTotalHands(db: PGlite, roomId: string, n: number): Promise<void> {
+  await db.query(`update th_rooms set game_state = jsonb_set(game_state, '{settings,totalHands}', to_jsonb($2::int)) where id = $1`, [roomId, n]);
+}
