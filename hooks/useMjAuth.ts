@@ -273,7 +273,7 @@ export function useMjAuth() {
     };
   }, [status]);
 
-  /** 導去 LINE 登入；登入完回到 /mahjong（有房號就回那間房）。主畫面 App 先發起交接，代碼跟著登入流程走 */
+  /** 導去 LINE 登入；登入完回到發起登入的頁面（麻將頁照舊回 /mahjong；十三支回 /thirteen；有房號帶 ?room=，見 loginReturnUrl）。主畫面 App 先發起交接，代碼跟著登入流程走 */
   const signIn = useCallback(async (roomCode: string | null) => {
     setStatus("redirecting");
     setErrorText(null);

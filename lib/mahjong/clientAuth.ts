@@ -49,12 +49,30 @@ export async function mjFetch(path: string, init: RequestInit = {}): Promise<Res
   });
 }
 
+/** 登入用、不能帶回去的查詢參數（主畫面 App 交接代碼、登入失敗訊息；房號另外處理） */
+const LOGIN_PARAMS = ["pairing", "error", "error_code", "error_description", "room"];
+/** 可以回去的站內頁面路徑：只有英數、-、_ 組成的一段段路徑（擋掉 //、\、%、..、/api/…，不會被導到站外） */
+const SAFE_PATH = /^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/;
+
 /**
- * LINE 登入完要回來的網址：只會是本站的 /mahjong，房號只接受 4 位數字，放在 query
- * （#room= 是 hash，登入流程會被 token 蓋掉，伺服器也收不到）。不接受任何外部傳入的網址。
+ * LINE 登入完要回來的網址（審伯 2026-11-18 必修 5：十三支登入後要回十三支、保留邀請房號）。只會是本站：
+ *   ・/mahjong 開頭的頁面（大廳、觀戰、管理頁）：照舊回 /mahjong，行為和以前完全一樣
+ *   ・其他站內頁面（例如 /thirteen）：回發起登入的那一頁，保留它的查詢參數（登入用的參數不帶）
+ *   ・路徑怪、或不是本站：一律回 /mahjong
+ * 房號只接受 4 位數字，放在 query 的 room（#room= 是 hash，登入流程會被 token 蓋掉，伺服器也收不到）：
+ * 呼叫端給的 roomCode 優先，沒給就沿用網址上的 #room= 或 ?room=。不接受任何外部傳入的網址。
  */
 export function loginReturnUrl(roomCode: string | null): string {
-  const url = new URL("/mahjong", window.location.origin);
-  if (roomCode && ROOM_CODE_RE.test(roomCode)) url.searchParams.set("room", roomCode);
+  const { origin, href } = window.location;
+  const here = new URL(href);
+  const hashRoom = /(?:^#|[#&])room=(\d{4})(?:&|$)/.exec(here.hash)?.[1] ?? null;
+  const room = [roomCode, hashRoom, here.searchParams.get("room")].find((r): r is string => !!r && ROOM_CODE_RE.test(r)) ?? null;
+  const sameSite = here.origin === origin && SAFE_PATH.test(here.pathname) && !here.pathname.startsWith("/api/");
+  const url = new URL("/mahjong", origin);
+  if (sameSite && here.pathname !== "/mahjong" && !here.pathname.startsWith("/mahjong/")) {
+    url.pathname = here.pathname; // 只設 pathname（不用字串拼接），網址一定還是本站
+    for (const [k, v] of here.searchParams) if (!LOGIN_PARAMS.includes(k)) url.searchParams.append(k, v);
+  }
+  if (room && (url.pathname !== "/mahjong" || roomCode === room)) url.searchParams.set("room", room);
   return url.toString();
 }
