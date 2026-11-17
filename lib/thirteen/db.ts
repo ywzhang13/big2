@@ -8,8 +8,9 @@ import type { Card } from "./cards";
 import type { Arrangement } from "./arrange";
 import type { RoundResult } from "./score";
 
-/** 開房可以選的理牌時間（秒） */
-export const ARRANGE_SECS = [30, 45, 60] as const;
+/** 開房可以選的理牌時間（秒）：最少 15 秒、15 秒一階、最多 120 秒（老闆 2026-11-18；原本只有 30／45／60，舊房間照樣有效） */
+export const ARRANGE_SECS = [15, 30, 45, 60, 75, 90, 105, 120] as const;
+export const ARRANGE_SEC_MESSAGE = "理牌時間要是 15～120 秒，每 15 秒一階（15、30、45、60、75、90、105、120）";
 export type ArrangeSec = (typeof ARRANGE_SECS)[number];
 export const isArrangeSec = (x: unknown): x is ArrangeSec => ARRANGE_SECS.includes(x as ArrangeSec);
 
@@ -82,9 +83,9 @@ export class StateConflictError extends Error {
   }
 }
 
-/** 開房：房號重複回 "duplicate"（呼叫端換一個再試）；理牌時間不是 30／45／60 丟錯 */
+/** 開房：房號重複回 "duplicate"（呼叫端換一個再試）；理牌時間不在 ARRANGE_SECS 裡丟錯 */
 export async function insertRoom(row: { code: string; host_id: string; host_user_id: string; settings: ThirteenSettings }): Promise<{ id: string } | "duplicate"> {
-  if (!isArrangeSec(row.settings.arrangeSec)) throw new Error("理牌時間只能是 30、45 或 60 秒");
+  if (!isArrangeSec(row.settings.arrangeSec)) throw new Error(ARRANGE_SEC_MESSAGE);
   const { data, error } = await getSupabaseAdmin()
     .from("th_rooms")
     .insert({ code: row.code, status: "waiting", host_id: row.host_id, game_state: newRoomState(row.settings, row.host_user_id) })

@@ -1,9 +1,9 @@
-// 十三支開房：POST { hostId, arrangeSec: 30|45|60, totalHands } → { roomId, code }。要登入；開完房主再呼叫 join 入座
+// 十三支開房：POST { hostId, arrangeSec: 15～120 每 15 秒一階, totalHands } → { roomId, code }。要登入；開完房主再呼叫 join 入座
 // 開房時順便清閒置太久的十三支房（同麻將：回應送出後才跑，不拖慢開房；規則見 lib/thirteen/server.ts sweepIdleThirteenRooms）
 import { randomInt } from "node:crypto";
 import { after } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { insertRoom, isArrangeSec } from "@/lib/thirteen/db";
+import { ARRANGE_SEC_MESSAGE, insertRoom, isArrangeSec } from "@/lib/thirteen/db";
 import { fail, json, sweepIdleThirteenRooms } from "@/lib/thirteen/server";
 
 const MAX_HANDS = 16;
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { hostId?: unknown; arrangeSec?: unknown; totalHands?: unknown } | null;
   const hostId = body?.hostId, arrangeSec = body?.arrangeSec, totalHands = body?.totalHands;
   if (typeof hostId !== "string" || !hostId || hostId.length > 64) return fail(400, "bad_request");
-  if (!isArrangeSec(arrangeSec)) return fail(400, "bad_arrange_sec", "理牌時間只能是 30、45 或 60 秒");
+  if (!isArrangeSec(arrangeSec)) return fail(400, "bad_arrange_sec", ARRANGE_SEC_MESSAGE);
   if (!Number.isInteger(totalHands) || (totalHands as number) < 1 || (totalHands as number) > MAX_HANDS) return fail(400, "bad_total_hands", `局數要是 1～${MAX_HANDS}`);
   try {
     for (let i = 0; i < 10; i++) {
