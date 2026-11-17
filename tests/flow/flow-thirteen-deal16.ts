@@ -4,6 +4,8 @@
 //   F3 亮牌：每家公開的三墩剛好 13 張；四家不用的 3 張、沒發的那 1 張都不在亮牌（狀態、th_reveal 廣播）和別家的畫面裡
 //   F4 時間到代排：沒送出的人由系統從他的 16 張挑 13 張排好、不倒水；他不用的 3 張一樣不公開
 //   F5 紀錄：整場打完寫進對局紀錄的最後一局（finalHand）、關房後回的 410 紀錄，都沒有任何人不用的 3 張和沒發的那張
+//   F6 觀戰（小測 2026-11-18 補驗）：被同意的觀戰者直接讀觀戰畫面 /api/thirteen/spectate/view——
+//      亮牌前 65 張一張都沒有；亮牌後只有四家三墩的 52 張，四家不用的 3 張和沒發的那張都沒有
 import { setupThirteenDb } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
@@ -13,6 +15,8 @@ import { POST as startRoute } from "../../app/api/thirteen/start/route";
 import { GET as stateRoute } from "../../app/api/thirteen/state/route";
 import { POST as submitRoute } from "../../app/api/thirteen/submit/route";
 import { POST as tickRoute } from "../../app/api/thirteen/tick/route";
+import { GET as spViewRoute } from "../../app/api/thirteen/spectate/view/route";
+import { requestSpectate, respondSpectate } from "../support/stub-spectate-store";
 import { clock } from "../../lib/thirteen/flow";
 import { privateChannel, publicChannel } from "../../lib/thirteen/server";
 import { autoArrange, checkArrangement } from "../../lib/thirteen/arrange";
@@ -108,6 +112,33 @@ const hidden = [...unused.flat(), ...restIds];
   const gone = await state(m.roomId, "p1");
   eq([!!rec, leaks(rec, hidden).length, gone.status, leaks(gone.body, hidden).length, !!(rec as { finalHand?: unknown } | undefined)?.finalHand],
     [true, 0, 410, 0, true], "F5 紀錄：寫進對局紀錄的最後一局、關房後回的 410 紀錄，都沒有任何人不用的 3 張和沒發的那張");
+}
+
+// F6：觀戰畫面（兩局的場，亮牌後房間還在）
+{
+  tokens["tk-watch"] = { id: "00000000-0000-4000-8000-0000000000f9", displayName: "觀戰員", pictureUrl: null, isGuest: false };
+  const w = await newMatch(2);
+  const hs: Card[][] = [];
+  for (const p of PIDS) hs.push((await state(w.roomId, p)).body.me.hand);
+  const wRest = ids((await db.query<{ r: Card[] }>(`select game_state->'rest' r from th_rooms where id = $1`, [w.roomId])).rows[0].r);
+  const rq = await requestSpectate(w.roomId, tokens["tk-watch"].id, "p1", "觀戰員", null);
+  if (rq.ok) await respondSpectate(w.roomId, "p1", rq.requestId, true);
+  const view = async () => { const r = await spViewRoute(new Request(`http://x/?roomId=${w.roomId}&target=p1`, { headers: { authorization: "Bearer tk-watch" } })); return { status: r.status, body: await r.json() }; };
+  const all65 = [...hs.flat().map((c) => c.id), ...wRest];
+  const before = await view();
+  // p0、p1 先送出（三墩在伺服器），再讓時間到：p2、p3 代排、亮牌
+  for (const i of [0, 1]) await post(submitRoute, { roomId: w.roomId, playerId: PIDS[i], ...subOf(safeAuto(hs[i])) }, PIDS[i]);
+  const mid = await view();
+  NOW += 30_000;
+  await post(tickRoute, { roomId: w.roomId, playerId: "p0" }, "p0");
+  const after = await view();
+  const arrs = (after.body.reveal?.arrangements ?? []) as { front: Card[]; middle: Card[]; back: Card[] }[];
+  const usedBy = arrs.map((a) => ids([...a.front, ...a.middle, ...a.back]));
+  const unusedW = hs.map((h, i) => ids(h).filter((id) => !(usedBy[i] ?? []).includes(id)));
+  eq([rq.ok, before.status, leaks(before.body, all65).length, mid.status, leaks(mid.body, all65).length,
+    after.status, after.body.phase, usedBy.map((u) => u.length), unusedW.map((u) => u.length), leaks(after.body, [...unusedW.flat(), ...wRest]).length, after.body.me],
+    [true, 200, 0, 200, 0, 200, "revealed", [13, 13, 13, 13], [3, 3, 3, 3], 0, null],
+    "F6 被同意的觀戰者讀 /api/thirteen/spectate/view：亮牌前（含兩家已送出時）65 張一張都沒有；亮牌後只有四家三墩各 13 張，四家不用的 3 張、沒發的那張都沒有");
 }
 
 console.log(results.join("\n"));
