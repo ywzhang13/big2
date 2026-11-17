@@ -131,7 +131,8 @@ async function afterClosed(room: Pick<ThRoom, "id" | "code">, endReason: "comple
     try { await fn(room.id); } catch (err) { console.error(`[th-close] 房 ${room.id} 刪除${what}資料失敗：`, err instanceof Error ? err.message : err); }
   }
   await send(room, [...before, { event: "th_room_closed", payload: { endReason, recorded: !!rec,
-    players: (rec?.players ?? []).map((p) => ({ seat: p.seat, playerName: p.playerName, totalScore: p.totalScore })) } }]);
+    players: (rec?.players ?? []).map((p) => ({ seat: p.seat, playerName: p.playerName, totalScore: p.totalScore })),
+    stats: (rec?.settings as { stats?: unknown } | undefined)?.stats ?? null } }]); // 整場累計（總結算畫面用）
 }
 
 /** 等人階段最後一個人離開、房間已由 th_lobby_leave 刪掉之後：清聊天和觀戰資料、通知（一局都沒打，沒有紀錄） */

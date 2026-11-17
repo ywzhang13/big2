@@ -21,7 +21,7 @@ import { POST as leaveReqRoute } from "../../app/api/thirteen/leave-request/rout
 import { POST as leaveVoteRoute } from "../../app/api/thirteen/leave-vote/route";
 import { POST as chatRoute } from "../../app/api/thirteen/chat/route";
 import { GET as historyRoute } from "../../app/api/thirteen/chat/history/route";
-import { clock, IDLE_VOTE_MS, NEXT_HAND_MS } from "../../lib/thirteen/flow";
+import { clock, IDLE_VOTE_MS, NEXT_HAND_MAX_MS } from "../../lib/thirteen/flow";
 import { privateChannel, publicChannel } from "../../lib/thirteen/server";
 import { spectatorChannelName } from "../../lib/mahjong/access";
 import type { Card } from "../../lib/thirteen/cards";
@@ -66,7 +66,7 @@ async function playHand(roomId: string, active: string[]) {
     await post(submitRoute, { roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p);
   }
   NOW += 30_000; await post(tickRoute, { roomId, playerId: active[0] }, active[0]);       // 截止：沒送出的人代排、亮牌
-  NOW += NEXT_HAND_MS; await post(tickRoute, { roomId, playerId: active[0] }, active[0]);  // 自動開下一局
+  NOW += NEXT_HAND_MAX_MS; await post(tickRoute, { roomId, playerId: active[0] }, active[0]);  // 自動開下一局
 }
 const roomN = async (id: string) => (await db.query<{ n: number }>(`select count(*)::int n from th_rooms where id = $1`, [id])).rows[0].n;
 const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`select end_reason from match_records where room_id = $1`, [id])).rows[0] ?? null;
@@ -219,7 +219,7 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
   await playHand(m.roomId, ["p0", "p1", "p2"]);
   await post(leaveReqRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   for (const p of ["p1", "p2"]) await post(leaveVoteRoute, { roomId: m.roomId, playerId: p, approve: true }, p);
-  while (NOW + 30_000 + NEXT_HAND_MS - t <= IDLE_VOTE_MS) await playHand(m.roomId, ["p0", "p1", "p2"]); // 跑到 3 號還差一點才滿 3 分鐘
+  while (NOW + 30_000 + NEXT_HAND_MAX_MS - t <= IDLE_VOTE_MS) await playHand(m.roomId, ["p0", "p1", "p2"]); // 跑到 3 號還差一點才滿 3 分鐘
   const beforeView = (await state(m.roomId, "p0")).body.leaveRequest;
   const alive = await roomN(m.roomId);
   NOW = t + IDLE_VOTE_MS + 1; // 只讓時間走到 3 號剛好超過 3 分鐘；這段期間沒有任何 tick、送出、投票
@@ -246,7 +246,7 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
     NOW = v.arrangeDeadline; const s3 = await sub("p3");       // 剛好截止
     const rv = (await state(m.roomId, "p0")).body.reveal;       // 亮牌內容：誰是系統代排的
     marks.push(`${s2.status}/${s3.status}:${s3.body.error}/代排${JSON.stringify(rv?.autoArranged)}`);
-    NOW += NEXT_HAND_MS; await post(tickRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
+    NOW += NEXT_HAND_MAX_MS; await post(tickRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   }
   const r = await post(leaveReqRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   eq([marks.length > 1, [...new Set(marks)], r.body.needed, r.body.idleSeats], [true, ["200/409:time_up/代排[3]"], 2, [3]],

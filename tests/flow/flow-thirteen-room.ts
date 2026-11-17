@@ -32,7 +32,7 @@ import { POST as spRespondRoute } from "../../app/api/thirteen/spectate/respond/
 import { GET as spManageRoute } from "../../app/api/thirteen/spectate/manage/route";
 import { POST as spRevokeRoute } from "../../app/api/thirteen/spectate/revoke/route";
 import { GET as spViewRoute } from "../../app/api/thirteen/spectate/view/route";
-import { clock, NEXT_HAND_MS } from "../../lib/thirteen/flow";
+import { clock, NEXT_HAND_MAX_MS } from "../../lib/thirteen/flow";
 import { closeIdleRoom, privateChannel, publicChannel, sweepIdleThirteenRooms } from "../../lib/thirteen/server";
 import { listIdleThirteenRooms } from "../../lib/thirteen/db";
 import { spectatorChannelName } from "../../lib/mahjong/access";
@@ -410,7 +410,7 @@ async function ageRoom(id: string, hours: number) {
   NOW += 60_000;
   const diss = await newMatch(["p1", "p0", "p2", "p4"], 3);
   await submitAll(diss.roomId, ["p1", "p0", "p2", "p4"]);
-  NOW += NEXT_HAND_MS; await post(tickRoute, { roomId: diss.roomId, playerId: "p1" }, "p1");
+  NOW += NEXT_HAND_MAX_MS; await post(tickRoute, { roomId: diss.roomId, playerId: "p1" }, "p1");
   await post(leaveReqRoute, { roomId: diss.roomId, playerId: "p1" }, "p1");
   for (const p of ["p0", "p2", "p4"]) await post(leaveVoteRoute, { roomId: diss.roomId, playerId: p, approve: true }, p);
   // 麻將場次（p0 也在）不能混進十三支紀錄

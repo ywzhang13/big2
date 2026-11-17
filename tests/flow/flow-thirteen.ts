@@ -21,7 +21,7 @@ import { POST as tickRoute } from "../../app/api/thirteen/tick/route";
 import { POST as nextRoute } from "../../app/api/thirteen/next-game/route";
 import { POST as leaveReqRoute } from "../../app/api/thirteen/leave-request/route";
 import { POST as leaveVoteRoute } from "../../app/api/thirteen/leave-vote/route";
-import { clock, dealer, NEXT_HAND_MS } from "../../lib/thirteen/flow";
+import { clock, dealer, NEXT_HAND_MAX_MS } from "../../lib/thirteen/flow";
 import { publicChannel, privateChannel } from "../../lib/thirteen/server";
 import { parseCards, type Card } from "../../lib/thirteen/cards";
 import { autoArrange, type Arrangement } from "../../lib/thirteen/arrange";
@@ -178,7 +178,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
 
 // ---------- T 送出和截止代排同時發生 ----------
 {
-  NOW += NEXT_HAND_MS; // 斷線（都沒按下一局）時間到 → 自動開第 2 局
+  NOW += NEXT_HAND_MAX_MS; // 斷線（都沒按下一局）時間到 → 自動開第 2 局
   const s2 = await state(m1.roomId, "p0", "p0");
   eq([s2.body.handNo, s2.body.phase, s2.body.history.length], [2, "arranging", 1], "N1 亮牌後沒人按下一局，時間到也會自動開下一局（有人斷線不會卡住）");
   const h0 = s2.body.me.hand as Card[];
@@ -206,7 +206,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
     "T2 送出和截止代排同時發生：代排先寫進去，送出那邊寫入衝突、重讀後已過截止 → 只認代排一個結果");
   eq(cum2, [0, 1, 2, 3].map((i) => m1Totals[0][i] + m1Totals[1][i]), "N4 第 2 局亮牌後，每一家的累計＝第 1 局＋第 2 局自己的本局分（逐家比對）");
 
-  NOW += NEXT_HAND_MS;
+  NOW += NEXT_HAND_MAX_MS;
   const s3 = (await state(m1.roomId, "p0", "p0")).body;
   const h = s3.me.hand as Card[];
   const a1 = autoArrange(h), a2 = autoArrange([...h].reverse());
@@ -242,12 +242,12 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   for (const p of PIDS.slice(1)) await sub(m1.roomId, p, autoArrange(await myHand(m1.roomId, p)));
   const fin = (await state(m1.roomId, "p0", "p0"));
   const closedEv = sent.filter((e) => e.event === "th_room_closed").pop();
-  const rec = (await db.query<{ game: string; end_reason: string; hands_played: number; settings: object }>(`select game, end_reason, hands_played, settings - 'finalHand' settings from match_records where room_id = $1`, [m1.roomId])).rows[0];
+  const rec = (await db.query<{ game: string; end_reason: string; hands_played: number; settings: object; nstats: number }>(`select game, end_reason, hands_played, settings - 'finalHand' - 'stats' settings, jsonb_array_length(settings->'stats') nstats from match_records where room_id = $1`, [m1.roomId])).rows[0];
   const recP = (await db.query<{ seat: number; total_score: number; user_id: string }>(`select seat, total_score, user_id from match_record_players p join match_records r on r.id = p.match_id where r.room_id = $1 order by seat`, [m1.roomId])).rows;
   const gone = (await db.query<{ n: number }>(`select count(*)::int n from th_rooms where id = $1`, [m1.roomId])).rows[0].n;
   eq([fin.status, fin.body.error, fin.body.record?.endReason, rec, gone, (closedEv?.payload as { endReason: string })?.endReason],
-    [410, "ended", "completed", { game: "thirteen", end_reason: "completed", hands_played: 3, settings: { arrangeSec: 30, totalHands: 3 } }, 0, "completed"],
-    "Q1 第 3 局（最後一局）亮牌後自動寫對局紀錄並關房；之後讀狀態回 410 和總結算");
+    [410, "ended", "completed", { game: "thirteen", end_reason: "completed", hands_played: 3, settings: { arrangeSec: 30, totalHands: 3 }, nstats: 4 }, 0, "completed"],
+    "Q1 第 3 局（最後一局）亮牌後自動寫對局紀錄（含四家的整場累計 stats）並關房；之後讀狀態回 410 和總結算");
   const totals = recP.map((p) => p.total_score);
   const fh = fin.body.record?.finalHand ?? null; // 沒有最後一局（必修 4 沒修好）時下面的斷言會變紅，不會讓整支測試當掉
   m1Totals.push(fh?.result?.totals ?? [NaN, NaN, NaN, NaN]);
