@@ -74,12 +74,12 @@ const v1 = (await state(roomId, "p1")).body;
 {
   const result = (rev1?.result ?? v1.reveal?.result) as RoundResult;
   const d = f.revealDurationMs ? f.revealDurationMs(result) : null;
-  // 照 v5 時間軸另外算一次（特效牌型、打槍組數、全壘打從結算結果數；別家隨機牌也可能有特效牌型）
+  // 照老闆定案的新節奏另外算一次（特效牌型、打槍組數、全壘打從結算結果數；別家隨機牌也可能有特效牌型）
   const specials = result ? result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0) : -1;
-  const v5 = 1200 + 3 * 2600 + specials * 900 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1000 + (result?.homeRun !== null ? 2800 : 0); // 全壘打 2.8 秒（小宜 v7）
+  const v8b = 20900 + specials * 300 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1500 + (result?.homeRun !== null ? 3200 : 0); // 老闆定案新節奏：20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打
   eq([rev1?.revealedAt, rev1?.settleAt, rev1?.nextHandAt, v1.reveal?.revealedAt, v1.reveal?.settleAt, v1.nextHandAt, d],
-    [NOW, NOW + v5, NOW + v5 + 30_000, NOW, NOW + v5, NOW + v5 + 30_000, v5],
-    `N1 亮牌：revealedAt＝亮牌時間、settleAt＝亮牌＋演出長度（這局 ${specials} 個特效牌型、三組打槍、全壘打＝${v5 / 1000} 秒，照 v5 另外算）、nextHandAt＝settleAt＋30 秒；廣播和讀狀態都有`);
+    [NOW, NOW + v8b, NOW + v8b + 30_000, NOW, NOW + v8b, NOW + v8b + 30_000, v8b],
+    `N1 亮牌：revealedAt＝亮牌時間、settleAt＝亮牌＋演出長度（這局 ${specials} 個特效牌型、三槍、全壘打＝${v8b / 1000} 秒，照新節奏另外算）、nextHandAt＝settleAt＋30 秒；廣播和讀狀態都有`);
   const st = (rev1?.stats ?? null) as { guns: number; gunned: number; homeRun: boolean; homeRunned: boolean; total: number; bonuses: { name: string; points: number }[] }[] | null;
   if (st) handStatsSeen.push(st);
   eq(st ? [st.map((x) => x.guns), st.map((x) => x.gunned), st.map((x) => x.homeRun), st.map((x) => x.homeRunned), st.map((x) => x.total), st[0].bonuses.map((b) => b.name).sort()] : null,

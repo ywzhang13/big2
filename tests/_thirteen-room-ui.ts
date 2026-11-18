@@ -10,7 +10,8 @@ import { autoArrange, parseCards } from "../lib/thirteen";
 import ThWaiting from "../components/thirteen/ThWaiting";
 import ThTable from "../components/thirteen/ThTable";
 import { closedFor, type ThGameView, type ThWaitingView } from "../components/thirteen/useThirteenRoom";
-import { normalizeArrangeSec, plusArrangeSec, toServerArrangeSec } from "../components/thirteen/arrangeTime";
+import { minusArrangeSec, normalizeArrangeSec, plusArrangeSec, toServerArrangeSec } from "../components/thirteen/arrangeTime";
+import ThLobby from "../components/thirteen/ThLobby";
 
 const results: string[] = [];
 const ok = (cond: boolean, msg: string) => results.push(`${cond ? "✅" : "❌"} ${msg}`);
@@ -41,13 +42,25 @@ const t = (v: ThGameView, now = 1_000_000) => renderToStaticMarkup(createElement
   const h = t(game(2, [true, false, true, true]));
   const at = (pos: string) => new RegExp(`th-at-${pos}" data-seat="(\\d)"`).exec(h)?.[1];
   ok(at("bottom") === "2" && at("right") === "3" && at("top") === "0" && at("left") === "1", `T1 我坐 2 號：自己在下、3 號在右、0 號在上、1 號在左（實際 下${at("bottom")} 右${at("right")} 上${at("top")} 左${at("left")}）`);
-  ok(count(h, /<img[^>]*card-front-/g) === 13 && count(h, /<img[^>]*card-back\.v2/g) === 39, `T2 自己攤開送出的三墩（13 張牌面），他家三家各 13 張牌背（牌面 ${count(h, /<img[^>]*card-front-/g)}、牌背 ${count(h, /<img[^>]*card-back\.v2/g)}）`);
+  ok(count(h, /<img[^>]*card-front-/g) === 0 && count(h, /<img[^>]*card-back\.v2/g) === 52 && count(h, /data-th-hand/g) === 4, `T2 送出後等其他人：四家（含自己）手牌區各 13 張牌背排成 3／5／5，還沒出牌（v8-B §1；牌面 ${count(h, /<img[^>]*card-front-/g)}、牌背 ${count(h, /<img[^>]*card-back\.v2/g)}）`);
   ok(/rotate\(90deg\)/.test(h) && /rotate\(-90deg\)/.test(h) && /rotate\(180deg\)/.test(h) && /rotate\(0deg\)/.test(h), "T3 他家牌背轉向自己的座位：左家 90°、右家 −90°、對家 180°，自己不轉");
-  ok(count(h, /data-th-thinking=/g) === 1 && /data-th-thinking="1"/.test(h) && /思考中/.test(h), "T4 只有還沒送出的小明（1 號）頭上有「思考中…」泡泡");
+  ok(count(h, /data-gp-thinking=/g) === 1 && /data-gp-thinking="1"/.test(h) && /思考中/.test(h), "T4 只有還沒送出的小明（1 號）頭上有「思考中…」泡泡");
   ok(/0:42/.test(h) && !/已送出/.test(h) && !/理牌中/.test(h), "T5 中央倒數照伺服器截止時間（還剩 42 秒＝0:42）；沒有「已送出」「理牌中」字樣");
   ok(/0:12/.test(t(game(2, [true, false, true, true]), 1_030_000)) && /is-low/.test(t(game(2, [true, false, true, true]), 1_035_000)), "T6 時間往前走倒數跟著減；剩 10 秒內變紅");
   const all = t(game(2, [true, true, true, true]));
-  ok(count(all, /data-th-thinking=/g) === 0, "T7 四家都送出：沒有任何「思考中…」泡泡");
+  ok(count(all, /data-gp-thinking=/g) === 0, "T7 四家都送出：沒有任何「思考中…」泡泡");
+  const plates = [...h.matchAll(/<div class="gp([^"]*)" data-seat="([btlr])" data-fx-seat="[btlr]" data-gp-seat="(\d)"/g)].map((m) => ({ cls: m[1], seat: m[2], id: m[3] }));
+  ok(plates.length === 4 && plates.map((x) => x.seat).sort().join("") === "blrt" && plates.filter((x) => x.cls.includes("is-me")).map((x) => x.id).join() === "2"
+    && /class="gp[^"]*" data-seat="l"[^>]*data-gp-seat="1"[\s\S]*?data-gp-thinking="1"/.test(h) && !/mjm-plate|mjm-wind|mjm-nm/.test(h),
+    "T10 四家都用共用名牌（GamePlate，掛 data-fx-seat）：自己 2 號金色；思考中泡泡掛在左家名牌裡（朝牌桌中心）；不再借用麻將 .mjm-plate");
+  const css = (await import("node:fs")).readFileSync("components/gamePlate.css", "utf8");
+  ok(/^\.gp \{ position: absolute; box-sizing: border-box; width: 88px; height: 32px;/m.test(css) && /\.gp-hang \{ position: absolute; right: -3px; bottom: -11px;/.test(css)
+    && /\.gp\[data-seat=l\] \.gp-think \{ left: calc\(100% \+ 6px\); top: 50%;/.test(css) && /\.gp\[data-seat=b\] \.gp-think \{ left: 50%; bottom: calc\(100% \+ 6px\);/.test(css),
+    "T11 共用名牌本體固定 88×32；彈孔掛右下角框外、思考中泡泡貼在朝牌桌中心那一邊外 6px（設計說明 §5 bubble 錨點），都不改變名牌大小");
+  const GamePlate = (await import("../components/GamePlate")).default;
+  const off = renderToStaticMarkup(createElement(GamePlate, { seat: "r", name: "一二三四五六", score: 0, offline: true, shot: 2 }));
+  ok(/class="gp is-off"/.test(off) && /<span class="gp-off">離線<\/span>/.test(off) && /data-gp-shot="2"/.test(off) && /class="gp-sc is-zero">0</.test(off) && /gp-av">一</.test(off),
+    "T12 共用名牌的離線樣式先做好（還沒有資料，十三支沒接）：灰掉＋左下「離線」；彈孔和離線各在右下、左下，可以同時出現；分數 0 也顯示");
   const r = t(game(2, [true, true, true, true], "revealed"));
   ok(!/th-clock/.test(r) && !/進入亮牌/.test(r) && !/已送出/.test(r) && !/\d+ \/ \d+ 已送出/.test(r), "T8 亮牌階段：不倒數、沒有「進入亮牌」「已送出」「n / 4 已送出」引導字");
 }
@@ -65,6 +78,7 @@ const t = (v: ThGameView, now = 1_000_000) => renderToStaticMarkup(createElement
   ok([["15", 15], ["120", 120], ["7", 15], ["0", 60], ["", 60], ["999", 120], ["50", 45], ["53", 60], ["abc", 60], [37, 30]].every(([i, o]) => normalizeArrangeSec(i as string) === o),
     "A1 直接輸入：四捨五入到 15 的倍數、夾在 15～120；空白或亂打回預設 60");
   ok(plusArrangeSec(15) === 30 && plusArrangeSec(105) === 120 && plusArrangeSec(120) === 120, "A2 「＋」每按一次加 15 秒，到 120 為止");
+  ok(minusArrangeSec(120) === 105 && minusArrangeSec(30) === 15 && minusArrangeSec(15) === 15 && minusArrangeSec(50) === 30, "A4 「−」每按一次減 15 秒，到 15 為止（老闆 2026-11-18）");
   ok(toServerArrangeSec(15) === 15 && toServerArrangeSec(45) === 45 && toServerArrangeSec(120) === 120 && toServerArrangeSec(50) === 45, "A3 後端已收 15～120（d72e01e）：照正規化後的秒數送，不再夾 30～60");
 }
 

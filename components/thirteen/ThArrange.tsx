@@ -11,6 +11,7 @@ import { findCombos, SHORTCUTS, type ShortcutKind } from "./shortcuts";
 import { arrangeReducer, derive, HAND, initArrange, ROW_NAME, ROW_SIZE, ROWS, rowLabel, type ArrangeAction, type Zone } from "./arrangeState";
 import { preloadRevealFx } from "./ThRevealFx";
 import ThFeltMenu from "./ThFeltMenu";
+import { useStageScale } from "./stageScale";
 import "./thArrange.css";
 
 export interface ThArrangeProps {
@@ -50,6 +51,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
   }, [submitted]);
   useEffect(() => { if (left === 0) dispatch({ type: "timeout" }); }, [left]);
   useEffect(() => { void preloadRevealFx(); }, []); // 理牌時先把亮牌要用的牌背、特效圖載好
+  useStageScale();
 
   // ---- 送出：submitted 從 null 變成排法的那一次才呼叫 onSubmit（reducer 保證只會變一次） ----
   const sentRef = useRef(false);
@@ -106,6 +108,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
   return (
     <div className={`th-arr${submitted ? " is-done" : ""}${drag?.moving ? " is-dragging" : ""}`}>
       <ThFeltMenu />{/* 左上角 ⚙ 換牌桌（和牌桌畫面同一個；v7 §1：理牌畫面底色跟著同一款） */}
+      <div className="th-arr-stage">{/* 844×390 一塊，整塊等比放大置中（v8-A §1） */}
       <div className="th-arr-main">
         <div className="th-rows">
           {ROWS.map((r) => {
@@ -157,7 +160,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={cardSrc(c)} alt="" draggable={false} />
-              {allFull && <span className="th-unused-tag">不用</span>}{/* 三墩排滿：剩下的 3 張變暗標「不用」（小宜 v6），拖到墩裡的牌上還是可以互換 */}
+              {/* 三墩排滿：剩下的 3 張只變灰、不加字（老闆 2026-11-18），拖到墩裡的牌上還是可以互換 */}
             </div>
           ))}
         </div>
@@ -188,6 +191,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
         <button type="button" className={`th-btn th-btn-submit${canSubmit ? " is-ready" : ""}`} disabled={!canSubmit} onClick={act({ type: "submit" })}>
           {submitted ? "已送出 ✓" : "送出"}{/* 倒水時按鈕變灰就好，字只留上面那一句短提示（老闆 2026-11-18） */}
         </button>
+      </div>
       </div>
 
       {drag?.moving && (

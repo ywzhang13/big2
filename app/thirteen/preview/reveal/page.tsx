@@ -1,6 +1,6 @@
 // 十三支亮牌與結算預覽（假資料，不接 API、不碰資料庫）：強制觸發開始比牌、衝三、鐵支、同花順、五龍、打槍、全壘打，看完接本局結算。
 // 只在本機開發或設了 THIRTEEN_PREVIEW=1 的預覽站開得到（見 ../gate.ts）
-//   /thirteen/preview/reveal?case=chongsan   case：normal／chongsan／tiezhi／tonghuashun／wulong／gun／homerun
+//   /thirteen/preview/reveal?case=chongsan   case：normal／chongsan／tiezhi／tonghuashun／wulong／gun／homerun／flushpair
 //   &final=1  當成整場最後一局（結算按鈕是「看總結算」，再進總結算）
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";

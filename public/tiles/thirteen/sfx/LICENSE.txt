@@ -1,0 +1,65 @@
+十三支音效（阿妍 2026-11-17 搜集、裁切；老馬 2026-11-18 放進專案）
+
+來源只用 Kenney（CC0）和 Freesound 標為 CC0 的音效：可商用、不需要署名、可以剪輯。
+檔名 th-sfx-<名稱>-a／b.v1.mp3：a、b 是兩個候選，components/thirteen/sfx.ts 的 SFX_PICK 決定用哪一個（預設 a）。
+已裁成小宜〈十三支-畫面設計說明-v8B〉第 6 節的長度、尾巴淡出、音量拉齊（阿妍試聽版）。Kenney 授權全文見同目錄 Kenney-*-License.txt。
+
+- th-sfx-start-a.v1.mp3（S1 開始比牌）：Freesound #155461「gong bash resonance」｜hiddenpersuader｜https://freesound.org/people/hiddenpersuader/sounds/155461/，CC0
+- th-sfx-start-b.v1.mp3（S1 開始比牌）：Freesound #537206「Magyar gong」｜Logicogonist｜https://freesound.org/people/Logicogonist/sounds/537206/，CC0
+- th-sfx-play-a.v1.mp3（S2 出牌）：Kenney Casino Audio「card-place-2」｜https://kenney.nl/assets/casino-audio，CC0
+- th-sfx-play-b.v1.mp3（S2 出牌）：Kenney Casino Audio「card-slide-4」，CC0
+- th-sfx-score-a.v1.mp3（S3 分數出現）：Kenney Interface Sounds「glass_001」｜https://kenney.nl/assets/interface-sounds，CC0
+- th-sfx-score-b.v1.mp3（S3 分數出現）：Kenney Interface Sounds「confirmation_001」，CC0
+- th-sfx-chongsan-a.v1.mp3（S4 衝三）：Kenney Digital Audio「highUp」｜https://kenney.nl/assets/digital-audio，CC0
+- th-sfx-chongsan-b.v1.mp3（S4 衝三）：Freesound #455857「simple power up」｜Tissman｜https://freesound.org/people/Tissman/sounds/455857/，CC0
+- th-sfx-tiezhi-a.v1.mp3（S5 鐵支）：Kenney Impact Sounds「impactBell_heavy_002」｜https://kenney.nl/assets/impact-sounds，CC0
+- th-sfx-tiezhi-b.v1.mp3（S5 鐵支）：Kenney Impact Sounds「impactMetal_heavy_001」，CC0
+- th-sfx-tonghuashun-a.v1.mp3（S6 同花順）：Kenney Digital Audio「zapThreeToneUp」，CC0
+- th-sfx-tonghuashun-b.v1.mp3（S6 同花順）：Kenney Digital Audio「threeTone1」，CC0
+- th-sfx-wulong-a.v1.mp3（S7 五龍）：Freesound #315824「dragon roar mild 17」｜bevibeldesign｜https://freesound.org/people/bevibeldesign/sounds/315824/，CC0
+- th-sfx-wulong-b.v1.mp3（S7 五龍）：Freesound #539968「Deep Boom」｜Za-Games｜https://freesound.org/people/Za-Games/sounds/539968/，CC0
+- th-sfx-gunshot-a.v1.mp3（S8 槍聲）：Freesound #654375「Single Gunshot」｜njjjjjjjjjjjjjjjjjjjjjjjj｜https://freesound.org/people/njjjjjjjjjjjjjjjjjjjjjjjj/sounds/654375/，CC0
+- th-sfx-gunshot-b.v1.mp3（S8 槍聲）：Freesound #828786「Glock 19X」｜areniporgen｜https://freesound.org/people/areniporgen/sounds/828786/，CC0
+- th-sfx-hit-a.v1.mp3（S9 中彈）：Freesound #496509「bullet zip and hit」｜TheLittleCrow｜https://freesound.org/people/TheLittleCrow/sounds/496509/，CC0
+- th-sfx-hit-b.v1.mp3（S9 中彈）：Freesound #447927「Hole-punch / puncher」｜Breviceps｜https://freesound.org/people/Breviceps/sounds/447927/，CC0
+- th-sfx-charge-a.v1.mp3（S10 集氣）：Kenney Digital Audio「phaserUp1」，CC0
+- th-sfx-charge-b.v1.mp3（S10 集氣）：Freesound #685256「Riser sound effect short」｜syntheffects｜https://freesound.org/people/syntheffects/sounds/685256/，CC0
+- th-sfx-bat-a.v1.mp3（S11 揮棒擊球）：Freesound #851452「Bat_hit2」｜hashtagsmcgee｜https://freesound.org/people/hashtagsmcgee/sounds/851452/，CC0
+- th-sfx-bat-b.v1.mp3（S11 揮棒擊球）：Kenney Impact Sounds「impactMetal_light_000」，CC0
+- th-sfx-homerun-a.v1.mp3（S12 全壘打）：Freesound #340965「Crowd cheering at parade」｜SoundsAreGr8｜https://freesound.org/people/SoundsAreGr8/sounds/340965/ **疊上** #246450「brass horn mid」｜mattlohkamp｜https://freesound.org/people/mattlohkamp/sounds/246450/，都是 CC0
+- th-sfx-homerun-b.v1.mp3（S12 全壘打）：Freesound #764056「CRWDCheer_Short Affirmative Cheer」｜ShangusBurger｜https://freesound.org/people/ShangusBurger/sounds/764056/，CC0
+- th-sfx-fireworks-a.v1.mp3（S13 煙火）：Freesound #435729「FIREWORKS - 5」｜SamuelGremaud｜https://freesound.org/people/SamuelGremaud/sounds/435729/，CC0
+- th-sfx-fireworks-b.v1.mp3（S13 煙火）：Freesound #651331「Firework Show Ambience 1」｜iliyabylich04｜https://freesound.org/people/iliyabylich04/sounds/651331/，CC0
+
+第二輪候選（阿妍 2026-11-18 搜集、裁切；老馬 2026-11-18 放進專案）：老闆不喜歡第一輪的衝三、鐵支、同花順、槍聲、中彈、集氣，各重找 3 個。
+檔名 th-sfx-<名稱>-r2-1／2／3.v1.mp3，1／2／3 對應阿妍〈十三支音效候選清單-第二輪-2026-11-18〉的 A／B／C。
+特效測試頁 /thirteen/preview/fx 選哪一個記在本機（localStorage th_sfx_pick），完整牌局照同一個選擇播；沒選的照舊靜音。全部 Freesound 標為 CC0（Creative Commons 0）。
+
+- th-sfx-chongsan-r2-1.v1.mp3（S4 衝三）：Freesound #794524「Orchestra Hit DIY」｜modusmogulus｜https://freesound.org/people/modusmogulus/sounds/794524/，CC0
+- th-sfx-chongsan-r2-2.v1.mp3（S4 衝三）：Freesound #822414「Eb Orch Hit」｜astro_denticle｜https://freesound.org/people/astro_denticle/sounds/822414/，CC0
+- th-sfx-chongsan-r2-3.v1.mp3（S4 衝三）：Freesound #578591「Brass Sting 2」｜nomiqbomi｜https://freesound.org/people/nomiqbomi/sounds/578591/，CC0
+- th-sfx-tiezhi-r2-1.v1.mp3（S5 鐵支）：Freesound #270589「Anvil Hit 1」｜michorvath｜https://freesound.org/people/michorvath/sounds/270589/，CC0
+- th-sfx-tiezhi-r2-2.v1.mp3（S5 鐵支）：Freesound #784157「Metal Plate Hit 6」｜loganzsound｜https://freesound.org/people/loganzsound/sounds/784157/，CC0
+- th-sfx-tiezhi-r2-3.v1.mp3（S5 鐵支）：Freesound #98867「Iron Clang」｜Unstableuranium｜https://freesound.org/people/Unstableuranium/sounds/98867/，CC0
+- th-sfx-tonghuashun-r2-1.v1.mp3（S6 同花順）：Freesound #318968「successarpeggio」｜djm62｜https://freesound.org/people/djm62/sounds/318968/，CC0
+- th-sfx-tonghuashun-r2-2.v1.mp3（S6 同花順）：Freesound #582694「Rising Activate 10」｜ironcross32｜https://freesound.org/people/ironcross32/sounds/582694/，CC0
+- th-sfx-tonghuashun-r2-3.v1.mp3（S6 同花順）：Freesound #350433「Horn Stabs Entrance」｜bevibeldesign｜https://freesound.org/people/bevibeldesign/sounds/350433/，CC0
+- th-sfx-gunshot-r2-1.v1.mp3（S8 槍聲）：Freesound #683186「357 Magnum Revolver Gunshot」｜Shark_Anthony｜https://freesound.org/people/Shark_Anthony/sounds/683186/，CC0
+- th-sfx-gunshot-r2-2.v1.mp3（S8 槍聲）：Freesound #330634「Desert Eagle Gunshot」｜elliotlp｜https://freesound.org/people/elliotlp/sounds/330634/，CC0
+- th-sfx-gunshot-r2-3.v1.mp3（S8 槍聲）：Freesound #844540「Gun (Pistol) Shot」｜synth2｜https://freesound.org/people/synth2/sounds/844540/，CC0
+- th-sfx-hit-r2-1.v1.mp3（S9 中彈）：Freesound #879268「Heavy Slam Impact」｜Qvantor｜https://freesound.org/people/Qvantor/sounds/879268/，CC0
+- th-sfx-hit-r2-2.v1.mp3（S9 中彈）：Freesound #770176「Kamen Rider style smack punch impact」｜G40X｜https://freesound.org/people/G40X/sounds/770176/，CC0
+- th-sfx-hit-r2-3.v1.mp3（S9 中彈）：Freesound #842508「Hit_Impact」｜gulfstreamav｜https://freesound.org/people/gulfstreamav/sounds/842508/，CC0
+- th-sfx-charge-r2-1.v1.mp3（S10 集氣）：Freesound #483883「Charge up」｜SamsterBirdies｜https://freesound.org/people/SamsterBirdies/sounds/483883/，CC0
+- th-sfx-charge-r2-2.v1.mp3（S10 集氣）：Freesound #558679「Sci-Fi Charge Up」｜Hemplock｜https://freesound.org/people/Hemplock/sounds/558679/，CC0
+- th-sfx-charge-r2-3.v1.mp3（S10 集氣）：Freesound #588242「Laser Charge Up」｜magnuswaker｜https://freesound.org/people/magnuswaker/sounds/588242/，CC0
+
+第三輪「大牌」共用音效候選（阿妍 2026-11-18 搜集、裁切；老馬 2026-11-18 放進專案）：衝三、鐵支、同花順、五龍共用老闆選的那一個。
+檔名 th-sfx-big-r3-a～e.v1.mp3，對應阿妍〈十三支大牌共用音效候選清單-第三輪-2026-11-18〉的 A～E。
+特效測試頁 /thirteen/preview/fx 選哪一個記在本機（localStorage th_sfx_big），完整牌局照同一個選擇播。全部 Freesound 標為 CC0（Creative Commons 0）。
+
+- th-sfx-big-r3-a.v1.mp3（A 賭場中大獎）：Freesound #787908「Casino Hit Big Money」｜modusmogulus｜https://freesound.org/people/modusmogulus/sounds/787908/，CC0
+- th-sfx-big-r3-b.v1.mp3（B 重低音爆擊加金屬亮音）：Freesound #785932「Cinema Trailer Impact 02」｜modusmogulus｜https://freesound.org/people/modusmogulus/sounds/785932/ **疊上** #799424「ride bell 1 short」｜Logicogonist｜https://freesound.org/people/Logicogonist/sounds/799424/，都是 CC0
+- th-sfx-big-r3-c.v1.mp3（C 遊戲大招升級）：Freesound #709927「LEVEL UP SFX 1」｜trader_one｜https://freesound.org/people/trader_one/sounds/709927/，CC0
+- th-sfx-big-r3-d.v1.mp3（D 收銀機叮鈴）：Freesound #728224「cash register chching」｜disman｜https://freesound.org/people/disman/sounds/728224/，CC0
+- th-sfx-big-r3-e.v1.mp3（E 拔刀亮音）：Freesound #772113「Sword Unsheath」｜hushless｜https://freesound.org/people/hushless/sounds/772113/，CC0

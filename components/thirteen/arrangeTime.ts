@@ -14,6 +14,8 @@ export function normalizeArrangeSec(raw: string | number): number {
 
 /** 「＋」：加 15 秒，到 120 為止 */
 export const plusArrangeSec = (sec: number) => Math.min(ARRANGE_MAX, normalizeArrangeSec(sec) + ARRANGE_STEP);
+/** 「−」：減 15 秒，到 15 為止（老闆 2026-11-18） */
+export const minusArrangeSec = (sec: number) => Math.max(ARRANGE_MIN, normalizeArrangeSec(sec) - ARRANGE_STEP);
 
 /** 送給伺服器的秒數：後端已收 15～120、15 秒一階（老柯 d72e01e），照正規化後的值送 */
 export function toServerArrangeSec(sec: number): number {

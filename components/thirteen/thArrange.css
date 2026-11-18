@@ -7,13 +7,11 @@
   --timer: 38px; --pad-l: 60px; --pad-b: 22px; --font: 15px; --pill-w: 64px;
   --gold: #c9a96e; --gold-l: #f0d68a; --red: #d0453c;
   position: fixed; inset: 0; overflow: hidden;
-  display: flex; gap: 14px;
-  padding: 8px max(14px, env(safe-area-inset-right)) max(var(--pad-b), env(safe-area-inset-bottom)) max(var(--pad-l), env(safe-area-inset-left));
-  background: radial-gradient(ellipse 75% 85% at 50% 46%, var(--th-c1, #1F6B45) 0%, var(--th-c2, #0F3D28) 55%, var(--th-c3, #06180F) 100%); /* 簡約牌桌四款（小宜 v7 §1），見 thRoom.css 的 --th-c* */
+  background: var(--th-felt-bg, radial-gradient(ellipse 80% 90% at 50% 46%, #1F6B45 0%, #0F3D28 60%, #06180F 100%)); /* 桌面花紋四款，見 thRoom.css 的 --th-felt-bg */
   color: #f3ead2; font-size: var(--font);
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
-@media (min-width: 1100px) and (min-height: 700px) {
+@media (min-width: 100000px) /* v8-A：桌機改成整塊等比放大（stageScale.ts），這段舊的桌機尺寸不再套用 */ {
   .th-arr {
     --slot-w: 104px; --slot-h: 146px; --slot-gap: 12px; --row-gap: 14px;
     --hand-w: 112px; --hand-h: 157px; --hand-show: 60px; /* 16 張：112＋15×60＝1012，放得進主欄 1034 */ --lift: 14px; /* 規格露出 90，但 13 張會超出主欄寬（1192 > 1034），改 76 */
@@ -24,7 +22,7 @@
 }
 
 .th-arr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; }
-@media (min-width: 1100px) and (min-height: 700px) { .th-arr-main { height: auto; justify-content: center; gap: 18px; } }
+@media (min-width: 100000px) /* v8-A：桌機改成整塊等比放大（stageScale.ts），這段舊的桌機尺寸不再套用 */ { .th-arr-main { height: auto; justify-content: center; gap: 18px; } }
 
 /* 三墩 */
 .th-rows { display: flex; flex-direction: column; gap: var(--row-gap); }
@@ -88,8 +86,12 @@
 /* 預覽頁：送出後印出排法（測試用，畫面下緣一行小字） */
 .th-preview-sent { position: fixed; left: 8px; bottom: 2px; z-index: 60; font-size: 10px; color: rgba(255, 255, 255, .55); pointer-events: none; }
 
-/* 三墩排滿後手牌剩下的 3 張＝不用的牌（小宜 v6）：變暗、標「不用」 */
+/* 三墩排滿後手牌剩下的 3 張＝不用的牌：只變灰，不加字（老闆 2026-11-18） */
 .th-card-hand { position: relative; }
-.th-card-hand.is-unused img { filter: brightness(.45) saturate(.6); }
-.th-unused-tag { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); padding: 1px 6px; border-radius: 999px; background: rgba(0,0,0,.72); color: #f3ead2; font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; }
-@media (min-width: 1100px) and (min-height: 700px) { .th-unused-tag { font-size: 18px; padding: 2px 10px; } }
+.th-card-hand.is-unused img { filter: grayscale(1) brightness(.6); }
+
+/* v8-A §1：理牌畫面 844×390 一塊，整塊等比放大（--th-s2，上限 2.4）放正中央；拖曳中的牌（.th-ghost）在外面、跟著放大 */
+.th-arr-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform: translate(-50%, -50%) scale(var(--th-s2, 1));
+  display: flex; gap: 14px; box-sizing: border-box;
+  padding: 8px max(14px, env(safe-area-inset-right)) max(var(--pad-b), env(safe-area-inset-bottom)) max(var(--pad-l), env(safe-area-inset-left)); }
+.th-arr .th-ghost { transform: translate(-50%, -60%) scale(var(--th-s2, 1)); }

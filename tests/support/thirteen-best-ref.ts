@@ -1,12 +1,19 @@
 // 測試用參考答案（老柯 2026-11-18）：用窮舉找出「最好的 13 張排法」，拿來檢查 lib/thirteen/arrange.ts 的 autoArrange。
-// 「最好」的判準（和 autoArrange 相同，見規則書 2.7）：在所有不倒水的排法裡，先比尾道、尾道一樣大再比中道、中道也一樣再比頭道，
-// 取最大的那一組（字典序最大）。這裡把所有尾道（5 張）× 剩下牌的所有中道（5 張）× 再剩下牌的所有頭道（3 張）全部列出來比，
+// 「最好」的判準（和 autoArrange 相同，見 lib/thirteen/API.md、規則書 2.7）：在所有不倒水的排法裡，
+// 先比三墩的牌型加分合計（頭墩衝三、中尾墩鐵支／同花順／五龍；阿哲 2026-11-18 拍板），一樣多再比尾道、中道、頭道（字典序最大）。
+// bestTripleByBruteForce(cards, { bonus: false }) 是 14a83b2 舊判準（只比尾、中、頭），給新舊對照用。這裡把所有尾道（5 張）× 剩下牌的所有中道（5 張）× 再剩下牌的所有頭道（3 張）全部列出來比，
 // 不靠任何「先挑最大的」捷徑，所以可以當作獨立的對照。張數多時很慢，只給測試用。
 import type { Card } from "../../lib/thirteen/cards";
 import { compareValue, evalFive, evalThree, type HandValue } from "../../lib/thirteen/hand";
+import { bonusOf } from "../../lib/thirteen/score";
 
 export type Triple = { back: HandValue; middle: HandValue; front: HandValue };
+/** 三墩的牌型加分合計（照計分規則的加分表：頭墩三條、中尾墩鐵支／同花順／五龍） */
+export const bonusSum = (t: Triple) => bonusOf("front", t.front) + bonusOf("middle", t.middle) + bonusOf("back", t.back);
+/** 舊判準：只比尾、中、頭 */
 export const cmpTriple = (a: Triple, b: Triple) => compareValue(a.back, b.back) || compareValue(a.middle, b.middle) || compareValue(a.front, b.front);
+/** 新判準：先比加分合計，再比尾、中、頭 */
+export const cmpBonusTriple = (a: Triple, b: Triple) => bonusSum(a) - bonusSum(b) || cmpTriple(a, b);
 
 function combos(n: number, k: number): number[][] {
   const out: number[][] = [];
@@ -18,8 +25,9 @@ function combos(n: number, k: number): number[][] {
   return out;
 }
 
-/** 窮舉所有不倒水的排法，回傳字典序最大的三墩牌型（尾、中、頭） */
-export function bestTripleByBruteForce(cards: Card[]): Triple {
+/** 窮舉所有不倒水的排法，回傳最好的三墩牌型（預設新判準：加分合計優先；bonus: false＝舊判準） */
+export function bestTripleByBruteForce(cards: Card[], opts: { bonus?: boolean } = {}): Triple {
+  const cmp = opts.bonus === false ? cmpTriple : cmpBonusTriple;
   const n = cards.length;
   const five = new Map<number, HandValue>(), three = new Map<number, HandValue>();
   const maskOf = (idx: number[]) => idx.reduce((m, i) => m | (1 << i), 0);
@@ -38,7 +46,7 @@ export function bestTripleByBruteForce(cards: Card[]): Triple {
         const front = v3(fIdx.map((i) => restM[i]));
         if (compareValue(front, middle) > 0) continue; // 倒水
         const t = { back, middle, front };
-        if (!best || cmpTriple(t, best) > 0) best = t;
+        if (!best || cmp(t, best) > 0) best = t;
       }
     }
   }

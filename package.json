@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/run-all.mjs"
+    "test": "node tests/run-all.mjs",
+    "test:slow": "node --import ./tests/support/register.mjs tests/slow/thirteen-arrange-10k.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",

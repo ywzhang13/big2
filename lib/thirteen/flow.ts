@@ -18,18 +18,28 @@ export const dealer = { deal: (): { hands: Card[][]; rest: Card[] } => deal() };
 // 前端照 settleAt 顯示結算面板（用伺服器時間換算），和伺服器用同一個 revealDurationMs，兩邊不會對不上。
 /** 結算面板出現後，等多久沒人按確認也自動開下一局 */
 export const SETTLE_WAIT_MS = 30_000;
-/** 亮牌演出各段長度（毫秒），照小宜〈十三支畫面設計說明 v5 增補〉第 4 節時間軸；全壘打照 v7 改成全螢幕 2.8 秒（原 1.9 秒） */
-export const REVEAL_TIMING = { START_MS: 1200, ROW_MS: 2600, SPECIAL_MS: 900, GUN_MS: 1000, HOME_RUN_MS: 2800 } as const;
-/** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個特效牌型（衝三、中尾墩鐵支／同花順／五龍）＋每組打槍＋全壘打 */
+/**
+ * 亮牌演出各段長度（毫秒）。老闆 2026-11-18 定案：照參考影片的節奏（阿妍量測〈十三支比牌節奏-參考影片對照與建議值〉）：
+ *   START_MS 開始比牌 1.7；PLAY_MS 每家出一墩 1.5；ROW_WAIT_MS 一墩四家都出完後的等待 0（換墩不停，和同一墩一樣隔 1.5）；
+ *   ROW_MS 一墩合計＝4×PLAY_MS＋ROW_WAIT_MS＝6.0（平手的兩家也各佔一格，照順序一家一家出）；
+ *   SPECIAL_MS 每個大牌（衝三、中尾墩鐵支／同花順／五龍）另外多佔 0.3（特效和下一家出牌重疊，多出的留給中央顯示牌型名）；
+ *   GUN_MS 每一槍 1.5；HOME_RUN_MS 全壘打 3.2；SETTLE_PAUSE_MS 結算面板出現前的停頓 1.2。
+ *   一般局＝1.7＋3×6.0＋1.2＝20.9 秒；整局＝20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打。
+ */
+export const REVEAL_TIMING = {
+  START_MS: 1700, PLAY_MS: 1500, ROW_WAIT_MS: 0, ROW_MS: 4 * 1500 + 0,
+  SPECIAL_MS: 300, GUN_MS: 1500, HOME_RUN_MS: 3200, SETTLE_PAUSE_MS: 1200,
+} as const;
+/** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個大牌（衝三、中尾墩鐵支／同花順／五龍）＋每一槍＋全壘打＋停頓 */
 export function revealDurationMs(result: RoundResult): number {
   const t = REVEAL_TIMING;
   const specials = result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
   const guns = result.pairs.filter((p) => p.gunner !== null).length;
-  return t.START_MS + 3 * t.ROW_MS + specials * t.SPECIAL_MS + guns * t.GUN_MS + (result.homeRun !== null ? t.HOME_RUN_MS : 0);
+  return t.START_MS + 3 * t.ROW_MS + specials * t.SPECIAL_MS + guns * t.GUN_MS + (result.homeRun !== null ? t.HOME_RUN_MS : 0) + t.SETTLE_PAUSE_MS;
 }
-/** 亮牌到自動開下一局最長要多久（四家三墩都是特效牌型、六組都打槍、全壘打，再加 30 秒）；測試推進時間用 */
+/** 亮牌到自動開下一局最長要多久（四家三墩都是特效牌型、六槍、全壘打，再加 30 秒）；測試推進時間用 */
 export const NEXT_HAND_MAX_MS = REVEAL_TIMING.START_MS + 3 * REVEAL_TIMING.ROW_MS + 12 * REVEAL_TIMING.SPECIAL_MS + 6 * REVEAL_TIMING.GUN_MS
-  + REVEAL_TIMING.HOME_RUN_MS + SETTLE_WAIT_MS;
+  + REVEAL_TIMING.HOME_RUN_MS + REVEAL_TIMING.SETTLE_PAUSE_MS + SETTLE_WAIT_MS;
 
 // ---- 每局統計（阿哲 2026-11-18：打槍、全壘打等改由後端每局記錄，前端不再自己累計）----
 /** 一家這一局的明細（v5 本局結算的左欄）：墩分＋各特殊加分＋打槍分＋全壘打分＝total（這局總分） */

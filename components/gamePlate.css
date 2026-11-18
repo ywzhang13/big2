@@ -1,0 +1,39 @@
+/* 共用名牌（components/GamePlate.tsx；小宜〈共用名牌-設計說明〉§2～3）。本體固定 88×32，標記都是絕對定位、不算在本體尺寸裡 */
+.gp { position: absolute; box-sizing: border-box; width: 88px; height: 32px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1);
+  display: flex; align-items: center; gap: 5px; padding: 0 5px 0 3px; text-shadow: none; white-space: nowrap; }
+/* 頭像 24：名字第一個字 */
+.gp-av { position: relative; box-sizing: border-box; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.1); border: 1.5px solid transparent;
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1; color: rgba(255,255,255,.6); }
+.gp.is-me .gp-av { border-color: #C9A96E; }
+/* 文字兩行：名字（最寬 49，超過變…）、分數 */
+.gp-tx { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.gp-nm { font-size: 11px; font-weight: 700; line-height: 14px; color: rgba(255,255,255,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gp.is-me .gp-nm { color: #f0d68a; }
+.gp-l2 { display: flex; align-items: center; gap: 4px; height: 13px; white-space: nowrap; }
+.gp-sc { font: 800 11px/13px "Chakra Petch", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.gp-sc.is-pos { color: #4ade80; } .gp-sc.is-neg { color: #f87171; } .gp-sc.is-zero { color: rgba(255,255,255,.4); }
+/* 右下角掛牌：十三支彈孔（米白膠囊、小彈孔＋紅字） */
+.gp-hang { position: absolute; right: -3px; bottom: -11px; height: 13px; box-sizing: border-box; padding: 0 5px 0 4px; border-radius: 999px; display: flex; align-items: center; gap: 2px;
+  font: 800 9px/11px "Chakra Petch", system-ui, sans-serif; white-space: nowrap; }
+.gp-hang.is-shot { color: #b91c1c; background: rgba(243,234,210,.95); box-shadow: 0 1px 3px rgba(0,0,0,.4); animation: gp-in .25s ease-out both; }
+.gp-hang.is-shot i { width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle, #000 0 35%, #4a3a2a 36% 60%, transparent 61%); }
+/* 左下角：離線（頭像和文字變灰） */
+.gp-off { position: absolute; left: -3px; bottom: -11px; height: 13px; box-sizing: border-box; padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 800; line-height: 11px;
+  color: #e5e7eb; background: #4b5563; border: 1px solid rgba(255,255,255,.25); }
+.gp.is-off .gp-av, .gp.is-off .gp-tx { opacity: .4; filter: grayscale(1); }
+/* 思考中泡泡：貼在 bubble 錨點（朝牌桌中心那一邊的中點）外 6px，尖角指向名牌 */
+.gp-think { position: absolute; padding: 2px 8px; border-radius: 10px; background: #fff; color: #1b1b1b; font-size: 10px; font-weight: 800; line-height: 14px; white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,.35); z-index: 5; }
+.gp-think::after { content: ""; position: absolute; border: 4px solid transparent; }
+.gp-think i { font-style: normal; animation: gp-dot 1.2s infinite; }
+.gp-think i:nth-child(2) { animation-delay: .2s; } .gp-think i:nth-child(3) { animation-delay: .4s; }
+.gp[data-seat=b] .gp-think { left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); }
+.gp[data-seat=b] .gp-think::after { left: 50%; top: 100%; margin-left: -4px; border-bottom: 0; border-top-color: #fff; }
+.gp[data-seat=t] .gp-think { left: 50%; top: calc(100% + 6px); transform: translateX(-50%); }
+.gp[data-seat=t] .gp-think::after { left: 50%; bottom: 100%; margin-left: -4px; border-top: 0; border-bottom-color: #fff; }
+.gp[data-seat=l] .gp-think { left: calc(100% + 6px); top: 50%; transform: translateY(-50%); }
+.gp[data-seat=l] .gp-think::after { right: 100%; top: 50%; margin-top: -4px; border-left: 0; border-right-color: #fff; }
+.gp[data-seat=r] .gp-think { right: calc(100% + 6px); top: 50%; transform: translateY(-50%); }
+.gp[data-seat=r] .gp-think::after { left: 100%; top: 50%; margin-top: -4px; border-right: 0; border-left-color: #fff; }
+@keyframes gp-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes gp-in { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: scale(1); } }

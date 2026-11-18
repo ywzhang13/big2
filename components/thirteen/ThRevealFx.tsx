@@ -1,6 +1,6 @@
 "use client";
 // 十三支亮牌特效層（小宜 v5 §1、§3，v4 §4～5）：開始比牌、衝三／鐵支／同花順／五龍、打槍、全壘打。
-// 只用老闆的素材（public/tiles/thirteen/fx），程式只做移動、縮放、旋轉、透明度、震動。
+// 只用老闆的素材（public/tiles/thirteen/fx），程式只做移動、縮放、旋轉、透明度；不做晃動、震動（老闆 2026-11-18）。
 // 小宜 v7（老闆 2026-11-18）：大字（開始比牌、衝三、鐵支、同花順、五龍、全壘打）和棒球改用 v2——素材整理時已去黑底、四邊羽化成實心透明圖，
 //   一般疊加、畫在牌上面（screen 疊在象牙白牌面會被洗掉）；衝三等四種出現在那一家那副牌上；全壘打 2.8 秒全螢幕（爆發、煙火用 screen 鋪滿）
 // 每段特效掛上去時記下「已經播了幾毫秒」當負的 animation-delay：重新整理、晚一點才看到也從對的那一刻接著播。
@@ -9,12 +9,13 @@ import { useLayoutEffect, useState } from "react";
 import type { Step } from "./revealTimeline";
 import { POS_BY_OFFSET, type Pos } from "./ThTable";
 import { CARD_BACK_SRC } from "./cardArt";
+import { stageScale } from "./stageScale";
 
 const FX = "/tiles/thirteen/fx";
 const DESKTOP = "(min-width: 1100px) and (min-height: 700px)";
 
 /** 素材版本：去黑底實心的是 v2，其他 v1 */
-const VER: Record<string, string> = { start: "v2", chongsan: "v2", tiezhi: "v2", tonghuashun: "v2", wulong: "v2", homerun: "v2", ball: "v2" };
+const VER: Record<string, string> = { start: "v2", chongsan: "v2", tiezhi: "v2", tonghuashun: "v2", wulong: "v2", homerun: "v2", ball: "v2", hrbatter: "v2" }; // hrbatter v2＝老闆第 12 輪新揮棒圖（腳清楚）；hrfield、hrstar、hrready 是 v1
 const src = (name: string, size: "m" | "d") => `${FX}/th-fx-${name}.${VER[name] ?? "v1"}.${size}.webp`;
 /** 手機用 .m、桌機用 .d（同一套 CSS 尺寸，桌機圖比較大） */
 function Pic({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
@@ -26,7 +27,7 @@ function Pic({ name, className, style }: { name: string; className?: string; sty
   );
 }
 
-const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "bat", "ball", "homerun", "burst", "fireworks"];
+const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar"];
 let preloaded: Promise<void> | null = null;
 /** 先把特效圖和牌背載好（理牌畫面一打開就呼叫）：第一次播的時候圖才不會還沒下載完、整段看不到。只載這台裝置那一套（手機 .m／桌機 .d） */
 export function preloadRevealFx(): Promise<void> {
@@ -51,24 +52,6 @@ function seatCenter(pos: Pos): Pt | null {
 const tableCenter = (): Pt => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 const isDesktop = () => window.matchMedia(DESKTOP).matches;
 
-/** 牌桌震動（Web Animations：可以給負的 delay，晚到也對得上時間） */
-function shake(px: number, times: number, durMs: number, delayMs: number) {
-  const el = document.querySelector<HTMLElement>(".th-table");
-  if (!el?.animate) return;
-  const frames: Keyframe[] = [{ transform: "translate(0,0)" }];
-  for (let i = 0; i < times; i++) frames.push({ transform: `translate(${px}px,0)` }, { transform: `translate(${-px}px,0)` });
-  frames.push({ transform: "translate(0,0)" });
-  el.animate(frames, { duration: durMs, delay: delayMs, easing: "ease-out" });
-}
-function shakeSeat(pos: Pos, px: number, durMs: number, delayMs: number) {
-  const el = document.querySelector<HTMLElement>(`.th-table [data-th-pos="${pos}"] .th-blk`);
-  if (!el?.animate) return;
-  const base = getComputedStyle(el).transform;
-  const t = (dx: number) => `translate(${dx}px,0) ${base === "none" ? "" : base}`;
-  el.animate([{ transform: t(0) }, { transform: t(px) }, { transform: t(-px) }, { transform: t(px) }, { transform: t(-px) }, { transform: t(px) }, { transform: t(0) }],
-    { duration: durMs, delay: delayMs });
-}
-
 /** 一段特效：掛上去那一刻算好位置和「已播毫秒」 */
 function useMount<T>(make: () => T): T | null {
   const [v, setV] = useState<T | null>(null);
@@ -79,7 +62,7 @@ function useMount<T>(make: () => T): T | null {
 
 function StartFx({ elapsed: elapsed0 }: { elapsed: number }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
-  const m = useMount(() => { shake(isDesktop() ? 6 : 4, 1, 160, 200 - elapsed); return true; });
+  const m = useMount(() => true);
   if (!m) return null;
   return (
     <div className="th-fx-at th-fx-start-at" data-th-fx="start">
@@ -92,13 +75,11 @@ function StartFx({ elapsed: elapsed0 }: { elapsed: number }) {
 const RATIO: Record<string, number> = { chongsan: 1.3734, tiezhi: 2.6947, tonghuashun: 2.7179, wulong: 2.6987 };
 function PatternFxView({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind: "fx" }>; elapsed: number; mySeat: number }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
-  const big = step.fx === "tonghuashun" || step.fx === "wulong";
   const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
   const at = useMount(() => {
-    const d = isDesktop();
-    shake((big ? 10 : 6) * (d ? 1.5 : 1), 1, 160, 150 - elapsed);
+    const s = stageScale(); // v8-A：特效尺寸跟著牌桌倍數放大
     const c = seatCenter(pos) ?? tableCenter(); // v7 §2：圖的中心對齊那一家整組牌的中心
-    const k = d ? 1.9 : 1;
+    const k = 1 * s;
     const [bw, bh] = pos === "bottom" ? [300 * k, 110 * k] : [240 * k, 88 * k];
     const r = RATIO[step.fx] ?? 2.7;
     const w = step.fx === "chongsan" ? Math.min(bw, bh * 1.5 * r) : Math.min(bw, bh * r); // 衝三的圖比較方（鯉魚在上），框高放寬 1.5 倍才不會太小
@@ -112,30 +93,21 @@ function PatternFxView({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step
   );
 }
 
-/** 打槍 1.0 秒（v4 §4）：手槍在打槍者那組牌往對方推 78／148 px、槍口指向對方 → 後座＋槍口火光 → 子彈光束拉到對方 → 三個彈孔＋對方的牌抖 */
+/** 打槍一槍 0.8 秒（小宜 v8-B §7）：手槍出現、槍口指向對方 → 0.18 火光＋後座 → 子彈光束 → 0.26 對方出牌區多一個彈孔（彈孔由 ThTable 畫，留到結算） */
 function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind: "gun" }>; elapsed: number; mySeat: number }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
   const from = POS_BY_OFFSET[(step.from - mySeat + 4) % 4], to = POS_BY_OFFSET[(step.to - mySeat + 4) % 4];
   const g = useMount(() => {
-    const d = isDesktop();
+    const s = stageScale(); // v8-A：特效尺寸跟著牌桌倍數放大
     const a = seatCenter(from) ?? tableCenter(), b = seatCenter(to) ?? tableCenter();
-    shakeSeat(to, d ? 10 : 6, 280, 320 - elapsed);
     const ang = Math.atan2(b.y - a.y, b.x - a.x);
-    const push = d ? 148 : 78, gunW = d ? 163 : 85, gunH = gunW * 131 / 256;
+    const push = 78 * s, gunW = 130 * s, gunH = gunW * 131 / 256; // 手槍放大（老闆 2026-11-18：可以大把一點）
     const flip = Math.abs(ang) > Math.PI / 2 ? -1 : 1;
     const muzzle = push + 0.492 * gunW;                    // 槍口：槍身中心再往前（素材 fx-info：槍口 0.992、槍身中心 0.5）
     const muzzleY = -0.29 * gunH * flip;
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
     const len = Math.max(20, dist - muzzle);
-    const hole = d ? 65 : 34;
-    let seed = step.n * 7 + 3;
-    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
-    // 三個彈孔落在對方那組牌上（照那組牌實際的框，左右家的牌是直的），彼此錯開
-    const r = document.querySelector(`.th-table [data-th-pos="${to}"] .th-blk`)?.getBoundingClientRect();
-    const box = r ?? { left: b.x - 40, top: b.y - 40, width: 80, height: 80 };
-    const spots = [[0.28, 0.3], [0.7, 0.48], [0.36, 0.74]];
-    const holes = spots.map(([fx, fy], i) => ({ x: box.left + box.width * (fx + (rnd() - 0.5) * 0.1), y: box.top + box.height * (fy + (rnd() - 0.5) * 0.1), r: rnd() * 360, img: ((step.n + i) % 4) + 1 }));
-    return { a, deg: (ang * 180) / Math.PI, flip, push, gunW, muzzle, muzzleY, len, beamH: Math.max(d ? 76 : 40, len / 3), hole, holes };
+    return { a, deg: (ang * 180) / Math.PI, flip, push, gunW, muzzle, muzzleY, len, beamH: Math.max(40 * s, len / 3) };
   });
   if (!g) return null;
   const delay = { animationDelay: `${-elapsed}ms` };
@@ -158,61 +130,59 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
           <Pic name="bullet" className="th-fx th-fx-bullet" style={delay} />
         </div>
       </div>
-      {g.holes.map((h, i) => (
-        <div key={i} className="th-fx-at" style={{ left: h.x, top: h.y }}>
-          <Pic name={`hole${h.img}`} className={`th-fx th-fx-hole th-fx-hole-${i}`} style={{ ...delay, width: g.hole, height: g.hole, rotate: `${h.r}deg` }} />
-        </div>
-      ))}
     </>
   );
 }
 
-/** 全壘打 2.8 秒全螢幕（小宜 v7 §3）：球棒在打者那組牌上方揮擊 → 棒球放大 3.8 倍朝鏡頭飛出 → 金色放射爆發鋪滿畫面 → 「全壘打」大字砸下、連震 3 下
- * → 煙火彩帶（1.4 秒再疊一份左右翻面的）→ 淡出進結算。球棒、棒球依座位鏡射：自己往右上、右家往左上、對家往左下、左家往右下 */
-function HomeRunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number }) {
+/** 全壘打 3.2 秒（小宜 v9，取代 v8-B §8 的 0.55 秒以後）：0～0.55 在打者那組牌上集氣——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
+ * （人一直是正的，只左右鏡射面向球飛的方向：自己、左家面向右，右家、對家面向左；0.55 秒後的打擊者畫面跟著同一個方向）；
+ * 0.55 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、球飛上天變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 2.80～3.20 一起淡出。
+ * 0.55 秒以後四家看到的畫面完全相同（不翻面）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
+function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number; name: string }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
   const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
   const h = useMount(() => {
-    const d = isDesktop();
-    shake(d ? 12 : 8, 1, 120, 300 - elapsed);   // 擊中
-    shake(d ? 20 : 14, 3, 300, 750 - elapsed);  // 大字砸下連震 3 下
+    const s = stageScale(); // v8-A：特效尺寸跟著牌桌倍數放大
     const a = seatCenter(pos) ?? tableCenter();
-    const mirror = { bottom: "none", right: "scaleX(-1)", top: "scale(-1,-1)", left: "scaleY(-1)" }[pos];
-    const batW = d ? 456 : 240;
-    return { a, mirror, lift: d ? 133 : 70, batW, reach: 0.83 * batW };
+    const face = pos === "right" || pos === "top" ? -1 : 1;
+    const readyH = 200 * s, half = readyH * 0.6; // 最大放到 1.12 倍：上下各留 0.6 倍高，對家（牌在上緣）頭頂才不會出畫面
+    return { a, face, readyH, readyY: Math.min(Math.max(a.y, half), window.innerHeight - half) };
   });
   if (!h) return null;
   const delay = { animationDelay: `${-elapsed}ms` };
-  const hx = h.reach * Math.cos(Math.PI / 6), hy = h.reach * Math.sin(Math.PI / 6); // 揮到 +30° 時的棒頭
+  const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name; // 名字最多 10 個字（同麻將自摸）
   return (
     <>
-      {/* 底層：screen 疊滿畫面的爆發、煙火（黑底素材；容器不能有 transform，見 thReveal.css） */}
-      <div className="th-fx-at th-fx-full-at is-blend" data-th-homerun={step.seat}>
-        <Pic name="burst" className="th-fx th-fx-burst" style={delay} />
+      {/* 集氣的光（全螢幕爆發圖縮小，0～0.45 秒在打擊者後面由 0.2 倍放大到 0.5 倍） */}
+      <div className="th-fx-at is-blend" style={{ left: h.a.x, top: h.a.y }}>
+        <Pic name="burst" className="th-fx th-fx-charge" style={delay} />
       </div>
-      <div className="th-fx-at th-fx-full-at is-blend">
-        <Pic name="fireworks" className="th-fx th-fx-fireworks" style={delay} />
+      {/* 打擊者準備姿勢：中心對齊那一家整組牌的中心（上下超出畫面才往內收） */}
+      {/* 鏡射放在外層、固定不動（老闆第 10 輪：準備姿勢要定住）；動畫只做放大和透明度，沒有旋轉和水平位移 */}
+      <div className="th-fx-at" style={{ left: h.a.x, top: h.readyY, transform: h.face < 0 ? "scaleX(-1)" : undefined }} data-th-hr-ready={pos}>
+        <Pic name="hrready" className="th-fx th-fx-ready" style={{ ...delay, height: h.readyH }} />
       </div>
-      <div className="th-fx-at th-fx-full-at is-blend">
-        <Pic name="fireworks" className="th-fx th-fx-fireworks is-flip" style={delay} />
-      </div>
-      {/* 上層：實心的球棒、棒球、大字 */}
-      <div className="th-fx-rot" style={{ left: h.a.x, top: h.a.y, transform: h.mirror }}>
-        <div className="th-fx-batbox" style={{ top: -h.lift }}>
-          <Pic name="bat" className="th-fx th-fx-bat" style={{ ...delay, width: h.batW }} />
+      {/* 打擊者畫面（v9 §3 圖層由下到上）：背景、壓暗、煙火（screen）、打擊者、球、星星、大字、名牌、換景亮光 */}
+      {/* 右家、對家的集氣人物朝左 → 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
+      <div className={`th-hr9${h.face < 0 ? " is-flip" : ""}`} data-th-homerun={step.seat} data-th-hr-flip={h.face < 0 ? 1 : 0} style={delay}>
+        <Pic name="hrfield" className="th-hr9-field" style={delay} />
+        <div className="th-hr9-dim" style={delay} />
+        <Pic name="fireworks" className="th-hr9-fw" style={delay} />
+        <Pic name="hrbatter" className="th-hr9-batter" style={delay} />
+        <div className="th-hr9-ballpath" style={delay}><Pic name="ball" className="th-hr9-ball" /></div>
+        <Pic name="hrstar" className="th-hr9-star" style={delay} />
+        <div className="th-hr9-title">
+          <Pic name="homerun" className="th-hr9-word" style={delay} />
+          <p className="th-hr9-name" data-th-hr-name style={delay}>{shown}</p>
         </div>
-        <div className="th-fx-ballbox" style={{ left: hx, top: -h.lift + hy }}>
-          <Pic name="ball" className="th-fx th-fx-ball" style={delay} />
-        </div>
-      </div>
-      <div className="th-fx-at th-fx-hr-at">
-        <Pic name="homerun" className="th-fx th-fx-homerun" style={delay} />
+        <div className="th-hr9-flash" style={delay} />
       </div>
     </>
   );
 }
 
-export default function ThRevealFx({ active, t, mySeat }: { active: Step[]; t: number; mySeat: number }) {
+/** names：每個座位的名字（全壘打畫面的名牌用） */
+export default function ThRevealFx({ active, t, mySeat, names = [] }: { active: Step[]; t: number; mySeat: number; names?: string[] }) {
   return (
     <div className="th-fx-layer" aria-hidden>
       {active.map((s) => {
@@ -221,7 +191,7 @@ export default function ThRevealFx({ active, t, mySeat }: { active: Step[]; t: n
         if (s.kind === "start") return <StartFx key={key} elapsed={elapsed} />;
         if (s.kind === "fx") return <PatternFxView key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
         if (s.kind === "gun") return <GunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
-        if (s.kind === "homerun") return <HomeRunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
+        if (s.kind === "homerun") return <HomeRunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} name={names[s.seat] ?? ""} />;
         return null;
       })}
     </div>

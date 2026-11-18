@@ -207,7 +207,7 @@ function ThirteenScreens() {
       ?? closedRec?.players.find((p) => p.seat === seat)?.playerName ?? "");
     if (screen === "final") {
       return (
-        <div className="th-table">
+        <div className="th-bg">
           <div className="th-felt" />
           <ThFinalResult players={names.map((playerName, seat) => ({ seat, playerName, totalScore: rv.playerScores[seat] ?? 0 }))}
             mySeat={join.seat} hands={rv.handNo} stats={matchStats} onLobby={backToLobby} />
@@ -224,7 +224,7 @@ function ThirteenScreens() {
     const { startAt } = revealClock({ revealedAt: rv.revealedAt ?? null, settleAt: rv.settleAt ?? null }, room.clockSkew, Date.now(), show.startAt);
     const cv = confirmView(confirmSt, show.key, view && view.status !== "waiting" ? view.nextReady : undefined, join.playerId);
     return (
-      <ThReveal key={show.key} view={tableView} rv={rv} startAt={startAt}
+      <ThReveal key={show.key} view={tableView} rv={rv} startAt={startAt} settleAt={rv.settleAt != null ? rv.settleAt - room.clockSkew : null}
         confirmBy={!show.final && nextHandAt !== null ? nextHandAt - room.clockSkew : null}
         confirmed={!show.final && cv.confirmed} sending={!show.final && cv.sending} error={show.final ? null : cv.error}
         confirmLabel={show.final ? "看總結算" : "確認"}
@@ -238,7 +238,7 @@ function ThirteenScreens() {
   // 整場結束（例如中途解散）：伺服器有紀錄就直接給總結算，沒有就一行字＋回大廳
   if (room.closed && closedRec && join) {
     return (
-      <div className="th-table">
+      <div className="th-bg">
         <div className="th-felt" />
         <ThFinalResult players={closedRec.players} mySeat={join.seat} hands={closedRec.finalHand?.handNo ?? closedRec.handsPlayed ?? 0}
           stats={matchStats} onLobby={backToLobby} />

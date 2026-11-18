@@ -1,6 +1,7 @@
 // 排牌：倒水檢查、送出檢查、逾時自動排牌（規則書 2.3、2.4、2.6）。
 import type { Card } from "./cards";
 import { compareValue, evalFive, evalThree, type HandValue } from "./hand";
+import { bonusOf } from "./score";
 
 /** 一家排好的三道：頭道 3 張、中道 5 張、尾道 5 張 */
 export interface Arrangement {
@@ -70,58 +71,109 @@ function isSubmission(x: unknown): x is SubmissionIds {
   return (["front", "middle", "back"] as const).every((k) => Array.isArray(o[k]) && (o[k] as unknown[]).every((id) => typeof id === "string"));
 }
 
-/** 從 cards 裡挑 5 張最大的組合：回傳一樣大的全部選法（同點數不同張、例如兩張 ♠K 或不同花色的 K，會留下不同的牌給下一墩） */
-function bestFives(cards: Card[]): { picks: Card[][]; value: HandValue } {
-  let best: { picks: Card[][]; value: HandValue } | null = null;
-  const n = cards.length;
-  for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++)
-    for (let d = c + 1; d < n; d++) for (let e = d + 1; e < n; e++) {
-      const pick = [cards[a], cards[b], cards[c], cards[d], cards[e]];
-      const value = evalFive(pick);
-      const cmp = best ? compareValue(value, best.value) : 1;
-      if (cmp > 0) best = { picks: [pick], value };
-      else if (cmp === 0) best!.picks.push(pick);
+// 每個組合記成位元遮罩（第 i 張牌＝第 i 個位元），判斷「有沒有用到同一張牌」只要一個 &
+type Pick = { pick: Card[]; value: HandValue; mask: number };
+const desc = (a: Pick, b: Pick) => compareValue(b.value, a.value);
+/** cards 裡所有 k 張（5 或 3）的組合，由大到小；整手只算一次 */
+function combos(cards: Card[], k: 3 | 5): Pick[] {
+  const out: Pick[] = [];
+  const n = cards.length, idx: number[] = [];
+  const rec = (start: number) => {
+    if (idx.length === k) {
+      const pick = idx.map((i) => cards[i]);
+      out.push({ pick, value: k === 5 ? evalFive(pick) : evalThree(pick), mask: idx.reduce((m, i) => m | (1 << i), 0) });
+      return;
     }
-  return best!;
+    for (let i = start; i < n; i++) { idx.push(i); rec(i + 1); idx.pop(); }
+  };
+  rec(0);
+  return out.sort(desc);
 }
 
-/** 從 cards 裡挑 3 張最大的組合（頭道） */
-function bestThree(cards: Card[]): { pick: Card[]; value: HandValue } {
-  let best: { pick: Card[]; value: HandValue } | null = null;
-  const n = cards.length;
-  for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++) {
-    const pick = [cards[a], cards[b], cards[c]];
-    const value = evalThree(pick);
-    if (!best || compareValue(value, best.value) > 0) best = { pick, value };
+type Plan = { front: Pick; middle: Pick; back: Pick; bonus: number };
+/** 新判準：牌型加分合計多的好；一樣多再比尾、中、頭（字典序） */
+function better(a: Plan, b: Plan): boolean {
+  return a.bonus !== b.bonus ? a.bonus > b.bonus
+    : (compareValue(a.back.value, b.back.value) || compareValue(a.middle.value, b.middle.value) || compareValue(a.front.value, b.front.value)) > 0;
+}
+const planOf = (front: Pick, middle: Pick, back: Pick): Plan =>
+  ({ front, middle, back, bonus: bonusOf("front", front.value) + bonusOf("middle", middle.value) + bonusOf("back", back.value) });
+
+/**
+ * 有幾墩已經指定好時，把其他墩補成「尾、中、頭字典序最大」又不倒水的排法；排不出來回 null。
+ * all5、all3 是整手由大到小排好的組合：尾道一組一組（同樣大的每一種都試）往下找，第一組排得出來的就是答案；中道、頭道同理。
+ */
+function complete(all5: Pick[], all3: Pick[], used: number, fixed: { front?: Pick; middle?: Pick; back?: Pick }): Plan | null {
+  const free = (list: Pick[], m: number) => list.filter((x) => !(x.mask & m)); // 由大到小的順序不變
+  const backs = fixed.back ? [fixed.back] : free(all5, used);
+  for (let i = 0; i < backs.length;) {
+    let j = i + 1; while (j < backs.length && compareValue(backs[j].value, backs[i].value) === 0) j++; // 同樣大的一組
+    let found: Plan | null = null;
+    for (let bi = i; bi < j; bi++) {
+      const back = backs[bi];
+      const u1 = used | back.mask;
+      const mids = fixed.middle ? [fixed.middle] : free(all5, u1);
+      const fronts = fixed.front ? [fixed.front] : free(all3, u1);
+      for (let k = 0; k < mids.length;) {
+        let l = k + 1; while (l < mids.length && compareValue(mids[l].value, mids[k].value) === 0) l++;
+        let midFound: Plan | null = null;
+        if (compareValue(mids[k].value, back.value) <= 0) {
+          for (let mi = k; mi < l; mi++) {
+            const middle = mids[mi];
+            const front = fronts.find((t) => !(t.mask & middle.mask) && compareValue(t.value, middle.value) <= 0);
+            if (front) { const p = planOf(front, middle, back); if (!midFound || better(p, midFound)) midFound = p; }
+          }
+        }
+        if (midFound) { if (!found || better(midFound, found)) found = midFound; break; }
+        k = l;
+      }
+    }
+    if (found) return found;
+    i = j;
   }
-  return best!;
+  return null;
 }
 
 /**
- * 理牌時間到了（或斷線）由系統自動排牌：從手牌（加一色每人 16 張；也收 13 張）挑 13 張，排出「最好」的三墩，保證不倒水。
- * 「最好」的判準（規則書 2.7，小測 2026-11-18 要求寫清楚）：在所有不倒水的排法裡，先比尾道，尾道一樣大再比中道，
- * 中道也一樣再比頭道，取最大的一組（字典序最大）。沒挑到的牌就是不用的。不考慮對手，也不額外追特殊加分。
- * 做法：
- *   1. 尾道＝手牌裡最大的 5 張。同樣大的選法可能不只一種（例如葫蘆用哪幾張 K、順子用哪個花色），每一種都試。
- *   2. 每種尾道，中道＝剩下的牌裡最大的 5 張；一樣大的選法也每一種都試。
- *   3. 頭道＝再剩下的牌裡最大的 3 張。
- *   比完所有組合取字典序最大的。不倒水：尾道是全部手牌最大的 5 張，一定不小於中道；中道是剩下牌裡最大的 5 張，
- *   頭道 3 張也在剩下的牌裡，所以中道不小於「頭道＋任意 2 張」，也就不小於頭道。
- * 一樣大的選法通常只有幾種，16 張一手約幾毫秒。
+ * 理牌時間到了（或斷線）由系統自動排牌，前端的「推薦排法」也是它：從手牌（加一色每人 16 張；也收 13 張）挑 13 張排成三墩，保證不倒水。
+ * 「最好」的判準（阿哲 2026-11-18 拍板；說明見 API.md）：在所有不倒水的排法裡，
+ *   1. 先比三墩的牌型加分合計（照計分規則的加分表：頭墩三條＝衝三、中墩和尾墩的鐵支／同花順／五龍）——有機會拿加分時，
+ *      不會為了讓尾墩或中墩大一點而把衝三、鐵支拆掉；
+ *   2. 加分一樣多，再比尾道、中道、頭道，取最大的（字典序最大）。
+ * 只看自己的牌，不考慮對手。沒挑到的牌就是不用的。
+ * 做法：最好的排法裡，有拿加分的那幾墩一定是「拿得到加分的組合」之一（頭墩的三條、中尾墩的鐵支／同花順／五龍，數量不多）。
+ *   所以把「每一墩要不要指定成某個加分組合」的所有搭配都試一次，其他墩補成字典序最大又不倒水的排法（complete），
+ *   全部比完取最好的。沒有任何加分組合時，只有「全都不指定」一種，結果和原本的判準一樣。
+ *   加分多的搭配先試；一個搭配就算其他墩都拿到最多加分也比不過目前最好的，就跳過。
+ * 已用窮舉所有不倒水排法的對照測試證明結果相同（tests/_thirteen-arrange-bonus.ts、_thirteen-deal16.ts G7）。
  */
 export function autoArrange(cards: Card[]): Arrangement {
   if (cards.length < 13) throw new Error("自動排牌至少要 13 張");
-  const backs = bestFives(cards);
-  let best: { arr: Arrangement; middle: HandValue; front: HandValue } | null = null;
-  for (const back of backs.picks) {
-    const rest = cards.filter((c) => !back.includes(c));
-    const middles = bestFives(rest);
-    for (const middle of middles.picks) {
-      const front = bestThree(rest.filter((c) => !middle.includes(c)));
-      const better = !best || compareValue(middles.value, best.middle) > 0
-        || (compareValue(middles.value, best.middle) === 0 && compareValue(front.value, best.front) > 0);
-      if (better) best = { arr: { front: front.pick, middle, back }, middle: middles.value, front: front.value };
-    }
+  if (cards.length > 30) throw new Error("自動排牌最多 30 張");
+  const all5 = combos(cards, 5), all3 = combos(cards, 3);
+  const special5 = all5.filter((x) => bonusOf("middle", x.value) > 0 || bonusOf("back", x.value) > 0);
+  const trips = all3.filter((x) => bonusOf("front", x.value) > 0);
+  // 每一墩最多還能拿多少加分（剪枝用）
+  const maxFront = trips.length ? Math.max(...trips.map((t) => bonusOf("front", t.value))) : 0;
+  const maxMiddle = special5.length ? Math.max(...special5.map((t) => bonusOf("middle", t.value))) : 0;
+  const maxBack = special5.length ? Math.max(...special5.map((t) => bonusOf("back", t.value))) : 0;
+  const plans: { front?: Pick; middle?: Pick; back?: Pick; used: number; fixedBonus: number; upper: number }[] = [];
+  for (const front of [undefined, ...trips]) for (const middle of [undefined, ...special5]) for (const back of [undefined, ...special5]) {
+    const fm = front?.mask ?? 0, mm = middle?.mask ?? 0, bm = back?.mask ?? 0;
+    if ((fm & mm) || (fm & bm) || (mm & bm)) continue;
+    if (middle && back && compareValue(middle.value, back.value) > 0) continue;
+    const above = middle ?? back;
+    if (front && above && compareValue(front.value, above.value) > 0) continue;
+    const fb = (front ? bonusOf("front", front.value) : 0) + (middle ? bonusOf("middle", middle.value) : 0) + (back ? bonusOf("back", back.value) : 0);
+    plans.push({ front, middle, back, used: fm | mm | bm, fixedBonus: fb, upper: fb + (front ? 0 : maxFront) + (middle ? 0 : maxMiddle) + (back ? 0 : maxBack) });
   }
-  return best!.arr;
+  plans.sort((a, b) => b.fixedBonus - a.fixedBonus); // 加分多的先試，比較快找到好答案、剪掉其他
+  let best: Plan | null = null;
+  for (const pl of plans) {
+    if (best && pl.upper < best.bonus) continue;
+    const p = complete(all5, all3, pl.used, pl);
+    if (p && (!best || better(p, best))) best = p;
+  }
+  if (!best) throw new Error("排不出不倒水的三墩（不應該發生）");
+  return { front: best.front.pick, middle: best.middle.pick, back: best.back.pick };
 }

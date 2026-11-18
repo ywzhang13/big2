@@ -8,7 +8,7 @@ import { makeCard } from "@/lib/thirteen";
 import type { MjAuthUser } from "@/hooks/useMjAuth";
 import { AuthBar } from "@/components/mahjong/MjLobbyAuth";
 import { cardSrc } from "./cardArt";
-import { ARRANGE_DEFAULT, ARRANGE_MAX, ARRANGE_MIN, normalizeArrangeSec, plusArrangeSec } from "./arrangeTime";
+import { ARRANGE_DEFAULT, ARRANGE_MAX, ARRANGE_MIN, minusArrangeSec, normalizeArrangeSec, plusArrangeSec } from "./arrangeTime";
 
 export const HAND_OPTIONS = [8, 16, 32]; // 老闆 2026-11-18：開房局數只能選 8／16／32（伺服器其他值回 400）
 const BRAND_CARDS = [makeCard("S", 14, 1), makeCard("H", 13, 1), makeCard("D", 12, 1)];
@@ -77,7 +77,11 @@ export default function ThLobby({ user, onSignOut, busy, error, resume, onCreate
                     <span className="text-[#f0d68a] text-sm font-bold">理牌時間</span>
                     <span className="mjl-sub text-white/40 text-xs">{ARRANGE_MIN}～{ARRANGE_MAX} 秒</span>
                   </div>
-                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <div className="grid grid-cols-[auto_1fr_auto] gap-2">
+                    <button data-th-sec-minus aria-label="減 15 秒" disabled={sec <= ARRANGE_MIN}
+                      onClick={() => setSecText(String(minusArrangeSec(sec)))}
+                      style={{ minWidth: 56 }}
+                      className={`${OPT} ${OPT_OFF} px-5 text-xl disabled:opacity-30 disabled:cursor-not-allowed`}>−</button>
                     <label className={`${OPT} ${OPT_ON} flex items-center justify-center gap-1 cursor-text`}>
                       <input
                         data-th-sec

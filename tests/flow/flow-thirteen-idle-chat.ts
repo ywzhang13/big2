@@ -220,7 +220,14 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
   await playHand(m.roomId, ["p0", "p1", "p2"]);
   await post(leaveReqRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   for (const p of ["p1", "p2"]) await post(leaveVoteRoute, { roomId: m.roomId, playerId: p, approve: true }, p);
-  while (NOW + 30_000 + NEXT_HAND_MAX_MS - t <= IDLE_VOTE_MS) await playHand(m.roomId, ["p0", "p1", "p2"]); // 跑到 3 號還差一點才滿 3 分鐘
+  while (NOW + 30_000 + NEXT_HAND_MAX_MS - t <= IDLE_VOTE_MS) await playHand(m.roomId, ["p0", "p1", "p2"]); // 能整局打完就打
+  // 剩下不夠打完一整局：0～2 號照樣在這局送出（保持有牌局動作，只有 3 號閒置），再用 tick 一小段一小段推到 3 號滿 3 分鐘前 1 毫秒，
+  // 讓理牌截止、開下一局都照時處理。不然下一步直接跳過去，讀狀態那次會先處理一個早就過了的理牌截止（v8-B 出牌放慢後每局變長才會碰到）
+  for (const p of ["p0", "p1", "p2"]) {
+    const a = autoArrange((await state(m.roomId, p)).body.me.hand as Card[]);
+    await post(submitRoute, { roomId: m.roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p);
+  }
+  while (NOW < t + IDLE_VOTE_MS - 1) { NOW = Math.min(NOW + 10_000, t + IDLE_VOTE_MS - 1); await post(tickRoute, { roomId: m.roomId, playerId: "p0" }, "p0"); }
   const beforeView = (await state(m.roomId, "p0")).body.leaveRequest;
   const alive = await roomN(m.roomId);
   NOW = t + IDLE_VOTE_MS + 1; // 只讓時間走到 3 號剛好超過 3 分鐘；這段期間沒有任何 tick、送出、投票

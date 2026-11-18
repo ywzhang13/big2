@@ -4,17 +4,20 @@
 import { useState } from "react";
 import type { Card } from "@/lib/thirteen";
 import { CARD_BACK_SRC, cardSrc } from "./cardArt";
-import { breakdown, ROWS, type ThReveal } from "./revealTimeline";
+import { useStageScale } from "./stageScale";
+import { badgeOf, breakdown, ROWS, rowDisplayOrder, type ThReveal } from "./revealTimeline";
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");
 const tone = (n: number) => (n > 0 ? "is-up" : n < 0 ? "is-down" : "");
 const HOLE = "/tiles/thirteen/fx/th-fx-hole1.v1.m.webp";
 
-function Cards({ groups }: { groups: Card[][] }) {
+function Cards({ groups, labels }: { groups: Card[][]; labels?: { label: string; bonus: boolean }[] }) {
   return (
     <div className="th-res-cards">
       {groups.map((g, i) => (
         <div key={i} className="th-res-grp">
+          {/* 每墩上方的牌型（小宜 v8-A §7）：伺服器結算的牌型；有加分紅金色，頭墩三條寫衝三 */}
+          {labels?.[i] && <span className={`th-res-type${labels[i].bonus ? " is-bonus" : ""}`} data-th-res-type={labels[i].label}>{labels[i].label}</span>}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {g.map((c) => <img key={c.id} src={c ? cardSrc(c) : CARD_BACK_SRC} alt="" draggable={false} />)}
         </div>
@@ -36,6 +39,7 @@ export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sendi
   confirmLabel?: string;
 }) {
   const [peek, setPeek] = useState(false);
+  useStageScale();
   const shotBy = rv.stats.map((st) => st.gunned);
   const items = breakdown(rv.stats[mySeat]); // 明細用伺服器的 stats（阿哲 2026-11-18：前端不再自己算）
   const total = rv.result.totals[mySeat];
@@ -65,7 +69,7 @@ export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sendi
                   <span className="th-res-mark"><img src={HOLE} alt="" />−{shotBy[seat]}</span>
                 )}
               </div>
-              <Cards groups={ROWS.map((r) => a[r])} />
+              <Cards groups={ROWS.map((r) => rowDisplayOrder(a[r]))} labels={ROWS.map((r) => badgeOf(r, rv.result.values[seat][r]))} />
               <div className="th-res-pts">
                 <b className={tone(rv.result.totals[seat])}>{signed(rv.result.totals[seat])}</b>
                 <small>累計 {signed(rv.playerScores[seat])}</small>
@@ -90,6 +94,7 @@ export function ThFinalResult({ players, mySeat, hands, stats, onLobby }: {
   stats: MatchStat[] | null;
   onLobby: () => void;
 }) {
+  useStageScale();
   const ranked = [...players].sort((a, b) => b.totalScore - a.totalScore || a.seat - b.seat);
   return (
     <div className="th-res" data-th-result="final" role="dialog" aria-label="總結算">

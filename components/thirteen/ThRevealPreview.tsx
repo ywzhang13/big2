@@ -22,13 +22,13 @@ export default function ThRevealPreview({ rv }: { rv: Reveal }) {
   };
   if (done && rv.over) {
     return (
-      <div className="th-table">
+      <div className="th-bg">
         <div className="th-felt" />
         <ThFinalResult players={NAMES.map((playerName, seat) => ({ seat, playerName, totalScore: rv.playerScores[seat] }))} mySeat={0} hands={1}
           stats={rv.stats.map((st, seat) => ({ guns: st.guns, gunned: st.gunned, homeRuns: st.homeRun ? 1 : 0, homeRunned: st.homeRunned ? 1 : 0, total: rv.playerScores[seat] }))} onLobby={() => location.reload()} />
       </div>
     );
   }
-  if (startAt === null) return <div className="th-table" data-testid="th-loading"><div className="th-felt" /></div>;
+  if (startAt === null) return <div className="th-bg" data-testid="th-loading"><div className="th-felt" /></div>;
   return <ThReveal view={view} rv={rv} startAt={startAt} confirmBy={null} confirmed={done} confirmLabel={rv.over ? "看總結算" : "確認"} onConfirm={() => setDone(true)} />;
 }
