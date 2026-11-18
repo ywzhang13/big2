@@ -13,6 +13,7 @@ import { preloadRevealFx } from "./ThRevealFx";
 import ThFeltMenu from "./ThFeltMenu";
 import { useStageScale } from "./stageScale";
 import "./thArrange.css";
+import { useArrangeRemind } from "./sfx";
 
 export interface ThArrangeProps {
   /** 發到的手牌（加一色 16 張，挑 13 張排三墩） */
@@ -50,6 +51,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
     return () => clearInterval(t);
   }, [submitted]);
   useEffect(() => { if (left === 0) dispatch({ type: "timeout" }); }, [left]);
+  useArrangeRemind(left, submitted); // 最後 10 秒每秒嗶一聲＋手機短震（照麻將太久沒出牌），送出後就停
   useEffect(() => { void preloadRevealFx(); }, []); // 理牌時先把亮牌要用的牌背、特效圖載好
   useStageScale();
 

@@ -15,30 +15,20 @@ import { preloadRevealFx } from "./ThRevealFx";
 import ThFeltMenu from "./ThFeltMenu";
 import GamePlate, { type PlateSeat } from "../GamePlate";
 import { useStageScale } from "./stageScale";
+import { BACK_SLIDE_MS, FAN_FLY_MS, FAN_STAGGER_MS, ROW_SIZES, SEAT_GEO, backGroupX, backY, cardPose, type Pos } from "./fanLayout";
 
-const ROW_SIZES = [3, 5, 5];
-export type Pos = "bottom" | "right" | "top" | "left";
+export type { Pos } from "./fanLayout";
 export const POS_BY_OFFSET: Pos[] = ["bottom", "right", "top", "left"];
-const ROT: Record<Pos, number> = { bottom: 0, right: -90, top: 180, left: 90 };
 
 type RowView = { cards: Card[] | null; glow?: boolean };
 
-/** 出牌版面（小宜 v12 §2，基準 844×390）：出牌區中心、手牌區往自己那側的距離；自己的牌大一號；左右家同墩錯開比較短（side）。
- *  四家圍著中央看板成四方形：對家、自己到看板 8，左右家 10 */
-const GEO: Record<Pos, { x: number; y: number; hand: number; big: boolean; side: boolean }> = {
-  bottom: { x: 422, y: 299, hand: 88, big: true, side: false },
-  top: { x: 422, y: 79, hand: 77, big: false, side: false },
-  left: { x: 300, y: 185, hand: 188, big: false, side: true },   // 手牌區、名牌留在原位（x 112），出牌區靠向看板
-  right: { x: 544, y: 185, hand: 188, big: false, side: true },
-};
 /** 共用名牌的座位代號（決定思考中泡泡朝哪邊） */
 const PLATE_SEAT: Record<Pos, PlateSeat> = { bottom: "b", top: "t", left: "l", right: "r" };
 /** 中央看板裡四家的格子（v12 §4）：對家上、左家左、右家右、自己下；字都是正的 */
 const CELL: Record<Pos, "t" | "l" | "r" | "b"> = { top: "t", left: "l", right: "r", bottom: "b" };
 
-/** 一家：靠自己那側的手牌區（13 張牌背 3／5／5，出掉的那組空出來）＋靠中央的出牌區（頭墩最靠中央、中墩疊上去往自己那側錯開、尾墩再疊；最新的在最上層）。
- *  整組轉向自己的座位；牌型＋分數那一行字是正的 */
-/** 被打槍的彈孔位置（出牌區中心為原點），三個彼此隔 30 以上 */
+/** 一家：靠自己那側的牌背區（13 張牌背 3／5／5）＋靠中央的出牌區（頭墩最靠中央、中墩疊上去往自己那側錯開、尾墩再疊；最新的在最上層）。整組轉向自己的座位 */
+/** 被打槍的彈孔位置（中墩中心為原點），三個彼此隔 30 以上 */
 const HOLE_AT = [[-42, -18], [34, 6], [-6, 38]];
 /** 第一人稱大彈孔（被打的人自己的畫面；基準版面座標，小宜 v8-B §7）。老闆 2026-11-18：三槍要在同一畫面——
  *  大彈孔 220 見方，三個橫排在畫面中段（左、中、右，彼此只疊一點），轉了角度外框也還在 844×390 裡（見 thReveal.css .th-hole-big） */
@@ -49,28 +39,43 @@ const HOLE_ROT = [0, 130, 250];
 
 function Seat({ rows, pos, played, holes }: { rows: RowView[]; pos: Pos; played: boolean[]; holes: number }) {
   // 彈孔角度用 --hr 放進 transform（直接用 rotate 屬性會繞著還沒置中的框轉，彈孔被甩出原位；老闆 2026-11-18 截圖三槍跑出畫面）
-  const g = GEO[pos];
-  const rot = ROT[pos];
+  // 扇形（小宜 v13）：每張牌各自算中心和角度（fanLayout.cardPose），座位座標原點＝頭墩中間那張牌，整組轉到那一家的方向。
+  // 牌背（v14.2）：還沒出的組永遠在牌背區正中間；出牌時剩下的組 0.2 秒滑過去（CSS transition，重新整理時直接畫在最後位置）。
+  // 出牌飛行（v13 §5）：每張從那一墩出牌前牌背的中心、直的、0.65 倍、透明度 20% 飛到扇形位置，0.29 秒、依序晚 0.015 秒
+  const g = SEAT_GEO[pos];
+  const gone = played.filter(Boolean).length;
+  const bx = backGroupX(g, gone), by = backY(g);
+  const vars = { "--cw": `${g.w}px`, "--ch": `${g.h}px`, "--bw": `${g.bw}px`, "--bh": `${g.bh}px`, "--bx": `${g.bx}px`,
+    "--fly": `${FAN_FLY_MS}ms`, "--slide": `${BACK_SLIDE_MS}ms` } as React.CSSProperties;
   return (
-    <div className={`th-seat2${g.big ? " is-big" : ""}${g.side ? " is-side" : ""}`} style={{ left: g.x, top: g.y, transform: `rotate(${rot}deg)` }}>
+    <div className="th-seat2" style={{ left: g.o[0], top: g.o[1], transform: `rotate(${g.rot}deg)`, ...vars }}>
       <div className="th-blk" data-th-play>
+        <span className="th-blk-mid" data-th-mid style={{ top: g.off }} />{/* 中墩中間那張牌的中心：大字、打槍的落點 */}
         {HOLE_AT.slice(0, holes).map(([x, y], i) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={`h${i}`} className="th-hole" data-th-hole={i} src={HOLE_SRC} alt="" draggable={false} style={{ left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`, "--hr": `${HOLE_ROT[i]}deg` } as React.CSSProperties} />
+          <img key={`h${i}`} className="th-hole" data-th-hole={i} src={HOLE_SRC} alt="" draggable={false} style={{ left: x, top: g.off + y, "--hr": `${HOLE_ROT[i]}deg` } as React.CSSProperties} />
         ))}
-        {rows.map((row, r) => row.cards && (
-          <div key={r} className={`th-blk-row${row.glow ? " is-glow" : ""}`} data-th-row={ROWS[r]} style={{ top: `calc(${r} * var(--off))`, zIndex: r + 1 }}>
-            {row.cards.map((c) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={c.id} src={cardSrc(c)} alt="" draggable={false} />
-            ))}
-          </div>
-        ))}
+        {rows.map((row, r) => {
+          if (!row.cards) return null;
+          const fromX = backGroupX(g, r)[r]!; // 這一墩出牌前牌背的中心
+          return (
+            <div key={r} className={`th-blk-row${row.glow ? " is-glow" : ""}`} data-th-row={ROWS[r]} style={{ zIndex: r + 1 }}>
+              {row.cards.map((c, i, all) => {
+                const p = cardPose(g, r, i, all.length);
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={c.id} className="th-fan-card" src={cardSrc(c)} alt="" draggable={false} data-th-card={`${r}-${i}`}
+                    style={{ left: p.x, top: p.y, "--a": `${p.deg}deg`, "--dx": `${fromX - p.x}px`, "--dy": `${by - p.y}px`, "--d": `${i * FAN_STAGGER_MS}ms` } as React.CSSProperties} />
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
-      <div className="th-hand-strip" style={{ top: g.hand }} data-th-hand>
-        {ROW_SIZES.map((n, r) => (
-          <span key={r} className="th-hand-grp" style={played[r] ? { width: `calc(var(--bw) + ${n - 1} * var(--bx))`, height: "var(--bh)" } : undefined}>
-            {!played[r] && Array.from({ length: n }, (_, k) => ( // 出掉的那組空出來，其他組不移動
+      <div className="th-hand-strip" style={{ top: by }} data-th-hand>
+        {ROW_SIZES.map((n, r) => played[r] ? null : (
+          <span key={r} className="th-hand-grp" data-th-back={r} style={{ transform: `translate(${bx[r]}px, 0) translate(-50%, -50%)` }}>
+            {Array.from({ length: n }, (_, k) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img key={k} src={CARD_BACK_SRC} alt="" draggable={false} />
             ))}

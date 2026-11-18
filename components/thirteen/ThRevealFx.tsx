@@ -10,6 +10,7 @@ import type { Step } from "./revealTimeline";
 import { POS_BY_OFFSET, type Pos } from "./ThTable";
 import { CARD_BACK_SRC } from "./cardArt";
 import { stageScale } from "./stageScale";
+import { fxCenter, fxWidth } from "./fanLayout";
 
 const FX = "/tiles/thirteen/fx";
 const DESKTOP = "(min-width: 1100px) and (min-height: 700px)";
@@ -44,7 +45,7 @@ export function preloadRevealFx(): Promise<void> {
 
 type Pt = { x: number; y: number };
 function seatCenter(pos: Pos): Pt | null {
-  const el = document.querySelector(`.th-table [data-th-pos="${pos}"] .th-blk`);
+  const el = document.querySelector(`.th-table [data-th-pos="${pos}"] [data-th-mid]`); // 中墩中間那張牌的中心（扇形 v13）
   if (!el) return null;
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -71,19 +72,18 @@ function StartFx({ elapsed: elapsed0 }: { elapsed: number }) {
   );
 }
 
-/** 大字的寬高比（素材 fx-info-v2.json）：照小宜 v7 的框（自己 300×110、其他三家 240×88；桌機 ×1.9）等比放進去 */
-const RATIO: Record<string, number> = { chongsan: 1.3734, tiezhi: 2.6947, tonghuashun: 2.7179, wulong: 2.6987 };
+/** 大字（小宜 v14 §3 分級）：五龍寬當 100%（他家 210、自己 270），同花順 90%、鐵支 80% 照寬，衝三照面積 70%（拿掉舊的框高放寬 1.5 倍）；
+ *  中心＝那一家中墩中間那張牌，左右家往外移到最大瞬間也離看板 4px（fanLayout.fxCenter）。牌桌座標照 .th-table 的實際位置和倍數換成畫面座標 */
 function PatternFxView({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind: "fx" }>; elapsed: number; mySeat: number }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
   const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
   const at = useMount(() => {
     const s = stageScale(); // v8-A：特效尺寸跟著牌桌倍數放大
-    const c = seatCenter(pos) ?? tableCenter(); // v7 §2：圖的中心對齊那一家整組牌的中心
-    const k = 1 * s;
-    const [bw, bh] = pos === "bottom" ? [300 * k, 110 * k] : [240 * k, 88 * k];
-    const r = RATIO[step.fx] ?? 2.7;
-    const w = step.fx === "chongsan" ? Math.min(bw, bh * 1.5 * r) : Math.min(bw, bh * r); // 衝三的圖比較方（鯉魚在上），框高放寬 1.5 倍才不會太小
-    return { x: c.x, y: c.y, w };
+    const w = fxWidth(pos, step.fx) * s;
+    const t = document.querySelector(".th-table")?.getBoundingClientRect();
+    if (!t) { const c = seatCenter(pos) ?? tableCenter(); return { x: c.x, y: c.y, w }; }
+    const [cx, cy] = fxCenter(pos, step.fx), k = t.width / 844;
+    return { x: t.left + cx * k, y: t.top + cy * k, w };
   });
   if (!at) return null;
   return (

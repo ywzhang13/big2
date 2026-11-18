@@ -171,9 +171,11 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   ok(count(h, /<img[^>]*card-front-/g) === 12 && count(h, /<img[^>]*card-back/g) === 40 && count(h, /data-th-board-pt=/g) === 4 && count(h, /data-th-board-sc=/g) === 4 && count(h, /data-th-hand/g) === 4
     && !/th-cardlabel|th-rowlabel|data-th-delta/.test(h),
     `V1 頭墩四家出完：出牌區 12 張牌面、手牌區剩 40 張牌背；看板 4 個牌型＋4 個加分；牌面上和出牌區旁不再有字（牌面 ${count(h, /<img[^>]*card-front-/g)}、牌背 ${count(h, /<img[^>]*card-back/g)}、看板牌型 ${count(h, /data-th-board-pt=/g)}、加分 ${count(h, /data-th-board-sc=/g)}）`);
-  ok(/th-seat2 is-side" style="left:300px;top:185px;transform:rotate\(90deg\)"/.test(h) && /th-seat2 is-big" style="left:422px;top:299px/.test(h) && /th-seat2" style="left:422px;top:79px/.test(h)
+  ok(/th-seat2" style="left:328px;top:185px;transform:rotate\(90deg\)/.test(h) && /th-seat2" style="left:422px;top:267px;transform:rotate\(0deg\)/.test(h) && /th-seat2" style="left:422px;top:107px;transform:rotate\(180deg\)/.test(h)
     && /data-th-board="front"/.test(h) && !/th-clock/.test(h) && !/思考中/.test(h),
-    "V2 四家出牌區照 v12 圍著看板（左家 300,185 轉 90°、自己 422,299、對家 422,79）；亮牌時沒有倒數、沒有思考中");
+    "V2 四家出牌區原點＝頭墩中間那張牌（v13：左家 328,185 轉 90°、自己 422,267、對家 422,107）；亮牌時沒有倒數、沒有思考中");
+  ok(count(h, /class="th-fan-card"/g) === 12 && count(h, /data-th-back=/g) === 8 && count(h, /data-th-mid/g) === 4,
+    `V2b 扇形：翻開的 12 張每張各自定位（th-fan-card）；每家剩中墩、尾墩兩組牌背（${count(h, /data-th-back=/g)} 組）`);
   const done = renderToStaticMarkup(createElement(ThTable, { view, now: 0, clockSkew: 0, reveal: { rv, frame: T.frameAt(tl, tl.end - 1) } }));
   const g = T.gunsOf(rv.result)[0];
   ok(new RegExp(`data-seat="${g.to}"[\\s\\S]*?data-gp-shot="1"`).test(done) && count(done, /data-gp-shot=/g) === 1 && count(done, /data-th-hole=/g) === 1
@@ -287,6 +289,87 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   const room = readFileSync("components/thirteen/thRoom.css", "utf8");
   ok(/\.th-seat2 \.th-blk-row \+ \.th-blk-row \{ margin-top: 0; \}/.test(room),
     "V9 出牌區中墩、尾墩不再吃舊版面的負 margin-top（老闆第 10 輪：第二副壓住第一副太多）；每墩只由 top: r × --off 決定");
+}
+
+// ---- F 扇形出牌（小宜 v13）、四家牌背往中間靠攏（v14.2）、大牌大字分級（v14）：幾何數字和設計說明逐項對 ----
+{
+  const L = await import("../components/thirteen/fanLayout");
+  const near = (a: number, b: number, e = 0.6) => Math.abs(a - b) <= e;
+  const P = ["bottom", "right", "top", "left"] as const;
+  // F1 頭墩中間那張牌（v13 §2）；中墩、尾墩往玩家方向錯開 36／31／30／31（v14.2 §6）
+  const head = { bottom: [422, 267], right: [516, 185], top: [422, 107], left: [328, 185] };
+  const mid = { bottom: [422, 303], right: [547, 185], top: [422, 77], left: [297, 185] };
+  ok(P.every((p) => { const g = L.SEAT_GEO[p], a = L.toStage(g, 0, 0), b = L.toStage(g, 0, g.off); return near(a[0], head[p][0]) && near(a[1], head[p][1]) && near(b[0], mid[p][0]) && near(b[1], mid[p][1]); }),
+    "F1 四家頭墩、中墩中間那張牌的中心和 v13／v14.2 一致（自己錯開 36、對家 30、左右家 31）");
+  // F2 扇形：夾角 4°、半徑 430／358、兩邊的牌往玩家方向收
+  const R = (p: (typeof P)[number]) => L.SEAT_GEO[p].step / (2 * Math.sin(2 * Math.PI / 180));
+  const e0 = L.cardPose(L.SEAT_GEO.bottom, 0, 0, 5), e4 = L.cardPose(L.SEAT_GEO.bottom, 0, 4, 5), c2 = L.cardPose(L.SEAT_GEO.bottom, 0, 1, 3);
+  ok(near(R("bottom"), 430, 0.5) && near(R("top"), 358, 0.5) && e0.deg === -8 && e4.deg === 8 && c2.deg === 0 && c2.x === 0 && near(e4.y, 430 * (1 - Math.cos(8 * Math.PI / 180)), 0.01) && e4.y > 0,
+    `F2 扇形：半徑自己 ${R("bottom").toFixed(1)}、他家 ${R("top").toFixed(1)}；五張展開 −8°～+8°、三張 −4°～+4°，兩邊往玩家方向收 ${e4.y.toFixed(2)}`);
+  // F3 牌背組中心（v14.2 §3 兩張表）
+  const backs = (p: (typeof P)[number], gone: number) => L.backGroupX(L.SEAT_GEO[p], gone).map((x) => x === null ? null : L.toStage(L.SEAT_GEO[p], x, L.backY(L.SEAT_GEO[p])).map((v) => Math.round(v)).join(","));
+  const want: Record<string, string[][]> = {
+    bottom: [["322,361", "406,361", "506,361"], ["372,361", "472,361"], ["422,361"]],
+    top: [["510,26", "436,26", "348,26"], ["466,26", "378,26"], ["422,26"]],
+    right: [["732,273", "732,199", "732,111"], ["732,229", "732,141"], ["732,185"]],
+    left: [["112,97", "112,171", "112,259"], ["112,141", "112,229"], ["112,185"]],
+  };
+  const got = P.map((p) => [0, 1, 2].map((gone) => backs(p, gone).filter((v) => v !== null)));
+  ok(P.every((p, i) => JSON.stringify(got[i]) === JSON.stringify(want[p])), `F3 四家剩下的牌背永遠在牌背區正中間，起訖座標和 v14.2 §3 一致：${JSON.stringify(got[0])}`);
+  // F4 前端動畫時間：飛牌最後一張、牌背滑動都在出牌落定（0.35 秒）前結束
+  ok(L.FAN_FLY_MS === 290 && L.FAN_STAGGER_MS === 15 && L.BACK_SLIDE_MS === 200 && L.FAN_FLY_MS + 4 * L.FAN_STAGGER_MS <= T.MS.flip && L.BACK_SLIDE_MS <= T.MS.flip,
+    "F4 飛牌 0.29 秒、每張晚 0.015 秒（五張 0.35 秒落定）、牌背滑 0.2 秒，都 ≤ 出牌落定 0.35 秒");
+  // F5 大字分級（v14 §3）：寬度、中心
+  const K = ["wulong", "tonghuashun", "tiezhi", "chongsan"] as const;
+  const w = (p: (typeof P)[number]) => K.map((k) => Math.round(L.fxWidth(p, k)));
+  const cx = (p: "left" | "right") => K.map((k) => Math.round(L.fxCenter(p, k)[0]));
+  ok(JSON.stringify(w("top")) === "[210,189,168,105]" && JSON.stringify(w("bottom")) === "[270,243,216,135]"
+    && JSON.stringify(cx("right")) === "[595,584,573,547]" && JSON.stringify(cx("left")) === "[249,260,271,297]"
+    && near(L.fxCenter("bottom", "wulong")[1], 303) && near(L.fxCenter("top", "wulong")[1], 77),
+    `F5 大字寬：他家 ${w("top")}、自己 ${w("bottom")}（五龍＞同花順＞鐵支＞衝三）；左右家中心 x ${cx("left")}／${cx("right")}`);
+  const fxTsx = (await import("node:fs")).readFileSync("components/thirteen/ThRevealFx.tsx", "utf8");
+  ok(!/bh \* 1\.5/.test(fxTsx) && /fxWidth\(pos, step\.fx\)/.test(fxTsx), "F6 拿掉衝三原本的 1.5 倍框高，大字寬改用 fxWidth");
+}
+
+// ---- A 理牌最後 10 秒提醒、牌型配音（老闆 2026-11-18） ----
+{
+  const { readFileSync, existsSync } = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const S = await import("../components/thirteen/sfx");
+  const { CAT } = await import("../lib/thirteen");
+  // A1 倒數 60→0：剩 10、3、2、1 秒各一次共 4 次；送出就停
+  const fire = (submitAt: number | null) => { const out: number[] = []; for (let left = 60; left >= 0; left--) if (S.remindAt(left, submitAt !== null && left <= submitAt)) out.push(left); return out; };
+  ok(fire(null).join(",") === "10,3,2,1" && fire(6).join(",") === "10" && fire(2).join(",") === "10,3" && [10, 3, 2, 1].map(S.remindIsDouble).join() === "true,false,false,false", `A1 理牌提醒：剩 10、3、2、1 秒各一次共 ${fire(null).length} 次，9～4 秒安靜；剩 6 秒送出只有 10 秒那 1 次（${fire(6).join(",")}）；剩 2 秒送出只有 10、3（${fire(2).join(",")}）；剩 10 秒是整個檔案（滴滴）、3、2、1 秒只播第一個短音`);
+  // A2 提醒聲和震動照麻將（共用 turn-remind.mp3、vibrate 200ms），聲音受音效開關控制、震動不受
+  const w = globalThis as unknown as Record<string, unknown>;
+  const saved = { window: w.window, localStorage: w.localStorage, Audio: w.Audio, navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator") };
+  const store = new Map<string, string>(), played: string[] = [], vib: number[] = [];
+  class FakeAudio { src: string; preload = ""; volume = 1; constructor(src: string) { this.src = src; } cloneNode() { return new FakeAudio(this.src); } play() { played.push(this.src); return Promise.resolve(); } }
+  w.window = globalThis; w.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) }; w.Audio = FakeAudio;
+  Object.defineProperty(globalThis, "navigator", { value: { vibrate: (ms: number) => { vib.push(ms); return true; } }, configurable: true });
+  S.setSfxOn(true); S.arrangeRemind(); const onPlayed = played.slice(), onVib = vib.length;
+  S.setSfxOn(false); played.length = 0; S.arrangeRemind(); S.playSrc(S.voiceSrc("back", { cat: CAT.FOUR_KIND, keys: [] } as unknown as HandValue)); const offPlayed = played.length, offVib = vib.length - onVib;
+  Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true }); S.setSfxOn(true); played.length = 0; S.arrangeRemind(); const iosPlayed = played.length;
+  w.window = saved.window; w.localStorage = saved.localStorage; w.Audio = saved.Audio; if (saved.navigator) Object.defineProperty(globalThis, "navigator", saved.navigator);
+  ok(onPlayed.join() === S.REMIND_SRC && S.REMIND_SRC === "/mahjong-fx/s/turn-remind.mp3" && existsSync(`public${S.REMIND_SRC}`) && onVib === 1 && vib[0] === 200 && offPlayed === 0 && offVib === 1 && iosPlayed === 1,
+    `A2 提醒：音效開著播麻將提醒聲＋震 200ms（單聲截停見 _thirteen-remind-clip.ts）；⚙ 音效關掉時提醒聲和配音都不播（播了 ${offPlayed} 個），震動照常；不支援震動的裝置只有聲音（${iosPlayed} 聲）`);
+  // A3 每墩牌落定唸那一家的牌型（12 次）；大牌和大字同時開始；同花一對照實唸、頭墩三條唸衝三
+  for (const name of ["normal", "chongsan", "wulong"]) {
+    const rv = must(name), tl = T.buildTimeline(rv), vs = S.sfxEvents(tl.steps, 0, null, rv.result.values).filter((e) => e.k === "voice");
+    const flips = tl.steps.filter((x): x is Extract<typeof x, { kind: "flip" }> => x.kind === "flip");
+    const want = flips.map((f) => ({ t: f.big ? f.t0 + T.MS.fxDelay : f.t0 + T.MS.flip, src: S.voiceSrc(f.row, rv.result.values[f.seats[0]][f.row]) })).sort((a, b) => a.t - b.t);
+    ok(vs.length === 12 && JSON.stringify(vs.map((e) => [e.t, e.src])) === JSON.stringify(want.map((e) => [e.t, e.src])),
+      `A3 ${name}：12 墩各唸一次，一般牌在落定（出牌後 0.35 秒）、大牌在大字出現（0.5 秒）；${vs.map((e) => e.src!.replace(/.*th-voice-|\.v1\.mp3/g, "")).join(" ")}`);
+  }
+  ok(S.voiceSrc("front", { cat: CAT.THREE_KIND } as HandValue).endsWith("th-voice-chongsan.v1.mp3") && S.voiceSrc("back", { cat: CAT.THREE_KIND } as HandValue).endsWith("th-voice-cat3.v1.mp3")
+    && S.voiceSrc("middle", { cat: CAT.FLUSH_PAIR } as HandValue).endsWith("th-voice-cat6.v1.mp3"), "A4 頭墩三條唸衝三、中尾墩唸三條；同花一對唸 cat6（照計分程式）");
+  // A5 13 個檔都在、登記雜湊；三條是新錄的版本（不是三條-舊）
+  const list = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
+  const files = [...Array.from({ length: 12 }, (_, i) => `cat${i}`), "chongsan"].map((k) => `/tiles/thirteen/voice/th-voice-${k}.v1.mp3`);
+  const sha1 = (f: string) => createHash("sha1").update(readFileSync(`public${f}`)).digest("hex");
+  ok(files.every((f) => existsSync(`public${f}`) && f in list) && new Set(files.map(sha1)).size === 13
+    && sha1(files[3]) === "795510a19b760ffce3165f83940fa1996e7980c5" && sha1(files[3]) !== "00e5f7deefcd85f81c53f2c2c833a7c8c99121bd" && existsSync("public/tiles/thirteen/voice/SOURCE.txt"),
+    "A5 13 個配音檔都在、內容都不同、登記了雜湊；三條是新版（sha1 7955…，不是三條-舊 00e5…）；來源寫在 SOURCE.txt");
 }
 
 // ---- Z 審伯必修 2：結算面板和倒數照伺服器的 settleAt／nextHandAt（同一個時差換算），舊局不被新時間軸延後 ----

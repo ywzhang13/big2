@@ -67,22 +67,24 @@
 
 /* ---- v8-B §1 出牌版面（基準 844×390；整塊跟著 --th-s 放大）：手牌區＋出牌區，名牌在畫面座標 ---- */
 .th-bg > .th-table .th-seatbox { position: absolute; left: 0; top: 0; right: auto; bottom: auto; width: 0; height: 0; }
-.th-seat2 { position: absolute; width: 0; height: 0; transform-origin: 0 0;
-  --cw: 40px; --ch: 56px; --cx: 25px; --off: 28px; /* 小宜 v12：每墩錯開他家 28、自己 32（露出 50%；角標最高佔牌高 37.3%） */ --bw: 26px; --bh: 36px; --bx: 14px; }
-.th-seat2.is-big { --cw: 46px; --ch: 64px; --cx: 30px; --off: 32px; --bw: 30px; --bh: 42px; --bx: 16px; }
-.th-seat2.is-side { --cx: 13px; } /* 左右家同墩左右錯開 13（一墩五張長 92），四家才圍得成四方形 */
-.th-seat2 .th-blk { position: absolute; left: 0; top: 0; display: block; width: calc(var(--cw) + 4 * var(--cx)); height: calc(var(--ch) + 2 * var(--off));
-  transform: translate(-50%, -50%); }
-.th-seat2 .th-blk-row { position: absolute; left: 50%; transform: translateX(-50%); display: flex; animation: th-play .35s ease-out both; }
-/* 老闆 2026-11-18 第 10 輪「第二副壓住第一副太多」：舊版面 .th-blk-row + .th-blk-row 的負 margin-top 也套到這裡，中墩、尾墩多往上 24px，
-   頭墩只露 10px。出牌區每墩的位置只由 top: r × --off 決定 */
+.th-seat2 { position: absolute; width: 0; height: 0; transform-origin: 0 0; } /* 尺寸由 fanLayout.ts 的 SEAT_GEO 帶進來（--cw、--ch、--bw、--bh、--bx） */
+/* 小宜 v13 扇形：每張牌各自定位（中心＝left/top、角度＝--a），座位座標原點＝頭墩中間那張牌 */
+.th-seat2 .th-blk { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.th-blk-mid { position: absolute; left: 0; width: 0; height: 0; }
+.th-seat2 .th-blk-row { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .th-seat2 .th-blk-row + .th-blk-row { margin-top: 0; }
-.th-seat2 .th-blk-row img { width: var(--cw); height: var(--ch); max-width: none; border-radius: 4px; box-shadow: -1px 1px 3px rgba(0,0,0,.45); }
-.th-seat2 .th-blk-row img + img { margin-left: calc(var(--cx) - var(--cw)); }
+.th-seat2 .th-blk-row img { position: absolute; width: var(--cw); height: var(--ch); max-width: none; margin: 0; border-radius: 4px; box-shadow: -1px 1px 3px rgba(0,0,0,.45); }
 .th-seat2 .th-blk-row.is-glow img { box-shadow: 0 0 10px 3px rgba(240,214,138,.85); }
-@keyframes th-play { from { opacity: 0; transform: translateX(-50%) translateY(60px) scale(.85); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
-.th-hand-strip { position: absolute; left: 0; display: flex; gap: 6px; transform: translate(-50%, -50%); }
-.th-hand-grp { display: flex; }
+/* 出牌飛行（v13 §5）：從那一墩出牌前牌背的中心（--dx、--dy）、直的、0.65 倍、透明度 20% → 扇形位置；0.29 秒、每張晚 0.015 秒（--d） */
+.th-seat2 .th-blk-row .th-fan-card { transform: translate(-50%, -50%) translate(0, 0) rotate(var(--a)) scale(1);
+  animation: th-fan-fly var(--fly, 290ms) cubic-bezier(.2,.8,.3,1) var(--d, 0ms) both; }
+@keyframes th-fan-fly {
+  from { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(0deg) scale(.65); opacity: .2; }
+  to { transform: translate(-50%, -50%) translate(0, 0) rotate(var(--a)) scale(1); opacity: 1; }
+}
+/* v14.2 牌背區：每組以自己的中心定位（transform 由程式給）；出牌時剩下的組 0.2 秒滑到正中間 */
+.th-hand-strip { position: absolute; left: 0; width: 0; height: 0; }
+.th-hand-grp { position: absolute; left: 0; top: 0; display: flex; transition: transform var(--slide, 200ms) cubic-bezier(.2,.8,.3,1); }
 .th-hand-grp img { width: var(--bw); height: var(--bh); max-width: none; border-radius: 3px; box-shadow: -1px 1px 2px rgba(0,0,0,.4); }
 .th-hand-grp img + img { margin-left: calc(var(--bx) - var(--bw)); }
 /* ---- 中央看板（小宜 v10～v12，112×84、4:3）：材質同麻將中央資訊盤（黑 30%、金線 25%、圓角 10）；字都是正的 ---- */

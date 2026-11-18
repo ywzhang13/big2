@@ -1,0 +1,22 @@
+十三支牌型配音（13 段）
+
+來源：老闆 2026-11-18 用 ElevenLabs 錄的男聲「阿瑋娛樂城男聲」。
+・原檔：ElevenLabs_2026-11-18T08_25_20_阿瑋娛樂城男聲_gen_s50_sim75_v4.mp3
+・三條另外重錄：十三支三條.mp3（新版；舊版「三條-舊.mp3」不使用）
+阿妍 2026-11-18 切段、對齊音量。逐檔起訖秒數、音量、語音辨識結果，見阿妍的〈清單與驗證-十三支牌型配音-2026-11-18.md〉。
+老馬 2026-11-18 放進專案，改成英數檔名；雜湊登記在 scripts/immutable-assets.json。
+
+檔名對照（cat 編號＝計分程式 lib/thirteen/hand.ts 的 CAT）：
+・th-voice-cat0.v1.mp3  烏龍.mp3
+・th-voice-cat1.v1.mp3  一對.mp3
+・th-voice-cat2.v1.mp3  兩對.mp3
+・th-voice-cat3.v1.mp3  三條.mp3（新版）
+・th-voice-cat4.v1.mp3  順子.mp3
+・th-voice-cat5.v1.mp3  同花.mp3
+・th-voice-cat6.v1.mp3  同花一對.mp3
+・th-voice-cat7.v1.mp3  同花兩對.mp3
+・th-voice-cat8.v1.mp3  葫蘆.mp3
+・th-voice-cat9.v1.mp3  鐵支.mp3
+・th-voice-cat10.v1.mp3 同花順.mp3
+・th-voice-cat11.v1.mp3 五龍.mp3
+・th-voice-chongsan.v1.mp3 衝三.mp3（頭墩三條）

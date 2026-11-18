@@ -42,7 +42,7 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
   const frame = showPanel ? allOpen() : frameAt(tl, Math.max(0, t));
   const autoAt = Math.min(panelAt + CONFIRM_MS, confirmBy ?? Infinity);
   const secondsLeft = Math.max(0, Math.ceil((autoAt - now) / 1000));
-  useRevealSfx(tl.steps, t, view.me?.seat ?? 0); // 音效跟著時間軸（小宜 v8-B §6）
+  useRevealSfx(tl.steps, t, view.me?.seat ?? 0, rv.result.values); // 音效跟著時間軸（小宜 v8-B §6）；每墩落定唸那一家的牌型
 
   // 倒數到了自動確認；失敗（斷線、伺服器拒絕）隔 3 秒再試，不會卡在「已確認」
   const lastAuto = useRef<number | null>(null);
