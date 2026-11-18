@@ -1,9 +1,8 @@
 // 十三支亮牌到結算的時間、每局統計（阿哲 2026-11-18 拍板）。純函式，不連資料庫。
 //   U1 亮牌演出長度（從開始比牌到結算面板出現）照小宜 v8-B 第 5 節（出牌放慢，2026-11-18）：
-//      開始比牌 1.2 秒＋三墩各 3.6 秒（四家各出 0.6 秒＋出完等 1.2 秒）＋每個特效牌型大字 0.9 秒＋每一槍 0.8 秒
-//      ＋全壘打 3.2 秒（含集氣 0.45 秒）＋結算面板前停 0.5 秒。
-//      案例：一般局 12.5 秒（舊 9.0）、一槍 13.3 秒（舊 10.0）、衝三＋尾墩鐵支（不打槍）14.3 秒、
-//      衝三＋尾墩鐵支＋三槍＋全壘打 19.9 秒（舊 16.6；v8-B 文件寫 20.4，但照它自己的公式和各段長度算是 19.9，差 0.5 秒）
+//      老闆 2026-11-18 定案（照參考影片，阿妍量測）：開始比牌 1.7 秒＋三墩各 6.0 秒（四家各出 1.5 秒、墩後不停）
+//      ＋每個大牌多佔 0.3 秒＋每一槍 1.5 秒＋全壘打 3.2 秒＋結算面板前停 1.2 秒，即 20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打。
+//      案例：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支（不打槍）21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 29.2 秒
 //   U2 隨機 2000 局：長度＝上面的 v8-B 公式（特效牌型、打槍組數、全壘打從結算結果另外數）；都不超過「最長演出」
 //   U3 每局統計（每家）：墩分＋各特殊加分＋打槍分＋全壘打分＝這局總分；打槍、被打槍、全壘打、被全壘打的次數和結算結果一致
 //   U4 特殊加分的項目名稱照 v5 結算明細：衝三、中墩鐵支、尾墩同花順…；拿到的是正、付的是負
@@ -39,10 +38,10 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
   const rs = [ties, oneGun, fxNoGun, big].map(scoreRound);
   const specialsOf = (r: RoundResult) => r.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
   eq([rs.map(specialsOf), rs.map((r) => r.pairs.filter((p) => p.gunner !== null).length), rs.map((r) => r.homeRun), rs.map(dur)],
-    [[0, 0, 2, 2], [0, 1, 0, 3], [null, null, null, 0], [12500, 13300, 14300, 19900]],
-    "U1 亮牌演出長度照 v8-B：一般局 12.5 秒、一槍 13.3 秒、衝三＋尾墩鐵支 14.3 秒、衝三＋尾墩鐵支＋三槍＋全壘打 19.9 秒");
-  eq([f.SETTLE_WAIT_MS, f.NEXT_HAND_MAX_MS], [30000, 1200 + 3 * 3600 + 12 * 900 + 6 * 800 + 3200 + 500 + 30000],
-    "U1 結算面板出現後等 30 秒；亮牌到開下一局最長 61.3 秒（四家三墩都是特效牌型、六槍、全壘打）");
+    [[0, 0, 2, 2], [0, 1, 0, 3], [null, null, null, 0], [20900, 22400, 21500, 29200]],
+    "U1 亮牌演出長度（老闆定案新節奏）：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支 21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 29.2 秒");
+  eq([f.SETTLE_WAIT_MS, f.NEXT_HAND_MAX_MS], [30000, 66700],
+    "U1 結算面板出現後等 30 秒；亮牌到開下一局最長 66.7 秒（四家三墩都是特效牌型、六槍、全壘打）");
 }
 
 // U2、U3、U4：隨機 2000 局
@@ -56,7 +55,7 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
     const specials = r.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
     const g6 = r.pairs.filter((p) => p.gunner !== null).length;
     guns += g6; if (r.homeRun !== null) homeRuns++;
-    const expect = 1200 + 3 * 3600 + specials * 900 + g6 * 800 + (r.homeRun !== null ? 3200 : 0) + 500; // v8-B
+    const expect = 20900 + specials * 300 + g6 * 1500 + (r.homeRun !== null ? 3200 : 0); // 老闆定案新節奏
     if (dur(r) !== expect) durBad++;
     if ((dur(r) ?? 0) + 30000 > (f.NEXT_HAND_MAX_MS ?? 0)) overMax++;
     const st = f.handStats ? f.handStats(r) : null;
@@ -71,10 +70,25 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
       for (const b of x.bonuses) { bonusSeen++; if (!NAMES.has(b.name) || b.points === 0) nameBad++; }
     });
   }
-  eq([durBad, overMax], [0, 0], "U2 隨機 2000 局：演出長度都等於 v8-B 公式（特效牌型、打槍組數、全壘打另外數），也都不超過最長演出＋30 秒");
+  eq([durBad, overMax], [0, 0], "U2 隨機 2000 局：演出長度都等於新公式 20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打（特效牌型、打槍組數、全壘打另外數），也都不超過最長演出＋30 秒");
   eq([sumBad, countBad, guns > 100, homeRuns > 0], [0, 0, true, true],
     `U3 隨機 2000 局（打槍 ${guns} 組、全壘打 ${homeRuns} 次）：每家「墩分＋特殊加分＋打槍分＋全壘打分」＝這局總分；打槍、被打槍、全壘打、被全壘打次數都和結算一致`);
   eq([bonusSeen > 0, nameBad], [true, 0], `U4 特殊加分項目（共 ${bonusSeen} 筆）名稱都是 v5 結算明細的名稱（衝三、中墩鐵支、尾墩同花順…），沒有 0 分的空項目`);
+}
+
+// U5 舊局（改新節奏之前就亮牌的局）：伺服器存的 settleAt／nextHandAt 照舊用，不會用新公式重算而提早或延後開局
+{
+  const g = flow as unknown as { revealPayload: (s: unknown) => { settleAt: number | null; nextHandAt: number | null }; shouldStartNext: (s: unknown, now: number) => boolean };
+  const T = 1_800_000_000_000;
+  const ties = [0, 1, 2, 3].map((k) => arr(["2S 3H 4D", "2H 3D 4C", "2D 3C 4S", "2C 3S 4H"][k], ["5S 6H 7D 8C TS", "5H 6D 7C 8S TH", "5D 6C 7S 8H TD", "5C 6S 7H 8D TC"][k], ["9S JH QD KC AS", "9H JD QC KS AH", "9D JC QS KH AD", "9C JS QH KD AC"][k]));
+  const result = scoreRound(ties);
+  const oldSettle = T + 12500, oldNext = oldSettle + 30000; // 舊公式（dd0602a，每家 0.6 秒）一般局 12.5 秒
+  const s = { phase: "revealed", handNo: 1, settings: { totalHands: 8 }, hands: [{ handNo: 1, result }], playerScores: result.totals, nextReady: [],
+    players: ties.map((a, seat) => ({ seat, arrangement: a, autoArranged: false })), revealedAt: T, settleAt: oldSettle, nextHandAt: oldNext };
+  const p = g.revealPayload(s);
+  eq([p.settleAt, p.nextHandAt, g.shouldStartNext(s, oldNext - 1), g.shouldStartNext(s, oldNext), dur(result)],
+    [oldSettle, oldNext, false, true, 20900],
+    "U5 舊局：已存的 settleAt、nextHandAt 照原值回傳，到原本的 nextHandAt 就開下一局（新公式這局是 20.9 秒，但不拿來重算舊局）");
 }
 
 console.log(results.join("\n"));

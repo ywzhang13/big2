@@ -19,16 +19,18 @@ export const dealer = { deal: (): { hands: Card[][]; rest: Card[] } => deal() };
 /** 結算面板出現後，等多久沒人按確認也自動開下一局 */
 export const SETTLE_WAIT_MS = 30_000;
 /**
- * 亮牌演出各段長度（毫秒），照小宜〈十三支畫面設計說明 v8-B〉第 5 節（出牌放慢，2026-11-18）：
- *   START_MS 開始比牌；PLAY_MS 每家出一墩（移動翻面 0.35＋停 0.25）；ROW_WAIT_MS 一墩四家都出完後的等待（v5 的 0.6 加倍）；
- *   ROW_MS 一墩合計＝4×PLAY_MS＋ROW_WAIT_MS（平手的兩家也各佔一格，照順序一家一家出）；SPECIAL_MS 每個特效牌型大字；
- *   GUN_MS 每一槍；HOME_RUN_MS 全壘打（含集氣 0.45 秒）；SETTLE_PAUSE_MS 結算面板出現前的停頓。
+ * 亮牌演出各段長度（毫秒）。老闆 2026-11-18 定案：照參考影片的節奏（阿妍量測〈十三支比牌節奏-參考影片對照與建議值〉）：
+ *   START_MS 開始比牌 1.7；PLAY_MS 每家出一墩 1.5；ROW_WAIT_MS 一墩四家都出完後的等待 0（換墩不停，和同一墩一樣隔 1.5）；
+ *   ROW_MS 一墩合計＝4×PLAY_MS＋ROW_WAIT_MS＝6.0（平手的兩家也各佔一格，照順序一家一家出）；
+ *   SPECIAL_MS 每個大牌（衝三、中尾墩鐵支／同花順／五龍）另外多佔 0.3（特效和下一家出牌重疊，多出的留給中央顯示牌型名）；
+ *   GUN_MS 每一槍 1.5；HOME_RUN_MS 全壘打 3.2；SETTLE_PAUSE_MS 結算面板出現前的停頓 1.2。
+ *   一般局＝1.7＋3×6.0＋1.2＝20.9 秒；整局＝20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打。
  */
 export const REVEAL_TIMING = {
-  START_MS: 1200, PLAY_MS: 600, ROW_WAIT_MS: 1200, ROW_MS: 4 * 600 + 1200,
-  SPECIAL_MS: 900, GUN_MS: 800, HOME_RUN_MS: 3200, SETTLE_PAUSE_MS: 500,
+  START_MS: 1700, PLAY_MS: 1500, ROW_WAIT_MS: 0, ROW_MS: 4 * 1500 + 0,
+  SPECIAL_MS: 300, GUN_MS: 1500, HOME_RUN_MS: 3200, SETTLE_PAUSE_MS: 1200,
 } as const;
-/** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個特效牌型（衝三、中尾墩鐵支／同花順／五龍）＋每一槍＋全壘打＋停頓 */
+/** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個大牌（衝三、中尾墩鐵支／同花順／五龍）＋每一槍＋全壘打＋停頓 */
 export function revealDurationMs(result: RoundResult): number {
   const t = REVEAL_TIMING;
   const specials = result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
