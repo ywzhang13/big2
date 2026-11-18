@@ -1,6 +1,8 @@
 // 吃牌限制（老闆 2026-10-21）：吃牌後這一輪，和吃牌用的兩張能湊成順子的牌不能打。
 // 例：手上六七八條，用六、七條吃上家的五條 → 這輪五條、八條都不能打。
-// 哪些牌不能打由伺服器決定（牌局狀態、mj_hand_update 的 chiForbidden，牌型字串同 tileKey，例如 "s5"），前端只負責顯示和擋點擊。
+// 碰牌限制（老闆 2026-11-18）：碰了某張牌，這一輪不能打同種牌（例：碰八筒，這輪不能打八筒）。
+// 哪些牌不能打由伺服器決定（牌局狀態、mj_hand_update 的 chiForbidden，牌型字串同 tileKey，例如 "s5"），前端只負責顯示和擋點擊；
+// chiForbiddenBy（"chi"／"pong"）只用來選提示文字。
 import { useEffect, useState } from "react";
 import { tileKey, type Tile } from "./tiles";
 
@@ -11,8 +13,13 @@ export const chiKinds = (raw: unknown): string[] =>
 /** 這張牌現在不能打 */
 export const isChiForbidden = (tile: Tile, kinds: readonly string[]) => kinds.length > 0 && kinds.includes(tileKey(tile));
 
-/** 點到不能打的牌時的提示（不用 emoji） */
+/** 伺服器給的 chiForbiddenBy（不是 "pong" 都當吃：舊版伺服器沒有這個欄位） */
+export const forbidBy = (raw: unknown): "chi" | "pong" => (raw === "pong" ? "pong" : "chi");
+
+/** 點到不能打的牌時的提示（不用 emoji）：吃、碰分開 */
 export const CHI_FORBID_HINT = "剛吃的牌，這輪不能打同一搭";
+export const PONG_FORBID_HINT = "剛碰的牌，這輪不能打";
+export const forbidHint = (by: "chi" | "pong") => (by === "pong" ? PONG_FORBID_HINT : CHI_FORBID_HINT);
 
 /** 點到不能打的牌：提示亮 ms 毫秒（再點一次重新計時）。回傳 [現在要不要顯示, 叫它顯示] */
 export function useChiHint(ms = 2000): [boolean, () => void] {

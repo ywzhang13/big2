@@ -3,11 +3,11 @@
 //   F2 五七條吃六條（中洞）：這輪不能打六條；五條、七條照打
 //   F3 邊張：八九條吃七條只禁七條；一二萬吃三萬只禁三萬（沒有 0、10）；一三筒吃二筒（中洞）只禁二筒
 //   F4 限制只持續吃完後的這一次出牌：打出一張後就清掉，下一輪同一種牌照打
-//   F5 碰、明槓不受影響：碰完沒有禁打的牌
+//   F5 碰不受食替（順子）限制，但碰的那種牌這輪不能打（老闆 2026-11-18 碰牌限制，詳見 _pong-forbid.ts）
 //   F6 吃完手上沒有能打的牌：那種吃法不提供；全部吃法都不行就沒有「吃」（碰照常）；硬送 executeAction 也會擋
 //   F7 宣告眼牌的出牌選項也不含禁打的牌
 //   F8 保險：狀態被改到手上全是禁打的牌時不限制（不會卡局）
-//   F9 2000 手模擬（電腦玩家只從能打的牌裡挑、能吃就吃）：沒有卡局、沒有一次打出禁打的牌、每次吃完都有牌可打
+//   F9 2000 手模擬（電腦玩家只從能打的牌裡挑、能吃碰就吃碰）：沒有卡局、沒有一次打出禁打的牌、每次吃碰完都有牌可打
 import {
   advanceTurn, chiForbiddenKeys, chiForbiddenKeysFor, dealTiles, declareWin, discardTile, drawTile, executeAction,
   eyeDiscardOptions, getAvailableActions, initGame, isGuoShui, passFlowerRob,
@@ -82,7 +82,8 @@ const tryDiscard = (s: MahjongGameState, key: string) => {
   const g = game(`s5 s5 s6 s7 s8 ${FILL} m3`, "s5");
   const pong = getAvailableActions(g).find((a) => a.playerSeat === 0 && a.type === "pong")!;
   const s = executeAction(g, pong);
-  eq([chiForbiddenKeys(s, 0), s.chiForbid ?? null, tryDiscard(s, "s8"), tryDiscard(s, "s6")], [[], null, "ok", "ok"], "F5 碰五條：不受食替限制，四、六、八條照打");
+  eq([chiForbiddenKeys(s, 0), s.chiForbid?.by ?? null, tryDiscard(s, "s8"), tryDiscard(s, "s6")], [["s5"], "pong", "ok", "ok"],
+    "F5 碰五條：不受食替的順子限制（四、六、八條照打），只有五條這輪不能打（碰牌限制，2026-11-18）");
 }
 // F6
 {
@@ -115,7 +116,7 @@ const tryDiscard = (s: MahjongGameState, key: string) => {
   let seed = 20261021;
   const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
   const realRandom = Math.random; Math.random = rnd;
-  const stats = { hands: 0, finished: 0, wins: 0, draws: 0, chis: 0, forbidHits: 0, stuck: 0, badDiscard: 0, noLegal: 0, errors: [] as string[] };
+  const stats = { hands: 0, finished: 0, wins: 0, draws: 0, chis: 0, pongs: 0, forbidHits: 0, stuck: 0, badDiscard: 0, noLegal: 0, errors: [] as string[] };
   const legal = (s: MahjongGameState) => { const f = chiForbiddenKeys(s, s.currentTurn); return s.players[s.currentTurn].hand.filter((x) => x.suit !== "f" && !f.includes(tileKey(x))); };
   for (let h = 0; h < 2000; h++) {
     stats.hands++;
@@ -143,8 +144,8 @@ const tryDiscard = (s: MahjongGameState, key: string) => {
         const claim = acts.find((a) => a.type === "pong" && rnd() < 0.5) ?? acts.find((a) => a.type === "chi" && rnd() < 0.8);
         if (claim) {
           s = executeAction(s, claim);
-          if (claim.type === "chi") {
-            stats.chis++;
+          if (claim.type === "chi" || claim.type === "pong") {
+            if (claim.type === "chi") stats.chis++; else stats.pongs++;
             if (legal(s).length === 0) stats.noLegal++;
           }
           continue;
@@ -154,9 +155,9 @@ const tryDiscard = (s: MahjongGameState, key: string) => {
     } catch (e) { stats.errors.push(`${h}:${(e as Error).message}`); }
   }
   Math.random = realRandom;
-  eq([stats.hands, stats.finished, stats.stuck, stats.noLegal, stats.badDiscard, stats.errors.slice(0, 3), stats.chis > 1000, stats.forbidHits === stats.chis],
-    [2000, 2000, 0, 0, 0, [], true, true],
-    `F9 2000 手模擬：全部打完（胡 ${stats.wins}、流局 ${stats.draws}），吃 ${stats.chis} 次每次都有牌可打、${stats.forbidHits} 次有禁打的牌，沒有卡局、沒有打出禁打的牌`);
+  eq([stats.hands, stats.finished, stats.stuck, stats.noLegal, stats.badDiscard, stats.errors.slice(0, 3), stats.chis > 1000, stats.pongs > 1000, stats.forbidHits === stats.chis + stats.pongs],
+    [2000, 2000, 0, 0, 0, [], true, true, true],
+    `F9 2000 手模擬：全部打完（胡 ${stats.wins}、流局 ${stats.draws}），吃 ${stats.chis} 次、碰 ${stats.pongs} 次，每次都有牌可打、${stats.forbidHits} 次有禁打的牌，沒有卡局、沒有打出禁打的牌`);
 }
 
 console.log(results.join("\n"));

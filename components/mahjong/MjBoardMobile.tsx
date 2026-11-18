@@ -9,7 +9,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import type { Meld } from "@/lib/mahjong/gameState";
 import { MjMeldArrow } from "./MjMeldArrow";
 import MjTableMenu from "./MjTableMenu";
-import { CHI_FORBID_HINT, isChiForbidden, useChiHint } from "@/lib/mahjong/chiForbid";
+import { forbidHint, isChiForbidden, useChiHint } from "@/lib/mahjong/chiForbid";
 import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import type { MjBoardProps } from "./MjBoard";
 import { paceText } from "./paceText";
@@ -365,6 +365,7 @@ export default function MjBoardMobile({
   eyeSeats,
   eyeOptions,
   chiForbidden = [],
+  chiForbiddenBy = "chi",
   opponentHands,
   declareFx,
   wallRemaining,
@@ -646,7 +647,7 @@ export default function MjBoardMobile({
             <MjClaimBanner actions={availableActions} onAction={onAction} winLabel={winLabel} passLabel={robKong || robFlower ? "不搶" : "過"} extra={eyeToggle} />
           </>
         ) : chiHint && needsDiscard ? (
-          <span className="mjm-status me" data-chi-hint>{CHI_FORBID_HINT}</span>
+          <span className="mjm-status me" data-chi-hint>{forbidHint(chiForbiddenBy)}</span>
         ) : canPick && selected && !chiBlocked(selected) ? (
           <>
             <span className="mjm-status me">輪到你打牌</span>

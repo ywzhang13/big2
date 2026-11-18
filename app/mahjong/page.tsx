@@ -1070,6 +1070,7 @@ function RoomView({
     eyeOptions: state.eyeOptions,
     eyeWithTing: state.eyeWithTing,
     chiForbidden: state.chiForbidden,
+    chiForbiddenBy: state.chiForbiddenBy,
     opponentHands: state.opponentHands,
     declareFx: state.declareFx,
     wallRemaining: state.wallRemaining,

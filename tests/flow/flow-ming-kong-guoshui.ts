@@ -181,7 +181,8 @@ async function mingKong(replacement: string) {
   const k = await call(action, { playerId: "p1", actionType: "kong", tiles: handIds(1, "p5") });
   eq([k.status, st().players[1].revealed[0]?.type, drawCanWin(), viewWin(1), gs()], [200, "concealed_kong", true, true, []], "K17 暗槓補到二萬：可以自摸，沒有過水");
   const w = await call(action, { playerId: "p1", actionType: "win" });
-  eq([w.status, fans().includes("槓上開花"), fans().includes("自摸")], [200, true, true], "K18 暗槓補牌自摸成功，算自摸和槓上開花");
+  // 2026-11-18 暗槓不破壞門清：這手只有一組暗槓，自摸算門清自摸 3 台（取代自摸 1）
+  eq([w.status, fans().includes("槓上開花"), fans().includes("門清自摸"), fans().includes("自摸")], [200, true, true, false], "K18 暗槓補牌自摸成功，算槓上開花；只有暗槓所以是門清自摸（不再只算自摸）");
 }
 {
   setup(REST);

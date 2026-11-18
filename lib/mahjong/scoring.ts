@@ -187,7 +187,8 @@ function scoreDecomposition(
   ctx: ScoringContext
 ): ScoreResult {
   const fans: { name: string; value: number }[] = [];
-  const isConcealed = ctx.revealed.length === 0; // 門清: no revealed melds
+  // 門清：沒有吃、碰、明槓（含碰後加槓）。暗槓不算（老闆 2026-11-18）：只有暗槓照樣算門清／門清自摸
+  const isConcealed = ctx.revealed.every((m) => m.type === "concealed_kong");
   const isTianhu = ctx.isFirstDraw && ctx.isDealer;
 
   // --- 天胡 / 地聽 / 地胡 ---
