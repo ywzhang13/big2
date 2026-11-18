@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Arrangement } from "@/lib/thirteen";
 import { useMjAuth } from "@/hooks/useMjAuth";
+import { bindPrefsAccount } from "@/lib/mahjong/prefs";
+import { migrateOldSfxSwitch } from "@/components/thirteen/sfx";
 import { mjStorage } from "@/lib/mahjong/clientAuth";
 import { GuestGate, LoginGate, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
 import ThArrange from "@/components/thirteen/ThArrange";
@@ -64,6 +66,17 @@ function ThirteenScreens() {
   const room = useThirteenRoom(join);
   useEffect(() => { applyFelt(loadFelt(), false); }, []); // 簡約牌桌：用本機記的那一款（v7 §1；設定在特效測試頁可以切）
   const loggedIn = auth.status === "in" && !!auth.user;
+  // 共用設定（聲音）跟著登入的人：和麻將同一份（LINE 帳號存伺服器、訪客和沒登入存這台 mj.prefs.v4）；
+  // 綁好之後把舊的十三支音效開關 th_sfx 轉一次（有帳號時等伺服器的設定回來再轉）
+  const prefsUserId = auth.status === "in" ? auth.user?.id ?? null : null;
+  const prefsGuest = !!auth.user?.isGuest;
+  useEffect(() => {
+    if (auth.status === "checking") return; // 還不知道是誰：先用這台的
+    bindPrefsAccount(prefsUserId ? { id: prefsUserId, isGuest: prefsGuest } : null);
+    const ctrl = new AbortController(); // 登出、換帳號、離開頁面：取消還沒跑完的轉換
+    void migrateOldSfxSwitch({ account: prefsUserId && !prefsGuest ? prefsUserId : null, signal: ctrl.signal });
+    return () => ctrl.abort();
+  }, [auth.status, prefsUserId, prefsGuest]);
 
   const doJoin = useCallback(async (code: string) => {
     setBusy(true); setError("");

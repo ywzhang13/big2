@@ -340,19 +340,7 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   // A1 倒數 60→0：剩 10、3、2、1 秒各一次共 4 次；送出就停
   const fire = (submitAt: number | null) => { const out: number[] = []; for (let left = 60; left >= 0; left--) if (S.remindAt(left, submitAt !== null && left <= submitAt)) out.push(left); return out; };
   ok(fire(null).join(",") === "10,3,2,1" && fire(6).join(",") === "10" && fire(2).join(",") === "10,3" && [10, 3, 2, 1].map(S.remindIsDouble).join() === "true,false,false,false", `A1 理牌提醒：剩 10、3、2、1 秒各一次共 ${fire(null).length} 次，9～4 秒安靜；剩 6 秒送出只有 10 秒那 1 次（${fire(6).join(",")}）；剩 2 秒送出只有 10、3（${fire(2).join(",")}）；剩 10 秒是整個檔案（滴滴）、3、2、1 秒只播第一個短音`);
-  // A2 提醒聲和震動照麻將（共用 turn-remind.mp3、vibrate 200ms），聲音受音效開關控制、震動不受
-  const w = globalThis as unknown as Record<string, unknown>;
-  const saved = { window: w.window, localStorage: w.localStorage, Audio: w.Audio, navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator") };
-  const store = new Map<string, string>(), played: string[] = [], vib: number[] = [];
-  class FakeAudio { src: string; preload = ""; volume = 1; constructor(src: string) { this.src = src; } cloneNode() { return new FakeAudio(this.src); } play() { played.push(this.src); return Promise.resolve(); } }
-  w.window = globalThis; w.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) }; w.Audio = FakeAudio;
-  Object.defineProperty(globalThis, "navigator", { value: { vibrate: (ms: number) => { vib.push(ms); return true; } }, configurable: true });
-  S.setSfxOn(true); S.arrangeRemind(); const onPlayed = played.slice(), onVib = vib.length;
-  S.setSfxOn(false); played.length = 0; S.arrangeRemind(); S.playSrc(S.voiceSrc("back", { cat: CAT.FOUR_KIND, keys: [] } as unknown as HandValue)); const offPlayed = played.length, offVib = vib.length - onVib;
-  Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true }); S.setSfxOn(true); played.length = 0; S.arrangeRemind(); const iosPlayed = played.length;
-  w.window = saved.window; w.localStorage = saved.localStorage; w.Audio = saved.Audio; if (saved.navigator) Object.defineProperty(globalThis, "navigator", saved.navigator);
-  ok(onPlayed.join() === S.REMIND_SRC && S.REMIND_SRC === "/mahjong-fx/s/turn-remind.mp3" && existsSync(`public${S.REMIND_SRC}`) && onVib === 1 && vib[0] === 200 && offPlayed === 0 && offVib === 1 && iosPlayed === 1,
-    `A2 提醒：音效開著播麻將提醒聲＋震 200ms（單聲截停見 _thirteen-remind-clip.ts）；⚙ 音效關掉時提醒聲和配音都不播（播了 ${offPlayed} 個），震動照常；不支援震動的裝置只有聲音（${iosPlayed} 聲）`);
+  // A2 提醒聲、震動、靜音、Web Audio 播放：見 tests/_thirteen-remind-clip.ts
   // A3 每墩牌落定唸那一家的牌型（12 次）；大牌和大字同時開始；同花一對照實唸、頭墩三條唸衝三
   for (const name of ["normal", "chongsan", "wulong"]) {
     const rv = must(name), tl = T.buildTimeline(rv), vs = S.sfxEvents(tl.steps, 0, null, rv.result.values).filter((e) => e.k === "voice");

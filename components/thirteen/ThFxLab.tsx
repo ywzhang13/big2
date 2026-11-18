@@ -5,7 +5,7 @@ import ThTable from "./ThTable";
 import ThRevealFx, { preloadRevealFx } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
-import { BIG_SFX, loadBigSfx, playSfx, saveBigSfx, useRevealSfx } from "./sfx";
+import { BIG_SFX, loadBigSfx, playSfx, playSrc, saveBigSfx, useRevealSfx } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
 import "./thRoom.css";
 import "./thReveal.css";
@@ -38,6 +38,8 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
 
+  // 自動量測用（只有預覽站的這一頁有）：照正式牌局同一條路（playSrc → Web Audio、跟著互動音效音量）播一個檔
+  useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
     setBig(loadBigSfx());
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();

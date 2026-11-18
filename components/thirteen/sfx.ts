@@ -1,9 +1,14 @@
 "use client";
 // 十三支音效（小宜 v8-B §6 S1～S13；檔案與授權見 public/tiles/thirteen/sfx/LICENSE.txt）。
-//   每個音效有 a、b 兩個候選，SFX_PICK 改一個字就換；大牌（衝三、鐵支、同花順、五龍）共用一個，在特效測試頁選（BIG_SFX）；開關記在本機（設定 ⚙ 裡切）
+//   每個音效有 a、b 兩個候選，SFX_PICK 改一個字就換；大牌（衝三、鐵支、同花順、五龍）共用一個，在特效測試頁選（BIG_SFX）。
+//   音量、靜音是三款共用的設定（≡ →「設定」→ 聲音：互動音效），播放走 Web Audio（thAudio.ts）
 import { useEffect, useRef } from "react";
 import { CAT, type HandValue, type Row } from "@/lib/thirteen";
 import { MS, scoreWindows, type Step } from "./revealTimeline";
+import { getPrefs, normalizePrefs, onPrefsChange, setPrefs } from "@/lib/mahjong/prefs";
+import { mjFetch } from "@/lib/mahjong/clientAuth";
+import { gameVibrate } from "@/components/gamePrefs/vibrate";
+import { loadBuffer, playBuffer } from "./thAudio";
 
 export type SfxKey = "start" | "play" | "score" | "chongsan" | "tiezhi" | "tonghuashun" | "wulong" | "gunshot" | "hit" | "charge" | "bat" | "homerun" | "fireworks";
 export const SFX_LIST: { key: SfxKey; name: string }[] = [
@@ -45,53 +50,83 @@ export function saveBigSfx(id: string | null): void {
   try { if (id) localStorage.setItem(BIG_KEY, id); else localStorage.removeItem(BIG_KEY); } catch { /* 存不了就只是這次 */ }
 }
 
-const KEY = "th_sfx";
-export const sfxOn = (): boolean => { try { return localStorage.getItem(KEY) !== "0"; } catch { return true; } };
-export const setSfxOn = (on: boolean): void => { try { localStorage.setItem(KEY, on ? "1" : "0"); } catch { /* 存不了就只是這次 */ } };
-
-const cache = new Map<string, HTMLAudioElement>();
 /** src：直接指定檔案（大牌候選）；沒給就照 k＋variant */
 export function playSfx(k: SfxKey, opts: { variant?: SfxVariant; src?: string; force?: boolean; volume?: number } = {}): void {
   playSrc(opts.src ?? sfxSrc(k, opts.variant), opts);
 }
-/** 播一個檔案（受 ⚙ 音效開關控制；force＝測試頁試聽） */
-export function playSrc(src: string, opts: { force?: boolean; volume?: number; stopAtSec?: number } = {}): void {
-  if (typeof window === "undefined" || (!opts.force && !sfxOn())) return;
-  let base = cache.get(src);
-  if (!base) { base = new Audio(src); base.preload = "auto"; cache.set(src, base); }
-  const a = base.cloneNode(true) as HTMLAudioElement; // 同一個音效可以疊（出牌一局 12 次、三槍）
-  a.volume = opts.volume ?? 1;
-  const played = a.play();
-  if (opts.stopAtSec) stopAtPosition(a, played, opts.stopAtSec); // 只播前面一段（提醒聲的單聲）
-  else void played.catch(() => { /* 還沒點過畫面（瀏覽器擋自動播放）就不出聲 */ });
-}
-
-/** 只播到檔案的第 stopAt 秒（審伯 2026-11-18 必修：照「實際播放進度」停，不從呼叫 play() 起算——起播延遲時才不會切掉第一聲）。
- *  play() 成功（真的開始播）才開始每 10ms 看一次 currentTime，到了就暫停；播放失敗、提前播完、被別人暫停都立刻收掉計時器；
- *  2 秒還沒播到（例如分頁在背景、播放卡住）就直接暫停收掉，不留下還在播的 Audio */
-const CLIP_POLL_MS = 10, CLIP_GIVE_UP_MS = 2000;
-function stopAtPosition(a: HTMLAudioElement, played: Promise<void>, stopAt: number): void {
-  let timer: ReturnType<typeof setInterval> | null = null, over = false;
-  const finish = () => {
-    if (over) return;
-    over = true;
-    if (timer !== null) clearInterval(timer);
-    timer = null;
-    a.removeEventListener("ended", finish); a.removeEventListener("error", finish); a.removeEventListener("pause", finish);
-  };
-  const stop = () => { finish(); try { if (!a.paused) a.pause(); } catch { /* 已經停了 */ } };
-  a.addEventListener("ended", finish); a.addEventListener("error", finish); a.addEventListener("pause", finish);
-  played.then(() => {
-    if (over) return;
-    if (a.paused || a.ended) { finish(); return; }
-    const giveUp = Date.now() + CLIP_GIVE_UP_MS;
-    timer = setInterval(() => { if (a.currentTime >= stopAt || Date.now() >= giveUp) stop(); }, CLIP_POLL_MS);
-  }, () => { stop(); /* 還沒點過畫面（瀏覽器擋自動播放）就不出聲，也不留計時器 */ });
+/** 播一個檔（Web Audio，見 thAudio.ts）：跟著共用設定的互動音效音量走、靜音就不播；force＝測試頁試聽。
+ *  duration＝只播檔案前面幾秒（提醒聲的單聲）：照檔案裡的位置切，起播晚也不會切到第一聲 */
+export function playSrc(src: string, opts: { force?: boolean; volume?: number; duration?: number } = {}): void {
+  if (typeof window === "undefined") return;
+  void playBuffer(src, opts);
 }
 export function preloadSfx(): void {
   if (typeof window === "undefined") return;
   const big = bigSrc(loadBigSfx());
-  for (const src of [...SFX_LIST.map(({ key }) => sfxSrc(key)), ...(big ? [big] : [])]) if (!cache.has(src)) { const a = new Audio(src); a.preload = "auto"; cache.set(src, a); }
+  for (const src of [...SFX_LIST.map(({ key }) => sfxSrc(key)), ...(big ? [big] : [])]) void loadBuffer(src);
+}
+
+/** 舊的十三支「音效」開關（localStorage th_sfx，"0"＝關）：第一次載入時轉成共用設定的互動音效靜音，然後刪掉（小宜〈共用設定面板 v1〉§8）。
+ *  只改「互動音效靜音」這一項（setPrefs({ fxMuted })）；有登入 LINE 時（審伯 2026-11-19 必修）：
+ *    自己問一次這個帳號的設定，確認畫面上的設定已經是帳號的那一份（或帳號從沒存過），才轉；
+ *    逾時（timeoutMs）、請求失敗、回來的不是這個帳號、或等待中被取消（登出、換帳號、頁面卸載）→ 什麼都不寫，th_sfx 留著下次再轉。
+ *  同一時間只跑一個（重複呼叫拿到同一個結果），轉完刪掉 th_sfx，所以只會生效一次 */
+export const OLD_SFX_KEY = "th_sfx";
+export type OldSfxResult = "muted" | "kept-on" | "none" | "skipped" | "aborted";
+type PrefsGet = { get(): Promise<{ account: string; persisted: boolean; prefs: unknown } | null> };
+const prefsHttp: PrefsGet = {
+  async get() { const r = await mjFetch("/api/mahjong/prefs", { method: "GET" }); return r.ok ? r.json() : null; },
+};
+let migrating: { account: string | null; signal?: AbortSignal; job: Promise<OldSfxResult> } | null = null;
+
+export function migrateOldSfxSwitch(opts: { account: string | null; signal?: AbortSignal; timeoutMs?: number; io?: PrefsGet }): Promise<OldSfxResult> {
+  // 同一個帳號正在轉（而且沒被取消）：共用那一次；被取消的（例如開發模式 effect 跑兩次的第一次）不共用，重新來
+  if (migrating && migrating.account === opts.account && !migrating.signal?.aborted) return migrating.job;
+  const job = runMigration(opts).finally(() => { if (migrating?.job === job) migrating = null; });
+  migrating = { account: opts.account, signal: opts.signal, job };
+  return job;
+}
+
+async function runMigration({ account, signal, timeoutMs = 4000, io = prefsHttp }: { account: string | null; signal?: AbortSignal; timeoutMs?: number; io?: PrefsGet }): Promise<OldSfxResult> {
+  let old: string | null;
+  try { old = localStorage.getItem(OLD_SFX_KEY); } catch { return "skipped"; }
+  if (old === null) return "none";
+  const apply = (): OldSfxResult => {
+    if (old === "0") setPrefs({ fxMuted: true });
+    try { localStorage.removeItem(OLD_SFX_KEY); } catch { /* 刪不掉：下次再轉一次，結果一樣 */ }
+    return old === "0" ? "muted" : "kept-on";
+  };
+  if (!account) return apply(); // 訪客、沒登入：設定就在這台
+  const deadline = Date.now() + timeoutMs;
+  // 1) 問這個帳號存了什麼（逾時、失敗、被取消都放棄）
+  const res = await race(io.get().catch(() => null), deadline, signal);
+  if (signal?.aborted) return "aborted";
+  if (!res || res === TIMEOUT || res.account !== account) return "skipped";
+  // 2) 帳號有存過：等畫面上的設定變成帳號那一份（prefs 的綁定把伺服器的值套上去）才轉；帳號從沒存過：畫面上的就是這個帳號的
+  if (res.persisted) {
+    const want = normalizePrefs(res.prefs);
+    if (!want) return "skipped";
+    const same = () => JSON.stringify(getPrefs()) === JSON.stringify(want);
+    if (!same()) {
+      const loaded = await race(new Promise<true>((done) => { const off = onPrefsChange(() => { if (same()) { off(); done(true); } }); signal?.addEventListener("abort", off); setTimeout(off, Math.max(0, deadline - Date.now())); }), deadline, signal);
+      if (signal?.aborted) return "aborted";
+      if (loaded !== true) return "skipped";
+    }
+  }
+  if (signal?.aborted) return "aborted";
+  return apply();
+}
+
+const TIMEOUT = Symbol("timeout");
+/** 等 p，最晚到 deadline；被取消也立刻結束（回 TIMEOUT，由呼叫的人看 signal.aborted） */
+function race<T>(p: Promise<T>, deadline: number, signal?: AbortSignal): Promise<T | typeof TIMEOUT> {
+  return new Promise((done) => {
+    const t = setTimeout(() => done(TIMEOUT), Math.max(0, deadline - Date.now()));
+    const stop = () => { clearTimeout(t); done(TIMEOUT); };
+    if (signal?.aborted) return stop();
+    signal?.addEventListener("abort", stop, { once: true });
+    p.then((v) => { clearTimeout(t); signal?.removeEventListener("abort", stop); done(v); });
+  });
 }
 
 /** 牌型配音（老闆 2026-11-18 用 ElevenLabs 錄的 13 段，來源見 public/tiles/thirteen/voice/SOURCE.txt）：
@@ -130,7 +165,7 @@ export function useRevealSfx(steps: Step[], t: number, mySeat: number, values?: 
   useEffect(() => { preloadSfx(); }, []);
   useEffect(() => {
     if (!values) return;
-    for (const src of new Set(values.flatMap((v) => (["front", "middle", "back"] as Row[]).map((row) => voiceSrc(row, v[row]))))) preloadSrc(src);
+    for (const src of new Set(values.flatMap((v) => (["front", "middle", "back"] as Row[]).map((row) => voiceSrc(row, v[row]))))) void loadBuffer(src);
   }, [values]);
   useEffect(() => {
     const prev = last.current ?? t - 1;
@@ -143,25 +178,20 @@ export function useRevealSfx(steps: Step[], t: number, mySeat: number, values?: 
   }, [steps, t, mySeat, values]);
 }
 
-function preloadSrc(src: string): void {
-  if (typeof window === "undefined" || cache.has(src)) return;
-  const a = new Audio(src); a.preload = "auto"; cache.set(src, a);
-}
-
 /** 理牌最後 10 秒提醒（老闆 2026-11-18）：照麻將「太久沒出牌」——提醒聲共用麻將的 turn-remind.mp3、震動同麻將 navigator.vibrate(200)。
  *  麻將的做法（lib/mahjong/tableSound.ts、fx/engine.ts playTableSound）：那個檔案本身就是「滴滴」——0.25 秒、兩個短音（0～60ms、160～220ms，間隔 100ms），一次播放就是快速兩聲。
- *  老闆 2026-11-18：剩 10 秒像麻將那樣快速兩聲（整個檔案播一次），剩 3、2、1 秒各一聲（只播前面第一個短音：照實際播放進度播到 90ms，停在兩音之間的靜音，不會有破音）；
- *  9～4 秒安靜；送出後就停；聲音受 ⚙ 音效開關控制，震動照麻將不受影響；不支援震動的裝置（iPhone 瀏覽器）只有聲音 */
-export const REMIND_SRC = "/mahjong-fx/s/turn-remind.mp3", REMIND_AT: readonly number[] = [10, 3, 2, 1], REMIND_DOUBLE_AT = 10, REMIND_SINGLE_AT = 0.09, REMIND_VIBRATE_MS = 200;
+ *  老闆 2026-11-18：剩 10 秒像麻將那樣快速兩聲（整個檔案播一次），剩 3、2、1 秒各一聲（Web Audio 只播檔案的前 90ms，停在兩音之間的靜音，不會有破音）；
+ *  9～4 秒安靜；送出後就停；聲音跟著共用設定的互動音效，震動跟著共用設定的「震動」開關；不支援震動的裝置（iPhone 瀏覽器）只有聲音 */
+export const REMIND_SRC = "/mahjong-fx/s/turn-remind.mp3", REMIND_AT: readonly number[] = [10, 3, 2, 1], REMIND_DOUBLE_AT = 10, REMIND_SINGLE_SEC = 0.09, REMIND_VIBRATE_MS = 200;
 export const remindAt = (left: number, submitted: boolean) => !submitted && REMIND_AT.includes(left);
 /** 剩 10 秒＝滴滴（整個檔案）；剩 3、2、1 秒＝滴（只播第一個短音） */
 export const remindIsDouble = (left: number) => left === REMIND_DOUBLE_AT;
 export function arrangeRemind(double = true): void {
-  playSrc(REMIND_SRC, double ? {} : { stopAtSec: REMIND_SINGLE_AT });
-  try { if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(REMIND_VIBRATE_MS); } catch { /* 不支援就只有聲音 */ }
+  playSrc(REMIND_SRC, double ? {} : { duration: REMIND_SINGLE_SEC });
+  gameVibrate(REMIND_VIBRATE_MS); // 共用設定的「震動」關掉就不震；不支援的裝置只有聲音
 }
 /** 理牌畫面：倒數秒數變成 10、3、2、1 時提醒一次 */
 export function useArrangeRemind(left: number, submitted: boolean): void {
-  useEffect(() => { preloadSrc(REMIND_SRC); }, []);
+  useEffect(() => { void loadBuffer(REMIND_SRC); }, []);
   useEffect(() => { if (remindAt(left, submitted)) arrangeRemind(remindIsDouble(left)); }, [left, submitted]);
 }

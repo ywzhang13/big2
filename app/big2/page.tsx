@@ -12,6 +12,9 @@ import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
 import type { Card as CardType } from "@/lib/constants";
 import { calculateScore } from "@/lib/scoring";
+import GameMenu from "@/components/gamePrefs/GameMenu";
+import { useGamePrefsAccount, useSessionAuth } from "@/components/gamePrefs/accountBinding";
+import { gameVibrate } from "@/components/gamePrefs/vibrate";
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -32,6 +35,9 @@ function getMyId(): string {
 }
 
 export default function Home() {
+  // 共用設定（左上 ≡ →「設定」）跟著登入的人：LINE 帳號讀寫帳號的、訪客和沒登入用這台；換帳號、登出不殘留（同十三支、麻將）。
+  // 只讀登入狀態，大老二沒有登入入口
+  useGamePrefsAccount(useSessionAuth());
   const [screen, setScreen] = useState<"home" | "create" | "join" | "room">("home");
   const [roomCode, setRoomCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -275,11 +281,11 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
     }
   }, [allReady, state.status, dealAndStart]);
 
-  // Vibrate when it becomes my turn
+  // Vibrate when it becomes my turn（共用設定的「震動」關掉就不震，見 components/gamePrefs/vibrate.ts）
   const prevIsMyTurn = useRef(false);
   useEffect(() => {
     if (isMyTurn && !prevIsMyTurn.current && state.status === "playing") {
-      try { navigator.vibrate?.(200); } catch {}
+      gameVibrate(200);
     }
     prevIsMyTurn.current = isMyTurn;
   }, [isMyTurn, state.status]);
@@ -511,6 +517,8 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden relative">
+      {/* 左上 ≡ →「設定」：三款共用的設定面板（小宜〈共用設定面板 v1〉），大老二目前只有聲音頁 */}
+      <GameMenu game="big2" tabs={[]} />
       <div className="flex justify-center pt-safe px-4 py-2">
         {top && <PlayerSlot name={top.name} cardCount={top.cardCount} isCurrentTurn={state.currentTurn === top.seat} isFinished={top.isFinished} position="top" score={state.scores[top.id]} />}
       </div>
