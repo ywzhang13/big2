@@ -802,8 +802,10 @@ export default function MjBoard({
                 return <span className="text-[#f0d68a] font-bold text-sm" data-chi-hint>{forbidHint(chiForbiddenBy)}</span>;
               }
               if (isMyTurn) {
+                // 有槓可按時，字改由橫幅上緣的小標顯示（原位置會被橫幅蓋住）；這裡留一個看不見的同字佔位，版面高度不變
+                const covered = hasActions && !needsDraw;
                 return (
-                  <span className="text-[#f0d68a] font-bold text-sm animate-pulse">
+                  <span className={`text-[#f0d68a] font-bold text-sm${covered ? " invisible" : " animate-pulse"}`} aria-hidden={covered || undefined}>
                     {needsDraw ? "輪到你摸牌" : "輪到你打牌"}
                   </span>
                 );
@@ -824,6 +826,7 @@ export default function MjBoard({
               winLabel={robFlower ? "七搶一" : robKong ? "搶槓胡" : "胡"}
               passLabel={robKong || robFlower ? "不搶" : "過"}
               extra={canEye ? eyeButton : null}
+              turnLabel={isMyTurn && needsDiscard ? "輪到你打牌" : undefined}
               desk
             />
           )}

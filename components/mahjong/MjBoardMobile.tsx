@@ -644,7 +644,7 @@ export default function MjBoardMobile({
         {availableActions.length > 0 ? (
           <>
             {/* 吃碰槓胡的按鈕改由金色橫幅（MjClaimBanner，疊層）顯示，眼牌鈕也一起放進去（動作列會被橫幅蓋住） */}
-            <MjClaimBanner actions={availableActions} onAction={onAction} winLabel={winLabel} passLabel={robKong || robFlower ? "不搶" : "過"} extra={eyeToggle} />
+            <MjClaimBanner actions={availableActions} onAction={onAction} winLabel={winLabel} passLabel={robKong || robFlower ? "不搶" : "過"} extra={eyeToggle} turnLabel={isMyTurn && needsDiscard ? "輪到你打牌" : undefined} />
           </>
         ) : chiHint && needsDiscard ? (
           <span className="mjm-status me" data-chi-hint>{forbidHint(chiForbiddenBy)}</span>

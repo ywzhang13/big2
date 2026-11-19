@@ -17,6 +17,7 @@ export default function MjClaimBanner({
   winLabel,
   passLabel,
   extra,
+  turnLabel,
   desk = false,
 }: {
   actions: { type: string; tiles?: Tile[] }[];
@@ -25,6 +26,9 @@ export default function MjClaimBanner({
   passLabel: string;
   /** 其他要一起放的按鈕（例如眼牌鈕：動作列被橫幅蓋住，所以放進來） */
   extra?: React.ReactNode;
+  /** 輪到自己打牌又有槓（暗槓、加槓）可按時的「輪到你打牌」：橫幅把動作列、狀態列蓋住，字會被壓在底下，所以改放在橫幅上緣外面一顆小標（不蓋到任何按鈕）；
+   *  吃碰槓胡是別人打牌時的宣告就不給 */
+  turnLabel?: string;
   desk?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -55,6 +59,19 @@ export default function MjClaimBanner({
   const th = desk ? 27 : 20;
   return createPortal(
     <div ref={ref} className={`mjm-claimbar${desk ? " desk" : ""}`} data-claim-banner>
+      {turnLabel && (
+        // 內聯樣式：這張只動 3 個檔。pointer-events: none，不擋底下牌桌的操作；絕對定位在橫幅容器上緣（容器底邊貼資訊列、高度＝橫幅高）
+        <span
+          data-claim-turn
+          style={{
+            position: "absolute", left: desk ? 22 : 10, bottom: `calc(${desk ? 78 : 62}px + 6px)`, padding: desk ? "4px 14px" : "3px 10px", borderRadius: 999,
+            font: `700 ${desk ? 15 : 13}px/1.2 system-ui, sans-serif`, color: "#f0d68a", background: "rgba(10,22,14,.88)", border: "1px solid rgba(201,169,110,.55)",
+            whiteSpace: "nowrap", pointerEvents: "none",
+          }}
+        >
+          {turnLabel}
+        </span>
+      )}
       <div className="bar">
         {/* 倒數只是提醒：走完就停在 0，不會自動按「過」 */}
         <span key={sig} className="cd" aria-hidden />
