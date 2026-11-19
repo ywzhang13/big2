@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { LINE_PROVIDER, authHeaders, getGuestClient, isGuestTab, loginReturnUrl } from "@/lib/mahjong/clientAuth";
+import { forgetLineToken, rememberLineToken } from "@/lib/linePicture/client";
 import type { Session } from "@supabase/supabase-js";
 
 export type MjAuthStatus = "checking" | "out" | "redirecting" | "error" | "in" | "pairing" | "handoff";
@@ -190,6 +191,7 @@ export function useMjAuth() {
       }
       if (waiting) dropPairing(); // 殘留的配對資料（過期、已經登入、不是 iPhone 主畫面）直接清掉，不會卡在等待
       const u = userOf(data.session, guestTab);
+      if (!guestTab) void rememberLineToken(data.session); // 剛 LINE 登入回來：把 LINE 授權交給伺服器（大頭照失效時換新用）
       setUser(u);
       setStatus(u ? "in" : failed ? "error" : "out");
     });
@@ -200,6 +202,7 @@ export function useMjAuth() {
         setUser(null);
         setStatus((s) => (s === "error" ? s : "out"));
       } else if (session && (event === "SIGNED_IN" || event === "USER_UPDATED")) {
+        if (event === "SIGNED_IN") void rememberLineToken(session);
         setUser(userOf(session));
         setStatus("in");
       }
@@ -371,6 +374,7 @@ export function useMjAuth() {
       dropGuest();
       return;
     }
+    forgetLineToken(await withTimeout(authHeaders(), {})); // 先請伺服器刪掉 LINE 授權（要趁還有登入 token 時送）
     const ok = await withTimeout(getSupabase().auth.signOut({ scope: "local" }).then((r) => !r.error, () => false), false);
     if (!ok) dropLocalSession(); // 伺服器沒確認（失敗、逾時、拿不到鎖）：自己清掉這台裝置的登入
   }, [dropGuest]);

@@ -4,6 +4,8 @@
 
 import { useState } from "react";
 import { openPrefs } from "@/lib/mahjong/prefs";
+import { authHeaders } from "@/lib/mahjong/clientAuth";
+import { refreshMyPicture } from "@/lib/linePicture/client";
 import { GearIcon } from "./MjIcons";
 import type { GuestLoginError, MjAuthStatus, MjAuthUser, MjHandoff } from "@/hooks/useMjAuth";
 
@@ -186,11 +188,21 @@ export function GuestGate({
   );
 }
 
-export function Avatar({ user }: { user: MjAuthUser }) {
+/** self：這是自己的頭像（右上登入列）。載不出來時請伺服器跟 LINE 換一次新照片（乙案），換到就直接顯示新的 */
+export function Avatar({ user, self }: { user: MjAuthUser; self?: boolean }) {
   const [broken, setBroken] = useState(false);
-  if (user.pictureUrl && !broken) {
+  const [fresh, setFresh] = useState<string | null>(null);
+  const src = fresh ?? user.pictureUrl;
+  const onError = () => {
+    setBroken(true);
+    if (self && !fresh && !user.isGuest) {
+      const show = (url: string | null) => { if (url && url !== user.pictureUrl) { setFresh(url); setBroken(false); } };
+      void refreshMyPicture(authHeaders, show).then(show); // 授權還沒存好時，存好後才換到（show 由 onLater 呼叫）
+    }
+  };
+  if (src && !broken) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img className="mjl-ava" src={user.pictureUrl} alt="" onError={() => setBroken(true)} />;
+    return <img className="mjl-ava" src={src} alt="" onError={onError} />;
   }
   return <span className="mjl-ava">{Array.from(user.displayName)[0] ?? ""}</span>;
 }
@@ -211,7 +223,7 @@ export function AuthBar({ user, onSignOut }: { user: MjAuthUser; onSignOut: () =
   return (
     <div className="mjl-authbar">
       <div className="mjl-who">
-        <Avatar user={user} />
+        <Avatar user={user} self />
         <span className="nm">{user.displayName}</span>
         {user.isGuest && <span className="mjl-guest-tag">遊客</span>}
       </div>
