@@ -1,0 +1,64 @@
+/* 三款共用的結算外框（GameResultFrame.tsx；數值照小宜〈十三支 v15〉§4-2、§5 和互動稿 .gr-*）。基準 844×390，整塊用 --gr-z 等比放大 */
+.gr { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(4,14,9,.86); color: #fff; }
+.gr.peek { background: transparent; pointer-events: none; }
+.gr.peek .gr-in { visibility: hidden; }
+.gr-in { box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 8px 14px; width: 844px; height: 390px; flex: none; zoom: var(--gr-z, 1); }
+.gr button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.gr button:focus-visible { outline: 2px solid #f0d68a; outline-offset: 2px; }
+/* 左欄：寬 190，內容置中、間隔 6 */
+.gr-l { flex: 0 0 190px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.gr-title { font: 900 30px/1.1 "MjBrandSerif", "Songti TC", "Noto Serif TC", serif; letter-spacing: .12em; text-indent: .12em; color: #fff4dc;
+  text-shadow: 0 0 14px rgba(240,214,138,.7), 0 2px 4px rgba(0,0,0,.8); white-space: nowrap; }
+.gr-sub { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); white-space: nowrap; }
+.gr .gr-tool { position: relative; height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #f0d68a; background: rgba(255,255,255,.06);
+  border: 1px solid rgba(201,169,110,.45); white-space: nowrap; }
+.gr-tool::after { content: ""; position: absolute; inset: -8px -4px; } /* 可按範圍上下各多 8 */
+.gr .gr-tool:hover { background: rgba(255,255,255,.12); } .gr .gr-tool:active { transform: scale(.96); }
+.gr-items { box-sizing: border-box; width: 100%; padding: 7px 10px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(201,169,110,.3); font-size: 12px; line-height: 1.5; }
+.gr-item { display: flex; justify-content: space-between; gap: 10px; }
+.gr-item .n { color: #f0d68a; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-item .v { font: 800 12px/1.5 "Chakra Petch", system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gr-item.tot { border-top: 1px solid rgba(201,169,110,.25); padding-top: 3px; margin-top: 1px; font-size: 13px; }
+.gr-item.tot .v { font-size: 13px; }
+.gr .up { color: #6ee7a0; } .gr .down { color: #ff7b72; } .gr .zero { color: rgba(255,255,255,.75); }
+/* 右欄：最寬 600；四家（間隔 5）、等待那一行、最下面一列 */
+.gr-r { flex: 1 1 auto; max-width: 600px; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.gr-rows { display: flex; flex-direction: column; gap: 5px; }
+.gr-row { box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-height: 61px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.035); border: 1px solid rgba(201,169,110,.22); }
+.gr-row.me { background: rgba(201,169,110,.15); border-color: #f0d68a; }
+.gr-row.is-final { min-height: 52px; }
+.gr-who { flex: 0 0 68px; min-width: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.gr-who .nm { max-width: 100%; font-size: 11px; font-weight: 700; line-height: 13px; color: rgba(255,255,255,.8); word-break: break-all;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gr-row.me .gr-who .nm { color: #f0d68a; }
+/* 名字下的標記：全壘打紅金膠囊、被打槍米白膠囊加小彈孔（遊戲自己交內容，樣式共用） */
+.gr-mark { display: inline-flex; align-items: center; gap: 3px; height: 14px; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.gr-mark.hr { background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; }
+.gr-mark.shot { background: rgba(243,234,210,.95); color: #b91c1c; }
+.gr-mark.shot img { width: 9px; height: 9px; max-width: none; }
+.gr-body { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-end; gap: 6px; }
+.gr-delta { flex: 0 0 auto; min-width: 62px; text-align: right; white-space: nowrap; }
+.gr-delta b { display: block; font: 800 19px/1.1 "Chakra Petch", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.gr-delta small { font-size: 10px; color: rgba(243,234,210,.6); }
+.gr-next { height: 15px; font-size: 11px; font-weight: 700; line-height: 15px; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-err { font-size: 11px; font-weight: 700; line-height: 14px; color: #ff9b92; text-align: right; }
+.gr-foot { display: flex; align-items: center; gap: 10px; min-height: 38px; }
+.gr-ready { display: flex; align-items: center; gap: 4px; margin-right: auto; min-width: 0; overflow: hidden; }
+.gr-ready .cnt { flex: none; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.55); white-space: nowrap; margin-right: 2px; }
+.gr-chip { box-sizing: border-box; display: inline-flex; align-items: center; gap: 3px; max-width: 92px; height: 22px; padding: 0 7px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.gr-chip span { overflow: hidden; text-overflow: ellipsis; } .gr-chip i { font-style: normal; flex: none; }
+.gr-chip.ok { background: rgba(201,169,110,.85); color: #0f2a1a; border: 1px solid #f0d68a; }
+.gr-chip.wait { color: rgba(255,255,255,.5); border: 1px dashed rgba(255,255,255,.35); }
+.gr .gr-btn { flex: none; height: 38px; min-width: 124px; padding: 0 20px; border-radius: 12px; font-size: 15px; font-weight: 800; background: linear-gradient(180deg, #e8c97a, #C9A96E);
+  color: #0f2a1a; white-space: nowrap; transition: filter .15s; }
+.gr .gr-btn:hover:not(:disabled) { filter: brightness(1.08); } .gr .gr-btn:active:not(:disabled) { transform: scale(.97); }
+.gr .gr-btn:disabled { filter: grayscale(.4) brightness(.8); cursor: default; }
+.gr .gr-back { position: absolute; right: 14px; bottom: 10px; height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(15,42,26,.92); color: #f0d68a;
+  border: 1.5px solid rgba(201,169,110,.8); font-weight: 800; font-size: 14px; pointer-events: auto; zoom: var(--gr-z, 1); }
+/* 總結算的列：名次圓點（和麻將同色）、名字、統計（各寬 74）、總分 */
+.gr-rank { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; color: #1a1408; background: #6b7280; }
+.gr-rank.r0 { background: #FFD700; } .gr-rank.r1 { background: #C0C0C0; } .gr-rank.r2 { background: #CD7F32; } .gr-rank.r3 { color: #fff; }
+.gr-fname { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 700; color: rgba(255,255,255,.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-row.me .gr-fname { color: #f0d68a; }
+.gr-stat { flex: 0 0 74px; font-size: 11px; color: rgba(255,255,255,.6); white-space: nowrap; }
+.gr-stat b { margin-left: 4px; font: 700 13px "Chakra Petch", system-ui, sans-serif; color: #fff; }

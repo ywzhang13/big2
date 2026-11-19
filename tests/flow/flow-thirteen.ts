@@ -27,6 +27,7 @@ import { parseCards, type Card } from "../../lib/thirteen/cards";
 import { autoArrange, type Arrangement } from "../../lib/thirteen/arrange";
 import { revealOrder, scoreRound } from "../../lib/thirteen/score";
 import { insertRoom } from "../../lib/thirteen/db";
+import { ruleOf } from "../support/thirteen-rule";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -65,10 +66,11 @@ const sub = (roomId: string, pid: string, a: Arrangement, as = pid) =>
 const myHand = async (roomId: string, pid: string) => (await state(roomId, pid, pid)).body.me.hand as Card[];
 
 /** 開房、四家入座、開局；回傳房間 id 和房號 */
-async function newMatch(opts: { arrangeSec?: number; totalHands?: number } = {}) {
+async function newMatch(opts: { arrangeSec?: number; totalHands?: number; scoreRule?: "jia" } = {}) {
   const totalHands = opts.totalHands ?? 3;
   const c = await post(createRoute, { hostId: "p0", arrangeSec: opts.arrangeSec ?? 30, totalHands: [8, 16, 32].includes(totalHands) ? totalHands : 8 }, "p0");
   if (![8, 16, 32].includes(totalHands)) await setTotalHands(db, c.body.roomId, totalHands); // 開房只能選 8／16／32；測試要短局就照舊房的方式直接改設定
+  if (opts.scoreRule) await db.query(`update th_rooms set game_state = jsonb_set(game_state, '{settings,scoreRule}', to_jsonb($2::text)) where id = $1`, [c.body.roomId, opts.scoreRule]); // 舊規則房（v4 上線前開的）
   for (const [i, p] of PIDS.entries()) await post(joinRoute, { code: c.body.code, playerId: p, name: `玩家${i}` }, p);
   const st = await post(startRoute, { roomId: c.body.roomId, playerId: "p0" }, "p0");
   return { roomId: c.body.roomId as string, code: c.body.code as string, start: st };
@@ -121,12 +123,15 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   eq(lastDeal.map((e) => [e.channel === privateChannel(m1.roomId, m1.code, e.payload.playerId as string, uid(PIDS.indexOf(e.payload.playerId as string))), (e.payload.hand as Card[]).length]),
     PIDS.map(() => [true, 16]), "D2 每家的 16 張只送到自己的座位頻道");
   const pub = sent.filter((e) => e.channel === publicChannel(m1.code));
-  const leakPub = pub.some((e) => all.some((id) => JSON.stringify(e.payload).includes(`"${id}"`)));
-  eq([pub.some((e) => e.event === "th_hand_start"), leakPub, JSON.stringify(s0.body).includes(`"${rest[0].id}"`)], [true, false, false],
-    "D3 公開頻道只說開局、不帶任何一張牌；剩下的 13 張不會出現在任何人的畫面");
+  // 2026-11-19 v4：剩下的那 1 張是這一局的彩金牌，只以 luckyCard 公開（開局廣播、畫面）；拿掉 luckyCard 後一張牌都不能有
+  const noLucky = (x: unknown) => JSON.stringify(x, (k, v) => (k === "luckyCard" ? undefined : v));
+  const leakPub = pub.some((e) => all.some((id) => noLucky(e.payload).includes(`"${id}"`)));
+  const startLucky = (pub.filter((e) => e.event === "th_hand_start").at(-1)?.payload as { luckyCard?: Card } | undefined)?.luckyCard?.id;
+  eq([pub.some((e) => e.event === "th_hand_start"), leakPub, noLucky(s0.body).includes(`"${rest[0].id}"`), startLucky, s0.body.luckyCard?.id], [true, false, false, rest[0].id, rest[0].id],
+    "D3 公開頻道只說開局、不帶任何一張手牌；剩下的那 1 張只以彩金牌 luckyCard 出現在開局廣播和畫面上");
 
   // 1 號先送出 → 0 號、觀戰都看不到 1 號的牌
-  await sub(m1.roomId, "p1", autoArrange(hands[1]));
+  await sub(m1.roomId, "p1", autoArrange(hands[1], await ruleOf(db, m1.roomId)));
   const v0 = await state(m1.roomId, "p0", "p0");
   const others = hands.slice(1).flat().map((c) => c.id);
   const leak0 = others.filter((id) => JSON.stringify(v0.body).includes(`"${id}"`));
@@ -142,19 +147,19 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
 
   // ---------- X 送出檢查 ----------
   const h0 = hands[0];
-  const good = autoArrange(h0);
+  const good = autoArrange(h0, await ruleOf(db, m1.roomId));
   const foul = { ...good, middle: good.back, back: good.middle };
   const r1 = await sub(m1.roomId, "p0", foul);
   const r2 = await post(submitRoute, { roomId: m1.roomId, playerId: "p0", front: ids(good.front).slice(0, 2), middle: ids(good.middle), back: ids(good.back) }, "p0");
   const r3 = await post(submitRoute, { roomId: m1.roomId, playerId: "p0", front: [ids(good.front)[0], ...ids(good.front).slice(0, 2)], middle: ids(good.middle), back: ids(good.back) }, "p0");
   const r4 = await post(submitRoute, { roomId: m1.roomId, playerId: "p0", front: [hands[2][0].id, ...ids(good.front).slice(1)], middle: ids(good.middle), back: ids(good.back) }, "p0");
-  const r5 = await sub(m1.roomId, "p2", autoArrange(hands[2]), "p0");
+  const r5 = await sub(m1.roomId, "p2", autoArrange(hands[2], await ruleOf(db, m1.roomId)), "p0");
   const r6 = await post(submitRoute, { roomId: m1.roomId, playerId: "p0", front: "AS", middle: [], back: null }, "p0");
   eq([[r1.status, r1.body.error, r1.body.message], [r2.body.error, r2.body.message], r3.body.error, r4.body.error, [r5.status, r5.body.error], r6.body.error],
     [[400, "foul_middle_back", "倒水：中道不能比尾道大"], ["bad_size", "頭道要 3 張、中道和尾道各 5 張"], "duplicate_card", "not_your_card", [403, "not_your_seat"], "bad_input"],
     "X1 送出檢查：倒水、張數、同一張兩次、拿別家的牌、替別人送、格式不對 → 全部擋下");
   const okSub = await sub(m1.roomId, "p0", good);
-  const change = await sub(m1.roomId, "p0", autoArrange([...h0].reverse()));
+  const change = await sub(m1.roomId, "p0", autoArrange([...h0].reverse(), await ruleOf(db, m1.roomId)));
   const stored = (await state(m1.roomId, "p0", "p0")).body.me.arrangement as Arrangement;
   eq([okSub.status, change.status, change.body.error, change.body.message, ids(stored.front), ids(stored.back)],
     [200, 409, "already_submitted", "已經送出，不能再改", ids(good.front), ids(good.back)], "X2 送出後不能再改：第二次送出擋下，存的還是第一次的三墩");
@@ -162,7 +167,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   // ---------- T 截止時間 ----------
   const before = sent.length;
   NOW += 30_000; // 剛好到截止時間
-  const late = await sub(m1.roomId, "p2", autoArrange(hands[2]));
+  const late = await sub(m1.roomId, "p2", autoArrange(hands[2], await ruleOf(db, m1.roomId)));
   const after = await state(m1.roomId, "p2", "p2");
   eq([late.status, late.body.error, late.body.message, after.body.phase, after.body.reveal.autoArranged, evs(before, "th_auto_arranged").map((e) => e.payload.seats)],
     [409, "time_up", "理牌時間已到，系統已經幫你排好", "revealed", [2, 3], [[2, 3]]],
@@ -185,7 +190,8 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const s2 = await state(m1.roomId, "p0", "p0");
   eq([s2.body.handNo, s2.body.phase, s2.body.history.length], [2, "arranging", 1], "N1 亮牌後沒人按下一局，時間到也會自動開下一局（有人斷線不會卡住）");
   const h0 = s2.body.me.hand as Card[];
-  const mine = autoArrange(h0);
+  const rule2 = await ruleOf(db, m1.roomId);
+  const mine = autoArrange(h0, rule2);
   const deadline = s2.body.arrangeDeadline as number;
   NOW = deadline - 1;
   // 讓「送出」讀完狀態、要寫入的那一刻，時間剛好過截止、另一個請求先把代排寫進去
@@ -204,7 +210,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const v = (await state(m1.roomId, "p0", "p0")).body;
   m1Totals.push(v.reveal.scores);
   const cum2 = v.playerScores;
-  eq([intercepted, raced.status, raced.body.error, v.phase, v.reveal.autoArranged, ids(v.reveal.arrangements[0].front).join() === ids(autoArrange(h0).front).join()],
+  eq([intercepted, raced.status, raced.body.error, v.phase, v.reveal.autoArranged, ids(v.reveal.arrangements[0].front).sort().join() === ids(autoArrange(h0, rule2).front).sort().join()],
     [true, 409, "time_up", "revealed", [0, 1, 2, 3], true],
     "T2 送出和截止代排同時發生：代排先寫進去，送出那邊寫入衝突、重讀後已過截止 → 只認代排一個結果");
   eq(cum2, [0, 1, 2, 3].map((i) => m1Totals[0][i] + m1Totals[1][i]), "N4 第 2 局亮牌後，每一家的累計＝第 1 局＋第 2 局自己的本局分（逐家比對）");
@@ -212,7 +218,8 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   NOW += NEXT_HAND_MAX_MS;
   const s3 = (await state(m1.roomId, "p0", "p0")).body;
   const h = s3.me.hand as Card[];
-  const a1 = autoArrange(h), a2 = autoArrange([...h].reverse());
+  const rule3 = await ruleOf(db, m1.roomId);
+  const a1 = autoArrange(h, rule3), a2 = autoArrange([...h].reverse(), rule3);
   const both = await Promise.all([sub(m1.roomId, "p0", a1), sub(m1.roomId, "p0", a2)]);
   const st = (await state(m1.roomId, "p0", "p0")).body.me.arrangement as Arrangement;
   const winner = both[0].status === 200 ? a1 : a2;
@@ -227,7 +234,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const st = newRoomState({ arrangeSec: 30, totalHands: 1 });
   seatPure(st, PIDS.map((p, i) => ({ id: `r${i}`, room_id: "x", player_id: p, name: p, seat: i, user_id: uid(i) })));
   startPure(st, 1_000_000);
-  const a = autoArrange(st.players[0].hand);
+  const a = autoArrange(st.players[0].hand, "legacy"); // 這裡的設定沒有 scoreRule＝舊規則房
   const idsOf = { front: ids(a.front), middle: ids(a.middle), back: ids(a.back) };
   const atDeadline = submitPure(st, 0, idsOf, st.arrangeDeadline!);
   const justBefore = submitPure(st, 0, idsOf, st.arrangeDeadline! - 1);
@@ -242,7 +249,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const hands3 = (await db.query<{ p: { seat: number; hand: Card[] }[] }>(`select game_state->'players' p from th_rooms where id = $1`, [m1.roomId])).rows[0].p
     .sort((a, b) => a.seat - b.seat).map((x) => x.hand.map((c) => c.id).sort());
   const sentBefore3 = sent.length;
-  for (const p of PIDS.slice(1)) await sub(m1.roomId, p, autoArrange(await myHand(m1.roomId, p)));
+  for (const p of PIDS.slice(1)) await sub(m1.roomId, p, autoArrange(await myHand(m1.roomId, p), await ruleOf(db, m1.roomId)));
   const fin = (await state(m1.roomId, "p0", "p0"));
   const closedEv = sent.filter((e) => e.event === "th_room_closed").pop();
   const rec = (await db.query<{ game: string; end_reason: string; hands_played: number; settings: object; nstats: number }>(`select game, end_reason, hands_played, settings - 'finalHand' - 'stats' settings, jsonb_array_length(settings->'stats') nstats from match_records where room_id = $1`, [m1.roomId])).rows[0];
@@ -266,7 +273,8 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const live = sent.slice(sentBefore3).find((e) => e.event === "th_reveal" && e.channel === publicChannel(m1.code))?.payload;
   const arrs = (fh?.arrangements ?? []) as Arrangement[];
   const perSeat = arrs.map((a) => [...a.front, ...a.middle, ...a.back].map((c) => c.id).sort());
-  const recomputed = arrs.length === 4 ? scoreRound(arrs) : null;
+  const lucky = (fh?.luckyCard as Card | null | undefined)?.rank ?? null; // v4：照這一局的彩金牌重算
+  const recomputed = arrs.length === 4 ? scoreRound(arrs, "v4", lucky) : null;
   const { sv: _sv, ...liveReveal } = (live ?? {}) as Record<string, unknown>; // 即時廣播多帶存檔版本號 sv（前端補抓用），不屬於亮牌內容
   eq([!!live, typeof _sv, stable(fh) === stable(liveReveal)], [true, "number", true],
     "S4 紀錄裡的最後一局和當時即時廣播的亮牌（th_reveal，扣掉版本號 sv）逐欄一模一樣：三墩、翻牌順序、結算、累計、代排名單");
@@ -274,7 +282,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   eq([perSeat.map((ids, i) => ids.length === 13 && new Set(ids).size === 13 && ids.every((id) => (hands3[i] as string[]).includes(id))), arrs.map((a) => [a.front.length, a.middle.length, a.back.length])],
     [[true, true, true, true], [[3, 5, 5], [3, 5, 5], [3, 5, 5], [3, 5, 5]]],
     "S4 每一家的三墩（頭 3、中 5、尾 5）共 13 張，全部是那一家這局發到的 16 張裡的牌，沒有混到別家的牌、沒有重複");
-  eq([stable(fh?.result), stable(fh?.order)], [stable(recomputed), stable(arrs.length === 4 ? revealOrder(arrs) : null)],
+  eq([stable(fh?.result), stable(fh?.order)], [stable(recomputed), stable(arrs.length === 4 ? revealOrder(arrs, "v4", lucky) : null)],
     "S4 用紀錄裡的四家三墩重新給引擎算：6 組結算（每墩勝負、加分、打槍）、全壘打、本局分、翻牌順序都和紀錄裡的一模一樣");
 }
 
@@ -282,7 +290,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
 type Ex = [string, string, string];
 async function playExample(rows: Ex[]) {
   forceDeal(rows);
-  const m = await newMatch({ totalHands: 5 });
+  const m = await newMatch({ totalHands: 5, scoreRule: "jia" }); // 規則書範例的分數是甲案寫的（v4 另有 flow-thirteen-score-v4）
   const arrs = rows.map(([f, mm, b]) => { const used = new Set<string>(); return { front: parseCards(f, used), middle: parseCards(mm, used), back: parseCards(b, used) }; });
   const rs = [];
   for (const [i, p] of PIDS.entries()) rs.push((await sub(m.roomId, p, arrs[i])).status);
@@ -338,7 +346,7 @@ const duel = async (a: Ex, b: Ex) => {
 // ---------- Q 解散投票 ----------
 {
   const m = await newMatch({ totalHands: 4 });
-  for (const p of PIDS) await sub(m.roomId, p, autoArrange(await myHand(m.roomId, p))); // 打完第 1 局
+  for (const p of PIDS) await sub(m.roomId, p, autoArrange(await myHand(m.roomId, p), await ruleOf(db, m.roomId))); // 打完第 1 局
   const req = await post(leaveReqRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   const dup = await post(leaveReqRoute, { roomId: m.roomId, playerId: "p1" }, "p1");
   const fake = await post(leaveVoteRoute, { roomId: m.roomId, playerId: "p2", approve: true }, "p1");
@@ -367,7 +375,7 @@ const duel = async (a: Ex, b: Ex) => {
 // ---------- N 下一局：四家都按就開 ----------
 {
   const m = await newMatch({ totalHands: 2 });
-  for (const p of PIDS) await sub(m.roomId, p, autoArrange(await myHand(m.roomId, p)));
+  for (const p of PIDS) await sub(m.roomId, p, autoArrange(await myHand(m.roomId, p), await ruleOf(db, m.roomId)));
   const r = [];
   for (const p of PIDS.slice(0, 3)) r.push((await post(nextRoute, { roomId: m.roomId, playerId: p }, p)).body.handNo);
   const twice = await post(nextRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
@@ -442,7 +450,7 @@ const duel = async (a: Ex, b: Ex) => {
   const roomN = async (roomId: string) => (await db.query<{ n: number }>(`select count(*)::int n from th_rooms where id = $1`, [roomId])).rows[0].n;
   // 最後一票要存檔時，別人剛好先存了新的（版本衝突）→ 重讀重判，票不遺失、照樣解散、紀錄一筆
   const m = await newMatch({ totalHands: 3 });
-  for (const p of PIDS) await sub(m.roomId, p, autoArrange(await myHand(m.roomId, p)));
+  for (const p of PIDS) await sub(m.roomId, p, autoArrange(await myHand(m.roomId, p), await ruleOf(db, m.roomId)));
   await post(leaveReqRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   for (const p of ["p1", "p2"]) await post(leaveVoteRoute, { roomId: m.roomId, playerId: p, approve: true }, p);
   let hit = false;
@@ -457,7 +465,7 @@ const duel = async (a: Ex, b: Ex) => {
 
   // 關房那一刻失敗：不回成功；四家同意已經存著，之後讀狀態就補關，紀錄只寫一筆
   const m2 = await newMatch({ totalHands: 3 });
-  for (const p of PIDS) await sub(m2.roomId, p, autoArrange(await myHand(m2.roomId, p)));
+  for (const p of PIDS) await sub(m2.roomId, p, autoArrange(await myHand(m2.roomId, p), await ruleOf(db, m2.roomId)));
   await post(leaveReqRoute, { roomId: m2.roomId, playerId: "p0" }, "p0");
   for (const p of ["p1", "p2"]) await post(leaveVoteRoute, { roomId: m2.roomId, playerId: p, approve: true }, p);
   let failed = false;

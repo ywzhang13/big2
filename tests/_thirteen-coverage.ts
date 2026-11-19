@@ -1,9 +1,15 @@
 // 十三支計分引擎：補測試（審伯 2026-11-13 兩項必修＋小測〈十三支計分引擎-測試覆蓋審查-2026-11-13〉的缺口）。
 // 每一段開頭的【】標出對應的審查項目。四人牌局一律用不重複的合法牌（parseCards 共用 used，同一張牌用超過張數會直接丟錯）。
 import { buildDeck, deal, makeCard, parseCards, shuffle, type Card } from "../lib/thirteen/cards";
-import { autoArrange, checkArrangement, validateSubmission, type Arrangement } from "../lib/thirteen/arrange";
-import { CAT, CAT_NAME, compareValue, evalFive, evalThree } from "../lib/thirteen/hand";
-import { scoreRound } from "../lib/thirteen/score";
+import { autoArrange as autoArrangeR, checkArrangement as checkArrangementR, validateSubmission as validateSubmissionR, type Arrangement } from "../lib/thirteen/arrange";
+import { CAT, CAT_NAME, compareValue, evalFive as evalFiveR, evalThree, type HandRule } from "../lib/thirteen/hand";
+import { scoreRound as scoreRoundR, type ScoreRule } from "../lib/thirteen/score";
+// 2026-11-19 v4 上線後，函式沒指定規則＝v4；這支測試寫的是舊規則，這裡把預設釘回舊規則（v4 另有 _thirteen-rule-v4.ts）
+const autoArrange = (c: Card[], r: HandRule = "legacy") => autoArrangeR(c, r);
+const checkArrangement = (a: Arrangement, r: HandRule = "legacy") => checkArrangementR(a, r);
+const validateSubmission = (d: Card[], ids: unknown, r: HandRule = "legacy") => validateSubmissionR(d, ids, r);
+const evalFive = (c: Card[], r: HandRule = "legacy") => evalFiveR(c, r);
+const scoreRound = (a: Arrangement[], r: ScoreRule = "jia") => scoreRoundR(a, r);
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {

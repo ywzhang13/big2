@@ -18,6 +18,8 @@ const results: string[] = [];
 const ok = (cond: boolean, msg: string) => results.push(`${cond ? "✅" : "❌"} ${msg}`);
 const env = process.env as Record<string, string | undefined>;
 const ids = (a: Arrangement) => [a.front, a.middle, a.back].map((r) => r.map((c) => c.id).join(",")).join(" | ");
+/** 每墩有哪些牌（不看順序）：畫面照 A→K 排（2026-11-19），送出內容照引擎的順序 */
+const rowSets = (a: Arrangement) => [a.front, a.middle, a.back].map((r) => r.map((c) => c.id).sort().join(",")).join(" | ");
 const run = (s: ArrangeState, ...acts: ArrangeAction[]) => acts.reduce(arrangeReducer, s);
 
 // ---- P 預覽路由 ----
@@ -60,10 +62,10 @@ for (const kind of ["autoArrange", "placed"] as const) {
   // 拿尾墩第一張，拖到中墩第一張上（兩墩都滿時＝互換），拖到一半時間到
   const from = v.arrangement.back[0].id, onto = v.arrangement.middle[0].id;
   s = run(s, { type: "dragStart", id: from, from: "back", pointerId: 1, x: 0, y: 0 }, { type: "dragMove", pointerId: 1, x: 50, y: 50, over: { zone: "middle", cardId: onto } }, { type: "timeout" });
-  const sentRows = s.submitted ? ids(s.submitted) : "（沒送出）";
+  const sentRows = s.submitted ? rowSets(s.submitted) : "（沒送出）";
   ok(s.drag === null, `S3-${kind} 拖到一半時間到：送出同時清掉拖曳狀態`);
   s = run(s, { type: "dragEnd", pointerId: 1, over: { zone: "middle", cardId: onto } });
-  ok(ids(derive(s).arrangement) === sentRows, `S4-${kind} 送出後才放開：畫面上的牌仍然和送出內容一樣（${kind === "autoArrange" ? "未排完自動排" : "已排好直接送出"}）`);
+  ok(rowSets(derive(s).arrangement) === sentRows, `S4-${kind} 送出後才放開：畫面上的牌仍然和送出內容一樣（${kind === "autoArrange" ? "未排完自動排" : "已排好直接送出"}）`);
 }
 // 送出後，所有改牌入口都要擋下
 {

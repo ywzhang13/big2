@@ -197,81 +197,31 @@
 .th-hr9.is-flip .th-hr9-title { left: 28vw; }
 
 
-/* ---- 本局結算／整場總結算（v5 §5～6，比照麻將每局結算：畫面壓暗、左欄標題＋明細＋確認、右欄四家各一列） ---- */
-.th-res { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 14px;
-  padding: 10px max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(60px, env(safe-area-inset-left));
-  background: rgba(5,12,8,.86); animation: th-fade .3s ease-out both; }
-.th-res.is-peek { background: transparent; pointer-events: none; }
-.th-res > * { zoom: var(--th-s2, 1); } /* v8-A §1：結算整塊等比放大，壓暗遮罩蓋滿整個畫面 */
-.th-res.is-peek > :not(.th-res-peek) { visibility: hidden; }
-.th-res-peek { pointer-events: auto; }
+/* ---- 本局結算／整場總結算：外框是三款共用的 GameResultFrame（components/gameResult），這裡只有十三支自己放進去的牌（小宜 v15 §4-2） ---- */
+.gr { animation: th-fade .3s ease-out both; }
 @keyframes th-fade { from { opacity: 0; } to { opacity: 1; } }
-.th-res-left { width: 204px; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.th-res-title { font-family: "MjBrandSerif", "Noto Serif TC", serif; font-size: 30px; font-weight: 900; letter-spacing: .12em; color: #fff4dc; text-shadow: 0 0 14px rgba(240,214,138,.7), 0 2px 4px rgba(0,0,0,.8); line-height: 1.1; }
-.th-res-sub { font-size: 12px; color: rgba(243,234,210,.6); margin-top: -4px; }
-.th-res-items { width: 100%; border: 1px solid rgba(201,169,110,.35); border-radius: 10px; background: rgba(255,255,255,.04); padding: 6px 10px; font-size: 12px; }
-.th-res-items div { display: flex; justify-content: space-between; line-height: 1.55; color: #f3ead2; }
-.th-res-items b { font-family: "Chakra Petch", system-ui, sans-serif; }
-.th-res-items .is-up { color: #6ee7a0; } .th-res-items .is-down { color: #ff7b72; }
-.th-res-items .th-res-total { border-top: 1px solid rgba(201,169,110,.3); margin-top: 3px; padding-top: 3px; font-weight: 800; font-size: 13px; }
-.th-res-btn { width: 100%; height: 44px; border-radius: 999px; font-weight: 800; font-size: 15px; cursor: pointer; transition: filter .15s; }
-.th-res-btn.primary { background: linear-gradient(180deg, #e8c97a, #C9A96E); color: #0f2a1a; border: 0; }
-.th-res-btn.second { background: rgba(15,42,26,.9); color: #f0d68a; border: 1.5px solid rgba(201,169,110,.7); }
-/* 誰按了確認（老闆 2026-11-19：照麻將 .mjm-result .ready：✓ 實心金、… 虛線） */
-.th-res-ready { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
-.th-res-ready .cnt { width: 100%; text-align: center; color: rgba(243,234,210,.6); font-weight: 700; }
-.th-res-ready .chip { flex: 1 1 calc(50% - 4px); min-width: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
-.th-res-ready .chip i { font-style: normal; flex: 0 0 auto; }
-.th-res-ready .chip.ok { background: rgba(201,169,110,.85); color: #0f2a1a; border: 1px solid #f0d68a; }
-.th-res-ready .chip.wait { background: transparent; color: rgba(255,255,255,.5); border: 1px dashed rgba(255,255,255,.35); }
-.th-res-ready .line { width: 100%; text-align: center; color: #f0d68a; font-weight: 700; }
-.th-res-err { width: 100%; font-size: 12px; font-weight: 700; color: #ff9b92; text-align: center; }
-.th-res-btn:disabled { filter: grayscale(.4) brightness(.8); cursor: default; }
-.th-res-right { flex: 1 1 auto; max-width: 560px; display: flex; flex-direction: column; gap: 6px; }
-.th-res-row { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 4px 10px; border-radius: 10px; border: 1px solid rgba(201,169,110,.28); background: rgba(255,255,255,.035); }
-.th-res-row.is-me { border-color: #f0d68a; background: rgba(201,169,110,.14); }
-.th-res-who { width: 64px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 800; color: #f0d68a; overflow: hidden; }
-.th-res-who span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.th-res-mark { display: inline-flex; align-items: center; gap: 2px; font: 800 12px "Chakra Petch", system-ui, sans-serif; color: #ff7b72; }
-.th-res-mark img { width: 14px; height: 14px; max-width: none; }
-.th-res-hr { align-self: flex-start; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 800; background: linear-gradient(180deg, #dc2626, #C9A96E); color: #fff7e6; }
-.th-res-cards { display: flex; gap: 6px; flex: 1 1 auto; }
-.th-res-grp { display: flex; position: relative; padding-top: 13px; }
-.th-res-type { position: absolute; left: 0; top: 0; font-size: 9px; font-weight: 800; line-height: 1; padding: 1px 5px; border-radius: 999px; white-space: nowrap;
-  background: linear-gradient(180deg, #e8c97a, #C9A96E); color: #0f2a1a; }
+/* 一家的牌：30×42，同一墩每張露出 21、墩和墩間隔 6；每墩上面一顆牌型小標（高 11、字 9） */
+.th-res-cards { display: flex; align-items: flex-end; gap: 6px; }
+.th-res-grp { display: flex; position: relative; padding-top: 12px; }
+.th-res-grp img { display: block; width: 30px; height: 42px; max-width: none; border-radius: 3px; box-shadow: -1px 0 2px rgba(0,0,0,.35); }
+.th-res-grp img + img { margin-left: -9px; }
+.th-res-grp img.is-gold { box-shadow: 0 0 0 1px rgba(255,236,160,.85), 0 0 6px rgba(255,214,110,.55), -1px 0 2px rgba(0,0,0,.35); } /* 金卡（v15 §1） */
+.th-res-type { position: absolute; left: 0; top: 0; height: 11px; padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 800; line-height: 11px; white-space: nowrap;
+  background: rgba(240,214,138,.9); color: #2a1d05; }
 .th-res-type.is-bonus { background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; }
-.th-res-grp img { width: 23px; height: 32px; max-width: none; border-radius: 2px; box-shadow: -1px 0 2px rgba(0,0,0,.35); }
-.th-res-grp img + img { margin-left: -7px; }
-.th-res-pts { min-width: 62px; flex: 0 0 auto; text-align: right; white-space: nowrap; } /* 底分讓分數變大（−36000）：寬度跟著數字長，不會超出框 */
-.th-res-pts b { display: block; font: 800 19px "Chakra Petch", system-ui, sans-serif; line-height: 1.1; }
-.th-res-pts small { font-size: 10px; color: rgba(243,234,210,.6); }
-.th-res-pts .is-up { color: #6ee7a0; } .th-res-pts .is-down { color: #ff7b72; }
-.th-res-peek { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(15,42,26,.92); color: #f0d68a; border: 1.5px solid rgba(201,169,110,.8); font-weight: 800; font-size: 14px; cursor: pointer; }
-/* 整場總結算：名次、名字、打槍、全壘打、總分 */
-.th-rank { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 800 12px "Chakra Petch", system-ui, sans-serif; background: rgba(255,255,255,.12); color: #f3ead2; }
-.th-rank.is-1 { background: linear-gradient(180deg, #f0d68a, #C9A96E); color: #0f2a1a; }
-.th-fin-name { flex: 1 1 auto; font-weight: 800; color: #f0d68a; font-size: 14px; }
-.th-fin-stat { font-size: 11px; color: rgba(243,234,210,.7); white-space: nowrap; }
+.th-res-type.is-jp { background: linear-gradient(135deg, #ffe9a0, #e2b34a); color: #3a2606; box-shadow: 0 0 6px rgba(255,214,110,.7); } /* 彩金牌型 */
+/* 沒用到的 3 張：接在尾墩右邊，先空 10、一條直線、再空 10；正常顏色、上面沒有小標（老闆 2026-11-19：不變灰） */
+.th-res-unused { margin-left: 4px; padding-left: 10px; border-left: 1px solid rgba(201,169,110,.3); }
+/* 左欄標題下：「彩金」小標＋彩金牌 23×32 */
+.th-res-lucky { display: inline-flex; align-items: center; gap: 6px; }
+.th-res-lucky b { height: 16px; padding: 0 8px; border-radius: 999px; font-size: 10px; font-weight: 800; line-height: 16px; color: #3a2606; background: linear-gradient(135deg, #ffe9a0, #e2b34a); }
+.th-res-lucky img { width: 23px; height: 32px; max-width: none; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,236,160,.9), 0 0 8px rgba(255,214,110,.75); }
 
 @media (min-width: 100000px) /* v8-A：桌機改成整塊等比放大（stageScale.ts），這段舊的桌機尺寸不再套用 */ {
   .th-badge { font-size: 19px; padding: 3px 14px; }
   .th-delta { font-size: 24px; left: calc(100% + 10px); }
   .th-fx-start { width: 888px; }
   .th-fx-muzzle-img { width: 210px; }
-  .th-res { gap: 28px; }
-  .th-res-left { width: 340px; gap: 14px; }
-  .th-res-title { font-size: 52px; }
-  .th-res-sub { font-size: 16px; }
-  .th-res-items { font-size: 17px; padding: 10px 16px; } .th-res-items .th-res-total { font-size: 19px; }
-  .th-res-btn { height: 56px; font-size: 20px; }
-  .th-res-right { max-width: 900px; gap: 10px; }
-  .th-res-row { min-height: 90px; padding: 6px 16px; gap: 14px; }
-  .th-res-who { width: 110px; font-size: 18px; }
-  .th-res-mark { font-size: 16px; } .th-res-mark img { width: 22px; height: 22px; } .th-res-hr { font-size: 14px; }
-  .th-res-grp img { width: 38px; height: 53px; } .th-res-grp img + img { margin-left: -12px; } .th-res-cards { gap: 12px; }
-  .th-res-pts { width: 100px; } .th-res-pts b { font-size: 32px; } .th-res-pts small { font-size: 14px; }
-  .th-res-peek { height: 56px; font-size: 18px; padding: 0 26px; }
-  .th-rank { width: 34px; height: 34px; font-size: 17px; } .th-fin-name { font-size: 20px; } .th-fin-stat { font-size: 16px; }
 }
 
 /* ---- 特效測試頁（app/thirteen/preview/fx）的按鈕：左上角，收得起來 ---- */

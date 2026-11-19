@@ -79,7 +79,7 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   for (const k of ["normal", "chongsan", "tiezhi", "tonghuashun", "wulong", "gun", "homerun"]) check(must(k));
   let seed = 11;
   const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-  for (let i = 0; i < 3000; i++) { const { hands } = deal(rnd); const a = hands.map(autoArrange); check({ order: revealOrder(a), result: scoreRound(a) }); }
+  for (let i = 0; i < 3000; i++) { const { hands } = deal(rnd); const a = hands.map((h) => autoArrange(h)); check({ order: revealOrder(a), result: scoreRound(a) }); }
   ok(bad === 0 && minDur > 0, `K3 ${n} 墩（3,007 局）加分顯示的時長都大於 0、出現後一直留到清空前一刻（最短 ${minDur}ms；不符 ${bad}）`);
   // K4 審伯必修 1（老闆定案「大字播完中央也要顯示」）：四種大牌的紅金牌型名一定在大字結束後才出現，而且確實顯示過——
   //   原本順序、把大牌那家挪到那一墩最後一家（接著換墩）、全壘打那局把尾墩大牌挪到最後一家（接著打槍）都要成立
@@ -137,26 +137,31 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
 // ---- S 分數 ----
 {
   let bad = 0, n = 0, badT = 0;
-  const check = (rv: { result: ReturnType<typeof scoreRound> }, arr: ReturnType<typeof autoArrange>[]) => {
+  // 2026-11-19 v4（老馬接上新牌型）：隨機 3000 局照 v4 房（彩金牌＝發完剩下那張，跟伺服器一樣），另外 1000 局照舊規則房（jia）
+  const check = (rv: { result: ReturnType<typeof scoreRound> }, arr: ReturnType<typeof autoArrange>[], rule: "v4" | "jia" = "v4", lucky: number | null = null) => {
     n++;
-    const d = T.rowDeltas(rv.result);
+    const d = T.rowDeltas(rv.result, rule);
     for (const row of T.ROWS) if (d[row].reduce((a, b) => a + b, 0) !== 0) bad++;
-    const st = handStats(rv.result); // 伺服器同一個函式（亮牌時存進 reveal.stats）
+    const st = handStats(rv.result, rule); // 伺服器同一個函式（亮牌時存進 reveal.stats）
     for (let s = 0; s < 4; s++) if (T.breakdown(st[s]).reduce((a, b) => a + b.pts, 0) !== rv.result.totals[s]) bad++;
-    if (T.buildTimeline({ order: revealOrder(arr), result: rv.result }).end !== revealDurationMs(rv.result)) badT++; // 伺服器 settleAt 用的同一個函式（老柯 dd0602a）
+    if (T.buildTimeline({ order: revealOrder(arr, rule, lucky), result: rv.result }).end !== revealDurationMs(rv.result)) badT++; // 伺服器 settleAt 用的同一個函式（老柯 dd0602a）
   };
   for (const k of ["normal", "chongsan", "tiezhi", "tonghuashun", "wulong", "gun", "homerun"]) { const rv = must(k); check(rv, rv.arrangements); }
   let seed = 7;
   const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-  for (let i = 0; i < 3000; i++) { const { hands } = deal(rnd); const a = hands.map(autoArrange); check({ result: scoreRound(a) }, a); }
-  ok(bad === 0, `S1 ${n} 局（7 個預覽牌局＋3000 局隨機）：每墩四家得失分合計 0；左欄明細加起來＝伺服器算的本局分數（不符 ${bad}）`);
+  for (let i = 0; i < 3000; i++) {
+    const { hands, rest } = deal(rnd), lucky = rest[0].rank;
+    const a = hands.map((h) => autoArrange(h, { lucky })); check({ result: scoreRound(a, "v4", lucky) }, a, "v4", lucky);
+  }
+  for (let i = 0; i < 1000; i++) { const { hands } = deal(rnd); const a = hands.map((h) => autoArrange(h, "legacy")); check({ result: scoreRound(a, "jia") }, a, "jia"); }
+  ok(bad === 0, `S1 ${n} 局（7 個預覽牌局＋v4 隨機 3000 局＋jia 隨機 1000 局）：每墩四家得失分合計 0；左欄明細加起來＝伺服器算的本局分數（不符 ${bad}）`);
   ok(badT === 0, `S4 ${n} 局：前端亮牌時間軸的總長＝伺服器 revealDurationMs（dd0602a；結算面板＝settleAt，四家同步；不符 ${badT}）`);
   const hr = must("homerun");
   const b = T.breakdown(hr.stats[0]), lost = T.breakdown(hr.stats[1]);
   ok(b.some((x) => x.label === "衝三" && x.pts > 0) && b.some((x) => x.label === "中墩鐵支") && b.some((x) => x.label === "尾墩同花順")
-    && b.some((x) => x.label === "打槍 ×3" && x.pts === 3 * SCORING.GUN_PENALTY) && b.some((x) => x.label === "全壘打" && x.pts === 9)
-    && lost.some((x) => x.label === "被全壘打" && x.pts === -3) && lost.some((x) => x.label.startsWith("被打槍")),
-  "S2 全壘打那局（明細來自伺服器 stats）：自己的明細有衝三、中墩鐵支、尾墩同花順、打槍 ×3、全壘打 +9；被打的人有被打槍、被全壘打 −3");
+    && b.some((x) => x.label === "打槍 ×3" && x.pts === 3 * SCORING.GUN_PENALTY) && b.some((x) => x.label === "全壘打" && x.pts === 3 * SCORING.HOME_RUN_PENALTY_V4)
+    && lost.some((x) => x.label === "被全壘打" && x.pts === -SCORING.HOME_RUN_PENALTY_V4) && lost.some((x) => x.label.startsWith("被打槍")),
+  "S2 全壘打那局（明細來自伺服器 stats）：自己的明細有衝三、中墩鐵支、尾墩同花順、打槍 ×3、全壘打 +6（v4：三家各 2）；被打的人有被打槍、被全壘打 −2");
   ok(JSON.stringify(revealOrder(hr.arrangements)) === JSON.stringify(hr.order), "S3 預覽牌局的翻牌順序就是伺服器 revealOrder 算的");
 }
 
@@ -168,9 +173,9 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   const tl = T.buildTimeline(rv);
   const w0 = T.scoreWindows(tl)[0];
   const h = renderToStaticMarkup(createElement(ThTable, { view, now: 0, clockSkew: 0, reveal: { rv, frame: T.frameAt(tl, w0.from + 10) } }));
-  ok(count(h, /<img[^>]*card-front-/g) === 12 && count(h, /<img[^>]*card-back/g) === 40 && count(h, /data-th-board-pt=/g) === 4 && count(h, /data-th-board-sc=/g) === 4 && count(h, /data-th-hand/g) === 4
+  ok(count(h, /<img[^>]*card-front-/g) === 12 && count(h, /<img[^>]*card-back/g) === 40 && count(h, /data-th-board-pt=/g) === 4 && count(h, /data-th-board-sc=/g) === 0 && count(h, /data-th-hand/g) === 4
     && !/th-cardlabel|th-rowlabel|data-th-delta/.test(h),
-    `V1 頭墩四家出完：出牌區 12 張牌面、手牌區剩 40 張牌背；看板 4 個牌型＋4 個加分；牌面上和出牌區旁不再有字（牌面 ${count(h, /<img[^>]*card-front-/g)}、牌背 ${count(h, /<img[^>]*card-back/g)}、看板牌型 ${count(h, /data-th-board-pt=/g)}、加分 ${count(h, /data-th-board-sc=/g)}）`);
+    `V1 頭墩四家出完：出牌區 12 張牌面、手牌區剩 40 張牌背；看板 4 個牌型、不顯示加分（小宜 v15 §3）；牌面上和出牌區旁不再有字（牌面 ${count(h, /<img[^>]*card-front-/g)}、牌背 ${count(h, /<img[^>]*card-back/g)}、看板牌型 ${count(h, /data-th-board-pt=/g)}、加分 ${count(h, /data-th-board-sc=/g)}）`);
   ok(/th-seat2" style="left:328px;top:185px;transform:rotate\(90deg\)/.test(h) && /th-seat2" style="left:422px;top:267px;transform:rotate\(0deg\)/.test(h) && /th-seat2" style="left:422px;top:107px;transform:rotate\(180deg\)/.test(h)
     && /data-th-board="front"/.test(h) && !/th-clock/.test(h) && !/思考中/.test(h),
     "V2 四家出牌區原點＝頭墩中間那張牌（v13：左家 328,185 轉 90°、自己 422,267、對家 422,107）；亮牌時沒有倒數、沒有思考中");
@@ -182,21 +187,23 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
     && count(done, /data-th-hole-big=/g) === (g.to === 0 ? 1 : 0), "V3 打槍播完：被打的那家出牌區留一個彈孔、名字旁「−1」；被打的是自己才有第一人稱大彈孔");
   const res = renderToStaticMarkup(createElement(ThRoundResult, { rv, names: ["老闆", "小明", "阿明", "小華"], mySeat: 0, secondsLeft: 30, confirmed: false, onConfirm: () => {} }));
   ok(count(res, /data-th-res-seat=/g) === 4 && count(res, /<img[^>]*card-front-/g) === 52 && /確認（30）/.test(res) && /查看牌桌/.test(res) && /本局結算/.test(res)
-    && /th-res-row is-me" data-th-res-seat="0"/.test(res) && /累計/.test(res),
-  "V4 本局結算：左欄標題＋明細＋「確認（30）」（倒數到伺服器 nextHandAt）；右欄四家各一列 13 張牌、本局分數、累計；自己那列亮框；右下「查看牌桌」");
+    && /gr-row me" data-th-res-seat="0"/.test(res) && /累計/.test(res),
+  "V4 本局結算（v15 共用外框）：左欄標題＋「查看牌桌」＋明細；右欄四家各一列 13 張牌、本局分數、累計；自己那列亮框；右下「確認（30）」（倒數到伺服器 nextHandAt）");
   const fin = renderToStaticMarkup(createElement(ThFinalResult, { players: [{ seat: 0, playerName: "老闆", totalScore: -5 }, { seat: 1, playerName: "小明", totalScore: 12 }, { seat: 2, playerName: "阿明", totalScore: 0 }, { seat: 3, playerName: "小華", totalScore: -7 }],
     mySeat: 0, hands: 8, stats: [{ guns: 4, gunned: 0, homeRuns: 1, homeRunned: 0, total: -5 }, { guns: 0, gunned: 2, homeRuns: 0, homeRunned: 1, total: 12 }, { guns: 0, gunned: 1, homeRuns: 0, homeRunned: 1, total: 0 }, { guns: 0, gunned: 1, homeRuns: 0, homeRunned: 1, total: -7 }], onLobby: () => {} }));
   const order = [...fin.matchAll(/data-th-fin-seat="(\d)"/g)].map((m) => m[1]).join("");
-  ok(order === "1203" && /共 8 局/.test(fin) && /回十三支大廳/.test(fin) && /打槍 4/.test(fin) && /全壘打 1/.test(fin), `V5 總結算：照總分排名（實際 ${order}）、共幾局、打槍和全壘打次數（伺服器整場累計 stats，不再自己加總）、「回十三支大廳」`);
+  ok(order === "1203" && /8 局/.test(fin) && /回大廳/.test(fin) && /打槍<b>4<\/b>/.test(fin) && /被打槍<b>2<\/b>/.test(fin) && /全壘打<b>1<\/b>/.test(fin),
+    `V5 總結算（v15）：照總分排名（實際 ${order}）、幾局、打槍／被打槍／全壘打次數（伺服器整場累計 stats，不再自己加總）、右下「回大廳」`);
 }
 
-// ---- O 亮牌時每墩照牌型排好（老闆 2026-11-18：A Q A A Q → A A A Q Q；用引擎 evalRow 的比較序） ----
+// ---- O 亮牌時每墩照 A、2、3…J、Q、K 排（老闆 2026-11-19，取代 11-18 照比較序；A Q A A Q 一樣是 A A A Q Q） ----
 {
   const { parseCards } = await import("../lib/thirteen");
   const show = (t: string) => T.rowDisplayOrder(parseCards(t)).map((c) => c.id.slice(1, 2)).join(" ");
   const fh = show("AD QD AS AH QS"), tp = show("3S KH 3D KC 9S"), qd = show("7S 2H 7D 7C 7H"), st = show("9S 5H 7D 8C 6H"), one = show("4S QD 4H");
-  ok(fh === "A A A Q Q" && tp === "K K 3 3 9" && qd === "7 7 7 7 2" && st === "9 8 7 6 5" && one === "4 4 Q",
-    `O1 葫蘆 A A A Q Q、兩對 K K 3 3 9、鐵支 7 7 7 7 2、順子 9 8 7 6 5、頭墩一對 4 4 Q（實際：${fh}／${tp}／${qd}／${st}／${one}）`);
+  const wheel = show("5S AS 4S 3S 2S"), top = show("KD AD QD JD TD");
+  ok(fh === "A A A Q Q" && tp === "3 3 9 K K" && qd === "2 7 7 7 7" && st === "5 6 7 8 9" && one === "4 4 Q" && wheel === "A 2 3 4 5" && top === "T J Q K A",
+    `O1 A 在最前、K 在最後：葫蘆 A A A Q Q、兩對 3 3 9 K K、鐵支 2 7 7 7 7、順子 5 6 7 8 9、頭墩 4 4 Q、同花順 5 A 4 3 2 → A 2 3 4 5、A K Q J 10 → 10 J Q K A（老闆 2026-11-19「TJQKA 順序」；實際：${fh}／${tp}／${qd}／${st}／${one}／${wheel}／${top}）`);
   const rv = must("normal");
   const tl = T.buildTimeline(rv);
   const view = { status: "playing" as const, code: "1234", sv: 1, phase: "revealed" as const, handNo: 1, settings: { arrangeSec: 60, totalHands: 8 }, serverNow: 0, arrangeDeadline: null,
@@ -232,8 +239,8 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   const at = (t: number) => renderToStaticMarkup(createElement(ThTable, { view, now: 0, clockSkew: 0, reveal: { rv, frame: T.frameAt(tl, t) } }));
   const flips = tl.steps.filter((x) => x.kind === "flip" && x.row === "middle"), wm = T.scoreWindows(tl)[1];
   const mid = at(flips[1].t0 + 400), full = at(wm.from + 10);
-  ok(count(mid, /data-th-board-pt="/g) === 2 && count(mid, /data-th-board-sc=/g) === 0 && count(full, /data-th-board-pt="/g) === 4 && count(full, /data-th-board-sc=/g) === 4,
-    `P2 中墩出到第 2 家：看板 2 個牌型、還沒有加分；四家出完後 4 個牌型＋4 個加分（${count(mid, /data-th-board-pt="/g)}/${count(mid, /data-th-board-sc=/g)} → ${count(full, /data-th-board-pt="/g)}/${count(full, /data-th-board-sc=/g)}）`);
+  ok(count(mid, /data-th-board-pt="/g) === 2 && count(mid, /data-th-board-sc=/g) === 0 && count(full, /data-th-board-pt="/g) === 4 && count(full, /data-th-board-sc=/g) === 0,
+    `P2 中墩出到第 2 家：看板 2 個牌型；四家出完後 4 個牌型，看板不顯示加分（v15 §3）（${count(mid, /data-th-board-pt="/g)}/${count(mid, /data-th-board-sc=/g)} → ${count(full, /data-th-board-pt="/g)}/${count(full, /data-th-board-sc=/g)}）`);
   const css = readFileSync("components/thirteen/thReveal.css", "utf8"), tsx = readFileSync("components/thirteen/ThTable.tsx", "utf8");
   const size = Number(/\.th-hole-big \{[^}]*width: (\d+)px/.exec(css)?.[1]);
   const at3 = JSON.parse(/const BIG_HOLE_AT = (\[[^;]+\]);/.exec(tsx)![1]) as number[][], rot = JSON.parse(/const HOLE_ROT = (\[[^;]+\]);/.exec(tsx)![1]) as number[];
@@ -320,13 +327,13 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   ok(L.FAN_FLY_MS === 290 && L.FAN_STAGGER_MS === 15 && L.BACK_SLIDE_MS === 200 && L.FAN_FLY_MS + 4 * L.FAN_STAGGER_MS <= T.MS.flip && L.BACK_SLIDE_MS <= T.MS.flip,
     "F4 飛牌 0.29 秒、每張晚 0.015 秒（五張 0.35 秒落定）、牌背滑 0.2 秒，都 ≤ 出牌落定 0.35 秒");
   // F5 大字分級（v14 §3）：寬度、中心
-  const K = ["wulong", "tonghuashun", "tiezhi", "chongsan"] as const;
+  const K = ["wulong", "tonghuashun", "tiezhi", "chongsan", "jpchongsan", "jphulu", "jptiezhi"] as const;
   const w = (p: (typeof P)[number]) => K.map((k) => Math.round(L.fxWidth(p, k)));
   const cx = (p: "left" | "right") => K.map((k) => Math.round(L.fxCenter(p, k)[0]));
-  ok(JSON.stringify(w("top")) === "[210,189,168,105]" && JSON.stringify(w("bottom")) === "[270,243,216,135]"
-    && JSON.stringify(cx("right")) === "[595,584,573,547]" && JSON.stringify(cx("left")) === "[249,260,271,297]"
+  ok(JSON.stringify(w("top")) === "[178,175,138,113,136,152,163]" && JSON.stringify(w("bottom")) === "[229,225,177,145,175,195,210]"
+    && JSON.stringify(cx("right")) === "[578,577,556,547,556,564,570]" && JSON.stringify(cx("left")) === "[266,267,288,297,288,280,274]"
     && near(L.fxCenter("bottom", "wulong")[1], 303) && near(L.fxCenter("top", "wulong")[1], 77),
-    `F5 大字寬：他家 ${w("top")}、自己 ${w("bottom")}（五龍＞同花順＞鐵支＞衝三）；左右家中心 x ${cx("left")}／${cx("right")}`);
+    `F5 大字寬（老闆 2026-11-20 新圖，照面積算）：他家 ${w("top")}、自己 ${w("bottom")}（五龍≥同花順＞鐵支＞衝三；彩金三種比對應一般牌型大）；左右家中心 x ${cx("left")}／${cx("right")}`);
   const fxTsx = (await import("node:fs")).readFileSync("components/thirteen/ThRevealFx.tsx", "utf8");
   ok(!/bh \* 1\.5/.test(fxTsx) && /fxWidth\(pos, step\.fx\)/.test(fxTsx), "F6 拿掉衝三原本的 1.5 倍框高，大字寬改用 fxWidth");
 }

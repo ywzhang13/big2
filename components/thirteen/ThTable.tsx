@@ -8,8 +8,8 @@
 //   那排正中央蓋牌型徽章（永遠是正的，不跟著牌轉）、這墩翻完在旁邊跳得失分；被打槍的人名字旁小彈孔＋「−N」
 import { useEffect } from "react";
 import type { Card } from "@/lib/thirteen";
-import { CARD_BACK_SRC, cardSrc } from "./cardArt";
-import { badgeOf, boardDeltas, ROW_NAME, ROWS, rowDisplayOrder, type RevealFrame, type ThReveal } from "./revealTimeline";
+import { CARD_BACK_SRC, cardSrc, isGold } from "./cardArt";
+import { badgeOf, plateScore, ROW_NAME, ROWS, rowDisplayOrder, type RevealFrame, type ThReveal } from "./revealTimeline";
 import type { ThGameView } from "./useThirteenRoom";
 import { preloadRevealFx } from "./ThRevealFx";
 import ThFeltMenu from "./ThFeltMenu";
@@ -37,7 +37,7 @@ const BIG_HOLE_AT = [[215, 185], [629, 205], [422, 190]];
 const HOLE_SRC = "/tiles/thirteen/fx/th-fx-hole.v2.m.webp", HOLE_BIG_SRC = "/tiles/thirteen/fx/th-fx-hole.v2.d.webp";
 const HOLE_ROT = [0, 130, 250];
 
-function Seat({ rows, pos, played, holes }: { rows: RowView[]; pos: Pos; played: boolean[]; holes: number }) {
+function Seat({ rows, pos, played, holes, lucky }: { rows: RowView[]; pos: Pos; played: boolean[]; holes: number; /** 彩金牌點數：一樣的牌畫金卡 */ lucky: number | null }) {
   // 彈孔角度用 --hr 放進 transform（直接用 rotate 屬性會繞著還沒置中的框轉，彈孔被甩出原位；老闆 2026-11-18 截圖三槍跑出畫面）
   // 扇形（小宜 v13）：每張牌各自算中心和角度（fanLayout.cardPose），座位座標原點＝頭墩中間那張牌，整組轉到那一家的方向。
   // 牌背（v14.2）：還沒出的組永遠在牌背區正中間；出牌時剩下的組 0.2 秒滑過去（CSS transition，重新整理時直接畫在最後位置）。
@@ -64,7 +64,7 @@ function Seat({ rows, pos, played, holes }: { rows: RowView[]; pos: Pos; played:
                 const p = cardPose(g, r, i, all.length);
                 return (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={c.id} className="th-fan-card" src={cardSrc(c)} alt="" draggable={false} data-th-card={`${r}-${i}`}
+                  <img key={c.id} className={`th-fan-card${isGold(c, lucky) ? " is-gold" : ""}`} src={cardSrc(c, lucky)} alt="" draggable={false} data-th-card={`${r}-${i}`}
                     style={{ left: p.x, top: p.y, "--a": `${p.deg}deg`, "--dx": `${fromX - p.x}px`, "--dy": `${by - p.y}px`, "--d": `${i * FAN_STAGGER_MS}ms` } as React.CSSProperties} />
                 );
               })}
@@ -86,30 +86,30 @@ function Seat({ rows, pos, played, holes }: { rows: RowView[]; pos: Pos; played:
   );
 }
 
-/** 中央看板（小宜 v10～v12）：這一墩四家的牌型（牌落定才跳出；大牌播完大字顯示紅金）和加分（四家出完才一起出現，留到下一墩第一家落定）。
+/** 中央看板（小宜 v15 §3，取代 v12 的排法）：四邊是四家這一墩的牌型（牌落定才跳出；大牌播完大字顯示紅金），左右家直排；
+ *  正中間放這一局的彩金牌（旁邊不寫字）。不顯示每墩的加分（v4 不算每墩輸贏，加分在本局結算看）。舊房沒有彩金牌：中間照舊寫墩名。
  *  材質照麻將中央資訊盤；在牌的下層（DOM 順序在前）、大字特效的下層 */
-function Board({ rv, frame, mySeat, deltas }: { rv: ThReveal; frame: RevealFrame; mySeat: number; deltas: Record<(typeof ROWS)[number], number[]> }) {
+function Board({ rv, frame, mySeat }: { rv: ThReveal; frame: RevealFrame; mySeat: number }) {
   const b = frame.board;
   const cells = [0, 1, 2, 3].map((seat) => {
     const pos = POS_BY_OFFSET[(seat - mySeat + 4) % 4], cell = CELL[pos], p = b.pats[seat];
     const name = p ? badgeOf(b.row, rv.result.values[seat][b.row]) : null;
-    const d = deltas[b.row][seat];
     return (
       <div key={seat} className={`th-board-e is-${cell}`} data-th-board-cell={pos}>
         {name && p ? (
-          <span key={`${b.row}-${p.at}`} className={`th-board-pt${p.big ? " is-bonus" : " is-pop"}${(cell === "l" || cell === "r") && name.label.length >= 4 ? " is-long" : ""}`}
-            data-th-board-pt={name.label}>{name.label}</span>
+          <span key={`${b.row}-${p.at}`} className={`th-board-pt${p.big ? " is-bonus" : " is-pop"}`} data-th-board-pt={name.label}>{name.label}</span>
         ) : <span className="th-board-pt is-none">—</span>}
-        {b.scoreAt !== null && (
-          <span key={`${b.row}-sc`} className={`th-board-sc ${d > 0 ? "is-up" : d < 0 ? "is-down" : "is-zero"}${Math.abs(d) >= 10000 ? " is-long" : ""}`} data-th-board-sc={d}>{d > 0 ? `+${d}` : d < 0 ? `−${-d}` : "0"}</span>
-        )}
       </div>
     );
   });
+  const lucky = rv.luckyCard ?? null;
   return (
     <div className={`th-board${b.show ? "" : " is-hide"}`} data-th-board={b.row} aria-hidden={!b.show}>
       {cells}
-      <span className="th-board-hub">{ROW_NAME[b.row]}</span>
+      {lucky ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="th-board-lucky" data-th-board-lucky={lucky.id} src={cardSrc(lucky, lucky.rank)} alt="" draggable={false} />
+      ) : <span className="th-board-hub">{ROW_NAME[b.row]}</span>}
     </div>
   );
 }
@@ -121,12 +121,11 @@ export default function ThTable({ view, now, clockSkew, reveal, menu = true }: {
   /** 左上角設定（換牌桌）；特效測試頁有自己的按鈕就不放 */
   menu?: boolean;
   /** 亮牌中：伺服器的亮牌內容＋時間軸現在這一刻（沒有＝理牌中的牌桌） */
-  reveal?: { rv: ThReveal; frame: RevealFrame } | null;
+  reveal?: { rv: ThReveal; frame: RevealFrame; /** 本局結算出現了（名牌才換成新的累計） */ settled?: boolean } | null;
 }) {
   const mySeat = view.me?.seat ?? 0;
   const revealed = !!reveal || view.phase === "revealed" || view.status === "finished";
   const left = view.arrangeDeadline !== null ? view.arrangeDeadline - (now + clockSkew) : 0;
-  const deltas = reveal ? boardDeltas(reveal.rv) : null; // 有底分的房：伺服器乘好的；舊房：照舊自己算
   useEffect(() => { void preloadRevealFx(); }, []); // 等其他人送出的時候先載特效圖
   useStageScale();
 
@@ -147,16 +146,16 @@ export default function ThTable({ view, now, clockSkew, reveal, menu = true }: {
   return (
     <div className="th-bg">{/* 桌布鋪滿畫面；牌桌 844×390 整塊等比放大置中（v8-A §1） */}
     <div className="th-table" data-testid="th-table">
-      {reveal && <Board rv={reveal.rv} frame={reveal.frame} mySeat={mySeat} deltas={deltas!} />}
+      {reveal && <Board rv={reveal.rv} frame={reveal.frame} mySeat={mySeat} />}
       {view.players.map((p) => {
         const pos = POS_BY_OFFSET[(p.seat - mySeat + 4) % 4];
         const isMe = pos === "bottom";
         const shot = reveal?.frame.shot[p.seat] ?? 0;
-        const score = view.playerScores?.[p.seat] ?? 0;
+        const score = reveal ? plateScore(reveal.rv, p.seat, !!reveal.settled) : view.playerScores?.[p.seat] ?? 0; // 亮牌途中維持上一局的累計
         return (
           <div key={p.id} className={`th-seatbox th-at-${pos}`} data-seat={p.seat} data-th-pos={pos}>
-            <Seat rows={rowsFor(p.seat)} pos={pos} played={playedOf(p.seat)} holes={shot} />
-            {/* 共用名牌（小宜〈共用名牌-設計說明〉）：四家同一個 88×32，頭像＋名字＋這一場的累計分數；
+            <Seat rows={rowsFor(p.seat)} pos={pos} played={playedOf(p.seat)} holes={shot} lucky={reveal?.rv.luckyCard?.rank ?? null} />
+            {/* 共用名牌（小宜〈共用名牌-設計說明〉）：四家同一個 88×38，頭像＋名字＋這一場的累計分數；
                 思考中泡泡貼在朝牌桌中心那一邊、彈孔掛右下角（§5 錨點），都不改變名牌大小 */}
             <GamePlate seat={PLATE_SEAT[pos]} name={p.name} score={score} me={isMe} plateId={p.seat} avatarUrl={p.avatarUrl ?? null} className={`th-gp th-gp-${pos}`}
               thinking={!p.submitted && !revealed} shot={shot} />

@@ -61,15 +61,22 @@ export function backGroupX(g: SeatGeo, gone: number): (number | null)[] {
 /** 牌背區中心在座位座標的 y（往玩家方向） */
 export const backY = (g: SeatGeo) => toLocal(g, g.strip[0], g.strip[1])[1];
 
-/** 大牌大字（v14 §3）：五龍寬當 100%（他家 210、自己 270）；同花順 90%、鐵支 80% 照寬；衝三照面積 70%。素材寬高比 fx-info-v2.json */
-export const FX_RATIO = { chongsan: 1.3734, tiezhi: 2.6947, tonghuashun: 2.7179, wulong: 2.6987 } as const;
+/** 大牌大字（v14 §3 的面積比例，換老闆 2026-11-20 新圖後一律照面積算）：五龍的面積當 100%（舊圖他家寬 210、自己 270），
+ *  其他牌型的面積佔它多少（舊圖換算：鐵支 .641、衝三 .49；同花順舊圖 .804，新圖又寬又扁，面積取 .7 讓寬度不超過五龍）；彩金三種比對應的一般牌型再大一點。
+ *  素材寬高比＝v3 去背圖的像素寬÷高（小宜〈十三支大牌特效-去背-檔案清單-2026-11-20〉） */
+export const FX_RATIO = {
+  chongsan: 990 / 622, tiezhi: 1070 / 590, tonghuashun: 1600 / 596, wulong: 1398 / 722,
+  jpchongsan: 1320 / 698, jphulu: 1375 / 731, jptiezhi: 1378 / 675,
+} as const;
 export type FxKind = keyof typeof FX_RATIO;
-const FX_K: Record<FxKind, number> = { wulong: 1, tonghuashun: 0.9, tiezhi: 0.8, chongsan: 0.7 };
+const FX_AREA: Record<FxKind, number> = { wulong: 1, tonghuashun: 0.7, tiezhi: 0.641, chongsan: 0.49, jpchongsan: 0.6, jphulu: 0.75, jptiezhi: 0.8 };
+/** 舊圖五龍的寬高比：面積基準（寬 210 ÷ 高 ＝ 面積 210² ÷ 2.6987） */
+const REF_RATIO = 2.6987;
 /** 中央看板（v12）與大字放大到最大的倍數 */
 export const BOARD_RECT = [366, 143, 112, 84] as const, FX_PEAK = 1.08;
 export function fxWidth(pos: Pos, kind: FxKind): number {
   const w0 = pos === "bottom" ? 270 : 210;
-  return kind === "chongsan" ? w0 * FX_K.chongsan * Math.sqrt(FX_RATIO.chongsan / FX_RATIO.wulong) : w0 * FX_K[kind];
+  return w0 * Math.sqrt((FX_AREA[kind] * FX_RATIO[kind]) / REF_RATIO);
 }
 /** 大字中心（牌桌座標）：那一家中墩中間那張牌；左右家往外移，最大瞬間也離看板 4px（算出來比原本更靠內就不移） */
 export function fxCenter(pos: Pos, kind: FxKind): [number, number] {

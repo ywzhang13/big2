@@ -16,7 +16,7 @@ import { IDLE_ACTIVE_MS, IDLE_WAITING_MS } from "@/lib/records/types";
 import { deleteThirteenChat } from "./chat";
 import { buildThirteenRecord, closeThirteen, findThirteenRecord, listIdleThirteenRooms, loadPlayers, loadRoom, saveGameStateIfUnchanged, StateConflictError,
   type CloseResult, type ThirteenGameState, type ThRoom } from "./db";
-import { advance, cancelIfDenied, clock, evaluateLeave, revealPayload, isOver } from "./flow";
+import { advance, cancelIfDenied, clock, evaluateLeave, luckyCardOf, revealPayload, isOver } from "./flow";
 
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
 export const fail = (status: number, error: string, message?: string, extra: Record<string, unknown> = {}) => json({ error, ...(message ? { message } : {}), ...extra }, status);
@@ -105,7 +105,7 @@ export async function saveAndAnnounce(room: ThRoom, s: ThirteenGameState, baseVe
 /** 開新的一局：公開頻道只說第幾局和截止時間；每家的 13 張只送到自己的座位頻道 */
 export function dealEvents(s: ThirteenGameState): Ev[] {
   return [
-    { event: "th_hand_start", payload: { handNo: s.handNo, arrangeDeadline: s.arrangeDeadline, serverNow: clock.now() } },
+    { event: "th_hand_start", payload: { handNo: s.handNo, arrangeDeadline: s.arrangeDeadline, serverNow: clock.now(), luckyCard: luckyCardOf(s) } },
     ...s.players.map((p) => ({ event: "th_deal_hand", payload: { playerId: p.id, handNo: s.handNo, hand: p.hand }, to: { playerId: p.id, userId: p.userId } })),
   ];
 }

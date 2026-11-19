@@ -75,6 +75,8 @@
 .th-seat2 .th-blk-row + .th-blk-row { margin-top: 0; }
 .th-seat2 .th-blk-row img { position: absolute; width: var(--cw); height: var(--ch); max-width: none; margin: 0; border-radius: 4px; box-shadow: -1px 1px 3px rgba(0,0,0,.45); }
 .th-seat2 .th-blk-row.is-glow img { box-shadow: 0 0 10px 3px rgba(240,214,138,.85); }
+.th-seat2 .th-blk-row img.is-gold { box-shadow: 0 0 0 1px rgba(255,236,160,.85), 0 0 8px rgba(255,214,110,.55), -1px 1px 3px rgba(0,0,0,.45); } /* 金卡（小宜 v15 §1）；出牌中的金光照樣蓋過 */
+.th-seat2 .th-blk-row.is-glow img.is-gold { box-shadow: 0 0 10px 3px rgba(240,214,138,.85); }
 /* 出牌飛行（v13 §5）：從那一墩出牌前牌背的中心（--dx、--dy）、直的、0.65 倍、透明度 20% → 扇形位置；0.29 秒、每張晚 0.015 秒（--d） */
 .th-seat2 .th-blk-row .th-fan-card { transform: translate(-50%, -50%) translate(0, 0) rotate(var(--a)) scale(1);
   animation: th-fan-fly var(--fly, 290ms) cubic-bezier(.2,.8,.3,1) var(--d, 0ms) both; }
@@ -88,28 +90,27 @@
 .th-hand-grp img { width: var(--bw); height: var(--bh); max-width: none; border-radius: 3px; box-shadow: -1px 1px 2px rgba(0,0,0,.4); }
 .th-hand-grp img + img { margin-left: calc(var(--bx) - var(--bw)); }
 /* ---- 中央看板（小宜 v10～v12，112×84、4:3）：材質同麻將中央資訊盤（黑 30%、金線 25%、圓角 10）；字都是正的 ---- */
+/* 中央看板（小宜 v15 §3）：位置大小不變 (366, 143) 112×84；左右各寬 18 放左右家牌型（直排 11px），上下各高 16 放對家、自己（橫排 12px），
+   正中間放彩金牌 30×42（金卡＋一圈光、不寫字）；不顯示數字。最長 5 個字（黑桃同花順）四邊同時都放得下，所以沒有「長名字縮小」 */
 .th-board { position: absolute; left: 366px; top: 143px; width: 112px; height: 84px; box-sizing: border-box; border-radius: 10px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,169,110,.25);
-  display: grid; grid-template: "t t t" 17px "l h r" 1fr "b b b" 17px / 1fr 10px 1fr; padding: 4px; transition: opacity .2s; pointer-events: none; }
+  display: grid; grid-template: "l t r" 16px "l h r" 1fr "l b r" 16px / 18px 1fr 18px; padding: 1px; transition: opacity .2s; pointer-events: none; }
 .th-board.is-hide { opacity: 0; }
-.th-board-e { display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; min-width: 0; }
-.th-board-e.is-t { grid-area: t; } .th-board-e.is-b { grid-area: b; }
-.th-board-e.is-l, .th-board-e.is-r { flex-direction: column; gap: 1px; }
-.th-board-e.is-l { grid-area: l; align-items: flex-start; padding-left: 2px; } .th-board-e.is-r { grid-area: r; align-items: flex-end; padding-right: 2px; }
+.th-board-e { display: flex; align-items: center; justify-content: center; white-space: nowrap; min-width: 0; min-height: 0; }
+.th-board-e.is-t { grid-area: t; } .th-board-e.is-b { grid-area: b; } .th-board-e.is-l { grid-area: l; } .th-board-e.is-r { grid-area: r; }
 .th-board-hub { grid-area: h; align-self: center; justify-self: center; width: 8px; font-size: 8px; font-weight: 700; line-height: 10px; text-align: center; color: rgba(240,214,138,.55); }
+/* 彩金牌外框（老闆 2026-11-20 新圖 8-jp-frame）試過不加：看板高只有 84、牌 30×42，外框的金邊會壓在上下兩家的牌型名後面，字變難讀 */
+.th-board-lucky { grid-area: h; align-self: center; justify-self: center; width: 30px; height: 42px; max-width: none; border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(255,236,160,.9), 0 0 12px rgba(255,214,110,.75); }
 .th-board-pt { text-align: center; font: 900 12px/14px "Noto Serif TC", "Songti TC", "PingFang TC", serif; color: #f0d68a; text-shadow: 0 1px 2px rgba(0,0,0,.8); letter-spacing: .04em; }
-.th-board-e.is-l .th-board-pt, .th-board-e.is-r .th-board-pt { font-size: 11px; letter-spacing: 0; }
-.th-board-e .th-board-pt.is-long { font-size: 10px; }
-.th-board-pt.is-bonus { padding: 0 6px; border-radius: 999px; background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; text-shadow: none; font-size: 11px; }
-.th-board-e.is-l .th-board-pt.is-bonus, .th-board-e.is-r .th-board-pt.is-bonus { padding: 0 4px; font-size: 10px; }
+.th-board-e.is-l .th-board-pt, .th-board-e.is-r .th-board-pt { writing-mode: vertical-rl; text-orientation: upright; font-size: 11px; line-height: 13px; letter-spacing: 0; }
+.th-board-pt.is-bonus { padding: 0 10px; border-radius: 999px; background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; text-shadow: none; font-size: 11px; }
+.th-board-e.is-l .th-board-pt.is-bonus, .th-board-e.is-r .th-board-pt.is-bonus { padding: 10px 0; font-size: 10px; }
 .th-board-pt.is-none { color: rgba(246,240,218,.22); font-weight: 400; text-shadow: none; }
 /* 牌型跳出 0.30 秒：2.6 倍砸到 0.92 倍再回 1 倍，同時金光一閃（大牌不跳：大字剛播完） */
 .th-board-pt.is-pop { animation: th-board-pop .3s cubic-bezier(.3,.7,.4,1) both, th-board-glow .5s ease-out both; }
 @keyframes th-board-pop { 0% { transform: scale(2.6); opacity: 0; } 45% { transform: scale(.92); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes th-board-glow { 0%, 40% { text-shadow: 0 0 10px #fff3c4, 0 0 18px rgba(240,214,138,.9); } 100% { text-shadow: 0 1px 2px rgba(0,0,0,.8); } }
-.th-board-sc { font: 800 12px/14px "Chakra Petch", system-ui, sans-serif; letter-spacing: .02em; animation: th-board-sc .25s ease-out both; }
-.th-board-sc.is-long { font-size: 10px; letter-spacing: 0; } /* 底分讓分數變五位數（+12000、−36000）：左右格只有 47px 寬，縮小才不會超出 */
-.th-board-sc.is-up { color: #6BD49A; } .th-board-sc.is-down { color: #FF8E84; } .th-board-sc.is-zero { color: rgba(246,240,218,.62); }
-@keyframes th-board-sc { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: scale(1); } }
-/* 共用名牌（components/GamePlate.tsx）的位置：小宜〈共用名牌-設計說明〉§4 十三支 v12 版面，左上角座標、四家都是 88×32 */
-.th-gp-bottom { left: 8px; top: 312px; } .th-gp-top { left: 214px; top: 8px; } .th-gp-left { left: 4px; top: 169px; } .th-gp-right { left: 752px; top: 169px; }
+/* 共用名牌（components/GamePlate.tsx）的位置：小宜〈共用名牌-設計說明〉§4 十三支 v12 版面，左上角座標；方向 A 四家都是 88×38：
+   自己往上 6（下緣不動）、左右家往上 3（中心不動）、對家不動 */
+.th-gp-bottom { left: 8px; top: 306px; } .th-gp-top { left: 214px; top: 8px; } .th-gp-left { left: 4px; top: 166px; } .th-gp-right { left: 752px; top: 166px; }
 .th-arr .th-menu { zoom: var(--th-s2, 1); } /* v8-A 殘項：理牌畫面的 ⚙ 跟著版面放大（牌桌上的 ⚙ 在放大的牌桌裡，本來就跟著放大） */

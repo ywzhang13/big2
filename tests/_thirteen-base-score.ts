@@ -14,7 +14,7 @@
 //      原本的 stats 和 result 維持墩數；舊房的 scored＝原本的墩數。要打到同時有人打槍又被打槍、和有全壘打的局（跑到為止，最多 3000 副）
 import { BASE_SCORES, buildThirteenRecord, isBaseScore, newRoomState, type ThirteenGameState, type ThirteenSettings } from "../lib/thirteen/db";
 import { autoArrange } from "../lib/thirteen/arrange";
-import { revealIfReady, revealPayload, seatPlayers, startHand, viewFor } from "../lib/thirteen/flow";
+import { handRuleFor, revealIfReady, revealPayload, seatPlayers, startHand, viewFor } from "../lib/thirteen/flow";
 import { SCORING } from "../lib/thirteen/score";
 
 const results: string[] = [];
@@ -32,7 +32,7 @@ function newGame(settings: ThirteenSettings): ThirteenGameState {
 /** 打一局：四家用推薦排法、亮牌。回傳這局的墩數（result.totals） */
 function playHand(s: ThirteenGameState, now: number): number[] {
   startHand(s, now);
-  for (const p of s.players) p.arrangement = autoArrange(p.hand);
+  for (const p of s.players) p.arrangement = autoArrange(p.hand, handRuleFor(s)); // 照房間規則排（v4 帶這一局的彩金牌；舊房用舊牌型排）
   if (!revealIfReady(s, now)) throw new Error("沒有亮牌");
   return s.hands[s.hands.length - 1].result.totals;
 }

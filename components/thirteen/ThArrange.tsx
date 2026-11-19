@@ -5,8 +5,8 @@
 // 操作：點選（點手牌選取→點墩放入；點墩裡的牌退回）和拖曳（手牌↔墩、墩↔墩；拖到滿的墩的某張牌上＝兩張互換）。
 // 拖曳用 Pointer Events，滑鼠和觸控同一套；牌加 touch-action:none，iPhone 上拖的時候畫面不會捲動。
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { Arrangement, Card, Row } from "@/lib/thirteen";
-import { cardSrc } from "./cardArt";
+import type { Arrangement, Card, HandRule, Row } from "@/lib/thirteen";
+import { cardSrc, isGold } from "./cardArt";
 import { findCombos, SHORTCUTS, type ShortcutKind } from "./shortcuts";
 import { arrangeReducer, derive, HAND, initArrange, ROW_NAME, ROW_SIZE, ROWS, rowLabel, type ArrangeAction, type Zone } from "./arrangeState";
 import { preloadRevealFx } from "./ThRevealFx";
@@ -22,10 +22,16 @@ export interface ThArrangeProps {
   deadline: number;
   /** 送出（只會呼叫一次）。送出後畫面鎖住，不能再改 */
   onSubmit: (a: Arrangement) => void;
+  /** 這一局的牌型規則（handRuleOf(scoreRule, 彩金牌點數)，跟伺服器同一套）；沒給＝新房、沒有彩金牌 */
+  rule?: HandRule;
+  /** 這一局的彩金牌（v4 房開始理牌就公開）：三墩左邊亮出來，手牌裡點數一樣的牌變金卡（小宜 v15 §1～2） */
+  lucky?: Card | null;
 }
 
-export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps) {
-  const [state, dispatch] = useReducer(arrangeReducer, cards, initArrange);
+export default function ThArrange({ cards, deadline, onSubmit, rule, lucky = null }: ThArrangeProps) {
+  const lr = lucky?.rank ?? null;
+  const gold = (c: Card) => (isGold(c, lr) ? " is-gold" : "");
+  const [state, dispatch] = useReducer(arrangeReducer, { cards, rule }, (x) => initArrange(x.cards, x.rule));
   // 正在拖的那根手指（或滑鼠）和最後一次移動的座標：在事件裡直接記，不等畫面更新
   const ptrRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -37,7 +43,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
 
   const combos = useMemo(() => {
     const out = {} as Record<ShortcutKind, Card[][]>;
-    for (const s of SHORTCUTS) out[s.kind] = findCombos(hand, s.kind);
+    for (const s of SHORTCUTS) out[s.kind] = findCombos(hand, s.kind, state.rule);
     return out;
     // hand 由 rows 決定；用 id 串當依賴，避免每次 render 都重算
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,10 +117,18 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
     <div className={`th-arr${submitted ? " is-done" : ""}${drag?.moving ? " is-dragging" : ""}`}>
       <ThFeltMenu />{/* 左上角 ⚙ 換牌桌（和牌桌畫面同一個；v7 §1：理牌畫面底色跟著同一款） */}
       <div className="th-arr-stage">{/* 844×390 一塊，整塊等比放大置中（v8-A §1） */}
+      {lucky && (
+        // 彩金牌（小宜 v15 §2）：三墩左邊、和中墩同高，左上角 (84, 66)；上面「彩金」小標
+        <div className="th-arr-lucky" data-th-lucky={lucky.id}>
+          <b>彩金</b>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cardSrc(lucky, lr)} alt={`彩金牌`} draggable={false} />
+        </div>
+      )}
       <div className="th-arr-main">
         <div className="th-rows">
           {ROWS.map((r) => {
-            const label = rowLabel(r, arrangement[r]);
+            const label = rowLabel(r, arrangement[r], state.rule);
             const over = drag?.moving && drag.over?.zone === r;
             return (
               <div key={r} className={`th-row th-row-${r}${foulRows.has(r) ? " is-foul" : ""}`}>
@@ -133,9 +147,9 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
                     const c = arrangement[r][i];
                     if (!c) return <div key={`e${i}`} className="th-slot" />;
                     return (
-                      <div key={c.id} className={`th-card th-card-row${dragging.has(c.id) ? " is-ghosted" : ""}`} {...cardProps(c.id, r)} onClick={(e) => e.stopPropagation()}>
+                      <div key={c.id} className={`th-card th-card-row${dragging.has(c.id) ? " is-ghosted" : ""}${gold(c)}`} {...cardProps(c.id, r)} onClick={(e) => e.stopPropagation()}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={cardSrc(c)} alt="" draggable={false} />
+                        <img src={cardSrc(c, lr)} alt="" draggable={false} />
                       </div>
                     );
                   })}
@@ -156,12 +170,12 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
           {hand.map((c) => (
             <div
               key={c.id}
-              className={`th-card th-card-hand${selected.includes(c.id) ? " is-sel" : ""}${dragging.has(c.id) ? " is-ghosted" : ""}${allFull ? " is-unused" : ""}`}
+              className={`th-card th-card-hand${selected.includes(c.id) ? " is-sel" : ""}${dragging.has(c.id) ? " is-ghosted" : ""}${allFull ? " is-unused" : ""}${gold(c)}`}
               data-th-unused={allFull ? "" : undefined}
               {...cardProps(c.id, HAND)}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={cardSrc(c)} alt="" draggable={false} />
+              <img src={cardSrc(c, lr)} alt="" draggable={false} />
               {/* 三墩排滿：剩下的 3 張只變灰、不加字（老闆 2026-11-18），拖到墩裡的牌上還是可以互換 */}
             </div>
           ))}
@@ -200,7 +214,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
         <div className="th-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden>
           {drag.ids.map((id, i) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={id} src={cardSrc(byId.get(id)!)} alt="" draggable={false} style={{ transform: `translate(${i * 14}px, ${i * 2}px)` }} />
+            <img key={id} className={gold(byId.get(id)!).trim()} src={cardSrc(byId.get(id)!, lr)} alt="" draggable={false} style={{ transform: `translate(${i * 14}px, ${i * 2}px)` }} />
           ))}
         </div>
       )}

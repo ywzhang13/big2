@@ -15,8 +15,8 @@ import { fxCenter, fxWidth } from "./fanLayout";
 const FX = "/tiles/thirteen/fx";
 const DESKTOP = "(min-width: 1100px) and (min-height: 700px)";
 
-/** 素材版本：去黑底實心的是 v2，其他 v1 */
-const VER: Record<string, string> = { start: "v2", chongsan: "v2", tiezhi: "v2", tonghuashun: "v2", wulong: "v2", homerun: "v2", ball: "v2", hrbatter: "v2" }; // hrbatter v2＝老闆第 12 輪新揮棒圖（腳清楚）；hrfield、hrstar、hrready 是 v1
+/** 素材版本：去黑底實心的是 v2，其他 v1；大牌大字 v3＝老闆 2026-11-20 新圖（去背、四邊羽化，彩金三種是新增的；彩金牌外框 8-jp-frame 試過不加） */
+const VER: Record<string, string> = { start: "v2", chongsan: "v3", tiezhi: "v3", tonghuashun: "v3", wulong: "v3", jpchongsan: "v3", jphulu: "v3", jptiezhi: "v3", homerun: "v2", ball: "v2", hrbatter: "v2" }; // hrbatter v2＝老闆第 12 輪新揮棒圖（腳清楚）；hrfield、hrstar、hrready 是 v1
 const src = (name: string, size: "m" | "d") => `${FX}/th-fx-${name}.${VER[name] ?? "v1"}.${size}.webp`;
 /** 手機用 .m、桌機用 .d（同一套 CSS 尺寸，桌機圖比較大） */
 function Pic({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
@@ -28,7 +28,7 @@ function Pic({ name, className, style }: { name: string; className?: string; sty
   );
 }
 
-const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar"];
+const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "jpchongsan", "jphulu", "jptiezhi", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar"];
 let preloaded: Promise<void> | null = null;
 /** 先把特效圖和牌背載好（理牌畫面一打開就呼叫）：第一次播的時候圖才不會還沒下載完、整段看不到。只載這台裝置那一套（手機 .m／桌機 .d） */
 export function preloadRevealFx(): Promise<void> {

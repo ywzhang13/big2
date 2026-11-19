@@ -58,6 +58,12 @@ export function shuffle<T>(xs: readonly T[], rng?: () => number): T[] {
   return a;
 }
 
+/** 顯示順序（老闆 2026-11-19）：A、2、3…J、Q、K；同點數照黑桃、紅心、方塊、梅花，黑桃第 1 副在前。只影響回傳的順序，比大小 A 照樣最大 */
+export function sortCards(cards: Card[]): Card[] {
+  const key = (c: Card) => (c.rank === 14 ? 1 : c.rank) * 100 + SUITS.indexOf(c.suit) * 10 + c.deck;
+  return [...cards].sort((a, b) => key(a) - key(b));
+}
+
 /** 每人發幾張（老闆 2026-11-18 拍板：加一色每人 16 張，自己挑 13 張理牌，另外 3 張不用、不公開） */
 export const HAND_SIZE = 16;
 

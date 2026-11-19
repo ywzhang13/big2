@@ -58,9 +58,9 @@ const t = (v: ThGameView, now = 1_000_000) => renderToStaticMarkup(createElement
     && /class="gp[^"]*" data-seat="l"[^>]*data-gp-seat="1"[\s\S]*?data-gp-thinking="1"/.test(h) && !/mjm-plate|mjm-wind|mjm-nm/.test(h),
     "T10 四家都用共用名牌（GamePlate，掛 data-fx-seat）：自己 2 號金色；思考中泡泡掛在左家名牌裡（朝牌桌中心）；不再借用麻將 .mjm-plate");
   const css = (await import("node:fs")).readFileSync("components/gamePlate.css", "utf8");
-  ok(/^\.gp \{ position: absolute; box-sizing: border-box; width: 88px; height: 32px;/m.test(css) && /\.gp-hang \{ position: absolute; right: -3px; bottom: -11px;/.test(css)
+  ok(/^\.gp \{ position: absolute; box-sizing: border-box; width: 88px; height: 38px;/m.test(css) && /\.gp-hang \{ position: absolute; right: -3px; bottom: -11px;/.test(css)
     && /\.gp\[data-seat=l\] \.gp-think \{ left: calc\(100% \+ 6px\); top: 50%;/.test(css) && /\.gp\[data-seat=b\] \.gp-think \{ left: 50%; bottom: calc\(100% \+ 6px\);/.test(css),
-    "T11 共用名牌本體固定 88×32；彈孔掛右下角框外、思考中泡泡貼在朝牌桌中心那一邊外 6px（設計說明 §5 bubble 錨點），都不改變名牌大小");
+    "T11 共用名牌本體固定 88×38（方向 A）；彈孔掛右下角框外、思考中泡泡貼在朝牌桌中心那一邊外 6px（設計說明 §5 bubble 錨點），都不改變名牌大小");
   const GamePlate = (await import("../components/GamePlate")).default;
   const off = renderToStaticMarkup(createElement(GamePlate, { seat: "r", name: "一二三四五六", score: 0, offline: true, shot: 2 }));
   ok(/class="gp is-off"/.test(off) && /<span class="gp-off">離線<\/span>/.test(off) && /data-gp-shot="2"/.test(off) && /class="gp-sc is-zero">0</.test(off) && /gp-av">一</.test(off),

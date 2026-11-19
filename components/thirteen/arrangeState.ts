@@ -1,8 +1,8 @@
 // 十三支理牌畫面的狀態與操作（純函式，ThArrange.tsx 用、tests/_thirteen-arrange.ts 測）。
 // 牌型、倒水、推薦排法一律呼叫計分引擎 lib/thirteen；這裡只管「哪張牌在哪」和送出鎖定。
 import {
-  autoArrange, bonusOf, CAT, CAT_NAME, checkArrangement, compareValue, evalFive, evalRow, evalThree,
-  type Arrangement, type Card, type Row,
+  autoArrange, bonusOf, CAT, CAT_NAME, checkArrangement, compareValue, evalFive, evalRow, evalThree, V4_NO_LUCKY,
+  type Arrangement, type Card, type HandRule, type Row,
 } from "@/lib/thirteen";
 import { findCombos, type ShortcutKind } from "./shortcuts";
 
@@ -13,7 +13,17 @@ export const HAND = "hand" as const;
 export type Zone = Row | typeof HAND;
 export type Rows = Record<Row, string[]>;
 export const EMPTY_ROWS: Rows = { front: [], middle: [], back: [] };
-export const byRank = (a: Card, b: Card) => a.rank - b.rank || a.suit.localeCompare(b.suit) || a.deck - b.deck;
+/** 畫面上牌的順序（老闆 2026-11-19：全部照 A、2、3…J、Q、K 排，A 在最前、K 在最後；計分引擎裡 A 還是 14 最大，這裡只管顯示） */
+export const showRank = (rank: number) => (rank === 14 ? 1 : rank);
+export const byRank = (a: Card, b: Card) => showRank(a.rank) - showRank(b.rank) || a.suit.localeCompare(b.suit) || a.deck - b.deck;
+const BROADWAY = "10,11,12,13,14";
+/** 一墩的顯示順序（理牌的墩、亮牌、結算共用）：照 byRank；只有 10 J Q K A 的順子、同花順把 A 放最後（老闆 2026-11-19「TJQKA 順序」）。
+ *  A 2 3 4 5 本來就是 A 在最前。只看五張點數，跟計分規則無關 */
+export function rowDisplayOrder(cards: Card[]): Card[] {
+  const out = cards.slice().sort(byRank);
+  if (out.length === 5 && out.map((c) => c.rank).sort((a, b) => a - b).join(",") === BROADWAY) out.push(out.shift()!);
+  return out;
+}
 
 export interface DragInfo {
   ids: string[];
@@ -36,6 +46,8 @@ export interface ArrangeState {
   drag: DragInfo | null;
   /** 送出的排法；null＝還沒送出。只會被設定一次 */
   submitted: Arrangement | null;
+  /** 這一局的牌型規則（伺服器同一套：handRuleOf(scoreRule, 彩金牌點數)）：牌型標籤、倒水、推薦排法、快捷鈕都照這個判斷 */
+  rule: HandRule;
 }
 
 export type ArrangeAction =
@@ -55,31 +67,34 @@ export type ArrangeAction =
   /** 倒數到 0：排好且不倒水就照目前的送出，否則用引擎的 autoArrange */
   | { type: "timeout" };
 
-export const initArrange = (cards: Card[]): ArrangeState => ({ cards, rows: EMPTY_ROWS, selected: [], cycle: null, notice: null, drag: null, submitted: null });
+export const initArrange = (cards: Card[], rule: HandRule = V4_NO_LUCKY): ArrangeState => ({ cards, rows: EMPTY_ROWS, selected: [], cycle: null, notice: null, drag: null, submitted: null, rule });
 
 // ---- 從狀態算出來的東西（畫面和測試共用） ----
 export function derive(s: ArrangeState) {
   const byId = new Map(s.cards.map((c) => [c.id, c]));
   const placed = new Set([...s.rows.front, ...s.rows.middle, ...s.rows.back]);
   const hand = s.cards.filter((c) => !placed.has(c.id)).sort(byRank);
-  const rowCards = (r: Row) => s.rows[r].map((id) => byId.get(id)!).sort(byRank);
+  const rowCards = (r: Row) => rowDisplayOrder(s.rows[r].map((id) => byId.get(id)!));
   const arrangement: Arrangement = { front: rowCards("front"), middle: rowCards("middle"), back: rowCards("back") };
   const full = (r: Row) => s.rows[r].length === ROW_SIZE[r];
   // 加一色 16 選 13（老闆 2026-11-18）：三墩排滿就能檢查、送出，手牌剩下的 3 張就是不用的（小宜 v6）
   const allFull = full("front") && full("middle") && full("back");
-  const check = allFull ? checkArrangement(arrangement) : null;
+  const check = allFull ? checkArrangement(arrangement, s.rule) : null;
   // 兩墩都排滿就先比（引擎 compareValue），不用等 13 張都放好才提示倒水
-  const foulMB = full("middle") && full("back") && compareValue(evalFive(arrangement.middle), evalFive(arrangement.back)) > 0;
-  const foulFM = full("front") && full("middle") && compareValue(evalThree(arrangement.front), evalFive(arrangement.middle)) > 0;
+  const foulMB = full("middle") && full("back") && compareValue(evalFive(arrangement.middle, s.rule), evalFive(arrangement.back, s.rule)) > 0;
+  const foulFM = full("front") && full("middle") && compareValue(evalThree(arrangement.front, s.rule), evalFive(arrangement.middle, s.rule)) > 0;
   return { byId, placed, hand, arrangement, full, allFull, check, foulMB, foulFM };
 }
 
-/** 一墩排滿時的標籤：牌型和加分都由引擎判斷（evalRow、bonusOf）。頭墩三條顯示「衝三」 */
-export function rowLabel(row: Row, cards: Card[]): string | null {
+/** 頭墩三條叫「衝三」、彩金三條叫「彩金衝三」（老柯 v4 API）；其他照引擎的牌型名 */
+export const rowCatName = (row: Row, cat: number) =>
+  row === "front" && cat === CAT.THREE_KIND ? "衝三" : row === "front" && cat === CAT.LUCKY_THREE ? "彩金衝三" : CAT_NAME[cat];
+/** 一墩排滿時的標籤：牌型和加分都由引擎判斷（evalRow、bonusOf，照這一局的規則） */
+export function rowLabel(row: Row, cards: Card[], rule: HandRule = V4_NO_LUCKY): string | null {
   if (cards.length !== ROW_SIZE[row]) return null;
-  const v = evalRow(cards);
-  const bonus = bonusOf(row, v);
-  const name = row === "front" && v.cat === CAT.THREE_KIND ? "衝三" : CAT_NAME[v.cat];
+  const v = evalRow(cards, rule);
+  const bonus = bonusOf(row, v, rule);
+  const name = rowCatName(row, v.cat);
   return bonus ? `${name} +${bonus}` : name;
 }
 
@@ -123,7 +138,7 @@ export function arrangeReducer(s: ArrangeState, a: ArrangeAction): ArrangeState 
     case "clearRow":
       return moveTo(s, s.rows[a.row], HAND);
     case "shortcut": {
-      const list = findCombos(derive(s).hand, a.kind);
+      const list = findCombos(derive(s).hand, a.kind, s.rule);
       if (!list.length) return s;
       const idx = s.cycle?.kind === a.kind ? (s.cycle.idx + 1) % list.length : 0;
       const pick = list[idx];
@@ -139,7 +154,7 @@ export function arrangeReducer(s: ArrangeState, a: ArrangeAction): ArrangeState 
     case "swapRows":
       return { ...s, rows: { ...s.rows, middle: s.rows.back, back: s.rows.middle }, notice: null };
     case "recommend":
-      return { ...s, rows: idsOf(autoArrange(s.cards)), selected: [], cycle: null, notice: null };
+      return { ...s, rows: idsOf(autoArrange(s.cards, s.rule)), selected: [], cycle: null, notice: null };
     case "dragStart": {
       // 拖的是已選取的手牌：整組一起拖（例如快捷鈕選出的一組）
       const ids = a.from === HAND && s.selected.includes(a.id) ? s.selected : [a.id];
@@ -176,7 +191,7 @@ export function arrangeReducer(s: ArrangeState, a: ArrangeAction): ArrangeState 
     }
     case "timeout": {
       const v = derive(s);
-      return submitWith(s, v.check?.ok ? v.arrangement : autoArrange(s.cards));
+      return submitWith(s, v.check?.ok ? v.arrangement : autoArrange(s.cards, s.rule));
     }
   }
 }

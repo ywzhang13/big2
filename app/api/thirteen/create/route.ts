@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     for (let i = 0; i < 10; i++) {
       const code = String(randomInt(0, 10000)).padStart(4, "0");
-      const r = await insertRoom({ code, host_id: hostId, host_user_id: user.id, settings: { arrangeSec, totalHands, baseScore, scoreRule: "jia" } });
+      const r = await insertRoom({ code, host_id: hostId, host_user_id: user.id, settings: { arrangeSec, totalHands, baseScore, scoreRule: "v4" } });
       if (r !== "duplicate") {
         after(() => sweepIdleThirteenRooms().then(() => undefined));
         return json({ roomId: r.id, code });

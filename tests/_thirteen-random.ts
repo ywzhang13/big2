@@ -21,7 +21,7 @@ for (let i = 0; i < N; i++) {
   const { hands, rest } = deal(rng);
   const all = [...hands.flat(), ...rest].map((c) => c.id);
   if (all.length !== 65 || new Set(all).size !== 65 || hands.some((h) => h.length !== 16) || rest.length !== 1) badCards++; // 2026-11-18 每人 16 張、剩 1 張
-  const arr = hands.map(autoArrange);
+  const arr = hands.map((h) => autoArrange(h));
   arr.forEach((a, s) => {
     if (!checkArrangement(a).ok) fouled++;
     const v = validateSubmission(hands[s], { front: ids(a.front), middle: ids(a.middle), back: ids(a.back) });

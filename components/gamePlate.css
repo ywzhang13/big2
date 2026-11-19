@@ -1,17 +1,18 @@
-/* 共用名牌（components/GamePlate.tsx；小宜〈共用名牌-設計說明〉§2～3）。本體固定 88×32，標記都是絕對定位、不算在本體尺寸裡 */
-.gp { position: absolute; box-sizing: border-box; width: 88px; height: 32px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1);
+/* 共用名牌（components/GamePlate.tsx；小宜〈共用名牌-設計說明〉§2～3）。本體固定 88×38（老闆 2026-11-19 選小宜〈名牌放 8 個字〉方向 A：加高 6、名字最多兩行），標記都是絕對定位、不算在本體尺寸裡 */
+.gp { position: absolute; box-sizing: border-box; width: 88px; height: 38px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1);
   display: flex; align-items: center; gap: 5px; padding: 0 5px 0 3px; text-shadow: none; white-space: nowrap; }
 /* 頭像 24：名字第一個字 */
 .gp-av { position: relative; box-sizing: border-box; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.1); border: 1.5px solid transparent;
   display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1; color: rgba(255,255,255,.6); }
 .gp-pic { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; border-radius: 50%; object-fit: cover; } /* 大頭照蓋在名字第一個字上面；載不到就藏起來 */
 .gp.is-me .gp-av { border-color: #C9A96E; }
-/* 文字兩行：名字（最寬 49，超過變…）、分數 */
+/* 文字：名字（寬 49，一行 4 個字，最多兩行＝8 個字；4 個字以內一行、上下置中）、分數；每行 12px（方向 A） */
 .gp-tx { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
-.gp-nm { font-size: 11px; font-weight: 700; line-height: 14px; color: rgba(255,255,255,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gp-nm { font-size: 11px; font-weight: 700; line-height: 12px; color: rgba(255,255,255,.72); white-space: normal; word-break: break-all; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .gp.is-me .gp-nm { color: #f0d68a; }
-.gp-l2 { display: flex; align-items: center; gap: 4px; height: 13px; white-space: nowrap; }
-.gp-sc { font: 800 11px/13px "Chakra Petch", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.gp-l2 { display: flex; align-items: center; gap: 4px; height: 12px; white-space: nowrap; }
+.gp-sc { font: 800 11px/12px "Chakra Petch", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .gp-sc.is-pos { color: #4ade80; } .gp-sc.is-neg { color: #f87171; } .gp-sc.is-zero { color: rgba(255,255,255,.4); }
 /* 右下角掛牌：十三支彈孔（米白膠囊、小彈孔＋紅字） */
 .gp-hang { position: absolute; right: -3px; bottom: -11px; height: 13px; box-sizing: border-box; padding: 0 5px 0 4px; border-radius: 999px; display: flex; align-items: center; gap: 2px;

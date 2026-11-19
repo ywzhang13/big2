@@ -1,11 +1,12 @@
 // 十三支牌局流程（純函式：只改傳進來的牌局狀態，不碰資料庫、不送廣播；路由在 lib/thirteen/server.ts 的鎖和樂觀鎖裡呼叫）。
 //   開局發牌 → 理牌（截止時間＝開局＋15～120 秒（每 15 秒一階），伺服器時間）→ 四家送出或截止時系統代排 → 亮牌結算 → 下一局 → … → 整場結束
 // 時間一律由伺服器判定：送出要在截止「之前」才收，截止「之後」才代排，同一個時間點只會有一邊成立。
-// 安全：給玩家的畫面（viewFor）亮牌前只有本人的手牌和三墩；別人只看得到「送出了沒」；沒發出去的 13 張永遠不給。
-import { deal, type Card } from "./cards";
+// 安全：給玩家的畫面（viewFor）亮牌前只有本人的手牌和三墩；別人只看得到「送出了沒」。
+// 65 張發完剩下的 1 張：v4 的房是這一局的彩金牌（luckyCard，開局就公開）；舊規則房照舊不給。別人沒用到的牌（unusedCards）亮牌後才給。
+import { deal, sortCards, type Card } from "./cards";
 import { autoArrange, validateSubmission, type ArrangeError, type Arrangement } from "./arrange";
-import { bonusOf, revealOrder, ROWS, rowPoints, scoreRound, SCORING, type Row, type RoundResult, type ScoreRule } from "./score";
-import { CAT_NAME } from "./hand";
+import { bonusOf, handRuleOf, homeRunPenaltyOf, revealOrder, ROWS, rowPoints, scoreRound, SCORING, type Row, type RoundResult, type ScoreRule } from "./score";
+import { CAT, CAT_NAME, type HandRule } from "./hand";
 import type { ThirteenGameState, ThirteenHandResult, ThirteenSettings, ThPlayer } from "./db";
 
 /** 伺服器時間（毫秒）；測試會換掉 */
@@ -13,7 +14,7 @@ export const clock = { now: () => Date.now() };
 /** 發牌（正式：計分引擎的安全洗牌）；測試會換成固定的牌 */
 export const dealer = { deal: (): { hands: Card[][]; rest: Card[] } => deal() };
 // ---- 亮牌 → 結算 → 下一局（阿哲 2026-11-18 拍板）----
-// 亮牌時伺服器記三個時間（伺服器毫秒）：revealedAt 亮牌、settleAt 結算面板出現（＝revealedAt＋亮牌演出長度）、
+// 亮牌時伺服器記三個時間（伺服器毫秒）：revealedAt 亮牌動畫起點（＝決定亮牌那一刻＋LEAD_MS）、settleAt 結算面板出現（＝revealedAt＋亮牌演出長度）、
 // nextHandAt 自動開下一局（＝settleAt＋30 秒）。四家都按確認就馬上開；有人沒按（例如斷線）到 nextHandAt 自動開。
 // 前端照 settleAt 顯示結算面板（用伺服器時間換算），和伺服器用同一個 revealDurationMs，兩邊不會對不上。
 /** 結算面板出現後，等多久沒人按確認也自動開下一局 */
@@ -24,11 +25,13 @@ export const SETTLE_WAIT_MS = 30_000;
  *   ROW_MS 一墩合計＝4×PLAY_MS＋ROW_WAIT_MS＝6.0（平手的兩家也各佔一格，照順序一家一家出）；
  *   SPECIAL_MS 每個大牌（衝三、中尾墩鐵支／同花順／五龍）另外多佔 0.3（特效和下一家出牌重疊，多出的留給中央顯示牌型名）；
  *   GUN_MS 每一槍 1.5；HOME_RUN_MS 全壘打 3.2；SETTLE_PAUSE_MS 結算面板出現前的停頓 1.2。
+ *   LEAD_MS 動畫起點排在決定亮牌之後 1.2 秒（老柯 2026-11-19，老闆回報「開始比牌只有 0.幾秒」）：存檔、廣播、瀏覽器收到再讀狀態，
+ *     正式站實測要 0.5～1 秒；起點不往後排，這段會吃掉「開始比牌」大字（0.9 秒）和開頭音效。四家照樣同一個起點
  *   一般局＝1.7＋3×6.0＋1.2＝20.9 秒；整局＝20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打。
  */
 export const REVEAL_TIMING = {
   START_MS: 1700, PLAY_MS: 1500, ROW_WAIT_MS: 0, ROW_MS: 4 * 1500 + 0,
-  SPECIAL_MS: 300, GUN_MS: 1500, HOME_RUN_MS: 3200, SETTLE_PAUSE_MS: 1200,
+  SPECIAL_MS: 300, GUN_MS: 1500, HOME_RUN_MS: 3200, SETTLE_PAUSE_MS: 1200, LEAD_MS: 1200,
 } as const;
 /** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個大牌（衝三、中尾墩鐵支／同花順／五龍）＋每一槍＋全壘打＋停頓 */
 export function revealDurationMs(result: RoundResult): number {
@@ -38,22 +41,22 @@ export function revealDurationMs(result: RoundResult): number {
   return t.START_MS + 3 * t.ROW_MS + specials * t.SPECIAL_MS + guns * t.GUN_MS + (result.homeRun !== null ? t.HOME_RUN_MS : 0) + t.SETTLE_PAUSE_MS;
 }
 /** 亮牌到自動開下一局最長要多久（四家三墩都是特效牌型、六槍、全壘打，再加 30 秒）；測試推進時間用 */
-export const NEXT_HAND_MAX_MS = REVEAL_TIMING.START_MS + 3 * REVEAL_TIMING.ROW_MS + 12 * REVEAL_TIMING.SPECIAL_MS + 6 * REVEAL_TIMING.GUN_MS
+export const NEXT_HAND_MAX_MS = REVEAL_TIMING.LEAD_MS + REVEAL_TIMING.START_MS + 3 * REVEAL_TIMING.ROW_MS + 12 * REVEAL_TIMING.SPECIAL_MS + 6 * REVEAL_TIMING.GUN_MS
   + REVEAL_TIMING.HOME_RUN_MS + REVEAL_TIMING.SETTLE_PAUSE_MS + SETTLE_WAIT_MS;
 
 // ---- 每局統計（阿哲 2026-11-18：打槍、全壘打等改由後端每局記錄，前端不再自己累計）----
 /** 一家這一局的明細（v5 本局結算的左欄）：墩分＋各特殊加分＋打槍分＋全壘打分＝total（這局總分） */
 export interface HandStat {
-  rows: number;                                  // 墩分：一般牌型的道兩兩比，贏 +1、輸 −1（特殊牌型那一道不算在這裡，算在 bonuses；甲案 2026-11-19）
+  rows: number;                                  // 墩分：一般牌型的道兩兩比，贏 +1、輸 −1（甲案：特殊牌型那一道不算在這裡，算在 bonuses；v4：一道的輸贏不算分，永遠 0）
   bonuses: { name: string; points: number }[];   // 特殊加分：衝三、中墩鐵支、尾墩五龍…；自己拿到的正、付給別人的負（同名合併）
   guns: number; gunned: number; gunPoints: number;  // 打槍幾家、被幾家打槍、打槍的分數
   homeRun: boolean; homeRunned: boolean; homeRunPoints: number; // 全壘打、被全壘打、全壘打的分數
   total: number;
 }
 const ROW_LABEL: Record<Row, string> = { front: "頭墩", middle: "中墩", back: "尾墩" };
-const bonusName = (row: Row, cat: number) => (row === "front" ? "衝三" : ROW_LABEL[row] + CAT_NAME[cat]);
+const bonusName = (row: Row, cat: number) => (row === "front" ? (cat === CAT.LUCKY_THREE ? "彩金衝三" : "衝三") : ROW_LABEL[row] + CAT_NAME[cat]);
 /** 這局每家的明細（依座位） */
-export function handStats(result: RoundResult, rule: ScoreRule = "jia"): HandStat[] {
+export function handStats(result: RoundResult, rule: ScoreRule = "v4"): HandStat[] {
   return [0, 1, 2, 3].map((seat) => {
     let rows = 0;
     const bonus = new Map<string, number>();
@@ -62,8 +65,8 @@ export function handStats(result: RoundResult, rule: ScoreRule = "jia"): HandSta
       for (const row of ROWS) {
         const w = p.rows[row].winner;
         if (w === null) continue;
-        // 甲案：墩分只算一般墩，特殊牌型那一道整個算在下面那一行；舊規則（v1）：每一道的 ±1 都算墩分，特殊牌型另列加分
-        if (rule === "v1" || p.rows[row].bonus === 0) rows += w === seat ? 1 : -1;
+        // 甲案：墩分只算一般墩，特殊牌型那一道整個算在下面那一行；舊規則（v1）：每一道的 ±1 都算墩分，特殊牌型另列加分；v4：沒有墩分
+        if (rule === "v1" || (rule === "jia" && p.rows[row].bonus === 0)) rows += w === seat ? 1 : -1;
         if (p.rows[row].bonus > 0) {
           const name = bonusName(row, result.values[w][row].cat);
           bonus.set(name, (bonus.get(name) ?? 0) + (w === seat ? p.rows[row].bonus : -p.rows[row].bonus));
@@ -75,7 +78,8 @@ export function handStats(result: RoundResult, rule: ScoreRule = "jia"): HandSta
     const homeRun = result.homeRun === seat, homeRunned = result.homeRun !== null && !homeRun;
     const bonuses = [...bonus].filter(([, v]) => v !== 0).map(([name, points]) => ({ name, points }));
     const gunPoints = (guns - gunned) * SCORING.GUN_PENALTY;
-    const homeRunPoints = homeRun ? 3 * SCORING.HOME_RUN_PENALTY : homeRunned ? -SCORING.HOME_RUN_PENALTY : 0;
+    const pen = homeRunPenaltyOf(rule);
+    const homeRunPoints = homeRun ? 3 * pen : homeRunned ? -pen : 0;
     return { rows, bonuses, guns, gunned, gunPoints, homeRun, homeRunned, homeRunPoints, total: result.totals[seat] };
   });
 }
@@ -160,7 +164,7 @@ export function startHand(s: ThirteenGameState, now: number): void {
   s.startedAt ??= new Date(now).toISOString();
   s.arrangeDeadline = now + s.settings.arrangeSec * 1000;
   s.rest = rest;
-  for (const p of s.players) { p.hand = hands[p.seat]; p.arrangement = null; p.autoArranged = false; }
+  for (const p of s.players) { p.hand = sortCards(hands[p.seat]); p.arrangement = null; p.autoArranged = false; } // 手牌照 A、2…K 排（老闆 2026-11-19）
   s.nextReady = [];
   s.nextHandAt = null;
   s.revealedAt = null;
@@ -183,7 +187,7 @@ export function submit(s: ThirteenGameState, seat: number, ids: unknown, now: nu
   if (p.arrangement) return fail("already_submitted");
   if (s.phase !== "arranging") return fail("not_arranging");
   if (s.arrangeDeadline === null || now >= s.arrangeDeadline) return fail("time_up");
-  const v = validateSubmission(p.hand, ids);
+  const v = validateSubmission(p.hand, ids, handRuleFor(s)); // 倒水照這房的牌型規則（v4 含這一局的彩金牌）
   if (!v.ok) return v;
   p.arrangement = v.arrangement;
   return { ok: true };
@@ -193,14 +197,20 @@ export function submit(s: ThirteenGameState, seat: number, ids: unknown, now: nu
 export function autoArrangeLate(s: ThirteenGameState, now: number): number[] {
   if (s.phase !== "arranging" || s.arrangeDeadline === null || now < s.arrangeDeadline) return [];
   const seats: number[] = [];
-  for (const p of s.players) if (!p.arrangement) { p.arrangement = autoArrange(p.hand); p.autoArranged = true; seats.push(p.seat); }
+  const rule = handRuleFor(s);
+  for (const p of s.players) if (!p.arrangement) { p.arrangement = autoArrange(p.hand, rule); p.autoArranged = true; seats.push(p.seat); }
   return seats;
 }
 
 /** 這房的底分（老闆 2026-11-19）：上線前開的舊房設定裡沒有 baseScore，一律當 1（分數和改之前一樣） */
 export const baseScoreOf = (settings: ThirteenSettings): number => settings.baseScore ?? 1;
 /** 這房的計分規則（審伯 2026-11-19 必修）：開房時記了 scoreRule "jia" 才是甲案；上線前開的房沒有這個欄位，整場照舊規則 v1 */
-export const scoreRuleOf = (settings: ThirteenSettings): ScoreRule => (settings.scoreRule === "jia" ? "jia" : "v1");
+export const scoreRuleOf = (settings: ThirteenSettings): ScoreRule =>
+  settings.scoreRule === "v4" ? "v4" : settings.scoreRule === "jia" ? "jia" : "v1"; // v4：2026-11-19 定案後開的房
+/** 這一局的彩金牌（v4 的房：65 張發完剩下的那 1 張，開局就公開）；舊規則房沒有彩金牌（剩下的那張照舊不給）＝null */
+export const luckyCardOf = (s: ThirteenGameState): Card | null => (scoreRuleOf(s.settings) === "v4" ? s.rest?.[0] ?? null : null);
+/** 這一局的牌型判斷規則（v4 含彩金點數） */
+export const handRuleFor = (s: ThirteenGameState): HandRule => handRuleOf(scoreRuleOf(s.settings), luckyCardOf(s)?.rank ?? null);
 /** 一局四家的分數＝墩數 × 底分；更早存的局沒有 scores 欄位就照當時的底分補算 */
 export const handScores = (h: ThirteenHandResult, settings: ThirteenSettings): number[] =>
   h.scores ?? h.result.totals.map((x) => x * baseScoreOf(settings));
@@ -209,7 +219,7 @@ export const handScores = (h: ThirteenHandResult, settings: ThirteenSettings): n
  * 每墩四家的分數（中央看板每墩加分用，老馬 2026-11-19）：該墩六組兩兩比，贏的拿、輸的付這一道的墩數（一般 1、特殊牌型照表，甲案），再 × 底分。
  * 三墩加總＋打槍分＋全壘打分（都 × 底分）＝這局的 scores
  */
-export function rowDeltas(result: RoundResult, base: number, rule: ScoreRule = "jia"): Record<Row, number[]> {
+export function rowDeltas(result: RoundResult, base: number, rule: ScoreRule = "v4"): Record<Row, number[]> {
   const out = { front: [0, 0, 0, 0], middle: [0, 0, 0, 0], back: [0, 0, 0, 0] } as Record<Row, number[]>;
   for (const p of result.pairs) for (const row of ROWS) {
     const { winner, bonus } = p.rows[row];
@@ -242,14 +252,14 @@ export function scoredStat(st: HandStat, base: number): ScoredStat {
 export function revealIfReady(s: ThirteenGameState, now: number): boolean {
   if (s.phase !== "arranging" || s.players.some((p) => !p.arrangement)) return false;
   const rule = scoreRuleOf(s.settings);
-  const result = scoreRound(s.players.map((p) => p.arrangement!), rule);
+  const result = scoreRound(s.players.map((p) => p.arrangement!), rule, luckyCardOf(s)?.rank ?? null);
   const scores = result.totals.map((x) => x * baseScoreOf(s.settings));
   s.hands.push({ handNo: s.handNo, result, stats: handStats(result, rule), scores });
   s.playerScores = s.playerScores.map((x, i) => x + scores[i]);
   s.phase = "revealed";
   s.nextReady = [];
-  s.revealedAt = now;
-  s.settleAt = now + revealDurationMs(result);
+  s.revealedAt = now + REVEAL_TIMING.LEAD_MS; // 動畫起點往後排，瀏覽器收到時「開始比牌」還沒開始（見 REVEAL_TIMING.LEAD_MS）
+  s.settleAt = s.revealedAt + revealDurationMs(result);
   s.nextHandAt = s.settleAt + SETTLE_WAIT_MS;
   return true;
 }
@@ -274,7 +284,7 @@ export function advance(s: ThirteenGameState, now: number): { autoSeats: number[
  * 和亮牌、結算面板出現、自動開下一局的伺服器時間
  */
 export function revealPayload(s: ThirteenGameState): {
-  handNo: number; order: Record<Row, number[][]>; arrangements: Arrangement[]; autoArranged: number[];
+  handNo: number; order: Record<Row, number[][]>; arrangements: Arrangement[]; unusedCards: Card[][]; luckyCard: Card | null; autoArranged: number[];
   result: RoundResult; stats: (HandStat & { gunEach: number; scored: ScoredStat })[]; scoreRule: ScoreRule; baseScore: number; scores: number[];
   rowDeltas: Record<Row, number[]>; playerScores: number[]; over: boolean;
   revealedAt: number | null; settleAt: number | null; nextHandAt: number | null;
@@ -285,8 +295,13 @@ export function revealPayload(s: ThirteenGameState): {
   const rule = scoreRuleOf(s.settings);
   return {
     handNo: s.handNo,
-    order: revealOrder(arrangements),
-    arrangements,
+    order: revealOrder(arrangements, rule, luckyCardOf(s)?.rank ?? null),
+    // 每墩的牌照 A、2…K 排（老闆 2026-11-19；只是顯示順序，比大小不受影響）
+    arrangements: arrangements.map((a) => ({ front: sortCards(a.front), middle: sortCards(a.middle), back: sortCards(a.back) })),
+    // 每家沒用到的牌（加一色每人發 16 張、排 13 張，剩 3 張；老闆 2026-11-19 要在結算畫面列出）。
+    // 只放在亮牌內容裡：亮牌前任何 API 都拿不到別人的牌
+    unusedCards: s.players.map((p) => { const used = new Set([...p.arrangement!.front, ...p.arrangement!.middle, ...p.arrangement!.back].map((c) => c.id)); return sortCards(p.hand.filter((c) => !used.has(c.id))); }),
+    luckyCard: luckyCardOf(s),
     autoArranged: s.players.filter((p) => p.autoArranged).map((p) => p.seat),
     result: last.result,
     // stats 是墩數（不乘，給出牌動畫）；gunEach＝每一槍的分數（GUN_PENALTY × 底分）；scored＝左欄明細的乘好版本
@@ -313,6 +328,7 @@ export function viewFor(s: ThirteenGameState, playerId: string | null, now: numb
     settings: s.settings,
     baseScore: baseScoreOf(s.settings),
     scoreRule: scoreRuleOf(s.settings),
+    luckyCard: s.phase === "waiting" ? null : luckyCardOf(s), // v4：開局就公開；舊規則房 null
     serverNow: now,
     arrangeDeadline: s.arrangeDeadline,
     nextHandAt: s.nextHandAt ?? null,

@@ -98,3 +98,11 @@
   display: flex; gap: 14px; box-sizing: border-box;
   padding: 8px max(14px, env(safe-area-inset-right)) max(var(--pad-b), env(safe-area-inset-bottom)) max(var(--pad-l), env(safe-area-inset-left)); }
 .th-arr .th-ghost { transform: translate(-50%, -60%) scale(var(--th-s2, 1)); }
+/* 彩金牌（小宜 v15 §2）：三墩左邊，左上角 (84, 66)；「彩金」小標高 16、金底深字 10px；牌 46×64、金卡外一圈光 */
+.th-arr-lucky { position: absolute; left: 84px; top: 66px; width: 46px; display: flex; flex-direction: column; align-items: center; gap: 3px; z-index: 2; pointer-events: none; }
+.th-arr-lucky b { height: 16px; padding: 0 8px; border-radius: 999px; font-size: 10px; font-weight: 800; line-height: 16px; color: #3a2606; background: linear-gradient(135deg, #ffe9a0, #e2b34a); white-space: nowrap; }
+.th-arr-lucky img { width: 46px; height: 64px; max-width: none; border-radius: 4px; box-shadow: 0 0 0 1px rgba(255,236,160,.9), 0 0 12px rgba(255,214,110,.75); }
+/* 金卡（點數和彩金牌一樣）：外面一圈光，原本的陰影保留（小宜 v15 §1） */
+.th-card-row.is-gold { box-shadow: 0 0 0 1px rgba(255,236,160,.85), 0 0 8px rgba(255,214,110,.55), 0 1px 4px rgba(0, 0, 0, .4); }
+.th-card-hand.is-gold { box-shadow: 0 0 0 1px rgba(255,236,160,.85), 0 0 8px rgba(255,214,110,.55), -2px 1px 4px rgba(0, 0, 0, .35); }
+.th-ghost img.is-gold { box-shadow: 0 0 0 1px rgba(255,236,160,.85), 0 0 8px rgba(255,214,110,.55), 0 2px 4px rgba(0,0,0,.35); }

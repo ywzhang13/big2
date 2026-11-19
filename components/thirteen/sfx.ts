@@ -4,7 +4,7 @@
 //   音量、靜音是三款共用的設定（≡ →「設定」→ 聲音：互動音效），播放走 Web Audio（thAudio.ts）
 import { useEffect, useRef } from "react";
 import { CAT, type HandValue, type Row } from "@/lib/thirteen";
-import { MS, scoreWindows, type Step } from "./revealTimeline";
+import { MS, scoreWindows, type PatternFx, type Step } from "./revealTimeline";
 import { getPrefs, normalizePrefs, onPrefsChange, setPrefs } from "@/lib/mahjong/prefs";
 import { mjFetch } from "@/lib/mahjong/clientAuth";
 import { gameVibrate } from "@/components/gamePrefs/vibrate";
@@ -129,11 +129,17 @@ function race<T>(p: Promise<T>, deadline: number, signal?: AbortSignal): Promise
   });
 }
 
-/** 牌型配音（老闆 2026-11-18 用 ElevenLabs 錄的 13 段，來源見 public/tiles/thirteen/voice/SOURCE.txt）：
- *  檔名照計分程式的 CAT（同花一對、同花兩對照實唸）；頭墩三條唸「衝三」 */
-export const voiceSrc = (row: Row, v: HandValue) =>
-  `/tiles/thirteen/voice/th-voice-${row === "front" && v.cat === CAT.THREE_KIND ? "chongsan" : `cat${v.cat}`}.v1.mp3`;
+/** 牌型配音（老闆 2026-11-18 用 ElevenLabs 錄的 13 段＋2026-11-19 彩金 3 段，來源見 public/tiles/thirteen/voice/SOURCE.txt）：
+ *  檔名照計分程式的 CAT（同花一對、同花兩對照實唸）；頭墩三條唸「衝三」、彩金三條唸「彩金衝三」。
+ *  v4：黑桃同花順唸「同花順」（老闆：沿用）；中尾墩的彩金三條沒有錄，唸「三條」 */
+const VOICE_ALIAS: Partial<Record<number, number>> = { [CAT.SPADE_STRAIGHT_FLUSH]: CAT.STRAIGHT_FLUSH, [CAT.LUCKY_THREE]: CAT.THREE_KIND };
+export const voiceSrc = (row: Row, v: HandValue) => {
+  const name = row === "front" && v.cat === CAT.THREE_KIND ? "chongsan" : row === "front" && v.cat === CAT.LUCKY_THREE ? "luckychongsan" : `cat${VOICE_ALIAS[v.cat] ?? v.cat}`;
+  return `/tiles/thirteen/voice/th-voice-${name}.v1.mp3`;
+};
 export type SfxEvent = { t: number; k: SfxKey | "voice"; volume?: number; src?: string };
+/** 大字特效對應的大牌音效：彩金三種沿用對應一般牌型的音效（老闆沒有另外給彩金音效；彩金葫蘆用衝三那個） */
+const FX_SFX: Record<PatternFx, SfxKey> = { chongsan: "chongsan", tiezhi: "tiezhi", tonghuashun: "tonghuashun", wulong: "wulong", jpchongsan: "chongsan", jphulu: "chongsan", jptiezhi: "tiezhi" };
 
 /** 一段時間軸裡每個音效的時間點（毫秒，從開始比牌算）；bigId＝選了哪個大牌音效：衝三、鐵支、同花順、五龍都播那個檔（src）。
  *  values＝每家每墩的牌型（伺服器的 result.values）：有給就在每一墩牌落定時唸那一家的牌型；大牌和大字同時開始唸 */
@@ -143,11 +149,11 @@ export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = 
     if (s.kind === "start") out.push({ t: s.t0, k: "start" });
     // 牌落定；衝三、鐵支、同花順、五龍那一墩由大牌音效取代出牌聲（老闆 2026-11-18：不用兩個都有）
     else if (s.kind === "flip") {
-      if (!s.big) out.push({ t: s.t0 + MS.flip, k: "play" });
-      if (values && !s.big) for (const seat of s.seats) out.push({ t: s.t0 + MS.flip, k: "voice", src: voiceSrc(s.row, values[seat][s.row]) });
+      if (!s.fx) out.push({ t: s.t0 + MS.flip, k: "play" });                       // 沒有大字的大牌（彩金葫蘆）照一般牌：落定出牌聲＋配音
+      if (values && !s.fx) for (const seat of s.seats) out.push({ t: s.t0 + MS.flip, k: "voice", src: voiceSrc(s.row, values[seat][s.row]) });
     }
     else if (s.kind === "fx") {                                                     // 大字出現
-      out.push({ t: s.t0, k: s.fx });
+      out.push({ t: s.t0, k: FX_SFX[s.fx] });
       if (values) out.push({ t: s.t0, k: "voice", src: voiceSrc(s.row, values[s.seat][s.row]) });
     }
     else if (s.kind === "gun") { out.push({ t: s.t0 + 180, k: "gunshot" }); out.push({ t: s.t0 + 260, k: "hit", volume: s.to === mySeat ? 1 : 0.6 }); } // 被打的人自己聽比較大聲

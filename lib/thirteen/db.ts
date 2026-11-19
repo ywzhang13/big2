@@ -32,7 +32,7 @@ export const BASE_SCORE_MESSAGE = "底分要是 10～100000 的整數";
 export interface ThirteenSettings {
   arrangeSec: ArrangeSec; // 理牌時間
   totalHands: number;     // 這場打幾局
-  scoreRule?: "jia";      // 計分規則：2026-11-19 起開房記 "jia"（甲案）；沒有＝上線前開的房，整場照舊規則（見 flow.ts scoreRuleOf）
+  scoreRule?: "jia" | "v4"; // 計分規則：2026-11-19 定案後開房記 "v4"；"jia"＝甲案時期開的房；沒有＝更早的房（v1）。整場不變（見 flow.ts scoreRuleOf）
   baseScore?: BaseScore;  // 底分（2026-11-19 起開房必有；更早的房沒有＝1，見 flow.ts baseScoreOf）
 }
 
@@ -64,7 +64,7 @@ export interface ThirteenGameState {
   startedAt: string | null;         // 這場開局時間（寫紀錄用）
   arrangeDeadline: number | null;   // 這局理牌截止時間（伺服器時間，毫秒）；過了就對還沒送出的人自動排
   players: ThirteenPlayerState[];   // 開局後才有，依座位排
-  rest: Card[];                     // 沒發出去的 13 張：只存伺服器，不給前端
+  rest: Card[];                     // 65 張發完剩下的 1 張：v4 的房是這一局的彩金牌（公開，見 flow.ts luckyCardOf）；舊規則房只存伺服器，不給前端
   hands: ThirteenHandResult[];      // 每局結果
   playerScores: number[];           // 多局累計（依座位）
   nextReady?: string[];             // 這局亮牌後按了「下一局」的玩家 id

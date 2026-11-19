@@ -1,9 +1,10 @@
 // 十三支理牌畫面預覽（假資料，不接 API、不碰資料庫）。只在本機開發或設了 THIRTEEN_PREVIEW=1 的預覽站開得到（見 ../gate.ts）。
 //   /thirteen/preview/arrange?seed=7&secs=60   seed 換一手牌、secs 是理牌秒數
 //   /thirteen/preview/arrange?hand=SA1,SA2,...  直接指定 13 張（id 照 lib/thirteen：花色＋點數字母＋第幾副）
+//   彩金牌（v4）：照伺服器，發完剩下的那張；&lucky=9S 直接指定（只看點數變金卡、帶進牌型判斷）
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { deal } from "@/lib/thirteen";
+import { deal, parseCards } from "@/lib/thirteen";
 import { parseHandParam } from "./hand";
 import { previewAllowed } from "../gate";
 import ThArrangePreview from "@/components/thirteen/ThArrangePreview";
@@ -29,6 +30,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   if (!previewAllowed()) notFound(); // 正式環境沒開預覽開關：一律 404，不發牌、不給預覽內容
   const one = (k: string) => (Array.isArray(q[k]) ? q[k]![0] : (q[k] as string | undefined));
   const secs = Math.min(600, Math.max(5, Number(one("secs")) || 60));
-  const cards = parseHandParam(one("hand")) ?? deal(seeded(Number(one("seed")) || 1)).hands[0];
-  return <ThArrangePreview cards={cards} secs={secs} />;
+  const dealt = deal(seeded(Number(one("seed")) || 1));
+  const cards = parseHandParam(one("hand")) ?? dealt.hands[0];
+  let lucky = dealt.rest[0] ?? null;
+  try { if (one("lucky")) lucky = parseCards(one("lucky")!)[0]; } catch { /* 看不懂就用發完剩下的那張 */ }
+  return <ThArrangePreview cards={cards} secs={secs} lucky={lucky} />;
 }

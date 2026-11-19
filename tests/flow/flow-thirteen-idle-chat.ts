@@ -26,6 +26,7 @@ import { privateChannel, publicChannel } from "../../lib/thirteen/server";
 import { spectatorChannelName } from "../../lib/mahjong/access";
 import type { Card } from "../../lib/thirteen/cards";
 import { autoArrange } from "../../lib/thirteen/arrange";
+import { ruleOf } from "../support/thirteen-rule";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -63,7 +64,7 @@ async function newMatch(seats: string[] = PIDS, totalHands = 16) {
 async function playHand(roomId: string, active: string[]) {
   for (const p of active) {
     const hand = (await state(roomId, p)).body.me.hand as Card[];
-    const a = autoArrange(hand);
+    const a = autoArrange(hand, await ruleOf(db, roomId));
     await post(submitRoute, { roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p);
   }
   NOW += 30_000; await post(tickRoute, { roomId, playerId: active[0] }, active[0]);       // 截止：沒送出的人代排、亮牌
@@ -135,7 +136,7 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
 {
   const { POST: nextRoute } = await import("../../app/api/thirteen/next-game/route");
   const submitMine = async (roomId: string, p: string) => {
-    const a = autoArrange((await state(roomId, p)).body.me.hand as Card[]);
+    const a = autoArrange((await state(roomId, p)).body.me.hand as Card[], await ruleOf(db, roomId));
     return post(submitRoute, { roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p);
   };
   /** 開一場、讓 3 號斷線超過 3 分鐘；0 號發起解散，閒置的 3 號按不同意（不算）、1 號同意 */
@@ -202,7 +203,7 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
   await post(leaveReqRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   const no = await post(leaveVoteRoute, { roomId: m.roomId, playerId: "p3", approve: false }, "p3");
   const yes3 = await post(leaveVoteRoute, { roomId: m.roomId, playerId: "p3", approve: true }, "p3"); // 改投同意（還在閒置）
-  const a = autoArrange((await state(m.roomId, "p3")).body.me.hand as Card[]);
+  const a = autoArrange((await state(m.roomId, "p3")).body.me.hand as Card[], await ruleOf(db, m.roomId));
   const back = await post(submitRoute, { roomId: m.roomId, playerId: "p3", front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, "p3"); // 恢復投票權
   const mid = (await state(m.roomId, "p0")).body.leaveRequest;
   const v1 = await post(leaveVoteRoute, { roomId: m.roomId, playerId: "p1", approve: true }, "p1");
@@ -224,7 +225,7 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
   // 剩下不夠打完一整局：0～2 號照樣在這局送出（保持有牌局動作，只有 3 號閒置），再用 tick 一小段一小段推到 3 號滿 3 分鐘前 1 毫秒，
   // 讓理牌截止、開下一局都照時處理。不然下一步直接跳過去，讀狀態那次會先處理一個早就過了的理牌截止（v8-B 出牌放慢後每局變長才會碰到）
   for (const p of ["p0", "p1", "p2"]) {
-    const a = autoArrange((await state(m.roomId, p)).body.me.hand as Card[]);
+    const a = autoArrange((await state(m.roomId, p)).body.me.hand as Card[], await ruleOf(db, m.roomId));
     await post(submitRoute, { roomId: m.roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p);
   }
   while (NOW < t + IDLE_VOTE_MS - 1) { NOW = Math.min(NOW + 10_000, t + IDLE_VOTE_MS - 1); await post(tickRoute, { roomId: m.roomId, playerId: "p0" }, "p0"); }
@@ -248,7 +249,7 @@ const recOf = async (id: string) => (await db.query<{ end_reason: string }>(`sel
   const marks: string[] = [];
   while (NOW - t <= IDLE_VOTE_MS) {
     const v = (await state(m.roomId, "p0")).body;
-    const sub = async (p: string) => { const a = autoArrange((await state(m.roomId, p)).body.me.hand as Card[]); return post(submitRoute, { roomId: m.roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p); };
+    const sub = async (p: string) => { const a = autoArrange((await state(m.roomId, p)).body.me.hand as Card[], await ruleOf(db, m.roomId)); return post(submitRoute, { roomId: m.roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p); };
     for (const p of ["p0", "p1"]) await sub(p);
     NOW = v.arrangeDeadline - 1; const s2 = await sub("p2");   // 截止前 1 毫秒
     NOW = v.arrangeDeadline; const s3 = await sub("p3");       // 剛好截止

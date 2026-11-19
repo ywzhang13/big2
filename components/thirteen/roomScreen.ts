@@ -105,6 +105,17 @@ export function skewFromDateHeader(date: string | null, sentAt: number, recvAt: 
 /** 關房（410）時用哪個時差：分頁記過的優先（毫秒級），沒有就用 Date 標頭，都沒有維持原值 */
 export const skewOnClosed = (stored: number | null, fromHeader: number | null, current: number) => stored ?? fromHeader ?? current;
 /** 亮牌演出照伺服器時間：起點＝revealedAt 換成本機時間；過了 settleAt 就直接顯示結算 */
+/** 這一刻要播哪一局的亮牌（審查 2026-11-19：老馬實打量到下一局亮牌進來時，上一局的本局結算面板會閃一下）：
+ *  以前在 useEffect 裡換局，畫面先用舊的那一局畫一次（舊局 settleAt 早就過了 → 結算面板）才換；改成畫面算的時候就換。
+ *  rv＝伺服器這一刻的亮牌（410 的末局紀錄優先）；同一局只更新「是不是最後一局」，換到新的一局才換起點。沒有亮牌就照舊（回 prev） */
+export type RevealShow<R> = { key: string; rv: R; startAt: number; final: boolean };
+export function syncShow<R extends { handNo: number; over: boolean }>(prev: RevealShow<R> | null, roomId: string | null, rv: R | null, closedFinal: boolean, now: number): RevealShow<R> | null {
+  if (!roomId || !rv) return prev;
+  const key = `${roomId}-${rv.handNo}`, final = rv.over || closedFinal;
+  if (prev?.key === key) return prev.final || !final ? prev : { ...prev, final: true };
+  return { key, rv, startAt: now, final }; // startAt：備用，只有沒有 revealedAt 的舊紀錄才用
+}
+
 export function revealClock(rv: { revealedAt: number | null; settleAt: number | null }, skew: number, now: number, fallbackStart: number) {
   const startAt = rv.revealedAt !== null ? rv.revealedAt - skew : fallbackStart;
   return { startAt, elapsed: now - startAt, pastSettle: rv.settleAt !== null && now + skew >= rv.settleAt };

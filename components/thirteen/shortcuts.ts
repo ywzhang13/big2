@@ -1,7 +1,7 @@
 // 理牌的牌型快捷鈕：從還在手牌裡的牌找出某種牌型的所有組合，由大到小排好給按鈕輪選。
 // 牌型判斷和大小比較用計分引擎（lib/thirteen 的 evalFive／evalThree／compareValue），這裡只負責列舉和去重。
 // 唯一例外是「對子」：兩張同點數（見下面 pair 那段的理由）。
-import { CAT, compareValue, evalFive, evalThree, type Card, type HandValue } from "@/lib/thirteen";
+import { CAT, compareValue, evalFive, evalThree, type Card, type HandRule, type HandValue } from "@/lib/thirteen";
 
 export type ShortcutKind = "straightFlush" | "fourKind" | "fullHouse" | "flush" | "straight" | "threeKind" | "pair";
 
@@ -15,11 +15,11 @@ export const SHORTCUTS: { kind: ShortcutKind; label: string }[] = [
   { kind: "pair", label: "對子" },
 ];
 
-/** 五張牌型對應的引擎等級。同花包含同花一對、同花兩對（都是五張同花色） */
+/** 五張牌型對應的引擎等級。同花包含同花一對、同花兩對（都是五張同花色）；v4 的黑桃同花順、彩金鐵支、彩金葫蘆歸在同一顆鈕 */
 const FIVE_CATS: Partial<Record<ShortcutKind, number[]>> = {
-  straightFlush: [CAT.STRAIGHT_FLUSH],
-  fourKind: [CAT.FOUR_KIND],
-  fullHouse: [CAT.FULL_HOUSE],
+  straightFlush: [CAT.STRAIGHT_FLUSH, CAT.SPADE_STRAIGHT_FLUSH],
+  fourKind: [CAT.FOUR_KIND, CAT.LUCKY_FOUR],
+  fullHouse: [CAT.FULL_HOUSE, CAT.LUCKY_FULL_HOUSE],
   flush: [CAT.FLUSH, CAT.FLUSH_PAIR, CAT.FLUSH_TWO_PAIR],
   straight: [CAT.STRAIGHT],
 };
@@ -38,24 +38,24 @@ function* subsets(cards: Card[], k: number, start = 0, pick: Card[] = []): Gener
  * 鐵支看四條的點數、留踢腳最小的那組（不浪費大牌）；葫蘆看三條＋對子點數；其他看整組的比較序。
  */
 function coreKey(v: HandValue): string {
-  if (v.cat === CAT.FOUR_KIND) return `${v.cat}:${v.keys[0]}`;
-  if (v.cat === CAT.FULL_HOUSE) return `${v.cat}:${v.keys[0]}:${v.keys[1]}`;
+  if (v.cat === CAT.FOUR_KIND || v.cat === CAT.LUCKY_FOUR) return `${v.cat}:${v.keys[0]}`;
+  if (v.cat === CAT.FULL_HOUSE || v.cat === CAT.LUCKY_FULL_HOUSE) return `${v.cat}:${v.keys[0]}:${v.keys[1]}`;
   return `${v.cat}:${v.keys.join(",")}`;
 }
 
-/** 回傳這種牌型的所有組合（每組是牌的陣列），最大的在前。湊不出來回空陣列 */
-export function findCombos(hand: Card[], kind: ShortcutKind): Card[][] {
+/** 回傳這種牌型的所有組合（每組是牌的陣列），最大的在前。湊不出來回空陣列；rule＝這一局的牌型規則（v4 帶彩金點數，伺服器同一套） */
+export function findCombos(hand: Card[], kind: ShortcutKind, rule?: HandRule): Card[][] {
   const found: { cards: Card[]; value: HandValue }[] = [];
   const five = FIVE_CATS[kind];
   if (five) {
     for (const s of subsets(hand, 5)) {
-      const value = evalFive(s);
+      const value = evalFive(s, rule);
       if (five.includes(value.cat)) found.push({ cards: s, value });
     }
   } else if (kind === "threeKind") {
     for (const s of subsets(hand, 3)) {
-      const value = evalThree(s);
-      if (value.cat === CAT.THREE_KIND) found.push({ cards: s, value });
+      const value = evalThree(s, rule);
+      if (value.cat === CAT.THREE_KIND || value.cat === CAT.LUCKY_THREE) found.push({ cards: s, value });
     }
   } else {
     // 對子＝兩張同點數（阿哲 2026-11-18 拍板保留的例外）：快捷鈕只是「幫忙選牌」，不決定牌型。
@@ -70,7 +70,7 @@ export function findCombos(hand: Card[], kind: ShortcutKind): Card[][] {
   const byCore = new Map<string, Card[]>();
   for (const f of found) {
     const key = coreKey(f.value);
-    if (!byCore.has(key) || f.value.cat === CAT.FOUR_KIND) byCore.set(key, f.cards);
+    if (!byCore.has(key) || f.value.cat === CAT.FOUR_KIND || f.value.cat === CAT.LUCKY_FOUR) byCore.set(key, f.cards);
   }
   return [...byCore.values()];
 }

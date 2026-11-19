@@ -5,7 +5,7 @@
 // 登入沿用麻將（LINE／測試用遊客）；資料同步見 components/thirteen/useThirteenRoom.ts
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Arrangement } from "@/lib/thirteen";
+import { handRuleOf, type Arrangement } from "@/lib/thirteen";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 import { migrateOldSfxSwitch } from "@/components/thirteen/sfx";
@@ -21,7 +21,7 @@ import { ThFinalResult, type MatchStat } from "@/components/thirteen/ThResult";
 import type { ThReveal as Reveal } from "@/components/thirteen/revealTimeline";
 import ThWaiting from "@/components/thirteen/ThWaiting";
 import { applyFelt, loadFelt } from "@/components/thirteen/feltTheme";
-import { clearLastJoin, confirmView, finalSeen, loadLastJoin, markFinalSeen, revealClock, revealScreen, saveLastJoin, sendConfirm, type ConfirmState } from "@/components/thirteen/roomScreen";
+import { clearLastJoin, confirmView, finalSeen, loadLastJoin, markFinalSeen, revealClock, revealScreen, saveLastJoin, sendConfirm, syncShow, type ConfirmState, type RevealShow } from "@/components/thirteen/roomScreen";
 import { toServerArrangeSec } from "@/components/thirteen/arrangeTime";
 import { apiJson, useThirteenRoom, type ThGameView, type ThJoin } from "@/components/thirteen/useThirteenRoom";
 import "@/components/thirteen/thRoom.css";
@@ -176,7 +176,7 @@ function ThirteenScreens() {
   // ---- 亮牌與結算 ----
   // 起點＝伺服器的亮牌時間 revealedAt 換成本機時間（四家同步、重新整理接著播）；結算面板在 settleAt、確認倒數到 nextHandAt（老柯 4b25124）。
   // 整場最後一局：伺服器亮牌同時就關房，只拿得到 410 附的紀錄（finalHand，一樣有 revealedAt）
-  const [show, setShow] = useState<{ key: string; rv: Reveal; startAt: number; final: boolean } | null>(null);
+  const [showState, setShow] = useState<RevealShow<Reveal> | null>(null);
   const [confirmedKey, setConfirmedKey] = useState<string | null>(null); // 末局「看總結算」（本機）
   const [confirmSt, setConfirmSt] = useState<ConfirmState>(null);        // 一般局「確認」：照伺服器回應（審伯必修 1）
   const closedRec = room.closed?.record ?? null;
@@ -184,16 +184,14 @@ function ThirteenScreens() {
   const liveReveal = view && view.status !== "waiting" && view.phase === "revealed" ? view.reveal : null;
   const nextHandAt = view && view.status !== "waiting" ? view.nextHandAt ?? null : null;
   const roomId = join?.roomId ?? null;
+  // 換局在畫面算的時候就換（syncShow），不等 useEffect：不然新一局亮牌進來的第一個畫面還是上一局，上一局的結算面板會閃一下
+  const show = syncShow(showState, roomId, finalHand ?? liveReveal, !!finalHand, Date.now());
+  if (show !== showState) setShow(show);
+  // 總結算中重新整理：這場的總結算已經看過 → 直接回總結算，不重播末局亮牌（審伯必修 1）
+  const showKey = show?.key ?? null, showFinal = !!show?.final;
   useEffect(() => {
-    const rv = finalHand ?? liveReveal;
-    if (!roomId || !rv) return;
-    const key = `${roomId}-${rv.handNo}`;
-    const startAt = Date.now(); // 備用：沒有 revealedAt 的舊紀錄才用；有的話畫面每次照伺服器時差重算（revealClock）
-    // 換到新的一局亮牌才設一次起點（同一局只更新是不是最後一局）
-    setShow((prev) => prev?.key === key ? { ...prev, final: prev.final || rv.over || !!finalHand } : { key, rv, startAt, final: rv.over || !!finalHand });
-    // 總結算中重新整理：這場的總結算已經看過 → 直接回總結算，不重播末局亮牌（審伯必修 1）
-    if ((rv.over || finalHand) && finalSeen(tabStore(), roomId)) setConfirmedKey(key);
-  }, [roomId, finalHand, liveReveal]);
+    if (showKey && showFinal && roomId && finalSeen(tabStore(), roomId)) setConfirmedKey(showKey);
+  }, [showKey, showFinal, roomId]);
   /** 整場累計（伺服器）：關房後用 410 紀錄的，還在打用讀狀態的 */
   const matchStats: MatchStat[] | null = (closedRec?.stats ?? (view && view.status !== "waiting" ? view.stats : null)) ?? null;
 
@@ -239,7 +237,7 @@ function ThirteenScreens() {
         <div className="th-bg">
           <div className="th-felt" />
           <ThFinalResult players={names.map((playerName, seat) => ({ seat, playerName, totalScore: rv.playerScores[seat] ?? 0 }))}
-            mySeat={join.seat} hands={rv.handNo} stats={matchStats} onLobby={backToLobby} />
+            mySeat={join.seat} hands={rv.handNo} stats={matchStats} onLobby={backToLobby} baseScore={rv.baseScore ?? null} />
         </div>
       );
     }
@@ -270,7 +268,7 @@ function ThirteenScreens() {
       <div className="th-bg">
         <div className="th-felt" />
         <ThFinalResult players={closedRec.players} mySeat={join.seat} hands={closedRec.finalHand?.handNo ?? closedRec.handsPlayed ?? 0}
-          stats={matchStats} onLobby={backToLobby} />
+          stats={matchStats} onLobby={backToLobby} baseScore={closedRec.finalHand?.baseScore ?? null} />
       </div>
     );
   }
@@ -303,7 +301,8 @@ function ThirteenScreens() {
   if (view.phase === "arranging" && me && !me.arrangement && view.arrangeDeadline !== null) {
     return (
       <>
-        <ThArrange key={`${view.handNo}-${arrangeKey}`} cards={me.hand} deadline={view.arrangeDeadline - room.clockSkew - SUBMIT_EARLY_MS} onSubmit={onSubmit} />
+        <ThArrange key={`${view.handNo}-${arrangeKey}`} cards={me.hand} deadline={view.arrangeDeadline - room.clockSkew - SUBMIT_EARLY_MS} onSubmit={onSubmit}
+          rule={handRuleOf(view.scoreRule ?? "v1", view.luckyCard?.rank ?? null)} lucky={view.luckyCard ?? null} />
         {notice && <div className="th-toast" role="alert">{notice}</div>}
       </>
     );

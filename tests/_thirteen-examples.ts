@@ -6,9 +6,15 @@
 // 2026-11-19 甲案（老闆定案，老柯改）：特殊牌型那一道只算表上的墩數、不再加那一道基本的 1。
 //   有特殊牌型的範例 3、4、8、9、11、12、13 改成甲案分數，說明寫「改之前」的數字；沒有特殊牌型的範例分數不變。
 import { parseCards } from "../lib/thirteen/cards";
-import { checkArrangement, type Arrangement } from "../lib/thirteen/arrange";
-import { CAT, CAT_NAME, evalFive } from "../lib/thirteen/hand";
-import { scoreRound, revealOrder, SCORING } from "../lib/thirteen/score";
+import { checkArrangement as checkArrangementR, type Arrangement } from "../lib/thirteen/arrange";
+import { CAT, CAT_NAME, evalFive as evalFiveR, type HandRule } from "../lib/thirteen/hand";
+import { scoreRound as scoreRoundR, revealOrder as revealOrderR, SCORING, type ScoreRule } from "../lib/thirteen/score";
+import type { Card } from "../lib/thirteen/cards";
+// 2026-11-19 v4 上線後，函式沒指定規則＝v4；這支測試寫的是舊規則，這裡把預設釘回舊規則（v4 另有 _thirteen-rule-v4.ts）
+const checkArrangement = (a: Arrangement, r: HandRule = "legacy") => checkArrangementR(a, r);
+const evalFive = (c: Card[], r: HandRule = "legacy") => evalFiveR(c, r);
+const scoreRound = (a: Arrangement[], r: ScoreRule = "jia") => scoreRoundR(a, r);
+const revealOrder = (a: Arrangement[], r: ScoreRule = "jia") => revealOrderR(a, r);
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {

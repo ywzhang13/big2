@@ -14,7 +14,7 @@ const NAMES = ["老闆", "小明", "阿明", "小華"];
 export type LabFx = "start" | PatternFx | "gun" | "gun3" | "homerun";
 const FX_LIST: { key: LabFx; name: string }[] = [
   { key: "start", name: "開始比牌" }, { key: "chongsan", name: "衝三" }, { key: "tiezhi", name: "鐵支" }, { key: "tonghuashun", name: "同花順" },
-  { key: "wulong", name: "五龍" }, { key: "gun", name: "打槍" }, { key: "gun3", name: "被打三槍" }, { key: "homerun", name: "全壘打" },
+  { key: "wulong", name: "五龍" }, { key: "jpchongsan", name: "彩金衝三" }, { key: "jphulu", name: "彩金葫蘆" }, { key: "jptiezhi", name: "彩金鐵支" }, { key: "gun", name: "打槍" }, { key: "gun3", name: "被打三槍" }, { key: "homerun", name: "全壘打" },
 ];
 const SEATS = ["自己", "右家", "對家", "左家"]; // 自己坐 0 號：1 號在右、2 號對家、3 號在左（同 ThTable）
 const isFx = (v: unknown): v is LabFx => FX_LIST.some((f) => f.key === v);
@@ -26,7 +26,7 @@ export function labSteps(fx: LabFx, seat: number): Step[] {
   // 被三家打槍（小宜 v8-B §7）：選的那家是被打的人，另外三家一人一槍，三槍三孔；選「自己」看第一人稱大彈孔
   if (fx === "gun3") return [1, 2, 3].map((k, n) => ({ kind: "gun" as const, t0: n * MS.gun, dur: MS.gun, from: (seat + k) % 4, to: seat, n }));
   if (fx === "homerun") return [{ kind: "homerun", t0: 0, dur: MS.homerun, seat }];
-  return [{ kind: "fx", t0: 0, dur: MS.fx, row: fx === "chongsan" ? "front" : "middle", seat, fx }];
+  return [{ kind: "fx", t0: 0, dur: MS.fx, row: fx === "chongsan" || fx === "jpchongsan" ? "front" : "middle", seat, fx }];
 }
 
 export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: string | null; seat: number; felt: string | null; ui: boolean } }) {

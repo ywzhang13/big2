@@ -59,8 +59,10 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
   });
   return (
     <>
-      <ThTable view={view} now={now} clockSkew={0} reveal={{ rv, frame }} />
-      {!showPanel && <ThRevealFx active={frame.active} t={Math.max(0, t)} mySeat={view.me?.seat ?? 0} names={names} />}
+      <ThTable view={view} now={now} clockSkew={0} reveal={{ rv, frame, settled: showPanel }} />
+      {/* 起點到了（t ≥ 0）才掛特效：伺服器把起點排在決定亮牌之後 1.2 秒（REVEAL_TIMING.LEAD_MS，老柯 2026-11-19），收到時 t 通常是負的；
+          提早掛，「開始比牌」大字會比開頭音效（t＝0 才播）早出現、四家也不同步。t＜0 時牌桌照第 0 秒（牌蓋著、看板隱藏） */}
+      {!showPanel && t >= 0 && <ThRevealFx active={frame.active} t={t} mySeat={view.me?.seat ?? 0} names={names} />}
       {showPanel && (
         <ThRoundResult rv={rv} names={names} mySeat={view.me?.seat ?? 0} secondsLeft={secondsLeft} confirmed={confirmed} sending={sending} error={error}
           onConfirm={onConfirm} confirmLabel={confirmLabel} ready={ready} />

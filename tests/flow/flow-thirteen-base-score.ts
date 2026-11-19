@@ -54,7 +54,7 @@ async function playHand(roomId: string): Promise<{ totals: number[]; scores: num
   for (const p of PIDS) {
     const v = (await state(roomId, p)).body;
     if (!v.me) return null;
-    const a = autoArrange(v.me.hand as Card[]);
+    const a = autoArrange(v.me.hand as Card[], v.scoreRule === "v4" ? { lucky: v.luckyCard?.rank ?? null } : "legacy"); // 舊房照舊牌型排（v4 的排法在舊房可能倒水）
     await post(submitRoute, { roomId, playerId: p, front: a.front.map((c) => c.id), middle: a.middle.map((c) => c.id), back: a.back.map((c) => c.id) }, p);
   }
   const after = await state(roomId, "p0");
@@ -83,8 +83,8 @@ async function playHand(roomId: string): Promise<{ totals: number[]; scores: num
   const c = await create({ baseScore: 200 });
   await seatAll(c.body.code);
   const w = await state(c.body.roomId, "p0");
-  eq([w.body.status, w.body.baseScore, w.body.settings?.baseScore, w.body.settings?.scoreRule], ["waiting", 200, 200, "jia"],
-    "F3 等人畫面帶 baseScore 200（settings 裡也有）；新開的房記 scoreRule jia（甲案，審伯 2026-11-19 必修）");
+  eq([w.body.status, w.body.baseScore, w.body.settings?.baseScore, w.body.settings?.scoreRule], ["waiting", 200, 200, "v4"],
+    "F3 等人畫面帶 baseScore 200（settings 裡也有）；新開的房記 scoreRule v4（2026-11-19 老闆定案；之前是 jia）");
   await post(startRoute, { roomId: c.body.roomId, playerId: "p0" }, "p0");
   const inGame = await state(c.body.roomId, "p0");
   eq(inGame.body.baseScore, 200, "F4 開局後的牌局狀態帶 baseScore 200");

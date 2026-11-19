@@ -15,6 +15,7 @@ import { POST as submitRoute } from "../../app/api/thirteen/submit/route";
 import { POST as nextRoute } from "../../app/api/thirteen/next-game/route";
 import { clock } from "../../lib/thirteen/flow";
 import { autoArrange } from "../../lib/thirteen/arrange";
+import { ruleOf } from "../support/thirteen-rule";
 import { closeIdleRoom } from "../../lib/thirteen/server";
 import { listIdleThirteenRooms } from "../../lib/thirteen/db";
 import type { Card } from "../../lib/thirteen/cards";
@@ -49,7 +50,7 @@ async function playHand(roomId: string): Promise<number[] | null> {
   for (const p of PIDS) {
     const v = (await state(roomId, p)).body;
     if (!v.me) return null;
-    const a = autoArrange(v.me.hand as Card[]);
+    const a = autoArrange(v.me.hand as Card[], await ruleOf(db, roomId));
     await post(submitRoute, { roomId, playerId: p, front: a.front.map((c) => c.id), middle: a.middle.map((c) => c.id), back: a.back.map((c) => c.id) }, p);
   }
   const after = await state(roomId, "p0");

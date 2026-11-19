@@ -8,11 +8,19 @@
 //   B5 前後對照：同一批固定種子的 2000 手 16 張，新判準的平均牌型加分不低於舊判準，而且每一手都不低於
 //   B6 伺服器單次計算時間：列出平均和最慢（2000 手）
 import { buildDeck, parseCards, shuffle, type Card } from "../lib/thirteen/cards";
-import { autoArrange, checkArrangement, type Arrangement } from "../lib/thirteen/arrange";
-import { CAT, evalFive, evalThree } from "../lib/thirteen/hand";
-import { bonusOf } from "../lib/thirteen/score";
-import { bestTripleByBruteForce, bonusSum, cmpBonusTriple } from "./support/thirteen-best-ref";
+import { autoArrange as autoArrangeR, checkArrangement as checkArrangementR, type Arrangement } from "../lib/thirteen/arrange";
+import { CAT, evalFive as evalFiveR, evalThree, type HandRule } from "../lib/thirteen/hand";
+import { bonusOf as bonusOfR, type Row } from "../lib/thirteen/score";
+import { bestTripleByBruteForce as bestR, bonusSum as bonusSumR, cmpBonusTriple as cmpBonusTripleR, type Triple } from "./support/thirteen-best-ref";
 import { oldAutoArrange } from "./support/thirteen-old-arrange";
+// 2026-11-19 v4 上線後，函式沒指定規則＝v4；這支測試寫的是舊規則，這裡把預設釘回舊規則（v4 另有 _thirteen-rule-v4.ts）
+const autoArrange = (c: Card[], r: HandRule = "legacy") => autoArrangeR(c, r);
+const checkArrangement = (a: Arrangement, r: HandRule = "legacy") => checkArrangementR(a, r);
+const evalFive = (c: Card[], r: HandRule = "legacy") => evalFiveR(c, r);
+const bonusOf = (row: Row, v: Parameters<typeof bonusOfR>[1]) => bonusOfR(row, v, "v1");
+const bestTripleByBruteForce = (c: Card[]) => bestR(c, { rule: "legacy" });
+const bonusSum = (t: Triple) => bonusSumR(t, "legacy");
+const cmpBonusTriple = (a: Triple, b: Triple) => cmpBonusTripleR(a, b, "legacy");
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {

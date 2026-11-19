@@ -20,6 +20,7 @@ import { POST as nextRoute } from "../../app/api/thirteen/next-game/route";
 import * as flow from "../../lib/thirteen/flow";
 import { buildDeck, shuffle, type Card } from "../../lib/thirteen/cards";
 import { autoArrange } from "../../lib/thirteen/arrange";
+import { ruleOf } from "../support/thirteen-rule";
 import { bonusOf, ROWS, type RoundResult } from "../../lib/thirteen/score";
 import { DEFAULT_BASE_SCORE } from "../../lib/thirteen/db";
 
@@ -66,7 +67,7 @@ const handStatsSeen: { guns: number; gunned: number; homeRun: boolean; homeRunne
 // 第 1 局：0 號送出固定排法，1、2 號自動排法送出，3 號斷線（不送、不按）
 const h0 = strong;
 await submit(roomId, "p0", { front: h0.filter((x) => x.rank === 12).slice(0, 3), middle: h0.filter((x) => x.rank === 13), back: h0.filter((x) => x.rank === 14) });
-for (const p of ["p1", "p2"]) await submit(roomId, p, autoArrange((await state(roomId, p)).body.me.hand));
+for (const p of ["p1", "p2"]) await submit(roomId, p, autoArrange((await state(roomId, p)).body.me.hand, await ruleOf(db, roomId)));
 NOW += 30_000; // 理牌截止：3 號代排、亮牌
 sent.length = 0;
 await post(tickRoute, { roomId, playerId: "p0" }, "p0");
@@ -78,9 +79,10 @@ const v1 = (await state(roomId, "p1")).body;
   // 照老闆定案的新節奏另外算一次（特效牌型、打槍組數、全壘打從結算結果數；別家隨機牌也可能有特效牌型）
   const specials = result ? result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0) : -1;
   const v8b = 20900 + specials * 300 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1500 + (result?.homeRun !== null ? 3200 : 0); // 老闆定案新節奏：20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打
-  eq([rev1?.revealedAt, rev1?.settleAt, rev1?.nextHandAt, v1.reveal?.revealedAt, v1.reveal?.settleAt, v1.nextHandAt, d],
-    [NOW, NOW + v8b, NOW + v8b + 30_000, NOW, NOW + v8b, NOW + v8b + 30_000, v8b],
-    `N1 亮牌：revealedAt＝亮牌時間、settleAt＝亮牌＋演出長度（這局 ${specials} 個特效牌型、三槍、全壘打＝${v8b / 1000} 秒，照新節奏另外算）、nextHandAt＝settleAt＋30 秒；廣播和讀狀態都有`);
+  const L = flow.REVEAL_TIMING.LEAD_MS; // 2026-11-19：動畫起點排在亮牌那一刻之後 1.2 秒（見 tests/_thirteen-reveal-lead.ts）
+  eq([L, rev1?.revealedAt, rev1?.settleAt, rev1?.nextHandAt, v1.reveal?.revealedAt, v1.reveal?.settleAt, v1.nextHandAt, d],
+    [1200, NOW + L, NOW + L + v8b, NOW + L + v8b + 30_000, NOW + L, NOW + L + v8b, NOW + L + v8b + 30_000, v8b],
+    `N1 亮牌：revealedAt＝亮牌時間＋1.2 秒（動畫起點）、settleAt＝亮牌＋演出長度（這局 ${specials} 個特效牌型、三槍、全壘打＝${v8b / 1000} 秒，照新節奏另外算）、nextHandAt＝settleAt＋30 秒；廣播和讀狀態都有`);
   const st = (rev1?.stats ?? null) as { guns: number; gunned: number; homeRun: boolean; homeRunned: boolean; total: number; bonuses: { name: string; points: number }[] }[] | null;
   if (st) handStatsSeen.push(st);
   eq(st ? [st.map((x) => x.guns), st.map((x) => x.gunned), st.map((x) => x.homeRun), st.map((x) => x.homeRunned), st.map((x) => x.total), st[0].bonuses.map((b) => b.name).sort()] : null,
@@ -100,14 +102,14 @@ const v1 = (await state(roomId, "p1")).body;
 }
 
 // 第 2 局：四家都送出、四家都按確認 → 馬上開第 3 局
-for (const p of PIDS) await submit(roomId, p, autoArrange((await state(roomId, p)).body.me.hand));
+for (const p of PIDS) await submit(roomId, p, autoArrange((await state(roomId, p)).body.me.hand, await ruleOf(db, roomId)));
 const v2 = (await state(roomId, "p0")).body;
 if (v2.reveal?.stats) handStatsSeen.push(v2.reveal.stats);
 {
   const revealedAt = v2.reveal?.revealedAt;
   for (const p of PIDS) await post(nextRoute, { roomId, playerId: p }, p);
   const after = (await state(roomId, "p0")).body;
-  eq([v2.phase, revealedAt === NOW, after.phase, after.handNo, NOW < (v2.reveal?.settleAt ?? 0)], ["revealed", true, "arranging", 3, true],
+  eq([v2.phase, revealedAt === NOW + flow.REVEAL_TIMING.LEAD_MS, after.phase, after.handNo, NOW < (v2.reveal?.settleAt ?? 0)], ["revealed", true, "arranging", 3, true],
     "N3 四家都按確認：馬上開第 3 局（還沒到結算面板出現的時間，也不用等 30 秒）");
   const mid = after.stats as { guns: number; gunned: number; homeRuns: number; homeRunned: number; total: number }[] | undefined;
   const sum = (k: "guns" | "gunned") => [0, 1, 2, 3].map((s) => handStatsSeen.reduce((n, h) => n + h[s][k], 0));
@@ -122,7 +124,7 @@ if (v2.reveal?.stats) handStatsSeen.push(v2.reveal.stats);
 }
 
 // 第 3 局（最後一局）：四家送出 → 亮牌就打完，寫紀錄、關房
-for (const p of PIDS) await submit(roomId, p, autoArrange((await state(roomId, p)).body.me.hand));
+for (const p of PIDS) await submit(roomId, p, autoArrange((await state(roomId, p)).body.me.hand, await ruleOf(db, roomId)));
 {
   type MS = { guns: number; gunned: number; homeRuns: number; homeRunned: number; total: number };
   const closed = sent.find((e) => e.event === "th_room_closed")?.payload as { stats?: MS[] } | undefined;

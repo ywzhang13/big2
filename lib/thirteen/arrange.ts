@@ -1,6 +1,6 @@
 // 排牌：倒水檢查、送出檢查、逾時自動排牌（規則書 2.3、2.4、2.6）。
 import type { Card } from "./cards";
-import { compareValue, evalFive, evalThree, type HandValue } from "./hand";
+import { compareValue, evalFive, evalThree, V4_NO_LUCKY, type HandRule, type HandValue } from "./hand";
 import { bonusOf } from "./score";
 
 /** 一家排好的三道：頭道 3 張、中道 5 張、尾道 5 張 */
@@ -31,10 +31,10 @@ const MESSAGES: Record<ArrangeError, string> = {
 };
 const fail = (error: ArrangeError): ArrangeFail => ({ ok: false, error, message: MESSAGES[error] });
 
-/** 倒水檢查（前端拿來決定能不能按送出、提示哪兩道順序錯）：頭 > 中 或 中 > 尾 才算倒水，相等不算 */
-export function checkArrangement(a: Arrangement): ArrangeCheck {
+/** 倒水檢查（前端拿來決定能不能按送出、提示哪兩道順序錯）：頭 > 中 或 中 > 尾 才算倒水，相等不算。rule：牌型判斷規則（見 hand.ts，沒指定＝v4、沒有彩金牌） */
+export function checkArrangement(a: Arrangement, rule: HandRule = V4_NO_LUCKY): ArrangeCheck {
   if (a.front.length !== 3 || a.middle.length !== 5 || a.back.length !== 5) return fail("bad_size");
-  const front = evalThree(a.front), middle = evalFive(a.middle), back = evalFive(a.back);
+  const front = evalThree(a.front, rule), middle = evalFive(a.middle, rule), back = evalFive(a.back, rule);
   if (compareValue(front, middle) > 0) return fail("foul_front_middle");
   if (compareValue(middle, back) > 0) return fail("foul_middle_back");
   return { ok: true, values: { front, middle, back } };
@@ -48,6 +48,7 @@ export function checkArrangement(a: Arrangement): ArrangeCheck {
 export function validateSubmission(
   dealt: Card[],
   ids: unknown,
+  rule: HandRule = V4_NO_LUCKY,
 ): { ok: true; arrangement: Arrangement } | ArrangeFail {
   // 審伯 2026-11-13 必修：送來的內容來自網路，先驗結構，任何怪輸入都回失敗、不能丟錯
   if (!isSubmission(ids)) return fail("bad_input");
@@ -58,7 +59,7 @@ export function validateSubmission(
   if (all.some((id) => !byId.has(id))) return fail("not_your_card");
   const pick = (xs: string[]) => xs.map((id) => byId.get(id)!);
   const arrangement = { front: pick(ids.front), middle: pick(ids.middle), back: pick(ids.back) };
-  const check = checkArrangement(arrangement);
+  const check = checkArrangement(arrangement, rule);
   if (!check.ok) return check;
   return { ok: true, arrangement };
 }
@@ -75,13 +76,13 @@ function isSubmission(x: unknown): x is SubmissionIds {
 type Pick = { pick: Card[]; value: HandValue; mask: number };
 const desc = (a: Pick, b: Pick) => compareValue(b.value, a.value);
 /** cards 裡所有 k 張（5 或 3）的組合，由大到小；整手只算一次 */
-function combos(cards: Card[], k: 3 | 5): Pick[] {
+function combos(cards: Card[], k: 3 | 5, rule: HandRule): Pick[] {
   const out: Pick[] = [];
   const n = cards.length, idx: number[] = [];
   const rec = (start: number) => {
     if (idx.length === k) {
       const pick = idx.map((i) => cards[i]);
-      out.push({ pick, value: k === 5 ? evalFive(pick) : evalThree(pick), mask: idx.reduce((m, i) => m | (1 << i), 0) });
+      out.push({ pick, value: k === 5 ? evalFive(pick, rule) : evalThree(pick, rule), mask: idx.reduce((m, i) => m | (1 << i), 0) });
       return;
     }
     for (let i = start; i < n; i++) { idx.push(i); rec(i + 1); idx.pop(); }
@@ -96,14 +97,14 @@ function better(a: Plan, b: Plan): boolean {
   return a.bonus !== b.bonus ? a.bonus > b.bonus
     : (compareValue(a.back.value, b.back.value) || compareValue(a.middle.value, b.middle.value) || compareValue(a.front.value, b.front.value)) > 0;
 }
-const planOf = (front: Pick, middle: Pick, back: Pick): Plan =>
-  ({ front, middle, back, bonus: bonusOf("front", front.value) + bonusOf("middle", middle.value) + bonusOf("back", back.value) });
+const planOf = (front: Pick, middle: Pick, back: Pick, rule: HandRule): Plan =>
+  ({ front, middle, back, bonus: bonusOf("front", front.value, rule) + bonusOf("middle", middle.value, rule) + bonusOf("back", back.value, rule) });
 
 /**
  * 有幾墩已經指定好時，把其他墩補成「尾、中、頭字典序最大」又不倒水的排法；排不出來回 null。
  * all5、all3 是整手由大到小排好的組合：尾道一組一組（同樣大的每一種都試）往下找，第一組排得出來的就是答案；中道、頭道同理。
  */
-function complete(all5: Pick[], all3: Pick[], used: number, fixed: { front?: Pick; middle?: Pick; back?: Pick }): Plan | null {
+function complete(all5: Pick[], all3: Pick[], used: number, fixed: { front?: Pick; middle?: Pick; back?: Pick }, rule: HandRule): Plan | null {
   const free = (list: Pick[], m: number) => list.filter((x) => !(x.mask & m)); // 由大到小的順序不變
   const backs = fixed.back ? [fixed.back] : free(all5, used);
   for (let i = 0; i < backs.length;) {
@@ -121,7 +122,7 @@ function complete(all5: Pick[], all3: Pick[], used: number, fixed: { front?: Pic
           for (let mi = k; mi < l; mi++) {
             const middle = mids[mi];
             const front = fronts.find((t) => !(t.mask & middle.mask) && compareValue(t.value, middle.value) <= 0);
-            if (front) { const p = planOf(front, middle, back); if (!midFound || better(p, midFound)) midFound = p; }
+            if (front) { const p = planOf(front, middle, back, rule); if (!midFound || better(p, midFound)) midFound = p; }
           }
         }
         if (midFound) { if (!found || better(midFound, found)) found = midFound; break; }
@@ -147,16 +148,16 @@ function complete(all5: Pick[], all3: Pick[], used: number, fixed: { front?: Pic
  *   加分多的搭配先試；一個搭配就算其他墩都拿到最多加分也比不過目前最好的，就跳過。
  * 已用窮舉所有不倒水排法的對照測試證明結果相同（tests/_thirteen-arrange-bonus.ts、_thirteen-deal16.ts G7）。
  */
-export function autoArrange(cards: Card[]): Arrangement {
+export function autoArrange(cards: Card[], rule: HandRule = V4_NO_LUCKY): Arrangement {
   if (cards.length < 13) throw new Error("自動排牌至少要 13 張");
   if (cards.length > 30) throw new Error("自動排牌最多 30 張");
-  const all5 = combos(cards, 5), all3 = combos(cards, 3);
-  const special5 = all5.filter((x) => bonusOf("middle", x.value) > 0 || bonusOf("back", x.value) > 0);
-  const trips = all3.filter((x) => bonusOf("front", x.value) > 0);
+  const all5 = combos(cards, 5, rule), all3 = combos(cards, 3, rule);
+  const special5 = all5.filter((x) => bonusOf("middle", x.value, rule) > 0 || bonusOf("back", x.value, rule) > 0);
+  const trips = all3.filter((x) => bonusOf("front", x.value, rule) > 0);
   // 每一墩最多還能拿多少加分（剪枝用）
-  const maxFront = trips.length ? Math.max(...trips.map((t) => bonusOf("front", t.value))) : 0;
-  const maxMiddle = special5.length ? Math.max(...special5.map((t) => bonusOf("middle", t.value))) : 0;
-  const maxBack = special5.length ? Math.max(...special5.map((t) => bonusOf("back", t.value))) : 0;
+  const maxFront = trips.length ? Math.max(...trips.map((t) => bonusOf("front", t.value, rule))) : 0;
+  const maxMiddle = special5.length ? Math.max(...special5.map((t) => bonusOf("middle", t.value, rule))) : 0;
+  const maxBack = special5.length ? Math.max(...special5.map((t) => bonusOf("back", t.value, rule))) : 0;
   const plans: { front?: Pick; middle?: Pick; back?: Pick; used: number; fixedBonus: number; upper: number }[] = [];
   for (const front of [undefined, ...trips]) for (const middle of [undefined, ...special5]) for (const back of [undefined, ...special5]) {
     const fm = front?.mask ?? 0, mm = middle?.mask ?? 0, bm = back?.mask ?? 0;
@@ -164,14 +165,14 @@ export function autoArrange(cards: Card[]): Arrangement {
     if (middle && back && compareValue(middle.value, back.value) > 0) continue;
     const above = middle ?? back;
     if (front && above && compareValue(front.value, above.value) > 0) continue;
-    const fb = (front ? bonusOf("front", front.value) : 0) + (middle ? bonusOf("middle", middle.value) : 0) + (back ? bonusOf("back", back.value) : 0);
+    const fb = (front ? bonusOf("front", front.value, rule) : 0) + (middle ? bonusOf("middle", middle.value, rule) : 0) + (back ? bonusOf("back", back.value, rule) : 0);
     plans.push({ front, middle, back, used: fm | mm | bm, fixedBonus: fb, upper: fb + (front ? 0 : maxFront) + (middle ? 0 : maxMiddle) + (back ? 0 : maxBack) });
   }
   plans.sort((a, b) => b.fixedBonus - a.fixedBonus); // 加分多的先試，比較快找到好答案、剪掉其他
   let best: Plan | null = null;
   for (const pl of plans) {
     if (best && pl.upper < best.bonus) continue;
-    const p = complete(all5, all3, pl.used, pl);
+    const p = complete(all5, all3, pl.used, pl, rule);
     if (p && (!best || better(p, best))) best = p;
   }
   if (!best) throw new Error("排不出不倒水的三墩（不應該發生）");

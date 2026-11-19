@@ -71,7 +71,7 @@ const { ThRoundResult } = await import("../components/thirteen/ThResult");
     `D3 左欄墩數：${got.map(([l, p]) => `${l} ${p}`).join("、")}，加起來 ${got.reduce((a, [, p]) => a + (p as number), 0)}（＝stats.total ${ex.total}，沒用 scored）`);
   // 本局結算：左欄（含「本局」）是墩數；右欄四家是伺服器的 scores（已乘底分）；舊房沒有 scores 右欄照舊用 result.totals
   const render = (r: typeof rv, extra: Record<string, unknown> = {}) => renderToStaticMarkup(createElement(ThRoundResult, { rv: r, names: ["老闆", "小明", "阿明", "小華"], mySeat: 0, secondsLeft: 30, confirmed: false, onConfirm: () => {}, ...extra })).replace(/<!-- -->/g, "");
-  const pts = (h: string) => [...h.matchAll(/data-th-res-seat="(\d)"[\s\S]*?<div class="th-res-pts"><b[^>]*>([^<]*)<\/b>/g)].map((m) => m[2]);
+  const pts = (h: string) => [...h.matchAll(/data-th-res-seat="(\d)"[\s\S]*?<div class="gr-delta"><b[^>]*>([^<]*)<\/b>/g)].map((m) => m[2]);
   const totals = [24, -72, 24, 24], scores = totals.map((x) => x * 500);
   const stats = rv.stats.map((s, i) => ({ ...s, total: totals[i] }));
   const withScores = render({ ...rv, baseScore: 500, result: { ...rv.result, totals }, stats, scores }), legacy = render({ ...rv, result: { ...rv.result, totals }, stats });
@@ -109,14 +109,14 @@ const { ThRoundResult } = await import("../components/thirteen/ThResult");
     hand("S5 H5 S5", "CJ CT S9 C8 C7", "HA HK H6 H4 H2"), // 偉鉅
     hand("C9 H9 S9", "DA SK SQ HJ HT", "SA S8 S6 S5 S4"), // 莊子緣
   ];
-  const base = 50, result = scoreRound(arr), stats = handStats(result);
+  const base = 50, result = scoreRound(arr, "jia"), stats = handStats(result, "jia"); // 這組測試寫的是甲案（v4 上線後要明確指定）
   const scores = result.totals.map((t) => t * base);
   const rv = { ...buildCase("gun")!, result, stats, scores, baseScore: base };
   delete (rv as { rowDeltas?: unknown }).rowDeltas;
   const names = ["Ming", "張育瑋", "偉鉅", "莊子緣"];
   const h = renderToStaticMarkup(createElement(ThRoundResult, { rv, names, mySeat: 1, secondsLeft: 30, confirmed: false, onConfirm: () => {} })).replace(/<!-- -->/g, "");
-  const left = [...h.matchAll(/<span>([^<]+)<\/span><b[^>]*>([^<]*)<\/b>/g)].map((m) => `${m[1]} ${m[2]}`);
-  const right = [...h.matchAll(/data-th-res-seat="(\d)"[\s\S]*?<div class="th-res-pts"><b[^>]*>([^<]*)<\/b>/g)].map((m) => m[2]);
+  const left = [...h.matchAll(/<span class="n">([^<]+)<\/span><b[^>]*>([^<]*)<\/b>/g)].map((m) => `${m[1]} ${m[2]}`);
+  const right = [...h.matchAll(/data-th-res-seat="(\d)"[\s\S]*?<div class="gr-delta"><b[^>]*>([^<]*)<\/b>/g)].map((m) => m[2]);
   ok(JSON.stringify(result.totals) === "[7,-3,-4,0]", `J1 截圖那一局新規則墩數：Ming ${result.totals[0]}、張育瑋 ${result.totals[1]}、偉鉅 ${result.totals[2]}、莊子緣 ${result.totals[3]}（預期 +7、−3、−4、0）`);
   ok(JSON.stringify(left) === JSON.stringify(["墩分 +4", "被尾墩同花順 −3", "被衝三 −4", "本局 −3"]), `J2 張育瑋左欄（墩數）：${left.join("、")}（預期 墩分 +4、被尾墩同花順 −3、被衝三 −4、本局 −3）`);
   ok(JSON.stringify(right) === JSON.stringify(["+350", "−150", "−200", "0"]) && scores.reduce((a, b) => a + b, 0) === 0,
@@ -135,7 +135,7 @@ const { ThRoundResult } = await import("../components/thirteen/ThResult");
   const { autoArrange } = await import("../lib/thirteen/arrange");
   let same = 0, total = 0;
   for (let k = 0; k < 300; k++) {
-    const res = k === 0 ? result : scoreRound(deal().hands.map((h) => autoArrange(h)));
+    const res = k === 0 ? result : scoreRound(deal().hands.map((h) => autoArrange(h, "legacy")), "jia");
     for (const rule of ["jia", "v1"] as const) { total++; if (JSON.stringify(T.rowDeltas(res, rule === "jia" ? "jia" : undefined)) === JSON.stringify(F.rowDeltas(res, 1, rule))) same++; }
   }
   ok(same === total, `J7 前端備用看板＝後端 flow.rowDeltas（底分 1）：${same}/${total}（截圖那局＋299 副隨機牌 × 甲案、舊規則）`);

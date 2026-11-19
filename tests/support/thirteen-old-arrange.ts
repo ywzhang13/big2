@@ -2,7 +2,9 @@
 // 新版見 lib/thirteen/arrange.ts。
 import type { Card } from "../../lib/thirteen/cards";
 import type { Arrangement } from "../../lib/thirteen/arrange";
-import { compareValue, evalFive, evalThree, type HandValue } from "../../lib/thirteen/hand";
+import { compareValue, evalFive as evalFiveR, evalThree, type HandValue } from "../../lib/thirteen/hand";
+// 2026-11-19 v4 上線後 evalFive 沒指定規則＝v4；這份是舊版，釘回舊牌型
+const evalFive = (c: Card[]) => evalFiveR(c, "legacy");
 
 /** 從 cards 裡挑 5 張最大的組合：回傳一樣大的全部選法（同點數不同張、例如兩張 ♠K 或不同花色的 K，會留下不同的牌給下一墩） */
 function bestFives(cards: Card[]): { picks: Card[][]; value: HandValue } {

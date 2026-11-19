@@ -38,6 +38,7 @@ import { listIdleThirteenRooms } from "../../lib/thirteen/db";
 import { spectatorChannelName } from "../../lib/mahjong/access";
 import type { Card } from "../../lib/thirteen/cards";
 import { autoArrange } from "../../lib/thirteen/arrange";
+import { ruleOf } from "../support/thirteen-rule";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -77,7 +78,7 @@ async function newMatch(seats: string[] = PIDS.slice(0, 4), totalHands = 16) {
 }
 async function submitAll(roomId: string, who: string[]) {
   for (const p of who) {
-    const a = autoArrange((await state(roomId, p)).body.me.hand as Card[]);
+    const a = autoArrange((await state(roomId, p)).body.me.hand as Card[], await ruleOf(db, roomId));
     await post(submitRoute, { roomId, playerId: p, front: ids(a.front), middle: ids(a.middle), back: ids(a.back) }, p);
   }
 }
@@ -327,7 +328,8 @@ async function ageRoom(id: string, hours: number) {
   for (const p of ["p0", "p1", "p2", "p3"]) hands.push((await state(m.roomId, p)).body.me.hand);
   const rest = (await db.query<{ r: Card[] }>(`select game_state->'rest' r from th_rooms where id = $1`, [m.roomId])).rows[0].r;
   const allIds = [...hands.flat(), ...rest].map((c) => c.id);
-  const leak = (x: unknown) => allIds.filter((id) => JSON.stringify(x).includes(`"${id}"`));
+  // 2026-11-19 v4：剩下的那 1 張是彩金牌，開局就以 luckyCard 公開；拿掉 luckyCard 欄位後再查有沒有牌外流
+  const leak = (x: unknown) => { const t = JSON.stringify(x, (k, v) => (k === "luckyCard" ? undefined : v)); return allIds.filter((id) => t.includes(`"${id}"`)); };
 
   // 還沒申請／還沒被同意：觀戰畫面、狀態、聊天紀錄都讀不到
   const early = [await get(spViewRoute, `roomId=${m.roomId}&target=p1`, "watch"), await state(m.roomId, "watch", null), await get(historyRoute, `roomId=${m.roomId}`, "watch")];
@@ -360,10 +362,10 @@ async function ageRoom(id: string, hours: number) {
   const s = await state(m.roomId, "watch", null);
   const peek = await state(m.roomId, "watch", "p1");
   const otherTarget = await get(spViewRoute, `roomId=${m.roomId}&target=p0`, "watch");
-  eq([v.status, v.body.phase, v.body.me, v.body.reveal, v.body.players.map((p: { submitted: boolean }) => p.submitted), leak(v.body), s.status, leak(s.body),
+  eq([v.body.luckyCard?.id === rest[0].id, v.status, v.body.phase, v.body.me, v.body.reveal, v.body.players.map((p: { submitted: boolean }) => p.submitted), leak(v.body), s.status, leak(s.body),
     peek.status, peek.body.error, otherTarget.status, v.body.target.playerId, v.body.spectatorCounts],
-    [200, "arranging", null, null, [false, true, true, false], [], 200, [], 403, "not_your_seat", 403, "p1", { p0: 0, p1: 1, p2: 0, p3: 0 }],
-    "P3 同意後亮牌前：觀戰畫面和狀態裡 65 張牌一張都沒有（同意他的 p1 的手牌、已送出的三墩也沒有），只看得到誰送出了；偷拿 p1 的 playerId 讀 403；沒同意的 p0 視角 403");
+    [true, 200, "arranging", null, null, [false, true, true, false], [], 200, [], 403, "not_your_seat", 403, "p1", { p0: 0, p1: 1, p2: 0, p3: 0 }],
+    "P3 同意後亮牌前：觀戰畫面和狀態裡除了公開的彩金牌 luckyCard，65 張牌一張都沒有（同意他的 p1 的手牌、已送出的三墩也沒有），只看得到誰送出了；偷拿 p1 的 playerId 讀 403；沒同意的 p0 視角 403");
 
   // 聊天：讀得到、收得到，不能發言
   await post(chatRoute, { roomId: m.roomId, text: "加油" }, "p0");
@@ -375,8 +377,8 @@ async function ageRoom(id: string, hours: number) {
   // 亮牌後才看得到四家三墩
   await submitAll(m.roomId, ["p0", "p3"]);
   const rv = await get(spViewRoute, `roomId=${m.roomId}&target=p1`, "watch");
-  eq([rv.body.phase, rv.body.reveal?.arrangements?.length, leak(rv.body).length, rv.body.me], ["revealed", 4, 52, null],
-    "P5 亮牌後觀戰畫面才有四家三墩（52 張發出去的牌），沒發出去的 13 張照樣沒有");
+  eq([rv.body.phase, rv.body.reveal?.arrangements?.length, leak(rv.body).length, rv.body.me], ["revealed", 4, 64, null],
+    "P5 亮牌後觀戰畫面才有四家三墩（52 張）＋四家不用的牌 unusedCards（12 張，2026-11-19 v4 起）；剩下的那張只在 luckyCard");
 
   // 自己這桌、遊客、還沒開局都不能申請；收回後立刻讀不到
   const own = await post(spRequestRoute, { roomId: m.roomId, targetPlayerId: "p0" }, "p1");

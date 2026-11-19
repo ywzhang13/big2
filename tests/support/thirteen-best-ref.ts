@@ -4,16 +4,16 @@
 // bestTripleByBruteForce(cards, { bonus: false }) 是 14a83b2 舊判準（只比尾、中、頭），給新舊對照用。這裡把所有尾道（5 張）× 剩下牌的所有中道（5 張）× 再剩下牌的所有頭道（3 張）全部列出來比，
 // 不靠任何「先挑最大的」捷徑，所以可以當作獨立的對照。張數多時很慢，只給測試用。
 import type { Card } from "../../lib/thirteen/cards";
-import { compareValue, evalFive, evalThree, type HandValue } from "../../lib/thirteen/hand";
+import { compareValue, evalFive, evalThree, V4_NO_LUCKY, type HandRule, type HandValue } from "../../lib/thirteen/hand";
 import { bonusOf } from "../../lib/thirteen/score";
 
 export type Triple = { back: HandValue; middle: HandValue; front: HandValue };
 /** 三墩的牌型加分合計（照計分規則的加分表：頭墩三條、中尾墩鐵支／同花順／五龍） */
-export const bonusSum = (t: Triple) => bonusOf("front", t.front) + bonusOf("middle", t.middle) + bonusOf("back", t.back);
+export const bonusSum = (t: Triple, rule: HandRule = V4_NO_LUCKY) => bonusOf("front", t.front, rule) + bonusOf("middle", t.middle, rule) + bonusOf("back", t.back, rule);
 /** 舊判準：只比尾、中、頭 */
 export const cmpTriple = (a: Triple, b: Triple) => compareValue(a.back, b.back) || compareValue(a.middle, b.middle) || compareValue(a.front, b.front);
 /** 新判準：先比加分合計，再比尾、中、頭 */
-export const cmpBonusTriple = (a: Triple, b: Triple) => bonusSum(a) - bonusSum(b) || cmpTriple(a, b);
+export const cmpBonusTriple = (a: Triple, b: Triple, rule: HandRule = V4_NO_LUCKY) => bonusSum(a, rule) - bonusSum(b, rule) || cmpTriple(a, b);
 
 function combos(n: number, k: number): number[][] {
   const out: number[][] = [];
@@ -26,13 +26,14 @@ function combos(n: number, k: number): number[][] {
 }
 
 /** 窮舉所有不倒水的排法，回傳最好的三墩牌型（預設新判準：加分合計優先；bonus: false＝舊判準） */
-export function bestTripleByBruteForce(cards: Card[], opts: { bonus?: boolean } = {}): Triple {
-  const cmp = opts.bonus === false ? cmpTriple : cmpBonusTriple;
+export function bestTripleByBruteForce(cards: Card[], opts: { bonus?: boolean; rule?: HandRule } = {}): Triple {
+  const rule = opts.rule ?? V4_NO_LUCKY; // 2026-11-19 v4：牌型、加分照規則（沒帶＝v4、沒有彩金牌）
+  const cmp = opts.bonus === false ? cmpTriple : (a: Triple, b: Triple) => cmpBonusTriple(a, b, rule);
   const n = cards.length;
   const five = new Map<number, HandValue>(), three = new Map<number, HandValue>();
   const maskOf = (idx: number[]) => idx.reduce((m, i) => m | (1 << i), 0);
-  const v5 = (idx: number[]) => { const m = maskOf(idx); let v = five.get(m); if (!v) { v = evalFive(idx.map((i) => cards[i])); five.set(m, v); } return v; };
-  const v3 = (idx: number[]) => { const m = maskOf(idx); let v = three.get(m); if (!v) { v = evalThree(idx.map((i) => cards[i])); three.set(m, v); } return v; };
+  const v5 = (idx: number[]) => { const m = maskOf(idx); let v = five.get(m); if (!v) { v = evalFive(idx.map((i) => cards[i]), rule); five.set(m, v); } return v; };
+  const v3 = (idx: number[]) => { const m = maskOf(idx); let v = three.get(m); if (!v) { v = evalThree(idx.map((i) => cards[i]), rule); three.set(m, v); } return v; };
   let best: Triple | null = null;
   for (const b of combos(n, 5)) {
     const restB = [...Array(n).keys()].filter((i) => !b.includes(i));

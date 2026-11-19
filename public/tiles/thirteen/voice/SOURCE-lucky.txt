@@ -1,0 +1,5 @@
+彩金 3 段（2026-11-19）：老闆用 ElevenLabs 錄，阿妍切段、對齊音量（平均 −17.8 dB，跟上面 13 段一致），見〈清單與驗證-十三支彩金配音-2026-11-19.md〉。老馬放進專案：
+・th-voice-luckychongsan.v1.mp3 彩金衝三.mp3（頭墩彩金三條）
+・th-voice-cat14.v1.mp3 彩金葫蘆.mp3
+・th-voice-cat15.v1.mp3 彩金鐵支.mp3
+沒有另外錄的：黑桃同花順（cat12）唸 cat10「同花順」；中尾墩的彩金三條（cat13）唸 cat3「三條」（components/thirteen/sfx.ts voiceSrc）。

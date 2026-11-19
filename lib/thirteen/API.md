@@ -84,7 +84,9 @@ compareValue(a, b): number   // 正數＝a 大，負數＝b 大，0＝一樣大
 | cat | 牌型 |
 |---|---|
 | 11 | 五龍 |
-| 10 | 同花順 |
+| 10 | 同花順（v4 是「非黑桃同花順」；舊規則房包含黑桃） |
+| 12 | 黑桃同花順（**只在 v4 房出現**） |
+| 13～15 | 彩金三條、彩金葫蘆、彩金鐵支（**只在 v4 房出現**；大小見下方「v4 規則」） |
 | 9 | 鐵支 |
 | 8 | 葫蘆 |
 | 7 | 同花兩對 |
@@ -132,6 +134,107 @@ SCORING.BONUS                  // 特殊加分，輸掉那一道的人付給贏�
   - 例：對方中道鐵支又打槍你，你要付 3＋1＋4＝8 分。
 - 一家打槍另外三家就是全壘打，另外三家各再付 `HOME_RUN_PENALTY`。
 
+## v4 規則（老闆 2026-11-19 定案；新開的房都是 v4，取代沒上線的 v3）
+
+### 規則版本 `scoreRule`
+
+| 值 | 哪些房 | 一道的輸贏 | 特殊牌型 | 全壘打 | 牌型 |
+|---|---|---|---|---|---|
+| `"v4"` | 這次上線後新開的房（`create` 寫進 `settings.scoreRule`） | **不算分** | 那一道被你贏過的人各付 `SCORING.BONUS_V4` | 三家各再付 2 | 黑桃同花順、彩金牌型 |
+| `"jia"` | 甲案上線後、這次上線前開的房 | 1 墩 | 只算 `SCORING.BONUS` | 三家各再付 3 | 舊牌型 |
+| `"v1"` | 設定裡沒有 `scoreRule` 的房 | 1 墩 | 1＋`SCORING.BONUS` | 三家各再付 3 | 舊牌型 |
+
+舊房整場照原本的規則，不會中途換。打槍（三道都贏同一家）三種規則都是向那家收 1。牌局狀態、亮牌內容（`reveal`、`th_reveal`、410 的 `record.finalHand`）都帶 `scoreRule`。
+
+### 彩金牌 `luckyCard`
+
+- 65 張發給四家各 16 張，剩下的 1 張就是這一局的彩金牌（存在牌局狀態的 `rest[0]`）。
+- 格式：`Card`＝`{ id, suit, rank, deck }`，例如 `{ "id": "S51", "suit": "S", "rank": 5, "deck": 1 }`。`rank` 2～14（14＝A）。
+- 哪裡拿得到（v4 的房）：
+  - 牌局狀態 `luckyCard`：開始理牌起四家、觀戰、不在桌上的人都看得到；等人時是 `null`。
+  - 公開頻道的 `th_hand_start` 廣播：`payload.luckyCard`。
+  - 亮牌內容 `reveal.luckyCard`、410 的 `record.finalHand.luckyCard`。
+- 舊規則房（v1、jia）一律是 `null`，剩下的那張照舊不給任何人。
+- 點數跟彩金牌一樣的牌叫「彩金點數」（只看點數，不看花色）。
+
+### 新牌型代號（代號不重編，比大小不能直接比數字）
+
+| cat | `CAT` | `CAT_NAME` | 條件（v4） |
+|---|---|---|---|
+| 15 | `LUCKY_FOUR` | 彩金鐵支 | 鐵支的四張是彩金點數 |
+| 14 | `LUCKY_FULL_HOUSE` | 彩金葫蘆 | 葫蘆的三張那組是彩金點數（對子是彩金點數不算） |
+| 13 | `LUCKY_THREE` | 彩金三條 | 三條是彩金點數；**頭墩請顯示「彩金衝三」**（左欄明細名稱已經是「彩金衝三」） |
+| 12 | `SPADE_STRAIGHT_FLUSH` | 黑桃同花順 | 五張都是黑桃的同花順 |
+| 10 | `STRAIGHT_FLUSH` | 同花順 | v4 就是「非黑桃同花順」（黑桃以外的同花順）；舊房包含黑桃 |
+
+大小（`compareValue`；或用 `CAT_RANK[cat] ?? cat` 排序）：
+五龍(11) ＞ 彩金鐵支(15) ＞ 非黑桃同花順(10) ＞ 鐵支(9) ＞ 黑桃同花順(12) ＞ 彩金葫蘆(14) ＞ 葫蘆(8) ＞ … ＞ 順子(4) ＞ 彩金三條(13) ＞ 三條(3) ＞ …
+
+- 同一種牌型裡彩金最大：彩金 5 的衝三贏 6 的衝三、也贏 A 的衝三。
+- 倒水也照這個大小。例如中墩黑桃同花順＋尾墩鐵支在 v4 合法、舊房倒水；頭墩彩金衝三比中墩一般三條大，在 v4 是倒水。
+
+### v4 加分（`SCORING.BONUS_V4`：那一道贏過誰，就向誰收這個數字）
+
+| 墩 | 牌型 | 加分 |
+|---|---|---|
+| 頭墩 | 衝三 | 1 |
+| 頭墩 | 彩金衝三 | 2 |
+| 中墩 | 彩金葫蘆 | 1 |
+| 中墩 | 黑桃同花順、鐵支 | 2 |
+| 中墩 | 非黑桃同花順 | 3 |
+| 中墩 | 彩金鐵支 | 6 |
+| 中墩 | 五龍 | 10 |
+| 尾墩 | 彩金葫蘆 | 0 |
+| 尾墩 | 黑桃同花順、鐵支 | 1 |
+| 尾墩 | 非黑桃同花順 | 2 |
+| 尾墩 | 彩金鐵支 | 3 |
+| 尾墩 | 五龍 | 5 |
+| 其他 | | 0 |
+
+- 例：中墩鐵支贏兩家、輸一家同花順 → 向贏的兩家各收 2、付那家 3。
+- 全壘打（沒有特殊牌型時）：贏家 +9（三槍 3＋三家各 2），三家各 −3。
+- 以上都是墩數，`scores` 再乘底分。四家總和一定是 0。
+
+### 欄位在 v4 的意思
+
+| 欄位 | v4 |
+|---|---|
+| `result.pairs[].rows[row]` | `winner` 照樣是那一道誰贏；`bonus` 是贏家那道的加分（一般牌型 0，那一道兩家之間就是 0 分） |
+| `stats[].rows`（左欄「墩分」） | **永遠 0**（一道的輸贏不算分），前端可以不顯示這一行 |
+| `stats[].bonuses` | 特殊牌型加分，名稱例：「衝三」「彩金衝三」「中墩彩金葫蘆」「中墩黑桃同花順」「中墩同花順」（＝非黑桃同花順）「尾墩彩金鐵支」；同名正負合併，合計 0 的不列 |
+| `stats[].gunPoints`、`scored.shotPoints`、`scored.shotByPoints` | 打槍，每槍 1（× 底分） |
+| `stats[].homeRunPoints` | 全壘打：自己 +6、被全壘打 −2（× 底分另見 `scored`） |
+| `stats[].scored` | 上面每一項 × 底分，加總＝`scores[seat]` |
+| `rowDeltas` | 每墩只有加分（一般牌型那一道 0）；三墩加總＋（打槍＋全壘打）× 底分＝`scores` |
+
+### 函式的規則參數（沒帶＝v4、沒有彩金牌）
+
+```ts
+type HandRule = "legacy" | { lucky: number | null }   // v4 → { lucky: 彩金牌的 rank }
+evalFive(cards, rule?)  evalThree(cards, rule?)  evalRow(cards, rule?)
+checkArrangement(a, rule?)  autoArrange(cards, rule?)  validateSubmission(dealt, ids, rule?)
+bonusOf(row, value, rule?: ScoreRule | HandRule)
+scoreRound(arrs, rule?: "v1" | "jia" | "v4", lucky?: number | null)   revealOrder(arrs, rule?, lucky?)
+handRuleOf(scoreRule, lucky?)   // "v4" → { lucky }，"v1"／"jia" → "legacy"
+sortCards(cards)                // 顯示順序 A、2…K
+```
+
+**前端要注意（老馬）**：
+- 理牌畫面的推薦排法、倒水檢查、牌型標籤、加分標籤，現在都是用沒帶規則的呼叫（＝v4、沒有彩金牌），**要改成帶 `handRuleOf(state.scoreRule, state.luckyCard?.rank ?? null)`**。不帶的話，手上有彩金牌型時標籤和倒水會跟伺服器不一樣（伺服器照彩金判斷）；舊房也可能推薦出伺服器判倒水的排法。
+- 牌型名稱、配音、特效的對照表要加 cat 12～15；頭墩 cat 13 顯示「彩金衝三」。
+- 手牌（`me.hand`、`th_deal_hand`）和亮牌的每墩、`unusedCards` 伺服器都已經照 A、2…K 排好。
+
+### 沒用到的牌 `unusedCards`
+
+亮牌內容（牌局狀態的 `reveal`、`th_reveal` 廣播、觀戰畫面的 `reveal`、410 的 `record.finalHand`、對局紀錄的最後一局）有：
+
+```ts
+unusedCards: Card[][]   // 依座位 0～3，每家 3 張＝這局發到的 16 張扣掉排出去的 13 張，照 A、2…K 排
+```
+
+- **只在亮牌後才有**。理牌中任何 API（自己、別家、觀戰、不在桌上的畫面）都拿不到別家的牌，也沒有 `unusedCards`。
+- 這次上線前存的舊局紀錄沒有這個欄位，前端要當作沒有。
+
 ## 亮牌順序
 
 `revealOrder(arrangements)` 回傳：
@@ -177,6 +280,6 @@ SCORING.BONUS                  // 特殊加分，輸掉那一道的人付給贏�
 | `handStats(result)` | 這局每家的明細：墩分、特殊加分（衝三、中墩鐵支…）、打槍、被打槍、全壘打、被全壘打；各項加起來等於這局總分 |
 | `matchStats(state)` | 整場累計：每家打槍、被打槍、全壘打、被全壘打的次數和總分 |
 
-亮牌時伺服器記下三個時間：`revealedAt`（亮牌）、`settleAt`（＝revealedAt＋演出長度）、`nextHandAt`（＝settleAt＋30 秒）。
+亮牌時伺服器記下三個時間：`revealedAt`（亮牌動畫起點＝決定亮牌那一刻＋`REVEAL_TIMING.LEAD_MS` 1.2 秒，2026-11-19 起；讓瀏覽器收到亮牌時「開始比牌」還沒開始）、`settleAt`（＝revealedAt＋演出長度）、`nextHandAt`（＝settleAt＋30 秒）。前端收到時 `revealedAt` 通常還在未來，動畫要等到這個時間才開始（見給老馬的說明）。
 四家都按確認（next-game）就馬上開下一局；有人沒按，就等到 nextHandAt 自動開。
 前端 API 說明見「給老馬-十三支結算與下一局API說明.md」。

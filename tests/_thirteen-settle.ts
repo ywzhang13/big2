@@ -8,8 +8,13 @@
 //   U4 特殊加分的項目名稱照 v5 結算明細：衝三、中墩鐵支、尾墩同花順…；拿到的是正、付的是負
 import * as flow from "../lib/thirteen/flow";
 import { buildDeck, parseCards, shuffle } from "../lib/thirteen/cards";
-import { autoArrange, type Arrangement } from "../lib/thirteen/arrange";
-import { bonusOf, ROWS, scoreRound, SCORING, type RoundResult } from "../lib/thirteen/score";
+import { autoArrange as autoArrangeR, type Arrangement } from "../lib/thirteen/arrange";
+import { bonusOf as bonusOfR, ROWS, scoreRound as scoreRoundR, SCORING, type RoundResult, type Row, type ScoreRule } from "../lib/thirteen/score";
+import type { Card } from "../lib/thirteen/cards";
+// 2026-11-19 v4 上線後，函式沒指定規則＝v4；這支測試寫的是舊規則，這裡把預設釘回舊規則（v4 另有 _thirteen-rule-v4.ts）
+const autoArrange = (c: Card[]) => autoArrangeR(c, "legacy");
+const scoreRound = (a: Arrangement[], r: ScoreRule = "jia") => scoreRoundR(a, r);
+const bonusOf = (row: Row, v: Parameters<typeof bonusOfR>[1]) => bonusOfR(row, v, "v1");
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -17,7 +22,7 @@ function eq(a: unknown, e: unknown, msg: string) {
   results.push(`${ok ? "✅" : "❌"} ${msg}${ok ? "" : `\n   預期=${JSON.stringify(e)}\n   實際=${JSON.stringify(a)}`}`);
 }
 type Stat = { rows: number; bonuses: { name: string; points: number }[]; guns: number; gunned: number; gunPoints: number; homeRun: boolean; homeRunned: boolean; homeRunPoints: number; total: number };
-const f = flow as unknown as { revealDurationMs?: (r: RoundResult) => number; handStats?: (r: RoundResult) => Stat[]; NEXT_HAND_MAX_MS?: number; SETTLE_WAIT_MS?: number };
+const f = flow as unknown as { revealDurationMs?: (r: RoundResult) => number; handStats?: (r: RoundResult, rule?: ScoreRule) => Stat[]; NEXT_HAND_MAX_MS?: number; SETTLE_WAIT_MS?: number };
 const dur = (r: RoundResult) => (f.revealDurationMs ? f.revealDurationMs(r) : null);
 const arr = (front: string, middle: string, back: string): Arrangement => ({ front: parseCards(front), middle: parseCards(middle), back: parseCards(back) });
 
@@ -40,8 +45,8 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
   eq([rs.map(specialsOf), rs.map((r) => r.pairs.filter((p) => p.gunner !== null).length), rs.map((r) => r.homeRun), rs.map(dur)],
     [[0, 0, 2, 2], [0, 1, 0, 3], [null, null, null, 0], [20900, 22400, 21500, 29200]],
     "U1 亮牌演出長度（老闆定案新節奏）：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支 21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 29.2 秒");
-  eq([f.SETTLE_WAIT_MS, f.NEXT_HAND_MAX_MS], [30000, 66700],
-    "U1 結算面板出現後等 30 秒；亮牌到開下一局最長 66.7 秒（四家三墩都是特效牌型、六槍、全壘打）");
+  eq([f.SETTLE_WAIT_MS, f.NEXT_HAND_MAX_MS], [30000, 67900],
+    "U1 結算面板出現後等 30 秒；亮牌到開下一局最長 67.9 秒（動畫起點往後 1.2 秒＋四家三墩都是特效牌型、六槍、全壘打；2026-11-19 前是 66.7）");
 }
 
 // U2、U3、U4：隨機 2000 局
@@ -58,7 +63,7 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
     const expect = 20900 + specials * 300 + g6 * 1500 + (r.homeRun !== null ? 3200 : 0); // 老闆定案新節奏
     if (dur(r) !== expect) durBad++;
     if ((dur(r) ?? 0) + 30000 > (f.NEXT_HAND_MAX_MS ?? 0)) overMax++;
-    const st = f.handStats ? f.handStats(r) : null;
+    const st = f.handStats ? f.handStats(r, "jia") : null;
     if (!st) { sumBad++; continue; }
     st.forEach((x, seat) => {
       const total = x.rows + x.bonuses.reduce((n, b) => n + b.points, 0) + x.gunPoints + x.homeRunPoints;
@@ -84,7 +89,7 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
   const result = scoreRound(ties);
   const oldSettle = T + 12500, oldNext = oldSettle + 30000; // 舊公式（dd0602a，每家 0.6 秒）一般局 12.5 秒
   const s = { phase: "revealed", handNo: 1, settings: { totalHands: 8 }, hands: [{ handNo: 1, result }], playerScores: result.totals, nextReady: [],
-    players: ties.map((a, seat) => ({ seat, arrangement: a, autoArranged: false })), revealedAt: T, settleAt: oldSettle, nextHandAt: oldNext };
+    players: ties.map((a, seat) => ({ seat, hand: [], arrangement: a, autoArranged: false })), revealedAt: T, settleAt: oldSettle, nextHandAt: oldNext };
   const p = g.revealPayload(s);
   eq([p.settleAt, p.nextHandAt, g.shouldStartNext(s, oldNext - 1), g.shouldStartNext(s, oldNext), dur(result)],
     [oldSettle, oldNext, false, true, 20900],

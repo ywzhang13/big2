@@ -6,8 +6,12 @@
 //   J4 左欄明細 handStats：「墩分」只算一般墩、特殊牌型那一行是表上數字（被衝三每家 −2），各項加總＝本局墩數
 // 做法：兩家只有要比的那一墩不同、另外兩墩點數一樣（不比花色＝平手），那一組的分數就是這一墩的墩數。
 import { makeCard, type Card } from "../lib/thirteen/cards";
-import { scoreRound } from "../lib/thirteen/score";
-import { handStats } from "../lib/thirteen/flow";
+import { scoreRound as scoreRoundR, type ScoreRule } from "../lib/thirteen/score";
+import type { Arrangement } from "../lib/thirteen/arrange";
+import { handStats as handStatsR } from "../lib/thirteen/flow";
+// 2026-11-19 v4 上線後，函式沒指定規則＝v4；這支測試寫的是舊規則，這裡把預設釘回舊規則（v4 另有 _thirteen-rule-v4.ts）
+const scoreRound = (a: Arrangement[], r: ScoreRule = "jia") => scoreRoundR(a, r);
+const handStats = (res: Parameters<typeof handStatsR>[0], r: ScoreRule = "jia") => handStatsR(res, r);
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {

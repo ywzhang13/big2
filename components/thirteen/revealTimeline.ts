@@ -4,7 +4,8 @@
 //   → 打槍（每槍 1.5 秒）→ 全壘打（3.2 秒）→ 停 1.2 秒 → 本局結算面板
 // 長度和伺服器同一套（lib/thirteen/flow.ts REVEAL_TIMING、revealDurationMs）：結算面板出現的時間＝伺服器的 settleAt，四家同步
 // 起點用伺服器的亮牌時間 revealedAt：四家看到的進度一樣，重新整理也接得上（不會從頭再播）
-import { CAT, CAT_NAME, SCORING, bonusOf, evalRow, type Card, type Arrangement, type HandValue, type RoundResult, type Row } from "@/lib/thirteen";
+import { CAT, SCORING, bonusOf, rowPoints, type Card, type Arrangement, type HandValue, type RoundResult, type Row } from "@/lib/thirteen";
+import { rowCatName, rowDisplayOrder } from "./arrangeState";
 import { REVEAL_TIMING, type HandStat, type ScoredStat } from "@/lib/thirteen/flow";
 
 export const ROWS: Row[] = ["front", "middle", "back"];
@@ -23,10 +24,14 @@ export interface ThReveal {
   rowDeltas?: Record<Row, number[]>;
   /** 這局四家的分數（老柯 2026-11-19：＝淨墩數 result.totals × 底分，伺服器乘好）；result.totals、stats 維持墩數給出牌動畫和明細。舊房沒有，退回 result.totals */
   scores?: number[];
+  /** 每家 16 張裡沒用到的 3 張（老柯 v4，比牌後才給，理牌時看不到別人的牌）；還沒有的版本不給，前端就不顯示 */
+  unusedCards?: Card[][];
   /** 這房的底分（舊房伺服器補 1） */
   baseScore?: number;
-  /** 計分規則（老柯 API 0-1c）："jia"＝甲案（2026-11-19 之後開的房）；沒有＝上線前開的舊房，照舊規則 v1 */
-  scoreRule?: "jia" | "v1";
+  /** 計分規則（老柯 API 0-1c、v4）："v4"＝v4 上線後開的房；"jia"＝甲案；沒有＝更早的舊房，照舊規則 v1 */
+  scoreRule?: "jia" | "v1" | "v4";
+  /** 這一局的彩金牌（v4 房；舊房 null 或沒有） */
+  luckyCard?: Card | null;
   playerScores: number[];
   over: boolean;
   /** 亮牌、結算面板出現、自動開下一局的伺服器時間（毫秒）；最後一局 nextHandAt＝null */
@@ -35,7 +40,7 @@ export interface ThReveal {
   nextHandAt: number | null;
 }
 
-export type PatternFx = "chongsan" | "tiezhi" | "tonghuashun" | "wulong";
+export type PatternFx = "chongsan" | "tiezhi" | "tonghuashun" | "wulong" | "jpchongsan" | "jphulu" | "jptiezhi";
 /** 新節奏（老闆 2026-11-18 定案、照參考影片；小宜 v12 §5、老柯伺服器公式：1.7＋3×6.0＋0.3×大牌＋1.5×槍＋3.2×全壘打＋1.2）。
  *  伺服器常數（start、play、wait、special、gun、homerun、settle）直接讀 REVEAL_TIMING，兩邊一起變；其他是前端畫面用的：
  *  startWord「開始比牌」大字；flip 牌翻面移到出牌區；pop 牌型在看板跳出；scoreDelay 第四家牌型跳完到加分出現；
@@ -53,29 +58,33 @@ export const revealDurationV8 = (specials: number, guns: number, homeRun: boolea
 
 export type Step =
   | { kind: "start"; t0: number; dur: number }
-  | { kind: "flip"; t0: number; dur: number; row: Row; seats: number[]; big: boolean }  // 一家一家出，seats 只有一位；big＝大牌（多佔 special）
+  | { kind: "flip"; t0: number; dur: number; row: Row; seats: number[]; big: boolean; fx: boolean }  // 一家一家出，seats 只有一位；big＝大牌（多佔 special、紅金牌型名）；fx＝有大字特效
   | { kind: "fx"; t0: number; dur: number; row: Row; seat: number; fx: PatternFx }
   | { kind: "gun"; t0: number; dur: number; from: number; to: number; n: number }
   | { kind: "homerun"; t0: number; dur: number; seat: number };
 
-/** 這一墩的牌型要不要播特效：頭墩三條＝衝三；中墩、尾墩的鐵支、同花順、五龍 */
+/** 這一墩的牌型播哪個大字（老闆 2026-11-20 新圖：彩金三種各有自己的字，不再借用一般版）：頭墩衝三／彩金衝三；中墩、尾墩的鐵支／彩金鐵支、
+ *  同花順（黑桃和非黑桃共用，老闆 2026-11-19）、五龍；中墩彩金葫蘆（尾墩彩金葫蘆不加分、不是大牌，所以沒有大字）。
+ *  只有「大牌」（isBigPattern）才會真的播，時間軸照這個挑 */
 export function patternFx(row: Row, v: HandValue): PatternFx | null {
-  if (row === "front") return v.cat === CAT.THREE_KIND ? "chongsan" : null;
-  return v.cat === CAT.FIVE_KIND ? "wulong" : v.cat === CAT.STRAIGHT_FLUSH ? "tonghuashun" : v.cat === CAT.FOUR_KIND ? "tiezhi" : null;
+  if (row === "front") return v.cat === CAT.THREE_KIND ? "chongsan" : v.cat === CAT.LUCKY_THREE ? "jpchongsan" : null;
+  if (v.cat === CAT.FIVE_KIND) return "wulong";
+  if (v.cat === CAT.STRAIGHT_FLUSH || v.cat === CAT.SPADE_STRAIGHT_FLUSH) return "tonghuashun";
+  if (v.cat === CAT.LUCKY_FOUR) return "jptiezhi";
+  if (v.cat === CAT.LUCKY_FULL_HOUSE) return "jphulu";
+  return v.cat === CAT.FOUR_KIND ? "tiezhi" : null;
 }
+/** 大牌（多佔 0.3 秒、紅金牌型名）：和伺服器 revealDurationMs 同一個條件 bonusOf(row, v) > 0，兩邊的亮牌長度才會一樣
+ *  （v4 表；舊房的特殊牌型在 v4 表上也都 > 0，所以舊房一樣） */
+export const isBigPattern = (row: Row, v: HandValue) => bonusOf(row, v) > 0;
 
-/** 一墩翻開時的排列（老闆 2026-11-18：A Q A A Q 要顯示成 A A A Q Q）：照計分引擎的比較序 keys（例如葫蘆＝[三條點數, 對子點數]）
- *  在 keys 前面的點數排前面，不在 keys 裡的（踢腳、順子其他張）照點數大到小 */
-export function rowDisplayOrder(cards: Card[]): Card[] {
-  const keys = evalRow(cards).keys;
-  const at = (c: Card) => { const i = keys.indexOf(c.rank); return i < 0 ? keys.length : i; };
-  return cards.slice().sort((a, b) => at(a) - at(b) || b.rank - a.rank);
-}
+/** 一墩翻開時的排列（老闆 2026-11-19：A、2、3…J、Q、K；10 J Q K A 的順子、同花順 A 放最後）。跟理牌畫面同一支 */
+export { rowDisplayOrder };
 
-/** 牌型徽章的字：頭墩三條寫「衝三」，其他照計分引擎的名稱（同花一對、同花兩對比同花大，照實寫；老闆 2026-11-18）；bonus＝有加分的牌型（紅金色） */
+/** 牌型徽章的字：頭墩三條寫「衝三」、彩金三條寫「彩金衝三」，其他照計分引擎的名稱（同花一對、同花兩對照實寫；v4 的彩金三條／葫蘆／鐵支、黑桃同花順、同花順）；
+ *  bonus＝大牌（紅金色），和亮牌時間軸同一個判斷 */
 export function badgeOf(row: Row, v: HandValue): { label: string; bonus: boolean } {
-  const label = row === "front" && v.cat === CAT.THREE_KIND ? "衝三" : CAT_NAME[v.cat];
-  return { label, bonus: bonusOf(row, v) > 0 };
+  return { label: rowCatName(row, v.cat), bonus: isBigPattern(row, v) };
 }
 
 /** 每一墩每家的得失分（兩兩比；不含打槍、全壘打）。只在伺服器沒給 rv.rowDeltas 時用。
@@ -86,7 +95,8 @@ export function rowDeltas(result: RoundResult, scoreRule?: ThReveal["scoreRule"]
     const r = p.rows[row];
     if (r.winner === null) continue;
     const loser = r.winner === p.a ? p.b : p.a;
-    const unit = scoreRule === "jia" ? (r.bonus > 0 ? r.bonus : 1) : 1 + r.bonus; // 和後端 score.ts 同一條規則
+    const unit = rowPoints(r.bonus, scoreRule ?? "v1"); // 和後端 score.ts 同一條規則（v4：一般牌型那一道 0）
+    if (unit === 0) continue;
     out[row][r.winner] += unit;
     out[row][loser] -= unit;
   }
@@ -102,9 +112,10 @@ export function buildTimeline(rv: Pick<ThReveal, "order" | "result">): { steps: 
   let t: number = MS.start;
   for (const row of ROWS) {
     for (const seat of rv.order[row].flat()) { // 最小的先出；一樣大的照順序一家一家出（各 1.5 秒，大牌多 0.3）
-      const fx = patternFx(row, rv.result.values[seat][row]);
-      const dur = MS.play + (fx ? MS.special : 0);
-      steps.push({ kind: "flip", t0: t, dur, row, seats: [seat], big: !!fx });
+      const v = rv.result.values[seat][row];
+      const big = isBigPattern(row, v), fx = big ? patternFx(row, v) : null;
+      const dur = MS.play + (big ? MS.special : 0);
+      steps.push({ kind: "flip", t0: t, dur, row, seats: [seat], big, fx: !!fx });
       if (fx) steps.push({ kind: "fx", t0: t + MS.fxDelay, dur: MS.fx, row, seat, fx }); // 大字從出牌後 0.5 秒播 1.5 秒，和下一家出牌重疊
       t += dur;
     }
@@ -116,8 +127,9 @@ export function buildTimeline(rv: Pick<ThReveal, "order" | "result">): { steps: 
 }
 
 type FlipStep = Extract<Step, { kind: "flip" }>;
-/** 牌型在看板出現的時間：一般牌型牌落定就跳出；大牌等大字播完（出牌後 0.5＋1.5 秒）才顯示紅金牌型名、不跳（老闆定案「大字播完中央也要顯示」） */
-export const patternAt = (f: FlipStep) => f.t0 + (f.big ? MS.fxDelay + MS.fx : MS.flip);
+/** 牌型在看板出現的時間：一般牌型牌落定就跳出；有大字的大牌等大字播完（出牌後 0.5＋1.5 秒）才顯示紅金牌型名、不跳（老闆定案「大字播完中央也要顯示」）；
+ *  沒有大字的大牌（彩金葫蘆）牌落定就顯示紅金名 */
+export const patternAt = (f: FlipStep) => f.t0 + (f.fx ? MS.fxDelay + MS.fx : MS.flip);
 /** 每一墩加分出現、清空的時間（小宜 v12 §5）：第四家牌型跳完 0.1 秒後出現；留到下一墩第一家的牌落定才清空；尾墩留到結算（end）。
  *  有打槍／全壘打時，尾墩在打槍開始時淡出。換墩或淡出都至少等加分出現 boardHold 之後（最後一家是大牌時，名字和加分才看得到） */
 export function scoreWindows(tl: { steps: Step[]; end: number }): { row: Row; from: number; to: number }[] {
@@ -204,3 +216,7 @@ export const boardDeltas = (rv: Pick<ThReveal, "result" | "rowDeltas" | "scoreRu
 
 /** 本局結算「這局幾分」：伺服器給的 scores（已乘底分）；舊房沒有就照舊用 result.totals */
 export const handScore = (rv: Pick<ThReveal, "result" | "scores">, seat: number): number => rv.scores?.[seat] ?? rv.result.totals[seat];
+/** 亮牌途中名牌的分數（老闆 2026-11-19：一開始比牌就跳成這局的結果，等於提前知道輸贏）：
+ *  伺服器亮牌時 playerScores 已經含這一局，所以本局結算出現前顯示「減掉這一局」＝上一局結束時的累計；結算出現後才是新的累計 */
+export const plateScore = (rv: Pick<ThReveal, "result" | "scores" | "playerScores">, seat: number, settled: boolean): number =>
+  (rv.playerScores[seat] ?? 0) - (settled ? 0 : handScore(rv, seat));
