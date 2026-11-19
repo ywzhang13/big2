@@ -19,7 +19,7 @@ export async function setupThirteenDb(): Promise<PGlite> {
     "migrations/20261022_mahjong_prefs.sql", "migrations/20261023_mahjong_chat.sql", "migrations/20261024_mahjong_prefs_v4.sql",
     "migrations/20261113_mahjong_chat_history.sql", "migrations/20261116_thirteen_rooms.sql", "migrations/20261117_thirteen_chat.sql",
     "migrations/20261118_thirteen_records.sql", "migrations/20261118_thirteen_lobby.sql",
-    "migrations/20261119_thirteen_base_score.sql"]) {
+    "migrations/20261119_thirteen_base_score.sql", "migrations/20261119_thirteen_lobby_rename.sql"]) {
     await db.exec(readFileSync(path.join(SUPA, f), "utf8"));
   }
   const base = "http://thirteen-flow.test";

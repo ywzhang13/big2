@@ -23,11 +23,15 @@ const waiting = (n: number): ThWaitingView => ({ status: "waiting", code: "1234"
 const w = (n: number, me: string) => renderToStaticMarkup(createElement(ThWaiting, { view: waiting(n), myPlayerId: me, onStart: async () => ({ ok: true }), onLeave: async () => ({ ok: true }) }));
 {
   const h3 = w(3, "p0"), h4 = w(4, "p0"), g4 = w(4, "p2");
-  ok(/disabled=""[^>]*>等待玩家 \(3\/4\)</.test(h3) && count(h3, /等待中\.\.\./g) === 1, "W1 房主、3 人：開始鈕停用、寫「等待玩家 (3/4)」，空位一格「等待中...」（同麻將）");
-  ok(/>開始遊戲</.test(h4) && !/disabled=""[^>]*>開始遊戲</.test(h4), "W2 房主、滿 4 人：「開始遊戲」可以按");
-  ok(/等待房主開始遊戲/.test(g4) && !/data-th-start/.test(g4), "W3 不是房主、滿 4 人：看到「等待房主開始遊戲」，沒有開始鈕");
-  ok(/1234/.test(h4) && /理牌 60 秒/.test(h4) && /2局/.test(h4) && /老闆 \(你\) \*/.test(h4.replace(/<!-- -->/g, "")) && /退出房間/.test(h4), "W4 房間碼、理牌秒數與局數、自己標「(你)」、房主「*」、退出房間（同麻將）");
-  ok(/class="mjl mjl-wait-page/.test(h4) && /class="mjw /.test(h4) && /mjw-seat/.test(h4) && /mjw-start/.test(h4), "W5 直接用麻將等人畫面的樣式（mjl-wait-page、mjw、mjw-seat、mjw-start）");
+  const plain = (h: string) => h.replace(/<!-- -->/g, "");
+  ok(/data-gl-status[^>]*>等待玩家 3\/4</.test(plain(h3)) && !/data-gl-start/.test(h3) && count(h3, /class="gl-seat empty"/g) === 1 && !/等待中/.test(h3),
+    "W1 房主、3 人：狀態條「等待玩家 3/4」（不是按鈕），空位一格虛線框、裡面沒有字（共用等人 v1.1）");
+  ok(/data-gl-start[^>]*>開始遊戲</.test(h4) && !/disabled=""[^>]*data-gl-start/.test(h4), "W2 房主、滿 4 人：「開始遊戲」可以按");
+  ok(/data-gl-status[^>]*>等待房主開始</.test(g4) && !/data-gl-start/.test(g4), "W3 不是房主、滿 4 人：狀態條「等待房主開始」，沒有開始鈕");
+  ok(/data-gl-room="?[^>]*>1234</.test(h4) && /複製邀請連結/.test(h4) && /理牌 60 秒/.test(plain(h4)) && /2局/.test(plain(h4)) && /class="gl-seat me" data-gl-seat="0"[\s\S]*?老闆[\s\S]*?gl-tag host">房主</.test(h4)
+    && /退出房間/.test(h4) && !/座位 \d|\(你\)|等待中|房間碼|等待玩家加入/.test(plain(h4)),
+    "W4 房號＋複製邀請連結、設定摘要、自己金色（me）、房主膠囊、退出房間；不寫「座位 N」「(你)」「等待中...」「房間碼」、沒有標題");
+  ok(/class="gl wait mjl"/.test(h4) && count(h4, /data-gl-seat=/g) === 4, "W5 用三款共用的等人畫面（components/gameLobby 的 .gl wait），四列座位");
 }
 
 // ---- T 牌桌 ----

@@ -10,9 +10,11 @@ import { useMjAuth } from "@/hooks/useMjAuth";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 import { migrateOldSfxSwitch } from "@/components/thirteen/sfx";
 import { mjStorage } from "@/lib/mahjong/clientAuth";
-import { GuestGate, LoginGate, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
+import { AuthBar, GuestGate, LoginGate, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
 import ThArrange from "@/components/thirteen/ThArrange";
-import ThLobby from "@/components/thirteen/ThLobby";
+import ThLobby, { ThBrand } from "@/components/thirteen/ThLobby";
+import { InviteNamePrompt } from "@/components/gameLobby/GameLobby";
+import { initialName, inviteNeedsName, loadGameName, saveGameName } from "@/components/gameLobby/name";
 import ThTable from "@/components/thirteen/ThTable";
 import ThReveal from "@/components/thirteen/ThReveal";
 import { ThFinalResult, type MatchStat } from "@/components/thirteen/ThResult";
@@ -41,6 +43,8 @@ function adoptQueryRoom(): void {
 }
 /** 分頁存的「上次入座的房間」（重新整理恢復用，見 components/thirteen/roomScreen.ts） */
 const tabStore = () => window.sessionStorage;
+/** 這台存的暱稱（三款共用 game_name；遊客分頁存 sessionStorage，同麻將）。第一次讀會把麻將手動改過的 mj_name、大老二的 big2_name 搬過來 */
+const storedName = () => loadGameName(mjStorage(), { mj: mjStorage(), big2: window.localStorage });
 
 export default function ThirteenPage() {
   const router = useRouter();
@@ -60,6 +64,7 @@ function ThirteenScreens() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resume, setResume] = useState<{ code: string; status: string } | null>(null);
+  const [invite, setInvite] = useState<string | null>(null); // 點邀請連結進來、這台還沒存過名字：先問名字（小宜 v1.1 §6）
   const [arrangeKey, setArrangeKey] = useState(0);
   const [notice, setNotice] = useState("");
   const [now, setNow] = useState(() => Date.now());
@@ -78,10 +83,14 @@ function ThirteenScreens() {
     return () => ctrl.abort();
   }, [auth.status, prefsUserId, prefsGuest]);
 
-  const doJoin = useCallback(async (code: string) => {
+  const lineName = auth.user?.displayName ?? null;
+  /** 不經過暱稱欄的入座（回到房間、已經有名字的邀請連結）：這台存的名字 → LINE 名稱前 8 個字 */
+  const autoName = useCallback(() => initialName(storedName(), lineName).name || "玩家", [lineName]);
+
+  /** save：名字是玩家在暱稱欄按「建立房間」「加入」送出的，成功才存成 game_name */
+  const doJoin = useCallback(async (code: string, name: string, save = false) => {
     setBusy(true); setError("");
     try {
-      const name = (auth.user?.displayName || "玩家").slice(0, 20);
       const r = await apiJson<{ roomId: string; seat: number; playerId: string; channel: string }>("/api/thirteen/join",
         { method: "POST", body: JSON.stringify({ code, playerId: playerId(), name }) });
       if (r.status !== 200) {
@@ -90,20 +99,22 @@ function ThirteenScreens() {
         return;
       }
       const j = { roomId: r.body.roomId, code, playerId: r.body.playerId, seat: r.body.seat, channel: r.body.channel };
+      if (save) saveGameName(mjStorage(), name);
+      setInvite(null);
       saveLastJoin(tabStore(), j);
       setJoin(j);
       if (hashRoom() !== code) window.location.hash = `room=${code}`;
     } catch {
       setError("網路不穩，請再試一次");
     } finally { setBusy(false); }
-  }, [auth.user]);
+  }, []);
 
-  async function doCreate(arrangeSec: number, totalHands: number, baseScore: number) {
+  async function doCreate(arrangeSec: number, totalHands: number, baseScore: number, name: string) {
     setBusy(true); setError("");
     try {
       const c = await apiJson<{ roomId: string; code: string }>("/api/thirteen/create", { method: "POST", body: JSON.stringify({ hostId: playerId(), arrangeSec: toServerArrangeSec(arrangeSec), totalHands, baseScore }) });
       if (c.status !== 200) { setError(c.body.message ?? "開房失敗"); return; }
-      await doJoin(c.body.code);
+      await doJoin(c.body.code, name, true);
     } catch {
       setError("網路不穩，請再試一次");
     } finally { setBusy(false); }
@@ -118,11 +129,15 @@ function ThirteenScreens() {
     // 房號被別場重用也不會用 join 誤入新場）。審伯必修 1
     const saved = code ? loadLastJoin(tabStore(), code) : null;
     if (saved) { setJoin(saved); return; }
-    if (code) { void doJoin(code); return; }
+    if (code) {
+      if (inviteNeedsName(storedName())) setInvite(code); // 第一次用邀請連結：問名字
+      else void doJoin(code, autoName());                 // 存過名字：直接入座
+      return;
+    }
     apiJson<{ room: { code: string; status: string } | null }>("/api/thirteen/my-room")
       .then((r) => setResume(r.status === 200 && r.body.room ? { code: r.body.room.code, status: r.body.room.status } : null))
       .catch(() => {});
-  }, [loggedIn, join, doJoin]);
+  }, [loggedIn, join, doJoin, autoName]);
 
   // 倒數用的時鐘；理牌截止時間（伺服器時間）過了就請伺服器推進一次（代排、亮牌由伺服器決定）
   const view = room.view;
@@ -187,6 +202,7 @@ function ThirteenScreens() {
   const backToLobby = () => {
     history.replaceState(null, "", window.location.pathname);
     clearLastJoin(tabStore());
+    setInvite(null);
     setJoin(null);
     setShow(null);
     setConfirmedKey(null);
@@ -271,9 +287,14 @@ function ThirteenScreens() {
     );
   }
 
+  if (!join && invite) {
+    return <InviteNamePrompt className="mjl" brand={<ThBrand />} top={<AuthBar user={auth.user!} onSignOut={auth.signOut} />} code={invite}
+      initialName={initialName(storedName(), lineName)} busy={busy} error={error} onJoin={(name) => void doJoin(invite, name, true)} onBack={backToLobby} />;
+  }
   if (!join || !view) {
     if (join || (busy && hashRoom())) return <div className="th-room th-loading">進入房間中…</div>;
-    return <ThLobby user={auth.user!} onSignOut={auth.signOut} busy={busy} error={error} resume={resume} onCreate={doCreate} onJoin={doJoin} onHome={goHome} />;
+    return <ThLobby user={auth.user!} onSignOut={auth.signOut} busy={busy} error={error} resume={resume} nameInit={initialName(storedName(), lineName)}
+      onCreate={doCreate} onJoin={(code, name) => void doJoin(code, name, true)} onResume={(code) => void doJoin(code, autoName())} onHome={goHome} />;
   }
 
   if (view.status === "waiting") return <ThWaiting view={view} myPlayerId={join.playerId} onStart={room.start} onLeave={leaveRoom} />;

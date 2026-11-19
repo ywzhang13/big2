@@ -22,7 +22,8 @@ export interface ThWaitingView {
   settings: ThSettings;
   /** 這房的底分（老柯 2026-11-19：讀最上層；舊房伺服器補 1） */
   baseScore?: number;
-  seats: { seat: number; name: string; playerId: string }[];
+  /** avatarUrl：LINE 大頭照（老柯 API；沒有就是 null，座位照舊顯示名字第一個字） */
+  seats: { seat: number; name: string; playerId: string; avatarUrl?: string | null }[];
 }
 export interface ThGameView {
   status: "playing" | "finished";

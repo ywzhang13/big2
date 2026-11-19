@@ -155,7 +155,7 @@ export async function insertPlayer(row: { room_id: string; player_id: string; na
  * 在同一個交易裡鎖住房間那一列再改座位和房間（房主交接、版本 +1、最後一人離開就刪房），和開局存檔、關房、閒置清除不會交錯。
  */
 export type LobbyJoinResult =
-  | { ok: true; rejoined: boolean; seat: number; player_id: string; state_version?: number }
+  | { ok: true; rejoined: boolean; renamed?: boolean; seat: number; player_id: string; state_version?: number } // renamed：等人階段重新加入換了名字（20261119）
   | { error: "room_not_found" | "started" | "full" | "player_taken" | "host_reserved" };
 export async function lobbyJoin(roomId: string, playerId: string, name: string, userId: string): Promise<LobbyJoinResult> {
   const { data, error } = await getSupabaseAdmin().rpc("th_lobby_join", { p_room_id: roomId, p_player_id: playerId, p_name: name, p_user_id: userId });

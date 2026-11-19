@@ -21,18 +21,27 @@ const { ThRoundResult } = await import("../components/thirteen/ThResult");
 
 // ---- L 開房 ----
 {
-  const lobby = readFileSync("components/thirteen/ThLobby.tsx", "utf8"), page = readFileSync("app/thirteen/page.tsx", "utf8");
-  const card = lobby.slice(lobby.indexOf(">底分<") - 400, lobby.indexOf("data-th-base-custom") + 600);
+  const page = readFileSync("app/thirteen/page.tsx", "utf8");
   ok(JSON.stringify(BASE_SCORE_OPTIONS) === "[30,50,100,200]" && BASE_SCORE_DEFAULT === 100, `L1 底分選項 ${BASE_SCORE_OPTIONS.join("／")}＋自訂、預設 ${BASE_SCORE_DEFAULT}`);
-  ok(lobby.indexOf(">局數<") < lobby.indexOf(">底分<") && /\$\{OPT\} \$\{!custom && base === n \? OPT_ON : OPT_OFF\}/.test(card) && />自訂</.test(card) && !/mjl-sub/.test(card),
-    "L2 底分在局數下面、四顆＋「自訂」一排，樣式和局數按鈕同一組（OPT／OPT_ON／OPT_OFF），沒有說明小字");
+  const { CreateRoomShell, sectionValue } = await import("../components/gameLobby/GameLobby");
+  const { TH_SECTIONS } = await import("../components/thirteen/ThLobby");
+  const shell = (name: string) => renderToStaticMarkup(createElement(CreateRoomShell, { brand: null, sections: TH_SECTIONS, initialName: { name, fromLine: false }, busy: false, error: "", onCreate: () => {}, onBack: () => {} })).replace(/<!-- -->/g, "");
+  const created = shell("老闆");
+  const cardTitles = [...created.matchAll(/<h4>([^<]*)<\/h4>/g)].map((m) => m[1]);
+  ok(JSON.stringify(cardTitles) === JSON.stringify(["理牌時間", "局數", "底分"]) && /data-gl-opt="base:30"[\s\S]*data-gl-opt="base:200"[\s\S]*data-gl-custom-on="base"[^>]*>自訂</.test(created)
+    && /data-gl-opt="base:100"[^>]*aria-pressed="true"/.test(created) && !/4 人|65 張|～|基本分/.test(created),
+    `L2 開房用共用外框：設定卡 ${cardTitles.join("／")}（照設計稿順序）、底分 30／50／100／200＋自訂、預設 100，卡片只有標題沒有副標`);
   const cases = ["10", "100000", "300", "9", "100001", "", " ", "12.5", "abc", "0", "1e3", "-50"].map((t) => [t, parseBaseScore(t)]);
   ok(JSON.stringify(cases.map(([, v]) => v)) === JSON.stringify([10, 100000, 300, null, null, null, null, null, null, null, null, null]),
     `L3 自訂底分只收 10～100000 的整數：${cases.map(([t, v]) => `"${t}"→${v}`).join("、")}`);
-  ok(/disabled=\{busy \|\| baseScore === null\}/.test(lobby) && /if \(baseScore !== null\) onCreate\(sec, hands, baseScore\)/.test(lobby),
-    "L4 自訂底分超出範圍（baseScore 是 null）：建立房間按鈕停用、按了也不送出");
-  const onChange = /data-th-base-custom[\s\S]*?onChange=\{\(e\) => setCustomText\(([^)]*\))\)\}/.exec(lobby)?.[1] ?? "";
-  ok(!/replace/.test(onChange) && parseBaseScore("12.5") === null && parseBaseScore("1e3") === null,
+  const baseSec = TH_SECTIONS[2];
+  const shellSrc = readFileSync("components/gameLobby/GameLobby.tsx", "utf8");
+  ok(sectionValue(baseSec, { value: 100, custom: true, text: "12.5" }) === null && sectionValue(baseSec, { value: 100, custom: true, text: "300" }) === 300
+    && /const ok = !!nm\.valid && Object\.values\(values\)\.every\(\(v\) => v !== null\)/.test(shellSrc) && /disabled=\{!ok \|\| busy\}/.test(shellSrc) && /if \(ok && !busy\) onCreate/.test(shellSrc)
+    && /disabled=""[^>]*data-gl-go="create"|data-gl-go="create"[^>]*disabled=""/.test(shell("   ")),
+    "L4 自訂底分不合法（null）或暱稱空白：建立房間按鈕停用、按了（含 Enter）也不送出");
+  const onChange = /data-gl-custom=[\s\S]*?onChange=\{\(e\) => set\(\{ text: ([^}]*) \}\)\}/.exec(shellSrc)?.[1] ?? "";
+  ok(onChange !== "" && !/replace/.test(onChange) && parseBaseScore("12.5") === null && parseBaseScore("1e3") === null,
     `L6 自訂底分輸入不偷刪字元（${onChange}）：打「12.5」照原樣留著 → 不合法、不能開房（之前會被刪成 125）`);
   ok(/JSON\.stringify\(\{ hostId: playerId\(\), arrangeSec: toServerArrangeSec\(arrangeSec\), totalHands, baseScore \}\)/.test(page), "L5 開房時把底分用 baseScore 送給 /api/thirteen/create");
 }
@@ -42,7 +51,7 @@ const { ThRoundResult } = await import("../components/thirteen/ThResult");
   const view = (baseScore?: number): ThWaitingView => ({ status: "waiting", code: "1234", hostId: "p0", settings: { arrangeSec: 60, totalHands: 8, ...(baseScore && baseScore > 1 ? { baseScore } : {}) }, ...(baseScore !== undefined ? { baseScore } : {}), seats: [{ seat: 0, name: "老闆", playerId: "p0" }] });
   const h = (v: ThWaitingView) => renderToStaticMarkup(createElement(ThWaiting, { view: v, myPlayerId: "p0", onStart: async () => ({ ok: true }), onLeave: async () => ({ ok: true }) })).replace(/<!-- -->/g, "");
   const withBase = h(view(500)), legacy = h(view(1)), none = h(view());
-  ok(/data-th-base-label[^>]*>底分 500</.test(withBase) && /理牌 60 秒/.test(withBase) && /8局/.test(withBase), "W1 有底分的房：等人畫面寫「底分 500」，和理牌秒數、局數放同一行（讀最上層的 baseScore）");
+  ok(/<div class="gl-chips"><span>8局<\/span><span>理牌 60 秒<\/span><span>底分 500<\/span><\/div>/.test(withBase), "W1 有底分的房：等人畫面的設定摘要「8局」「理牌 60 秒」「底分 500」（讀最上層的 baseScore）");
   ok(!/底分/.test(legacy) && !/底分/.test(none), "W2 舊房（伺服器補 baseScore=1）或沒有這個欄位：不顯示底分，畫面和改之前一樣");
 }
 

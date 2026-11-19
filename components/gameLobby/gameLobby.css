@@ -1,0 +1,123 @@
+/* 三款共用的開房、加入、取名、等人（小宜〈共用開房流程 v1.1〉2026-11-19；數值照設計稿 .gl-*，外觀沿用麻將大廳）。
+   「手機橫向」＝橫拿而且視窗高 ≤ 500（同麻將）。桌機、手機用同一份 DOM，靠 CSS 換排法（不重複畫輸入欄）：
+     開房：DOM＝品牌｜設定｜右欄（暱稱、建立、返回）。桌機一欄：品牌 → 暱稱 → 設定 → 建立 → 返回；手機：左設定 420、右欄 260，不顯示品牌
+     等人：DOM＝左欄（房號、摘要、退出）｜右欄（座位、開始）。桌機一欄：房號 → 摘要 → 座位 → 開始 → 退出；手機左 210、右 300 */
+.gl {
+  --h: 56px; --r: 16px; --fs: 18px; --gap: 16px;
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap);
+  min-height: 100dvh; padding: 16px calc(24px + var(--sar)) 16px calc(24px + var(--sal)); background: #0f2a1a; color: #fff;
+  /* 蓋過 body 為安全區留的 padding（同麻將 .mjl-lobby），iPhone 四邊不露出桌布 */
+  margin: calc(-1 * var(--sat)) calc(-1 * var(--sar)) calc(-1 * var(--sab)) calc(-1 * var(--sal)); width: auto; flex: 1 1 auto;
+}
+.gl-brand { flex: none; margin-bottom: 12px; } /* 品牌和內容欄間隔 28＝欄內 16＋12 */
+.gl-col { display: flex; flex-direction: column; gap: var(--gap); width: 384px; max-width: 100%; flex: none; }
+.gl-ttl { font-size: 24px; font-weight: 800; color: #f0d68a; text-align: center; letter-spacing: .04em; }
+.gl-ttl b { font-variant-numeric: tabular-nums; letter-spacing: .14em; margin-left: 6px; }
+
+/* 輸入欄 */
+.gl-field { position: relative; }
+.gl-in { width: 100%; height: var(--h); border-radius: var(--r); background: rgba(255,255,255,.1); color: #fff; text-align: center; font-size: var(--fs); outline: none; border: 0; transition: box-shadow .15s; }
+.gl-in::placeholder { color: rgba(255,255,255,.3); }
+.gl-in:focus { box-shadow: 0 0 0 2px rgba(201,169,110,.5); }
+.gl-in.code { font-size: 24px; letter-spacing: .5em; text-indent: .5em; font-variant-numeric: tabular-nums; }
+.gl-in.code::placeholder { font-size: 16px; letter-spacing: 0; }
+.gl-line { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; font-size: 11px; color: rgba(255,255,255,.4); background: rgba(0,0,0,.3); padding: 3px 8px; border-radius: 999px; pointer-events: none; }
+.gl-line i { width: 8px; height: 8px; border-radius: 50%; background: #06C755; }
+
+/* 按鈕 */
+.gl-btn { width: 100%; height: var(--h); border-radius: var(--r); background: #C9A96E; color: #0f2a1a; font-size: var(--fs); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; transition: all .15s; }
+.gl-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.gl-btn:active:not(:disabled) { transform: scale(.97); }
+.gl-btn:disabled { opacity: .35; cursor: not-allowed; }
+.gl-btn.mute { background: rgba(255,255,255,.1); color: rgba(255,255,255,.55); font-weight: 600; cursor: default; }
+.gl-btn.line { height: 44px; background: transparent; border: 1px solid rgba(201,169,110,.4); color: #f0d68a; font-size: 14px; }
+.gl-btn.line:hover:not(:disabled) { background: rgba(255,255,255,.05); filter: none; }
+.gl-back { align-self: center; min-height: 36px; padding: 0 16px; font-size: 14px; color: rgba(255,255,255,.4); background: none; border: 0; cursor: pointer; }
+.gl-back:hover { color: rgba(255,255,255,.65); }
+.gl-err { font-size: 14px; color: #f87171; text-align: center; }
+.gl-err.full { font-size: 16px; font-weight: 700; }
+.gl button:focus-visible, .gl input:focus-visible { outline: 2px solid #f0d68a; outline-offset: 2px; }
+
+/* 開房設定卡（各遊戲交資料，外框畫） */
+.gl-set { display: flex; flex-direction: column; gap: 12px; width: 384px; max-width: 100%; flex: none; }
+.gl-card { border-radius: 16px; padding: 14px 16px 16px; background: linear-gradient(145deg, rgba(201,169,110,.08), rgba(255,255,255,.03)); border: 1px solid rgba(201,169,110,.15); }
+.gl-card h4 { font-size: 14px; font-weight: 700; color: #f0d68a; margin: 0 0 10px; }
+.gl-opts { display: grid; gap: 8px; }
+.gl-opt { height: 44px; border-radius: 12px; font-size: 16px; font-weight: 700; background: rgba(255,255,255,.05); color: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.05); transition: all .15s; font-variant-numeric: tabular-nums; min-width: 0; width: 100%; text-align: center; cursor: pointer; outline: none; }
+.gl-opt:hover:not(.on):not(:disabled) { background: rgba(255,255,255,.1); }
+.gl-opt:active:not(:disabled) { transform: scale(.95); }
+.gl-opt.on { background: #C9A96E; color: #0f2a1a; border-color: transparent; box-shadow: 0 6px 14px rgba(201,169,110,.2); }
+.gl-opt:disabled { opacity: .3; cursor: not-allowed; }
+.gl-opt.bad { box-shadow: 0 0 0 2px rgba(248,113,113,.75); }
+input.gl-opt { cursor: text; }
+.gl-step { display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px; }
+.gl-step label { display: flex; align-items: center; justify-content: center; gap: 4px; cursor: text; }
+.gl-step label input { width: 3em; text-align: center; font-weight: 700; background: none; border: 0; outline: none; color: inherit; font-size: inherit; }
+.gl-step label span { font-size: 14px; }
+
+/* 等人 */
+.gl-code { border-radius: 16px; background: rgba(255,255,255,.1); padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.gl-code small { font-size: 12px; color: rgba(255,255,255,.5); }
+.gl-code b { font-size: 40px; line-height: 1.1; color: #C9A96E; letter-spacing: .3em; text-indent: .3em; font-variant-numeric: tabular-nums; }
+.gl-copy { height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(201,169,110,.4); color: #f0d68a; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: none; cursor: pointer; transition: all .15s; }
+.gl-copy:hover { background: rgba(255,255,255,.06); }
+.gl-copy:active { transform: scale(.96); }
+.gl-copy.ok { border-color: rgba(74,222,128,.55); color: #86efac; }
+.gl-chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.gl-chips span { height: 28px; padding: 0 12px; border-radius: 999px; background: rgba(255,255,255,.06); font-size: 13px; color: rgba(255,255,255,.6); display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
+.gl-seats { display: flex; flex-direction: column; gap: 8px; }
+/* 座位＝共用名牌的座位版：頭像（照片蓋在名字第一個字上，載不到就藏起來）＋名字＋「房主」 */
+.gl-seat { --av: 40px; height: 56px; border-radius: 14px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 10px; padding: 0 12px 0 8px; animation: gl-in .25s ease-out both; }
+.gl-seat.empty { background: transparent; border: 1px dashed rgba(255,255,255,.14); animation: none; }
+.gl-seat .av { position: relative; flex: none; width: var(--av); height: var(--av); border-radius: 50%; background: rgba(255,255,255,.1); border: 1.5px solid transparent; display: grid; place-items: center; font-size: calc(var(--av) * .45); font-weight: 700; color: rgba(255,255,255,.6); overflow: hidden; }
+.gl-seat .av img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.gl-seat .nm { flex: 1; min-width: 0; font-size: 17px; font-weight: 700; color: rgba(255,255,255,.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-seat.me .av { border-color: #C9A96E; }
+.gl-seat.me .nm { color: #f0d68a; }
+.gl-tag { flex: none; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; white-space: nowrap; }
+.gl-tag.host { background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; }
+@keyframes gl-in { from { opacity: 0; transform: scale(.96); } }
+
+/* ---- 桌機：開房、等人把欄位攤平成一欄（順序靠 order） ---- */
+@media not ((orientation: landscape) and (max-height: 500px)) {
+  .gl.has-set > .gl-col, .gl.wait > .gl-col { display: contents; }
+  .gl.has-set > .gl-col > *, .gl.wait > .gl-col > * { width: 384px; max-width: 100%; }
+  .gl.has-set .gl-name { order: 1; } .gl.has-set > .gl-set { order: 2; } .gl.has-set .gl-go { order: 3; } .gl.has-set .gl-col > .gl-back, .gl.has-set .gl-col > .gl-err { order: 4; }
+  .gl.has-set .gl-col > .gl-back { width: auto; }
+  .gl.wait .gl-code { order: 1; } .gl.wait .gl-chips { order: 2; } .gl.wait .gl-seats { order: 3; } .gl.wait .gl-act { order: 4; } .gl.wait .gl-leave { order: 5; }
+}
+
+/* ---- 手機橫向 ---- */
+@media (orientation: landscape) and (max-height: 500px) {
+  .gl {
+    --h: 44px; --r: 13px; --fs: 16px; --gap: 10px;
+    flex-direction: row; gap: 36px; height: 100dvh; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    padding-top: max(12px, var(--sat), var(--sab)); padding-bottom: max(12px, var(--sat), var(--sab));
+  }
+  .gl-brand { margin-bottom: 0; }
+  .gl-col { width: 300px; }
+  .gl.has-set { gap: 20px; }
+  .gl.has-set > .gl-brand { display: none; }
+  .gl.has-set .gl-col { width: 260px; }
+  .gl-set { width: 420px; gap: 6px; }
+  .gl-ttl { font-size: 19px; }
+  .gl-in.code { font-size: 22px; }
+  .gl-card { border-radius: 14px; padding: 8px 10px; }
+  .gl-card h4 { margin-bottom: 6px; }
+  .gl-opts, .gl-step { gap: 6px; }
+  .gl-opt { height: 36px; font-size: 14px; border-radius: 10px; }
+  .gl-back { font-size: 12px; }
+  .gl.wait { gap: 24px; }
+  .gl.wait .gl-col.a { width: 210px; }
+  .gl.wait .gl-col.b { width: 300px; }
+  .gl-code { padding: 10px 12px; gap: 4px; }
+  .gl-code b { font-size: 34px; letter-spacing: .24em; text-indent: .24em; }
+  .gl-chips { gap: 6px; }
+  .gl-chips span { height: 26px; padding: 0 8px; font-size: 12px; }
+  .gl-seats { gap: 6px; }
+  .gl-seat { --av: 32px; height: 44px; border-radius: 12px; gap: 8px; padding: 0 10px 0 6px; }
+  .gl-seat .nm { font-size: 15px; }
+  .gl-btn.line { height: 40px; }
+}
