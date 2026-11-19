@@ -2,9 +2,10 @@
 import { getAuthUser, getPictureUrls } from "@/lib/auth";
 import { loadPlayers } from "@/lib/thirteen/db";
 import { clock, seatPlayers, startHand, touch } from "@/lib/thirteen/flow";
-import { fail, json, saveAndAnnounce, withRoom } from "@/lib/thirteen/server";
+import { fail, json, newGamesPaused, pausedResponse, saveAndAnnounce, withRoom } from "@/lib/thirteen/server";
 
 export async function POST(request: Request) {
+  if (newGamesPaused()) return pausedResponse(); // 退回前排空用：已開好的房也不能開打（上線計畫第 6 節）
   const body = await request.json().catch(() => null) as { roomId?: unknown; playerId?: unknown } | null;
   const user = await getAuthUser(request);
   if (!user) return fail(401, "not_logged_in");

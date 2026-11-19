@@ -4,9 +4,10 @@ import { randomInt } from "node:crypto";
 import { after } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { ARRANGE_SEC_MESSAGE, BASE_SCORE_MESSAGE, DEFAULT_BASE_SCORE, insertRoom, isArrangeSec, isBaseScore, isTotalHands, TOTAL_HANDS_MESSAGE } from "@/lib/thirteen/db";
-import { fail, json, sweepIdleThirteenRooms } from "@/lib/thirteen/server";
+import { fail, json, newGamesPaused, pausedResponse, sweepIdleThirteenRooms } from "@/lib/thirteen/server";
 
 export async function POST(request: Request) {
+  if (newGamesPaused()) return pausedResponse(); // 退回前排空用（上線計畫第 6 節）
   const user = await getAuthUser(request);
   if (!user) return fail(401, "not_logged_in");
   const body = await request.json().catch(() => null) as { hostId?: unknown; arrangeSec?: unknown; totalHands?: unknown; baseScore?: unknown } | null;

@@ -21,6 +21,14 @@ import { advance, cancelIfDenied, clock, evaluateLeave, luckyCardOf, revealPaylo
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
 export const fail = (status: number, error: string, message?: string, extra: Record<string, unknown> = {}) => json({ error, ...(message ? { message } : {}), ...extra }, status);
 
+/**
+ * 暫停開新局（老柯 2026-11-20，第三批上線總審必修：退回 957329f 之前先擋住新開 v4 房和開打，讓現有的房照 v4 打完或投票解散）。
+ * 環境變數 THIRTEEN_PAUSE_NEW=1 時開房、開局一律 503 paused（不用登入就回，方便用 curl 確認開關生效）；
+ * 已經開打的房不受影響（送出、亮牌、下一局、解散照常）。見上線計畫第 6 節。
+ */
+export const newGamesPaused = (env: Record<string, string | undefined> = process.env) => env.THIRTEEN_PAUSE_NEW === "1";
+export const pausedResponse = () => fail(503, "paused", "十三支暫停開新局，請稍後再試；已經在打的牌局照常打完");
+
 /** 公開頻道：房裡每個人（含觀戰）都收得到，只放不洩漏手牌的事件 */
 export const publicChannel = (code: string) => `th-${code}`;
 /**
