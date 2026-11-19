@@ -1,5 +1,5 @@
 // 十三支開局：POST { roomId, playerId }（房主本人）。四家到齊才能開；發牌、設理牌截止時間，每家的牌只送到自己的座位頻道
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, getPictureUrls } from "@/lib/auth";
 import { loadPlayers } from "@/lib/thirteen/db";
 import { clock, seatPlayers, startHand, touch } from "@/lib/thirteen/flow";
 import { fail, json, saveAndAnnounce, withRoom } from "@/lib/thirteen/server";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (seats.length < 4) return fail(400, "not_full", "滿 4 人才能開始");
     const s = room.game_state;
     const base = s.stateVersion;
-    seatPlayers(s, seats);
+    seatPlayers(s, seats, await getPictureUrls(seats.map((p) => p.user_id))); // 大頭照開局時查一次（同麻將），查不到是 null、不擋開局
     startHand(s, clock.now());
     touch(s, me.player_id, clock.now()); // 房主開局＝牌局動作；其他人從開局時間起算
     const sv = await saveAndAnnounce(room, s, base, { autoSeats: [], revealed: false, nextStarted: true }, [], "playing");

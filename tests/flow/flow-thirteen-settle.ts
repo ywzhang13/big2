@@ -21,6 +21,7 @@ import * as flow from "../../lib/thirteen/flow";
 import { buildDeck, shuffle, type Card } from "../../lib/thirteen/cards";
 import { autoArrange } from "../../lib/thirteen/arrange";
 import { bonusOf, ROWS, type RoundResult } from "../../lib/thirteen/score";
+import { DEFAULT_BASE_SCORE } from "../../lib/thirteen/db";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -112,7 +113,8 @@ if (v2.reveal?.stats) handStatsSeen.push(v2.reveal.stats);
   const sum = (k: "guns" | "gunned") => [0, 1, 2, 3].map((s) => handStatsSeen.reduce((n, h) => n + h[s][k], 0));
   // 小測 2026-11-18 補驗：五個欄位都逐家比對（被全壘打也比；第 1 局有全壘打，所以 1～3 號的被全壘打不是 0）
   const homeRunnedSum = [0, 1, 2, 3].map((s) => handStatsSeen.filter((h) => h[s].homeRunned).length);
-  const totalSum = [0, 1, 2, 3].map((s) => handStatsSeen.reduce((n, h) => n + h[s].total, 0));
+  // 每局明細 stats.total 是墩數；整場累計是分數＝墩數 × 底分（2026-11-19；這裡開房沒帶底分＝DEFAULT_BASE_SCORE）
+  const totalSum = [0, 1, 2, 3].map((s) => handStatsSeen.reduce((n, h) => n + h[s].total, 0) * DEFAULT_BASE_SCORE);
   eq(mid ? [mid.map((x) => x.guns), mid.map((x) => x.gunned), mid.map((x) => x.homeRuns), mid.map((x) => x.homeRunned), mid.map((x) => x.total), homeRunnedSum.some((n) => n > 0)] : null,
     [sum("guns"), sum("gunned"), [0, 1, 2, 3].map((s) => handStatsSeen.filter((h) => h[s].homeRun).length), homeRunnedSum, totalSum, true],
     "N4 讀狀態（進行中）帶整場累計：每家打槍、被打槍、全壘打、被全壘打、總分五個欄位都＝前兩局每局明細逐家加總（這兩局有人被全壘打）");
@@ -135,7 +137,7 @@ for (const p of PIDS) await submit(roomId, p, autoArrange((await state(roomId, p
     handStatsSeen.reduce((n, h) => n + h[seat].gunned, 0),
     handStatsSeen.filter((h) => h[seat].homeRun).length,
     handStatsSeen.filter((h) => h[seat].homeRunned).length,
-    handStatsSeen.reduce((n, h) => n + h[seat].total, 0),
+    handStatsSeen.reduce((n, h) => n + h[seat].total, 0) * DEFAULT_BASE_SCORE,
   ]);
   const cols = (xs: MS[] | undefined | null) => (xs ?? []).map((x) => [x.guns, x.gunned, x.homeRuns, x.homeRunned, x.total]); // 固定欄位順序（jsonb 存回來鍵會重排）
   eq([handStatsSeen.length, expected.some((e) => e[0] > 0), expected.some((e) => e[2] > 0), expected.map((e) => e[4]), cols(rec?.stats), cols(closed?.stats), goneR.status, cols(goneR.body.record?.stats)],

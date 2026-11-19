@@ -217,6 +217,14 @@
 .th-res-btn { width: 100%; height: 44px; border-radius: 999px; font-weight: 800; font-size: 15px; cursor: pointer; transition: filter .15s; }
 .th-res-btn.primary { background: linear-gradient(180deg, #e8c97a, #C9A96E); color: #0f2a1a; border: 0; }
 .th-res-btn.second { background: rgba(15,42,26,.9); color: #f0d68a; border: 1.5px solid rgba(201,169,110,.7); }
+/* 誰按了確認（老闆 2026-11-19：照麻將 .mjm-result .ready：✓ 實心金、… 虛線） */
+.th-res-ready { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
+.th-res-ready .cnt { width: 100%; text-align: center; color: rgba(243,234,210,.6); font-weight: 700; }
+.th-res-ready .chip { flex: 1 1 calc(50% - 4px); min-width: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.th-res-ready .chip i { font-style: normal; flex: 0 0 auto; }
+.th-res-ready .chip.ok { background: rgba(201,169,110,.85); color: #0f2a1a; border: 1px solid #f0d68a; }
+.th-res-ready .chip.wait { background: transparent; color: rgba(255,255,255,.5); border: 1px dashed rgba(255,255,255,.35); }
+.th-res-ready .line { width: 100%; text-align: center; color: #f0d68a; font-weight: 700; }
 .th-res-err { width: 100%; font-size: 12px; font-weight: 700; color: #ff9b92; text-align: center; }
 .th-res-btn:disabled { filter: grayscale(.4) brightness(.8); cursor: default; }
 .th-res-right { flex: 1 1 auto; max-width: 560px; display: flex; flex-direction: column; gap: 6px; }
@@ -234,7 +242,7 @@
 .th-res-type.is-bonus { background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; }
 .th-res-grp img { width: 23px; height: 32px; max-width: none; border-radius: 2px; box-shadow: -1px 0 2px rgba(0,0,0,.35); }
 .th-res-grp img + img { margin-left: -7px; }
-.th-res-pts { width: 62px; flex: 0 0 auto; text-align: right; }
+.th-res-pts { min-width: 62px; flex: 0 0 auto; text-align: right; white-space: nowrap; } /* 底分讓分數變大（−36000）：寬度跟著數字長，不會超出框 */
 .th-res-pts b { display: block; font: 800 19px "Chakra Petch", system-ui, sans-serif; line-height: 1.1; }
 .th-res-pts small { font-size: 10px; color: rgba(243,234,210,.6); }
 .th-res-pts .is-up { color: #6ee7a0; } .th-res-pts .is-down { color: #ff7b72; }

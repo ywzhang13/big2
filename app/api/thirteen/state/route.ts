@@ -3,10 +3,10 @@
 //   不帶 playerId → 不在桌上的畫面：亮牌前誰的牌都看不到。只有這桌的人、或被這桌至少一位玩家同意觀戰的人能讀，其他人 403 not_allowed
 //     （觀戰要先申請、被同意，比照麻將；觀戰者請用 /api/thirteen/spectate/view，內容一樣）
 // 每次讀都先推進牌局（截止時間到了就代排、亮牌、開下一局），截止時間只看伺服器時間
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, getPictureUrls } from "@/lib/auth";
 import { loadRoomSpectate } from "@/lib/mahjong/spectate/store";
 import { loadPlayers } from "@/lib/thirteen/db";
-import { clock, viewFor } from "@/lib/thirteen/flow";
+import { baseScoreOf, clock, viewFor } from "@/lib/thirteen/flow";
 import { advanceAndSave, goneResponse, fail, json, seatOwnerError, withRoom } from "@/lib/thirteen/server";
 
 export async function GET(request: Request) {
@@ -21,8 +21,9 @@ export async function GET(request: Request) {
       return fail(403, "not_allowed");
     if (room.status === "waiting") {
       if (playerId && !seats.some((p) => p.player_id === playerId && p.user_id === user.id)) return fail(403, "not_your_seat");
-      return json({ status: "waiting", code: room.code, hostId: room.host_id, settings: room.game_state.settings,
-        seats: seats.map((p) => ({ seat: p.seat, name: p.name, playerId: p.player_id })) });
+      const pics = await getPictureUrls(seats.map((p) => p.user_id)); // 等人畫面的大頭照：座位表沒有存，照帳號查（開局後改讀牌局狀態裡存好的）
+      return json({ status: "waiting", code: room.code, hostId: room.host_id, settings: room.game_state.settings, baseScore: baseScoreOf(room.game_state.settings),
+        seats: seats.map((p, i) => ({ seat: p.seat, name: p.name, playerId: p.player_id, avatarUrl: pics[i] })) });
     }
     if (playerId) { const e = await seatOwnerError(request, room.game_state, playerId); if (e) return e; }
     const { s, sv, closed } = await advanceAndSave(room);

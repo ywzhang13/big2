@@ -4,6 +4,7 @@
 /* 頭像 24：名字第一個字 */
 .gp-av { position: relative; box-sizing: border-box; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.1); border: 1.5px solid transparent;
   display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1; color: rgba(255,255,255,.6); }
+.gp-pic { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; border-radius: 50%; object-fit: cover; } /* 大頭照蓋在名字第一個字上面；載不到就藏起來 */
 .gp.is-me .gp-av { border-color: #C9A96E; }
 /* 文字兩行：名字（最寬 49，超過變…）、分數 */
 .gp-tx { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }

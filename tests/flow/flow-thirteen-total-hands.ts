@@ -54,7 +54,8 @@ async function playHand(roomId: string): Promise<number[] | null> {
   }
   const after = await state(roomId, "p0");
   // 最後一局亮牌就關房：分數從關房後 410 回應的紀錄（最後一局 finalHand）拿
-  const totals = after.status === 200 ? after.body.reveal?.result?.totals ?? null : after.body.record?.finalHand?.result?.totals ?? null;
+  // 2026-11-19 起本局分數是 scores（墩數 × 底分；這裡開房沒帶底分＝100）
+  const totals = after.status === 200 ? after.body.reveal?.scores ?? null : after.body.record?.finalHand?.scores ?? null;
   if (after.status === 200) for (const p of PIDS) await post(nextRoute, { roomId, playerId: p }, p);
   return totals;
 }

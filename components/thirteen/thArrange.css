@@ -21,7 +21,7 @@
   }
 }
 
-.th-arr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; }
+.th-arr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; container-type: inline-size; }
 @media (min-width: 100000px) /* v8-A：桌機改成整塊等比放大（stageScale.ts），這段舊的桌機尺寸不再套用 */ { .th-arr-main { height: auto; justify-content: center; gap: 18px; } }
 
 /* 三墩 */
@@ -49,7 +49,10 @@
 .th-hint { min-height: 1.4em; text-align: center; color: var(--gold-l); font-weight: 700; font-size: .95em; padding: 0 6px; }
 .th-hint.is-ok { color: #9be6a8; }
 .th-hint.is-bad { color: #ff9a92; }
-.th-hand { display: flex; justify-content: center; align-items: flex-end; height: calc(var(--hand-h) + var(--lift)); padding: 0 6px; border-radius: 10px; outline: 2px dashed transparent; outline-offset: 1px; min-width: 50%; }
+.th-hand { display: flex; justify-content: center; align-items: flex-end; height: calc(var(--hand-h) + var(--lift)); padding: 0 6px; border-radius: 10px; outline: 2px dashed transparent; outline-offset: 1px; min-width: 50%; max-width: 100%; box-sizing: border-box;
+  /* 老闆 2026-11-19：iPhone 橫拿兩側有安全區，主欄只剩約 560px，16 張（714px）放不下、最左邊那張被切到畫面外。
+     每張露出的寬度跟著主欄實際寬度縮（.th-arr-main 是 container）：放得下照舊 44px，放不下就壓到剛好放滿；--hand-n＝手牌張數（ThArrange 給） */
+  --hand-show: min(44px, (100cqw - 12px - var(--hand-w)) / max(1, var(--hand-n, 16) - 1)); }
 .th-hand.is-target { outline-color: rgba(240, 214, 138, .7); }
 .th-card-hand { width: var(--hand-w); height: var(--hand-h); flex: 0 0 auto; margin-left: calc(var(--hand-show) - var(--hand-w)); box-shadow: -2px 1px 4px rgba(0, 0, 0, .35); transition: transform .12s; }
 .th-card-hand:first-child { margin-left: 0; }

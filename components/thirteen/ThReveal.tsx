@@ -51,13 +51,19 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
   }, [showPanel, confirmed, sending, now, autoAt, onConfirm]);
 
   const names = [0, 1, 2, 3].map((s) => view.players.find((p) => p.seat === s)?.name ?? "");
+  // 誰按了確認（老闆 2026-11-19：跟麻將一樣顯示誰在等誰）：伺服器的 nextReady（按了確認的玩家 id）；自己按了以伺服器收下為準（confirmed）
+  const meSeat = view.me?.seat ?? null;
+  const ready = rv.over ? null : [0, 1, 2, 3].map((s) => {
+    const p = view.players.find((x) => x.seat === s);
+    return { seat: s, name: p?.name ?? "", ok: !!p && (!!view.nextReady?.includes(p.id) || (s === meSeat && confirmed)) };
+  });
   return (
     <>
       <ThTable view={view} now={now} clockSkew={0} reveal={{ rv, frame }} />
       {!showPanel && <ThRevealFx active={frame.active} t={Math.max(0, t)} mySeat={view.me?.seat ?? 0} names={names} />}
       {showPanel && (
         <ThRoundResult rv={rv} names={names} mySeat={view.me?.seat ?? 0} secondsLeft={secondsLeft} confirmed={confirmed} sending={sending} error={error}
-          onConfirm={onConfirm} confirmLabel={confirmLabel} />
+          onConfirm={onConfirm} confirmLabel={confirmLabel} ready={ready} />
       )}
     </>
   );

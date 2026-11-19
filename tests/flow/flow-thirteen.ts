@@ -107,7 +107,7 @@ const evs = (from: number, name: string) => sent.slice(from).filter((e) => e.eve
 
 // ---------- D 發牌、V 亮牌前偷看 ----------
 const m1 = await newMatch({ totalHands: 3 });
-const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比對累計）
+const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比對累計；2026-11-19 起是 scores＝墩數 × 底分，這裡開房沒帶底分＝100）
 {
   const s0 = await state(m1.roomId, "p0", "p0");
   const hands: Card[][] = [];
@@ -170,11 +170,11 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
 
   // ---------- R 亮牌內容 ----------
   const rv = after.body.reveal;
-  m1Totals.push(rv.result.totals);
+  m1Totals.push(rv.scores);
   const view0 = (await state(m1.roomId, "p0", "p0")).body;
   eq([Object.keys(rv.order), rv.arrangements.length, rv.result.pairs.length, rv.result.totals.reduce((a: number, b: number) => a + b, 0),
     rv.playerScores, view0.playerScores],
-    [["front", "middle", "back"], 4, 6, 0, rv.result.totals, rv.result.totals],
+    [["front", "middle", "back"], 4, 6, 0, rv.scores, rv.scores],
     "R1 亮牌後：每墩翻牌順序、四家三墩、6 組兩兩結算、本局四家合計 0、累計＝本局");
   eq(evs(before, "th_reveal").length === 1 && evs(before, "th_reveal")[0].channel === publicChannel(m1.code), true, "R2 亮牌內容走公開頻道送一次");
 }
@@ -202,7 +202,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const raced = await sub(m1.roomId, "p0", mine);
   globalThis.fetch = realFetch;
   const v = (await state(m1.roomId, "p0", "p0")).body;
-  m1Totals.push(v.reveal.result.totals);
+  m1Totals.push(v.reveal.scores);
   const cum2 = v.playerScores;
   eq([intercepted, raced.status, raced.body.error, v.phase, v.reveal.autoArranged, ids(v.reveal.arrangements[0].front).join() === ids(autoArrange(h0).front).join()],
     [true, 409, "time_up", "revealed", [0, 1, 2, 3], true],
@@ -249,11 +249,11 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const recP = (await db.query<{ seat: number; total_score: number; user_id: string }>(`select seat, total_score, user_id from match_record_players p join match_records r on r.id = p.match_id where r.room_id = $1 order by seat`, [m1.roomId])).rows;
   const gone = (await db.query<{ n: number }>(`select count(*)::int n from th_rooms where id = $1`, [m1.roomId])).rows[0].n;
   eq([fin.status, fin.body.error, fin.body.record?.endReason, rec, gone, (closedEv?.payload as { endReason: string })?.endReason],
-    [410, "ended", "completed", { game: "thirteen", end_reason: "completed", hands_played: 3, settings: { arrangeSec: 30, totalHands: 3 }, nstats: 4 }, 0, "completed"],
+    [410, "ended", "completed", { game: "thirteen", end_reason: "completed", hands_played: 3, settings: { baseScore: 100, arrangeSec: 30, totalHands: 3 }, nstats: 4 }, 0, "completed"],
     "Q1 第 3 局（最後一局）亮牌後自動寫對局紀錄（含四家的整場累計 stats）並關房；之後讀狀態回 410 和總結算");
   const totals = recP.map((p) => p.total_score);
   const fh = fin.body.record?.finalHand ?? null; // 沒有最後一局（必修 4 沒修好）時下面的斷言會變紅，不會讓整支測試當掉
-  m1Totals.push(fh?.result?.totals ?? [NaN, NaN, NaN, NaN]);
+  m1Totals.push(fh?.scores ?? [NaN, NaN, NaN, NaN]);
   eq([m1Totals.length, totals, recP.map((p) => p.user_id), fin.body.record.players.map((p: { totalScore: number }) => p.totalScore)],
     [3, [0, 1, 2, 3].map((i) => m1Totals[0][i] + m1Totals[1][i] + m1Totals[2][i]), PIDS.map((_, i) => uid(i)), totals],
     "N2 三局累計寫進紀錄：每一家的總分＝自己三局本局分的和（逐家比對）、帳號都記上");
@@ -297,33 +297,33 @@ const duel = async (a: Ex, b: Ex) => {
   const d: [Ex, Ex, number][] = [
     [["2C 7D 9H", "3H 3D 8C 8S KD", "4C 5D 6H 7S 8D"], ["5H 5C 2D", "TD TC 2H 4S 9C", "JS JH JC 3C 6D"], 1],
     [["QH QD 3C", "8H 8D 4C 4D 2S", "5C 6D 7H 8S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"], 4],
-    [["QH QD QC", "8H 8D 8C 4D 4H", "5C 5D 5H 5S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"], 8],
-    [["2C 2D 9H", "7H 7D 7C 7S 3D", "AS AH AD AC 4H"], ["6H 6D 3C", "4S 5S 6S 7S 8S", "9D TD JD QD KD"], -13],
+    [["QH QD QC", "8H 8D 8C 4D 4H", "5C 5D 5H 5S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"], 6], // 範例 3（甲案 2026-11-19：改之前 8）
+    [["2C 2D 9H", "7H 7D 7C 7S 3D", "AS AH AD AC 4H"], ["6H 6D 3C", "4S 5S 6S 7S 8S", "9D TD JD QD KD"], -11], // 範例 4（甲案：改之前 −13）
     [["AS AH KD", "3H 3D 3C 7S 8D", "4H 5D 6C 7H 8C"], ["AS AD KC", "2H 2D 2C 9S TD", "8S 9H TH JH QH"], 0],
     [["AS AH KD", "3H 3D 3C 7S 8D", "9C TC JC QD KH"], ["AS AD KC", "2H 2D 2C 9S TD", "8S 9H TH JH QH"], 2],
     [["2D 3D 5C", "9C 9D 4H 4C JD", "KS KS 9S 5S 2S"], ["2H 4D 6C", "TC TD 3S 3C QD", "AH QH JH 8H 3H"], -1],
-    [["KH KD 2C", "QH QD QC 3H 3D", "AS AS AH AD AC"], ["JH JD 4C", "TS TH TD 5H 5D", "5S 6S 7S 8S 9S"], 8],
-    [["2H 3D 7C", "9S 9S 9H 9D 9C", "TS TS TH TD TC"], ["QH QD 5C", "JH JD JC 6H 6D", "AS AH AD AC 8H"], 13],
+    [["KH KD 2C", "QH QD QC 3H 3D", "AS AS AH AD AC"], ["JH JD 4C", "TS TH TD 5H 5D", "5S 6S 7S 8S 9S"], 7], // 範例 8（甲案：改之前 8）
+    [["2H 3D 7C", "9S 9S 9H 9D 9C", "TS TS TH TD TC"], ["QH QD 5C", "JH JD JC 6H 6D", "AS AH AD AC 8H"], 11], // 範例 9（甲案：改之前 13）
     [["2C 3D 7H", "8H 8D 9C 9D KH", "AS 2S 3H 4D 5C"], ["4H 9H JC", "TC TD QC QD KD", "2H 3S 4S 5S 6C"], -4],
   ];
   const got = [];
   for (const [a, b] of d) got.push(await duel(a, b));
-  eq(got, d.map((x) => x[2]), "E1 規則書範例 1～10（兩人對比）經 API 送出、伺服器結算，分數和規則書一致");
+  eq(got, d.map((x) => x[2]), "E1 規則書範例 1～10（兩人對比）經 API 送出、伺服器結算，分數照甲案（特殊牌型那一道只算表上墩數）");
 
   const ex11 = await playExample([["QH QD QS", "8H 8D 8S 4D 4H", "5C 5D 5H 5S 9C"], ["JH TD 2C", "7C 7D 3H 2S KC", "9H 9D 6C 6S AC"], ["2H 3D 4C", "TC TS 3C 9S KD", "JS JC JD 2D 6D"], ["6H 7H 8C", "AH AD 3S 4S KH", "TH TS QS QC 7S"]]);
   const ex12 = await playExample([["KH KD 2C", "QH QD QC 3H 3D", "AS AH AD AC 4C"], ["2H 2D 9C", "TS TH TD TC JH", "5S 6S 7S 8S 9S"], ["3C 4D 6H", "JS JC 8D 8H 5C", "6S 6C 6D 7H 7D"], ["4H 5D 7C", "KS KC 9D 9H 2S", "8C 9S TS JD QS"]]);
   const ex13 = await playExample([["QH QD QS", "8H 8D 8C 8S 4D", "AS AS AH AD AC"], ["JH TD 2C", "7C 7D 3H 2S KC", "9H 9D 6C 6S QC"], ["2H 3D 4C", "TC TS 3C 9S KD", "JS JC JD 2D 6D"], ["6H 7H 5C", "KH KS 3S 4S 5D", "TH TS 7S 7S 9C"]]);
   const pr = (r: { result: { pairs: { a: number; b: number; points: number; gunner: number | null }[] } }) => r.result.pairs.map((p) => [p.a, p.b, p.points, p.gunner]);
   eq([ex11.rv.result.totals, ex11.rv.result.homeRun, pr(ex11.rv)],
-    [[33, -13, -11, -9], 0, [[0, 1, 8, 0], [0, 2, 8, 0], [0, 3, 8, 0], [1, 2, -1, null], [1, 3, -1, null], [2, 3, -1, null]]],
-    "E2／R3 範例 11 經 API：0 號打槍三家（每組 gunner＝0）＋全壘打（homeRun＝0）→ +33／−13／−11／−9");
+    [[27, -11, -9, -7], 0, [[0, 1, 6, 0], [0, 2, 6, 0], [0, 3, 6, 0], [1, 2, -1, null], [1, 3, -1, null], [2, 3, -1, null]]],
+    "E2／R3 範例 11 經 API：0 號打槍三家（每組 gunner＝0）＋全壘打（homeRun＝0）→ +27／−11／−9／−7（甲案；改之前 +33／−13／−11／−9）");
   eq([ex12.rv.result.totals, ex12.rv.result.homeRun, pr(ex12.rv), ex12.rv.order],
-    [[4, 30, -18, -16], null, [[0, 1, -8, null], [0, 2, 6, 0], [0, 3, 6, 0], [1, 2, 11, 1], [1, 3, 11, 1], [2, 3, -1, null]],
+    [[4, 24, -15, -13], null, [[0, 1, -6, null], [0, 2, 5, 0], [0, 3, 5, 0], [1, 2, 9, 1], [1, 3, 9, 1], [2, 3, -1, null]],
       { front: [[2], [3], [1], [0]], middle: [[2], [3], [0], [1]], back: [[3], [2], [0], [1]] }],
-    "E3 範例 12 經 API：一般局 +4／+30／−18／−16、打槍兩組；亮牌順序每墩從最小到最大");
+    "E3 範例 12 經 API：一般局 +4／+24／−15／−13（甲案；改之前 +4／+30／−18／−16）、打槍兩組；亮牌順序每墩從最小到最大");
   const bonus = ex13.rv.result.pairs.find((p: { a: number; b: number }) => p.a === 0 && p.b === 1).rows;
   eq([ex13.rv.result.totals, ex13.rv.result.homeRun, [bonus.front.bonus, bonus.middle.bonus, bonus.back.bonus]],
-    [[51, -19, -17, -15], 0, [2, 4, 4]], "E4／R4 範例 13 經 API：衝三 +2、中道鐵支 +4、尾道五龍 +4 的牌型加分都在結算裡，+51／−19／−17／−15");
+    [[42, -16, -14, -12], 0, [2, 4, 4]], "E4／R4 範例 13 經 API：衝三 2、中道鐵支 4、尾道五龍 4（甲案：那一道只算這個墩數）都在結算裡，+42／−16／−14／−12（改之前 +51／−19／−17／−15）");
 
   // 範例 14：倒水邊界經 API
   forceDeal([["AH AD KC", "AS AC KD QH JS", "2H 2D 2C 2S 5D"], ["3H 4D 6C", "7C 8D 9H JC QD", "3S 3C 5H 5C 6D"], ["2D 4C 7H", "8C 9D TH JD KH", "4S 4H 6S 6H 8S"], ["5D 7D 9S", "TC TD QS KS AH", "7S 9C JH QC KC"]]);
@@ -373,7 +373,7 @@ const duel = async (a: Ex, b: Ex) => {
   const twice = await post(nextRoute, { roomId: m.roomId, playerId: "p0" }, "p0");
   const last = await post(nextRoute, { roomId: m.roomId, playerId: "p3" }, "p3");
   const v = (await state(m.roomId, "p3", "p3")).body;
-  const h1 = v.history[0].totals;
+  const h1 = v.history[0].scores;
   eq([r, twice.body.handNo, last.body.handNo, v.phase, v.me.hand.length, v.playerScores, v.history.length],
     [[1, 1, 1], 1, 2, "arranging", 16, h1, 1], "N3 亮牌後四家都按下一局才開（重複按不算兩次）；新的一局重新發 16 張、每一家的累計＝第 1 局自己的分數（逐家比對）");
 }

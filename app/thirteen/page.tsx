@@ -98,10 +98,10 @@ function ThirteenScreens() {
     } finally { setBusy(false); }
   }, [auth.user]);
 
-  async function doCreate(arrangeSec: number, totalHands: number) {
+  async function doCreate(arrangeSec: number, totalHands: number, baseScore: number) {
     setBusy(true); setError("");
     try {
-      const c = await apiJson<{ roomId: string; code: string }>("/api/thirteen/create", { method: "POST", body: JSON.stringify({ hostId: playerId(), arrangeSec: toServerArrangeSec(arrangeSec), totalHands }) });
+      const c = await apiJson<{ roomId: string; code: string }>("/api/thirteen/create", { method: "POST", body: JSON.stringify({ hostId: playerId(), arrangeSec: toServerArrangeSec(arrangeSec), totalHands, baseScore }) });
       if (c.status !== 200) { setError(c.body.message ?? "開房失敗"); return; }
       await doJoin(c.body.code);
     } catch {

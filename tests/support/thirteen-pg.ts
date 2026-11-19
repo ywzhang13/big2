@@ -18,7 +18,8 @@ export async function setupThirteenDb(): Promise<PGlite> {
     // 聊天（十三支和麻將共用同一套聊天紀錄）：冷卻 → 聊天紀錄 → 十三支房間 → 讓聊天函式認得十三支房間
     "migrations/20261022_mahjong_prefs.sql", "migrations/20261023_mahjong_chat.sql", "migrations/20261024_mahjong_prefs_v4.sql",
     "migrations/20261113_mahjong_chat_history.sql", "migrations/20261116_thirteen_rooms.sql", "migrations/20261117_thirteen_chat.sql",
-    "migrations/20261118_thirteen_records.sql", "migrations/20261118_thirteen_lobby.sql"]) {
+    "migrations/20261118_thirteen_records.sql", "migrations/20261118_thirteen_lobby.sql",
+    "migrations/20261119_thirteen_base_score.sql"]) {
     await db.exec(readFileSync(path.join(SUPA, f), "utf8"));
   }
   const base = "http://thirteen-flow.test";

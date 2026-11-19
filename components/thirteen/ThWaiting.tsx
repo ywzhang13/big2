@@ -35,6 +35,7 @@ export default function ThWaiting({ view, myPlayerId, onStart, onLeave }: {
           <div className="flex justify-center gap-6 text-sm">
             <span className="text-white/40">理牌 {view.settings.arrangeSec} 秒</span>
             <span className="text-white/40">{view.settings.totalHands}局</span>
+            {view.baseScore !== undefined && view.baseScore > 1 && <span className="text-white/40" data-th-base-label>底分 {view.baseScore}</span>}{/* 舊房伺服器補 1：不顯示 */}
           </div>
         </div>
         <div className="mjw-seats grid grid-cols-2 gap-3 w-full">

@@ -107,6 +107,7 @@
 @keyframes th-board-pop { 0% { transform: scale(2.6); opacity: 0; } 45% { transform: scale(.92); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes th-board-glow { 0%, 40% { text-shadow: 0 0 10px #fff3c4, 0 0 18px rgba(240,214,138,.9); } 100% { text-shadow: 0 1px 2px rgba(0,0,0,.8); } }
 .th-board-sc { font: 800 12px/14px "Chakra Petch", system-ui, sans-serif; letter-spacing: .02em; animation: th-board-sc .25s ease-out both; }
+.th-board-sc.is-long { font-size: 10px; letter-spacing: 0; } /* 底分讓分數變五位數（+12000、−36000）：左右格只有 47px 寬，縮小才不會超出 */
 .th-board-sc.is-up { color: #6BD49A; } .th-board-sc.is-down { color: #FF8E84; } .th-board-sc.is-zero { color: rgba(246,240,218,.62); }
 @keyframes th-board-sc { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: scale(1); } }
 /* 共用名牌（components/GamePlate.tsx）的位置：小宜〈共用名牌-設計說明〉§4 十三支 v12 版面，左上角座標、四家都是 88×32 */

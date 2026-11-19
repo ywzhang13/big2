@@ -9,7 +9,7 @@
 import { useEffect } from "react";
 import type { Card } from "@/lib/thirteen";
 import { CARD_BACK_SRC, cardSrc } from "./cardArt";
-import { badgeOf, ROW_NAME, ROWS, rowDeltas, rowDisplayOrder, type RevealFrame, type ThReveal } from "./revealTimeline";
+import { badgeOf, boardDeltas, ROW_NAME, ROWS, rowDisplayOrder, type RevealFrame, type ThReveal } from "./revealTimeline";
 import type { ThGameView } from "./useThirteenRoom";
 import { preloadRevealFx } from "./ThRevealFx";
 import ThFeltMenu from "./ThFeltMenu";
@@ -101,7 +101,7 @@ function Board({ rv, frame, mySeat, deltas }: { rv: ThReveal; frame: RevealFrame
             data-th-board-pt={name.label}>{name.label}</span>
         ) : <span className="th-board-pt is-none">—</span>}
         {b.scoreAt !== null && (
-          <span key={`${b.row}-sc`} className={`th-board-sc ${d > 0 ? "is-up" : d < 0 ? "is-down" : "is-zero"}`} data-th-board-sc={d}>{d > 0 ? `+${d}` : d < 0 ? `−${-d}` : "0"}</span>
+          <span key={`${b.row}-sc`} className={`th-board-sc ${d > 0 ? "is-up" : d < 0 ? "is-down" : "is-zero"}${Math.abs(d) >= 10000 ? " is-long" : ""}`} data-th-board-sc={d}>{d > 0 ? `+${d}` : d < 0 ? `−${-d}` : "0"}</span>
         )}
       </div>
     );
@@ -126,7 +126,7 @@ export default function ThTable({ view, now, clockSkew, reveal, menu = true }: {
   const mySeat = view.me?.seat ?? 0;
   const revealed = !!reveal || view.phase === "revealed" || view.status === "finished";
   const left = view.arrangeDeadline !== null ? view.arrangeDeadline - (now + clockSkew) : 0;
-  const deltas = reveal ? rowDeltas(reveal.rv.result) : null;
+  const deltas = reveal ? boardDeltas(reveal.rv) : null; // 有底分的房：伺服器乘好的；舊房：照舊自己算
   useEffect(() => { void preloadRevealFx(); }, []); // 等其他人送出的時候先載特效圖
   useStageScale();
 
@@ -158,7 +158,7 @@ export default function ThTable({ view, now, clockSkew, reveal, menu = true }: {
             <Seat rows={rowsFor(p.seat)} pos={pos} played={playedOf(p.seat)} holes={shot} />
             {/* 共用名牌（小宜〈共用名牌-設計說明〉）：四家同一個 88×32，頭像＋名字＋這一場的累計分數；
                 思考中泡泡貼在朝牌桌中心那一邊、彈孔掛右下角（§5 錨點），都不改變名牌大小 */}
-            <GamePlate seat={PLATE_SEAT[pos]} name={p.name} score={score} me={isMe} plateId={p.seat} className={`th-gp th-gp-${pos}`}
+            <GamePlate seat={PLATE_SEAT[pos]} name={p.name} score={score} me={isMe} plateId={p.seat} avatarUrl={p.avatarUrl ?? null} className={`th-gp th-gp-${pos}`}
               thinking={!p.submitted && !revealed} shot={shot} />
           </div>
         );

@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Card } from "@/lib/thirteen";
 import { CARD_BACK_SRC, cardSrc } from "./cardArt";
 import { useStageScale } from "./stageScale";
-import { badgeOf, breakdown, ROWS, rowDisplayOrder, type ThReveal } from "./revealTimeline";
+import { badgeOf, breakdown, handScore, ROWS, rowDisplayOrder, type ThReveal } from "./revealTimeline";
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");
 const tone = (n: number) => (n > 0 ? "is-up" : n < 0 ? "is-down" : "");
@@ -26,7 +26,7 @@ function Cards({ groups, labels }: { groups: Card[][]; labels?: { label: string;
   );
 }
 
-export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sending = false, error = null, onConfirm, confirmLabel }: {
+export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sending = false, error = null, onConfirm, confirmLabel, ready = null }: {
   rv: ThReveal;
   names: string[];
   mySeat: number;
@@ -37,12 +37,16 @@ export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sendi
   error?: string | null;
   onConfirm: () => void;
   confirmLabel?: string;
+  /** 四家有沒有按確認（跟麻將一樣顯示誰在等誰）；null＝不顯示（最後一局、預覽頁） */
+  ready?: { seat: number; name: string; ok: boolean }[] | null;
 }) {
   const [peek, setPeek] = useState(false);
+  const readyN = ready?.filter((r) => r.ok).length ?? 0;
+  const waiting = ready?.filter((r) => !r.ok).map((r) => (r.seat === mySeat ? "你" : r.name)) ?? [];
   useStageScale();
   const shotBy = rv.stats.map((st) => st.gunned);
   const items = breakdown(rv.stats[mySeat]); // 明細用伺服器的 stats（阿哲 2026-11-18：前端不再自己算）
-  const total = rv.result.totals[mySeat];
+  const total = rv.stats[mySeat]?.total ?? rv.result.totals[mySeat]; // 左欄「本局」：墩數（老闆 2026-11-19：左欄墩數、右欄輸贏）
   return (
     <div className={`th-res${peek ? " is-peek" : ""}`} data-th-result="round" role="dialog" aria-label="本局結算">
       <div className="th-res-left">
@@ -52,8 +56,17 @@ export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sendi
           <div className="th-res-total"><span>本局</span><b className={tone(total)}>{signed(total)}</b></div>
         </div>
         <button type="button" className="th-res-btn primary" data-th-confirm disabled={confirmed || sending} onClick={onConfirm}>
-          {confirmed ? "等其他人…" : sending ? "送出中…" : `${confirmLabel ?? "確認"}${secondsLeft !== null ? `（${secondsLeft}）` : ""}`}
+          {confirmed ? (ready ? "已確認" : "等其他人…") : sending ? "送出中…" : `${confirmLabel ?? "確認"}${secondsLeft !== null ? `（${secondsLeft}）` : ""}`}
         </button>
+        {ready && (
+          <div className="th-res-ready" data-th-ready={readyN}>
+            <span className="cnt">確認 {readyN}/4</span>
+            {ready.map((r) => (
+              <span key={r.seat} className={`chip ${r.ok ? "ok" : "wait"}`} data-th-ready-seat={r.seat} data-ok={r.ok ? "1" : "0"}><i>{r.ok ? "✓" : "…"}</i>{r.name}</span>
+            ))}
+            {readyN > 0 && waiting.length > 0 && <div className="line" role="status">還在等 {waiting.join("、")}</div>}
+          </div>
+        )}
         {error && !confirmed && <div className="th-res-err" role="alert" data-th-confirm-error>{error}</div>}
       </div>
       <div className="th-res-right">
@@ -71,7 +84,7 @@ export function ThRoundResult({ rv, names, mySeat, secondsLeft, confirmed, sendi
               </div>
               <Cards groups={ROWS.map((r) => rowDisplayOrder(a[r]))} labels={ROWS.map((r) => badgeOf(r, rv.result.values[seat][r]))} />
               <div className="th-res-pts">
-                <b className={tone(rv.result.totals[seat])}>{signed(rv.result.totals[seat])}</b>
+                <b className={tone(handScore(rv, seat))}>{signed(handScore(rv, seat))}</b>
                 <small>累計 {signed(rv.playerScores[seat])}</small>
               </div>
             </div>

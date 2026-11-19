@@ -1,5 +1,6 @@
 // 十三支比牌與計分（規則書第 4 節；打槍罰分照老闆 2026-11-13 修改：被一家打槍多付那家 1 分）。
-// 四家兩兩互比三道：贏 +1、輸 −1、平手 0；輸的人另付贏家那道的特殊加分；三道全贏＝打槍，再付 GUN_PENALTY；
+// 四家兩兩互比三道：一般牌型贏 +1、輸 −1、平手 0；贏家那道是特殊牌型時，那一道只算表上的墩數、不再加基本的 1
+// （老闆 2026-11-19 甲案：衝三就是 2 墩；改之前是 1＋2＝3）；三道全贏＝打槍，再付 GUN_PENALTY；
 // 一家打槍另外三家＝全壘打，三家各再付 HOME_RUN_PENALTY（和打槍疊加）。四人總分一定是 0。
 import { checkArrangement, type Arrangement } from "./arrange";
 import { CAT, compareValue, type HandValue } from "./hand";
@@ -13,7 +14,7 @@ export const SCORING = {
   GUN_PENALTY: 1,
   /** 全壘打：另外三家各再付的分數，和打槍疊加 */
   HOME_RUN_PENALTY: 3,
-  /** 特殊加分：輸掉那一道的人，額外付給贏家（贏家那一道的牌型）；表上沒有的牌型不加分 */
+  /** 特殊牌型：贏家那一道是這些牌型時，輸的人付這個墩數（取代基本的 1，不是另外加；甲案 2026-11-19）；表上沒有的牌型照一般 1 墩 */
   BONUS: {
     front: { [CAT.THREE_KIND]: 2 },                                                  // 衝三
     middle: { [CAT.FOUR_KIND]: 4, [CAT.STRAIGHT_FLUSH]: 6, [CAT.FIVE_KIND]: 8 },     // 中道鐵支、同花順、五龍
@@ -23,11 +24,21 @@ export const SCORING = {
 
 export const bonusOf = (row: Row, v: HandValue) => SCORING.BONUS[row][v.cat] ?? 0;
 
+/**
+ * 計分規則版本（審伯 2026-11-19 必修）：
+ *   "jia" 甲案（2026-11-19 起新開的房）：特殊牌型那一道只算表上的墩數；一般牌型 1
+ *   "v1"  舊規則（上線前開的房，整場都照舊）：特殊牌型那一道＝1＋表上的數字
+ * 房間用哪一版看牌局設定 settings.scoreRule（見 flow.ts scoreRuleOf），不靠有沒有底分判斷
+ */
+export type ScoreRule = "v1" | "jia";
+/** 贏下一道時這一道的墩數：bonus＝贏家那道特殊牌型在表上的數字（0＝一般牌型） */
+export const rowPoints = (bonus: number, rule: ScoreRule): number => (rule === "jia" ? (bonus > 0 ? bonus : 1) : 1 + bonus);
+
 /** 一組（a 對 b）的結果；points＝a 從 b 拿到的分數（負數＝a 付給 b） */
 export interface PairResult {
   a: number;
   b: number;
-  rows: Record<Row, { winner: number | null; bonus: number }>; // 每道誰贏（null＝平手）、輸家付的加分
+  rows: Record<Row, { winner: number | null; bonus: number }>; // 每道誰贏（null＝平手）、贏家特殊牌型的墩數（0＝一般牌型，這道算 1 墩）
   gunner: number | null; // 打槍的座位（三道全贏）；沒有＝null
   points: number;
 }
@@ -41,7 +52,7 @@ export interface RoundResult {
 
 type Values = Record<Row, HandValue>;
 
-function scorePair(a: number, b: number, va: Values, vb: Values): PairResult {
+function scorePair(a: number, b: number, va: Values, vb: Values, rule: ScoreRule): PairResult {
   const rows = {} as PairResult["rows"];
   let points = 0, aWins = 0, bWins = 0;
   for (const row of ROWS) {
@@ -50,7 +61,7 @@ function scorePair(a: number, b: number, va: Values, vb: Values): PairResult {
     const aWin = c > 0;
     const bonus = bonusOf(row, aWin ? va[row] : vb[row]);
     rows[row] = { winner: aWin ? a : b, bonus };
-    points += (aWin ? 1 : -1) * (1 + bonus);
+    points += (aWin ? 1 : -1) * rowPoints(bonus, rule);
     if (aWin) aWins++; else bWins++;
   }
   const gunner = aWins === 3 ? a : bWins === 3 ? b : null;
@@ -60,7 +71,7 @@ function scorePair(a: number, b: number, va: Values, vb: Values): PairResult {
 }
 
 /** 四家排好的牌 → 這局結算。每家的排法都要先通過倒水檢查（倒水的排法丟錯，不該走到這裡） */
-export function scoreRound(arrangements: Arrangement[]): RoundResult {
+export function scoreRound(arrangements: Arrangement[], rule: ScoreRule = "jia"): RoundResult {
   if (arrangements.length !== 4) throw new Error("十三支要 4 家");
   const values = arrangements.map((a, seat) => {
     const c = checkArrangement(a);
@@ -71,7 +82,7 @@ export function scoreRound(arrangements: Arrangement[]): RoundResult {
   const pairs: PairResult[] = [];
   const guns = [0, 0, 0, 0]; // 每家打槍了幾家
   for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) {
-    const p = scorePair(a, b, values[a], values[b]);
+    const p = scorePair(a, b, values[a], values[b], rule);
     pairs.push(p);
     totals[a] += p.points;
     totals[b] -= p.points;

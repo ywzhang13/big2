@@ -152,7 +152,7 @@ export default function ThArrange({ cards, deadline, onSubmit }: ThArrangeProps)
 
         <div className={`th-hint${hintKind ? ` is-${hintKind}` : ""}`} role="status">{hint}</div>
 
-        <div className={`th-hand${drag?.moving && drag.over?.zone === HAND ? " is-target" : ""}`} data-zone={HAND}>
+        <div className={`th-hand${drag?.moving && drag.over?.zone === HAND ? " is-target" : ""}`} data-zone={HAND} style={{ "--hand-n": hand.length } as React.CSSProperties}>
           {hand.map((c) => (
             <div
               key={c.id}

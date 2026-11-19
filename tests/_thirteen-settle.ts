@@ -35,7 +35,7 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
   // 衝三＋尾墩鐵支、不打槍：0 號頭墩三條 Q、中墩三條 K、尾墩鐵支；另外三家中墩順子贏 0 號的中墩
   //   → 0 號對每一家都是兩贏一輸，另外三家彼此全平手，沒有打槍
   const fxNoGun = [arr("QS QH QD", "KS KH KD 2C 3D", "9S 9H 9D 9C 3S"), ...[1, 2, 3].map((k) => arr(rot("2 3 4", k), rot("5 6 7 8 9", k), rot("T J Q K A", k)))];
-  const rs = [ties, oneGun, fxNoGun, big].map(scoreRound);
+  const rs = [ties, oneGun, fxNoGun, big].map((a) => scoreRound(a)); // 不能直接 .map(scoreRound)：第二個參數是計分規則，會被塞進陣列索引
   const specialsOf = (r: RoundResult) => r.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
   eq([rs.map(specialsOf), rs.map((r) => r.pairs.filter((p) => p.gunner !== null).length), rs.map((r) => r.homeRun), rs.map(dur)],
     [[0, 0, 2, 2], [0, 1, 0, 3], [null, null, null, 0], [20900, 22400, 21500, 29200]],

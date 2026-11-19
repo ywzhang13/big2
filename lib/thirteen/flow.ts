@@ -4,9 +4,9 @@
 // 安全：給玩家的畫面（viewFor）亮牌前只有本人的手牌和三墩；別人只看得到「送出了沒」；沒發出去的 13 張永遠不給。
 import { deal, type Card } from "./cards";
 import { autoArrange, validateSubmission, type ArrangeError, type Arrangement } from "./arrange";
-import { bonusOf, revealOrder, ROWS, scoreRound, SCORING, type Row, type RoundResult } from "./score";
+import { bonusOf, revealOrder, ROWS, rowPoints, scoreRound, SCORING, type Row, type RoundResult, type ScoreRule } from "./score";
 import { CAT_NAME } from "./hand";
-import type { ThirteenGameState, ThPlayer } from "./db";
+import type { ThirteenGameState, ThirteenHandResult, ThirteenSettings, ThPlayer } from "./db";
 
 /** 伺服器時間（毫秒）；測試會換掉 */
 export const clock = { now: () => Date.now() };
@@ -44,7 +44,7 @@ export const NEXT_HAND_MAX_MS = REVEAL_TIMING.START_MS + 3 * REVEAL_TIMING.ROW_M
 // ---- 每局統計（阿哲 2026-11-18：打槍、全壘打等改由後端每局記錄，前端不再自己累計）----
 /** 一家這一局的明細（v5 本局結算的左欄）：墩分＋各特殊加分＋打槍分＋全壘打分＝total（這局總分） */
 export interface HandStat {
-  rows: number;                                  // 墩分：三道兩兩比，贏 +1、輸 −1
+  rows: number;                                  // 墩分：一般牌型的道兩兩比，贏 +1、輸 −1（特殊牌型那一道不算在這裡，算在 bonuses；甲案 2026-11-19）
   bonuses: { name: string; points: number }[];   // 特殊加分：衝三、中墩鐵支、尾墩五龍…；自己拿到的正、付給別人的負（同名合併）
   guns: number; gunned: number; gunPoints: number;  // 打槍幾家、被幾家打槍、打槍的分數
   homeRun: boolean; homeRunned: boolean; homeRunPoints: number; // 全壘打、被全壘打、全壘打的分數
@@ -53,7 +53,7 @@ export interface HandStat {
 const ROW_LABEL: Record<Row, string> = { front: "頭墩", middle: "中墩", back: "尾墩" };
 const bonusName = (row: Row, cat: number) => (row === "front" ? "衝三" : ROW_LABEL[row] + CAT_NAME[cat]);
 /** 這局每家的明細（依座位） */
-export function handStats(result: RoundResult): HandStat[] {
+export function handStats(result: RoundResult, rule: ScoreRule = "jia"): HandStat[] {
   return [0, 1, 2, 3].map((seat) => {
     let rows = 0;
     const bonus = new Map<string, number>();
@@ -62,7 +62,8 @@ export function handStats(result: RoundResult): HandStat[] {
       for (const row of ROWS) {
         const w = p.rows[row].winner;
         if (w === null) continue;
-        rows += w === seat ? 1 : -1;
+        // 甲案：墩分只算一般墩，特殊牌型那一道整個算在下面那一行；舊規則（v1）：每一道的 ±1 都算墩分，特殊牌型另列加分
+        if (rule === "v1" || p.rows[row].bonus === 0) rows += w === seat ? 1 : -1;
         if (p.rows[row].bonus > 0) {
           const name = bonusName(row, result.values[w][row].cat);
           bonus.set(name, (bonus.get(name) ?? 0) + (w === seat ? p.rows[row].bonus : -p.rows[row].bonus));
@@ -81,7 +82,7 @@ export function handStats(result: RoundResult): HandStat[] {
 /** 整場累計（v5 總結算的右欄）：每家打槍、被打槍、全壘打、被全壘打次數和總分（依座位） */
 export function matchStats(s: ThirteenGameState): { guns: number; gunned: number; homeRuns: number; homeRunned: number; total: number }[] {
   return [0, 1, 2, 3].map((seat) => {
-    const per = s.hands.map((h) => (h.stats ?? handStats(h.result))[seat]);
+    const per = s.hands.map((h) => (h.stats ?? handStats(h.result, scoreRuleOf(s.settings)))[seat]);
     return { guns: per.reduce((n, x) => n + x.guns, 0), gunned: per.reduce((n, x) => n + x.gunned, 0),
       homeRuns: per.filter((x) => x.homeRun).length, homeRunned: per.filter((x) => x.homeRunned).length, total: s.playerScores[seat] ?? 0 };
   });
@@ -144,10 +145,10 @@ export function cancelIfDenied(s: ThirteenGameState, now: number): boolean {
   return true;
 }
 
-/** 開局：把入座的四家放進牌局狀態（依座位） */
-export function seatPlayers(s: ThirteenGameState, seats: ThPlayer[]): void {
-  s.players = [...seats].sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ id: p.player_id, name: p.name, seat: p.seat, userId: p.user_id, hand: [], arrangement: null, autoArranged: false }));
+/** 開局：把入座的四家放進牌局狀態（依座位）；avatarUrls 和 seats 同順序（LINE 大頭照，開局時查一次，同麻將） */
+export function seatPlayers(s: ThirteenGameState, seats: ThPlayer[], avatarUrls: (string | null)[] = []): void {
+  s.players = seats.map((p, i) => ({ p, avatarUrl: avatarUrls[i] ?? null })).sort((a, b) => a.p.seat - b.p.seat)
+    .map(({ p, avatarUrl }) => ({ id: p.player_id, name: p.name, seat: p.seat, userId: p.user_id, avatarUrl, hand: [], arrangement: null, autoArranged: false }));
   s.playerScores = [0, 0, 0, 0];
 }
 
@@ -196,12 +197,55 @@ export function autoArrangeLate(s: ThirteenGameState, now: number): number[] {
   return seats;
 }
 
-/** 四家都有三墩了就亮牌結算：本局結果存進 hands、累計加進 playerScores */
+/** 這房的底分（老闆 2026-11-19）：上線前開的舊房設定裡沒有 baseScore，一律當 1（分數和改之前一樣） */
+export const baseScoreOf = (settings: ThirteenSettings): number => settings.baseScore ?? 1;
+/** 這房的計分規則（審伯 2026-11-19 必修）：開房時記了 scoreRule "jia" 才是甲案；上線前開的房沒有這個欄位，整場照舊規則 v1 */
+export const scoreRuleOf = (settings: ThirteenSettings): ScoreRule => (settings.scoreRule === "jia" ? "jia" : "v1");
+/** 一局四家的分數＝墩數 × 底分；更早存的局沒有 scores 欄位就照當時的底分補算 */
+export const handScores = (h: ThirteenHandResult, settings: ThirteenSettings): number[] =>
+  h.scores ?? h.result.totals.map((x) => x * baseScoreOf(settings));
+
+/**
+ * 每墩四家的分數（中央看板每墩加分用，老馬 2026-11-19）：該墩六組兩兩比，贏的拿、輸的付這一道的墩數（一般 1、特殊牌型照表，甲案），再 × 底分。
+ * 三墩加總＋打槍分＋全壘打分（都 × 底分）＝這局的 scores
+ */
+export function rowDeltas(result: RoundResult, base: number, rule: ScoreRule = "jia"): Record<Row, number[]> {
+  const out = { front: [0, 0, 0, 0], middle: [0, 0, 0, 0], back: [0, 0, 0, 0] } as Record<Row, number[]>;
+  for (const p of result.pairs) for (const row of ROWS) {
+    const { winner, bonus } = p.rows[row];
+    if (winner === null) continue;
+    const loser = winner === p.a ? p.b : p.a;
+    const pts = rowPoints(bonus, rule) * base;
+    out[row][winner] += pts;
+    out[row][loser] -= pts;
+  }
+  return out;
+}
+
+/** 本局結算左欄明細的乘好版本（老柯 2026-11-19）：HandStat 每一項 × 底分，打槍另外拆成打槍拿到、被打槍付出兩項 */
+export interface ScoredStat {
+  rows: number;                                 // 墩分 × 底分
+  bonuses: { name: string; points: number }[];  // 每個特殊牌型加分 × 底分（名稱同 HandStat.bonuses）
+  gunPoints: number;                            // 打槍淨分 × 底分＝shotPoints＋shotByPoints
+  shotPoints: number;                           // 打槍拿到的分（≥ 0）＝guns × GUN_PENALTY × 底分
+  shotByPoints: number;                         // 被打槍付出的分（≤ 0）＝−gunned × GUN_PENALTY × 底分
+  homeRunPoints: number;                        // 全壘打分 × 底分
+  total: number;                                // ＝rows＋bonuses 合計＋gunPoints＋homeRunPoints＝這局的 scores[seat]
+}
+export function scoredStat(st: HandStat, base: number): ScoredStat {
+  return { rows: st.rows * base, bonuses: st.bonuses.map((b) => ({ name: b.name, points: b.points * base })), gunPoints: st.gunPoints * base,
+    shotPoints: st.guns * SCORING.GUN_PENALTY * base, shotByPoints: -st.gunned * SCORING.GUN_PENALTY * base,
+    homeRunPoints: st.homeRunPoints * base, total: st.total * base };
+}
+
+/** 四家都有三墩了就亮牌結算：本局結果（result 是墩數）存進 hands，分數＝墩數 × 底分，累計加進 playerScores */
 export function revealIfReady(s: ThirteenGameState, now: number): boolean {
   if (s.phase !== "arranging" || s.players.some((p) => !p.arrangement)) return false;
-  const result = scoreRound(s.players.map((p) => p.arrangement!));
-  s.hands.push({ handNo: s.handNo, result, stats: handStats(result) });
-  s.playerScores = s.playerScores.map((x, i) => x + result.totals[i]);
+  const rule = scoreRuleOf(s.settings);
+  const result = scoreRound(s.players.map((p) => p.arrangement!), rule);
+  const scores = result.totals.map((x) => x * baseScoreOf(s.settings));
+  s.hands.push({ handNo: s.handNo, result, stats: handStats(result, rule), scores });
+  s.playerScores = s.playerScores.map((x, i) => x + scores[i]);
   s.phase = "revealed";
   s.nextReady = [];
   s.revealedAt = now;
@@ -231,18 +275,26 @@ export function advance(s: ThirteenGameState, now: number): { autoSeats: number[
  */
 export function revealPayload(s: ThirteenGameState): {
   handNo: number; order: Record<Row, number[][]>; arrangements: Arrangement[]; autoArranged: number[];
-  result: RoundResult; stats: HandStat[]; playerScores: number[]; over: boolean;
+  result: RoundResult; stats: (HandStat & { gunEach: number; scored: ScoredStat })[]; scoreRule: ScoreRule; baseScore: number; scores: number[];
+  rowDeltas: Record<Row, number[]>; playerScores: number[]; over: boolean;
   revealedAt: number | null; settleAt: number | null; nextHandAt: number | null;
 } {
   const arrangements = s.players.map((p) => p.arrangement!);
   const last = s.hands[s.hands.length - 1];
+  const base = baseScoreOf(s.settings);
+  const rule = scoreRuleOf(s.settings);
   return {
     handNo: s.handNo,
     order: revealOrder(arrangements),
     arrangements,
     autoArranged: s.players.filter((p) => p.autoArranged).map((p) => p.seat),
     result: last.result,
-    stats: last.stats ?? handStats(last.result),
+    // stats 是墩數（不乘，給出牌動畫）；gunEach＝每一槍的分數（GUN_PENALTY × 底分）；scored＝左欄明細的乘好版本
+    stats: (last.stats ?? handStats(last.result, rule)).map((st) => ({ ...st, gunEach: SCORING.GUN_PENALTY * base, scored: scoredStat(st, base) })),
+    scoreRule: rule,
+    baseScore: base,
+    scores: handScores(last, s.settings),
+    rowDeltas: rowDeltas(last.result, base, rule),
     playerScores: s.playerScores,
     over: isOver(s),
     revealedAt: s.revealedAt ?? null,
@@ -259,14 +311,16 @@ export function viewFor(s: ThirteenGameState, playerId: string | null, now: numb
     phase: s.phase,
     handNo: s.handNo,
     settings: s.settings,
+    baseScore: baseScoreOf(s.settings),
+    scoreRule: scoreRuleOf(s.settings),
     serverNow: now,
     arrangeDeadline: s.arrangeDeadline,
     nextHandAt: s.nextHandAt ?? null,
     nextReady: s.nextReady ?? [],
     playerScores: s.playerScores,
-    history: s.hands.map((h) => ({ handNo: h.handNo, totals: h.result.totals })),
+    history: s.hands.map((h) => ({ handNo: h.handNo, totals: h.result.totals, scores: handScores(h, s.settings) })),
     stats: matchStats(s),
-    players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat, submitted: p.arrangement !== null })),
+    players: s.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat, avatarUrl: p.avatarUrl ?? null, submitted: p.arrangement !== null })),
     me: me ? { seat: me.seat, hand: me.hand, arrangement: me.arrangement } : null,
     reveal: revealed ? revealPayload(s) : null,
     leaveRequest: s.leaveRequest ? { requesterId: s.leaveRequest.requesterId, approvedBy: s.leaveRequest.approvedBy, ...evaluateLeave(s, now)! } : null,

@@ -7,7 +7,7 @@ import type { MatchRecordInput, EndReason, MatchRecordSummary } from "@/lib/reco
 import type { Card } from "./cards";
 import type { Arrangement } from "./arrange";
 import type { RoundResult } from "./score";
-import { matchStats, type HandStat } from "./flow";
+import { baseScoreOf, matchStats, type HandStat } from "./flow";
 
 /** 開房可以選的理牌時間（秒）：最少 15 秒、15 秒一階、最多 120 秒（老闆 2026-11-18；原本只有 30／45／60，舊房間照樣有效） */
 export const ARRANGE_SECS = [15, 30, 45, 60, 75, 90, 105, 120] as const;
@@ -20,9 +20,20 @@ export const TOTAL_HANDS_MESSAGE = "局數只能選 8、16 或 32 局";
 export type ArrangeSec = (typeof ARRANGE_SECS)[number];
 export const isArrangeSec = (x: unknown): x is ArrangeSec => ARRANGE_SECS.includes(x as ArrangeSec);
 
+/** 底分（老闆 2026-11-19）：每局分數＝淨墩數 × 底分。開房畫面的預設選項是 BASE_SCORES，更大的用自訂（10～100000 的整數）；沒帶＝DEFAULT_BASE_SCORE */
+export const BASE_SCORES = [30, 50, 100, 200] as const;
+export const BASE_SCORE_MIN = 10, BASE_SCORE_MAX = 100000;
+export type BaseScore = number;
+export const DEFAULT_BASE_SCORE: BaseScore = 100;
+export const isBaseScore = (x: unknown): x is BaseScore =>
+  typeof x === "number" && Number.isInteger(x) && x >= BASE_SCORE_MIN && x <= BASE_SCORE_MAX;
+export const BASE_SCORE_MESSAGE = "底分要是 10～100000 的整數";
+
 export interface ThirteenSettings {
   arrangeSec: ArrangeSec; // 理牌時間
   totalHands: number;     // 這場打幾局
+  scoreRule?: "jia";      // 計分規則：2026-11-19 起開房記 "jia"（甲案）；沒有＝上線前開的房，整場照舊規則（見 flow.ts scoreRuleOf）
+  baseScore?: BaseScore;  // 底分（2026-11-19 起開房必有；更早的房沒有＝1，見 flow.ts baseScoreOf）
 }
 
 export interface ThirteenPlayerState {
@@ -30,6 +41,7 @@ export interface ThirteenPlayerState {
   name: string;
   seat: number;
   userId: string | null;
+  avatarUrl?: string | null;        // LINE 大頭照網址（開局時查一次；遊客、沒頭像、2026-11-19 前開局的牌局是 null／沒有）
   hand: Card[];                     // 這局發到的 13 張（亮牌前只能給本人看）
   arrangement: Arrangement | null;  // 送出的三墩（已通過 validateSubmission）；還沒送出＝null
   autoArranged: boolean;            // 理牌時間到了由系統自動排（autoArrange）
@@ -40,6 +52,7 @@ export interface ThirteenHandResult {
   handNo: number;
   result: RoundResult;
   stats?: HandStat[]; // 這局每家的明細（2026-11-18 起亮牌時記；更早的局沒有，用 handStats(result) 補算）
+  scores?: number[];  // 這局四家的分數＝result.totals（墩數）× 底分（2026-11-19 起亮牌時記；更早的局沒有，用 handScores 補算）
 }
 
 export interface ThirteenGameState {
@@ -241,7 +254,7 @@ export function buildThirteenRecord(roomId: string, roomCode: string, s: Thirtee
     basePoints: null,
     fanPoints: null,
     // stats：整場累計（每家打槍、被打槍、全壘打、被全壘打次數和總分），總結算畫面和對局紀錄用（2026-11-18）
-    settings: { arrangeSec: s.settings.arrangeSec, totalHands: s.settings.totalHands, stats: matchStats(s) },
+    settings: { arrangeSec: s.settings.arrangeSec, totalHands: s.settings.totalHands, baseScore: baseScoreOf(s.settings), stats: matchStats(s) },
     handsPlayed: s.hands.length,
     players: s.players.map((p) => ({
       seat: p.seat,
@@ -298,7 +311,7 @@ export async function findThirteenRecord(roomId: string): Promise<(MatchRecordSu
 /** 我的十三支對局紀錄（一頁）＋累計（th_my_matches，20261118_thirteen_records.sql）。cursor＝上一頁最後一筆的 endedAt 和 id */
 export interface ThirteenMyMatch {
   id: string; roomCode: string; endedAt: string; endReason: EndReason; handsPlayed: number | null;
-  arrangeSec: number | null; totalHands: number | null; myScore: number;
+  arrangeSec: number | null; totalHands: number | null; baseScore: number; myScore: number;
   players: { seat: number; playerName: string; totalScore: number; isMe: boolean }[];
 }
 export async function listMyThirteenMatches(userId: string, limit: number, cursor: { endedAt: string; id: string } | null):

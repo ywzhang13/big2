@@ -5,7 +5,7 @@
 // 長度和伺服器同一套（lib/thirteen/flow.ts REVEAL_TIMING、revealDurationMs）：結算面板出現的時間＝伺服器的 settleAt，四家同步
 // 起點用伺服器的亮牌時間 revealedAt：四家看到的進度一樣，重新整理也接得上（不會從頭再播）
 import { CAT, CAT_NAME, SCORING, bonusOf, evalRow, type Card, type Arrangement, type HandValue, type RoundResult, type Row } from "@/lib/thirteen";
-import { REVEAL_TIMING, type HandStat } from "@/lib/thirteen/flow";
+import { REVEAL_TIMING, type HandStat, type ScoredStat } from "@/lib/thirteen/flow";
 
 export const ROWS: Row[] = ["front", "middle", "back"];
 export const ROW_NAME: Record<Row, string> = { front: "頭墩", middle: "中墩", back: "尾墩" };
@@ -17,8 +17,16 @@ export interface ThReveal {
   arrangements: Arrangement[];
   autoArranged: number[];
   result: RoundResult;
-  /** 這局每家的明細（伺服器算，本局結算左欄用） */
-  stats: HandStat[];
+  /** 這局每家的明細（伺服器算，墩數）：本局結算左欄照這個顯示（老闆 2026-11-19：左欄是墩數）；scored（乘好底分的版本）前端不用 */
+  stats: (HandStat & { gunEach?: number; scored?: ScoredStat })[];
+  /** 每一墩每家的得失分（有底分的房由伺服器乘好給，中央看板用；舊房沒有，前端用 rowDeltas(result) 算，和改之前一樣） */
+  rowDeltas?: Record<Row, number[]>;
+  /** 這局四家的分數（老柯 2026-11-19：＝淨墩數 result.totals × 底分，伺服器乘好）；result.totals、stats 維持墩數給出牌動畫和明細。舊房沒有，退回 result.totals */
+  scores?: number[];
+  /** 這房的底分（舊房伺服器補 1） */
+  baseScore?: number;
+  /** 計分規則（老柯 API 0-1c）："jia"＝甲案（2026-11-19 之後開的房）；沒有＝上線前開的舊房，照舊規則 v1 */
+  scoreRule?: "jia" | "v1";
   playerScores: number[];
   over: boolean;
   /** 亮牌、結算面板出現、自動開下一局的伺服器時間（毫秒）；最後一局 nextHandAt＝null */
@@ -70,15 +78,17 @@ export function badgeOf(row: Row, v: HandValue): { label: string; bonus: boolean
   return { label, bonus: bonusOf(row, v) > 0 };
 }
 
-/** 每一墩每家的得失分（兩兩比：贏 +1＋加分、輸 −1−加分；不含打槍、全壘打） */
-export function rowDeltas(result: RoundResult): Record<Row, number[]> {
+/** 每一墩每家的得失分（兩兩比；不含打槍、全壘打）。只在伺服器沒給 rv.rowDeltas 時用。
+ *  甲案（scoreRule "jia"）：特殊牌型那一墩算表上的墩數、一般牌型 1；舊規則（沒有 scoreRule）：1＋表上的數字（老柯 API 0-1c，審伯必修：舊局要和已存的總分對得上） */
+export function rowDeltas(result: RoundResult, scoreRule?: ThReveal["scoreRule"]): Record<Row, number[]> {
   const out = { front: [0, 0, 0, 0], middle: [0, 0, 0, 0], back: [0, 0, 0, 0] } as Record<Row, number[]>;
   for (const p of result.pairs) for (const row of ROWS) {
     const r = p.rows[row];
     if (r.winner === null) continue;
     const loser = r.winner === p.a ? p.b : p.a;
-    out[row][r.winner] += 1 + r.bonus;
-    out[row][loser] -= 1 + r.bonus;
+    const unit = scoreRule === "jia" ? (r.bonus > 0 ? r.bonus : 1) : 1 + r.bonus; // 和後端 score.ts 同一條規則
+    out[row][r.winner] += unit;
+    out[row][loser] -= unit;
   }
   return out;
 }
@@ -177,13 +187,20 @@ export const allOpen = (): RevealFrame => ({
 
 /** 本局結算左欄：自己的明細（伺服器的 stats；有就列、沒有就不列），加起來＝本局分數 */
 export function breakdown(st: HandStat): { label: string; pts: number }[] {
+  // 老闆 2026-11-19 定案：本局結算左欄一律是墩數（stats 本身，不乘底分）；右欄四家和名牌才是乘過底分的輸贏（scores、playerScores）
   const items: { label: string; pts: number }[] = [{ label: "墩分", pts: st.rows }];
   for (const b of st.bonuses) items.push({ label: b.points < 0 ? `被${b.name}` : b.name, pts: b.points });
   if (st.guns || st.gunned) {
-    const per = SCORING.GUN_PENALTY; // 打槍幾家、被幾家打槍是伺服器給的次數；gunPoints＝(guns−gunned)×GUN_PENALTY
+    const per = SCORING.GUN_PENALTY; // 打槍幾家、被幾家打槍是伺服器給的次數；gunPoints＝(guns−gunned)×每槍墩數
     if (st.guns && st.gunned) { items.push({ label: `打槍 ×${st.guns}`, pts: st.guns * per }); items.push({ label: `被打槍 ×${st.gunned}`, pts: -st.gunned * per }); }
     else items.push({ label: st.guns ? `打槍 ×${st.guns}` : `被打槍 ×${st.gunned}`, pts: st.gunPoints });
   }
   if (st.homeRun || st.homeRunned) items.push({ label: st.homeRun ? "全壘打" : "被全壘打", pts: st.homeRunPoints });
   return items;
 }
+
+/** 中央看板的每墩得失分：伺服器給了（有底分、已經乘好）就用伺服器的，沒給（舊房）照舊自己算 */
+export const boardDeltas = (rv: Pick<ThReveal, "result" | "rowDeltas" | "scoreRule">): Record<Row, number[]> => rv.rowDeltas ?? rowDeltas(rv.result, rv.scoreRule);
+
+/** 本局結算「這局幾分」：伺服器給的 scores（已乘底分）；舊房沒有就照舊用 result.totals */
+export const handScore = (rv: Pick<ThReveal, "result" | "scores">, seat: number): number => rv.scores?.[seat] ?? rv.result.totals[seat];

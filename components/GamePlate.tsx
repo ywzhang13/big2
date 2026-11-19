@@ -8,9 +8,11 @@ import "./gamePlate.css";
 /** 座位（相對自己）：b 自己、t 對家、l 左家、r 右家——決定思考中泡泡朝哪邊 */
 export type PlateSeat = "b" | "t" | "l" | "r";
 
-export default function GamePlate({ seat, name, score, me = false, offline = false, thinking = false, shot = 0, plateId, className, style }: {
+export default function GamePlate({ seat, name, score, me = false, offline = false, thinking = false, shot = 0, plateId, className, style, avatarUrl = null }: {
   seat: PlateSeat;
   name: string;
+  /** LINE 大頭照（老闆 2026-11-19）；沒有或載不到就照舊顯示名字第一個字。名牌大小、位置不變 */
+  avatarUrl?: string | null;
   score: number;
   /** 自己：頭像金圈、名字金色 */
   me?: boolean;
@@ -28,7 +30,10 @@ export default function GamePlate({ seat, name, score, me = false, offline = fal
   const sc = score > 0 ? ["pos", `+${score}`] : score < 0 ? ["neg", `−${-score}`] : ["zero", "0"];
   return (
     <div className={`gp${me ? " is-me" : ""}${offline ? " is-off" : ""}${className ? ` ${className}` : ""}`} data-seat={seat} data-fx-seat={seat} data-gp-seat={plateId} style={style}>
-      <span className="gp-av">{Array.from(name)[0] ?? ""}</span>
+      <span className="gp-av">{Array.from(name)[0] ?? ""}{avatarUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="gp-pic" src={avatarUrl} alt="" draggable={false} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      )}</span>
       <span className="gp-tx">
         <span className="gp-nm">{name}</span>
         <span className="gp-l2"><span className={`gp-sc is-${sc[0]}`}>{sc[1]}</span></span>

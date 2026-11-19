@@ -190,8 +190,8 @@ let s = (await T.loadRoom(roomId))!.game_state!;
 {
   const rec = T.buildThirteenRecord(roomId, "5201", s, "completed")!;
   eq([rec.game, rec.handsPlayed, rec.settings, rec.totalRounds, rec.basePoints, rec.fanPoints, rec.players.map((p) => [p.seat, p.playerId, p.userId, p.totalScore])],
-    ["thirteen", 2, { arrangeSec: 45, totalHands: 4, stats: matchStats(s) }, null, null, null, s.players.map((p) => [p.seat, p.id, p.userId, s.playerScores[p.seat]])],
-    "C1 組紀錄：遊戲 thirteen、打了 2 局、理牌秒數、局數和整場累計（2026-11-18 起）放 settings（麻將的圈、底、台是 null）、四家總分和帳號");
+    ["thirteen", 2, { arrangeSec: 45, totalHands: 4, baseScore: 1, stats: matchStats(s) }, null, null, null, s.players.map((p) => [p.seat, p.id, p.userId, s.playerScores[p.seat]])],
+    "C1 組紀錄：遊戲 thirteen、打了 2 局、理牌秒數、局數、底分（舊房沒設＝1，2026-11-19 起）和整場累計（2026-11-18 起）放 settings（麻將的圈、底、台是 null）、四家總分和帳號");
   const changed = await closeRoom("thirteen", roomId, rec, { stateVersion: 3 });
   eq([changed, (await T.loadRoom(roomId)) !== null, Number((await one(`select count(*)::int n from match_records where room_id = $1`, [roomId])).n)],
     ["changed", true, 0], "C2 關房時版本不對（有人剛存了新的）→ changed，房間和紀錄都沒動");
@@ -199,7 +199,7 @@ let s = (await T.loadRoom(roomId))!.game_state!;
   const m = await one(`select game, room_code, end_reason, hands_played, settings - 'stats' settings, total_rounds, jsonb_array_length(settings->'stats') nstats from match_records where room_id = $1`, [roomId]);
   const mp = await rows(`select seat, player_name, player_id, total_score, user_id from match_record_players p join match_records r on r.id = p.match_id where r.room_id = $1 order by seat`, [roomId]);
   eq([closed, m, mp.map((x) => [x.seat, x.player_id, x.total_score, x.user_id])],
-    ["closed", { game: "thirteen", room_code: "5201", end_reason: "completed", hands_played: 2, settings: { arrangeSec: 45, totalHands: 4 }, total_rounds: null, nstats: 4 },
+    ["closed", { game: "thirteen", room_code: "5201", end_reason: "completed", hands_played: 2, settings: { baseScore: 1, arrangeSec: 45, totalHands: 4 }, total_rounds: null, nstats: 4 },
       s.players.map((p) => [p.seat, p.id, s.playerScores[p.seat], p.userId])],
     "C3 版本對 → closed：同一個交易寫進對局紀錄（十三支、2 局、設定、四家總分和帳號）");
   const left = await one(`select (select count(*)::int from th_rooms where id = $1) r, (select count(*)::int from th_players where room_id = $1) p`, [roomId]);

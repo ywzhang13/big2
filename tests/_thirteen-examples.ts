@@ -3,6 +3,8 @@
 // 分數照老闆 2026-11-13 修改的打槍規則重算（被打槍多付 1 分，v2 原為 3 分）：
 //   受打槍影響的範例 2、3、4、8、10、11、12、13 已改成新分數，其他範例分數和 v2 相同。
 // 待阿妍〈定案版 v3〉交出後再和她的「舊分數→新分數」對照表核對一次。
+// 2026-11-19 甲案（老闆定案，老柯改）：特殊牌型那一道只算表上的墩數、不再加那一道基本的 1。
+//   有特殊牌型的範例 3、4、8、9、11、12、13 改成甲案分數，說明寫「改之前」的數字；沒有特殊牌型的範例分數不變。
 import { parseCards } from "../lib/thirteen/cards";
 import { checkArrangement, type Arrangement } from "../lib/thirteen/arrange";
 import { CAT, CAT_NAME, evalFive } from "../lib/thirteen/hand";
@@ -34,13 +36,13 @@ eq(SCORING.GUN_PENALTY, 1, "打槍罰分常數＝1（老闆 2026-11-13 修改；
 // 範例 1～10：兩人之間，「A 從 B 拿到幾分」
 eq(duel(["2C 7D 9H", "3H 3D 8C 8S KD", "4C 5D 6H 7S 8D"], ["5H 5C 2D", "TD TC 2H 4S 9C", "JS JH JC 3C 6D"]), 1, "範例 1 三道互有輸贏：A +1");
 eq(duel(["QH QD 3C", "8H 8D 4C 4D 2S", "5C 6D 7H 8S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"]), 4, "範例 2 打槍沒加分：3＋打槍 1 ＝ A +4（v2 為 +6）");
-eq(duel(["QH QD QC", "8H 8D 8C 4D 4H", "5C 5D 5H 5S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"]), 8, "範例 3 打槍＋衝三＋尾道鐵支：3＋1＋2＋2 ＝ A +8（v2 為 +10）");
-eq(duel(["2C 2D 9H", "7H 7D 7C 7S 3D", "AS AH AD AC 4H"], ["6H 6D 3C", "4S 5S 6S 7S 8S", "9D TD JD QD KD"]), -13, "範例 4 鐵支被同花順壓：B 打槍 3＋1＋6＋3 ＝ B +13（v2 為 +15）");
+eq(duel(["QH QD QC", "8H 8D 8C 4D 4H", "5C 5D 5H 5S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"]), 6, "範例 3 打槍＋衝三＋尾道鐵支：衝三 2＋中道 1＋尾道鐵支 2＋打槍 1 ＝ A +6（甲案；改之前 +8，v2 為 +10）");
+eq(duel(["2C 2D 9H", "7H 7D 7C 7S 3D", "AS AH AD AC 4H"], ["6H 6D 3C", "4S 5S 6S 7S 8S", "9D TD JD QD KD"]), -11, "範例 4 鐵支被同花順壓：B 打槍 頭道 1＋中道同花順 6＋尾道同花順 3＋打槍 1 ＝ B +11（甲案；改之前 +13，v2 為 +15）");
 eq(duel(["AS AH KD", "3H 3D 3C 7S 8D", "4H 5D 6C 7H 8C"], ["AS AD KC", "2H 2D 2C 9S TD", "8S 9H TH JH QH"]), 0, "範例 5 完全同點平手、不比花色：0 分");
 eq(duel(["AS AH KD", "3H 3D 3C 7S 8D", "9C TC JC QD KH"], ["AS AD KC", "2H 2D 2C 9S TD", "8S 9H TH JH QH"]), 2, "範例 6 兩贏一平不算打槍：A +2");
 eq(duel(["2D 3D 5C", "9C 9D 4H 4C JD", "KS KS 9S 5S 2S"], ["2H 4D 6C", "TC TD 3S 3C QD", "AH QH JH 8H 3H"]), -1, "範例 7 加一色同花一對贏同花：B +1");
-eq(duel(["KH KD 2C", "QH QD QC 3H 3D", "AS AS AH AD AC"], ["JH JD 4C", "TS TH TD 5H 5D", "5S 6S 7S 8S 9S"]), 8, "範例 8 尾道五龍贏同花順：A 打槍 3＋1＋4 ＝ A +8（v2 為 +10）");
-eq(duel(["2H 3D 7C", "9S 9S 9H 9D 9C", "TS TS TH TD TC"], ["QH QD 5C", "JH JD JC 6H 6D", "AS AH AD AC 8H"]), 13, "範例 9 中道五龍（頭道輸、不打槍）：−1＋9＋5 ＝ A +13");
+eq(duel(["KH KD 2C", "QH QD QC 3H 3D", "AS AS AH AD AC"], ["JH JD 4C", "TS TH TD 5H 5D", "5S 6S 7S 8S 9S"]), 7, "範例 8 尾道五龍贏同花順：A 打槍 頭道 1＋中道 1＋尾道五龍 4＋打槍 1 ＝ A +7（甲案；改之前 +8，v2 為 +10）");
+eq(duel(["2H 3D 7C", "9S 9S 9H 9D 9C", "TS TS TH TD TC"], ["QH QD 5C", "JH JD JC 6H 6D", "AS AH AD AC 8H"]), 11, "範例 9 中道五龍（頭道輸、不打槍）：−1＋中道五龍 8＋尾道五龍 4 ＝ A +11（甲案；改之前 +13）");
 eq(duel(["2C 3D 7H", "8H 8D 9C 9D KH", "AS 2S 3H 4D 5C"], ["4H 9H JC", "TC TD QC QD KD", "2H 3S 4S 5S 6C"]), -4, "範例 10 A-2-3-4-5 最小順子：B 打槍 3＋1 ＝ B +4（v2 為 +6）");
 
 // 範例 11～13：四人
@@ -53,22 +55,22 @@ eq(four([
   ["JH TD 2C", "7C 7D 3H 2S KC", "9H 9D 6C 6S AC"],
   ["2H 3D 4C", "TC TS 3C 9S KD", "JS JC JD 2D 6D"],
   ["6H 7H 8C", "AH AD 3S 4S KH", "TH TS QS QC 7S"],
-]), { totals: [33, -13, -11, -9], homeRun: 0, pairs: [[0, 1, 8, 0], [0, 2, 8, 0], [0, 3, 8, 0], [1, 2, -1, null], [1, 3, -1, null], [2, 3, -1, null]] },
-"範例 11 全壘打：每家 3＋1＋2＋2＝8，再各付全壘打 3 → +33／−13／−11／−9，合計 0（v2 為 +39／−15／−13／−11）");
+]), { totals: [27, -11, -9, -7], homeRun: 0, pairs: [[0, 1, 6, 0], [0, 2, 6, 0], [0, 3, 6, 0], [1, 2, -1, null], [1, 3, -1, null], [2, 3, -1, null]] },
+"範例 11 全壘打：每家 衝三 2＋中道 1＋尾道鐵支 2＋打槍 1＝6，再各付全壘打 3 → +27／−11／−9／−7，合計 0（甲案；改之前 +33／−13／−11／−9，v2 為 +39）");
 eq(four([
   ["KH KD 2C", "QH QD QC 3H 3D", "AS AH AD AC 4C"],
   ["2H 2D 9C", "TS TH TD TC JH", "5S 6S 7S 8S 9S"],
   ["3C 4D 6H", "JS JC 8D 8H 5C", "6S 6C 6D 7H 7D"],
   ["4H 5D 7C", "KS KC 9D 9H 2S", "8C 9S TS JD QS"],
-]), { totals: [4, 30, -18, -16], homeRun: null, pairs: [[0, 1, -8, null], [0, 2, 6, 0], [0, 3, 6, 0], [1, 2, 11, 1], [1, 3, 11, 1], [2, 3, -1, null]] },
-"範例 12 一般局（沒有全壘打）：+4／+30／−18／−16，合計 0（v2 為 +8／+34／−22／−20）");
+]), { totals: [4, 24, -15, -13], homeRun: null, pairs: [[0, 1, -6, null], [0, 2, 5, 0], [0, 3, 5, 0], [1, 2, 9, 1], [1, 3, 9, 1], [2, 3, -1, null]] },
+"範例 12 一般局（沒有全壘打）：0 對 1＝頭道 +1、被中道鐵支 −4、被尾道同花順 −3＝−6 … → +4／+24／−15／−13，合計 0（甲案；改之前 +4／+30／−18／−16，v2 為 +8／+34）");
 eq(four([
   ["QH QD QS", "8H 8D 8C 8S 4D", "AS AS AH AD AC"],
   ["JH TD 2C", "7C 7D 3H 2S KC", "9H 9D 6C 6S QC"],
   ["2H 3D 4C", "TC TS 3C 9S KD", "JS JC JD 2D 6D"],
   ["6H 7H 5C", "KH KS 3S 4S 5D", "TH TS 7S 7S 9C"],
-]), { totals: [51, -19, -17, -15], homeRun: 0, pairs: [[0, 1, 14, 0], [0, 2, 14, 0], [0, 3, 14, 0], [1, 2, -1, null], [1, 3, -1, null], [2, 3, -1, null]] },
-"範例 13 打槍＋全壘打＋五龍：每家 3＋1＋2＋4＋4＝14，再加全壘打 3＝17 → +51／−19／−17／−15，合計 0（v2 為 +57）");
+]), { totals: [42, -16, -14, -12], homeRun: 0, pairs: [[0, 1, 11, 0], [0, 2, 11, 0], [0, 3, 11, 0], [1, 2, -1, null], [1, 3, -1, null], [2, 3, -1, null]] },
+"範例 13 打槍＋全壘打＋五龍：每家 衝三 2＋中道鐵支 4＋尾道五龍 4＋打槍 1＝11，再加全壘打 3 → +42／−16／−14／−12，合計 0（甲案；改之前 +51，v2 為 +57）");
 
 // 範例 14：倒水邊界
 const [ok14] = players([["AH AD KC", "AS AC KD QH JS", "2H 2D 2C 2S 5D"]]);
@@ -95,7 +97,8 @@ eq(revealOrder(r12), { front: [[2], [3], [1], [0]], middle: [[2], [3], [0], [1]]
 const r5 = players([["AS AH KD", "3H 3D 3C 7S 8D", "4H 5D 6C 7H 8C"], ["AS AD KC", "2H 2D 2C 9S TD", "8S 9H TH JH QH"]]);
 eq(revealOrder([r5[0], r5[1], r5[0], r5[1]]).front, [[0, 1, 2, 3]], "亮牌順序：一樣大（範例 5 頭道 AA+K）放同一組一起亮");
 
-// 對照 v2：打槍罰分改回 3，引擎要算出規則書 v2（阿妍參考程式驗算過）的原始分數——證明只改一個常數就能切換規則
+// 打槍罰分只是一個常數：改成 3 分時，範例 2、3、4、8、10、11、12、13 每被打一槍多付 2 分（甲案下的分數；
+// 2026-11-19 前這裡對照的是規則書 v2 的原始分數，v2 的特殊牌型會再加那一道的 1，甲案之後已經不會相等）
 SCORING.GUN_PENALTY = 3;
 eq([
   duel(["QH QD 3C", "8H 8D 4C 4D 2S", "5C 6D 7H 8S 9C"], ["JH TD 2C", "7C 7D 3H 5S KC", "9H 9D 6C 6S AC"]),
@@ -106,8 +109,8 @@ eq([
   four([["QH QD QS", "8H 8D 8S 4D 4H", "5C 5D 5H 5S 9C"], ["JH TD 2C", "7C 7D 3H 2S KC", "9H 9D 6C 6S AC"], ["2H 3D 4C", "TC TS 3C 9S KD", "JS JC JD 2D 6D"], ["6H 7H 8C", "AH AD 3S 4S KH", "TH TS QS QC 7S"]]).totals,
   four([["KH KD 2C", "QH QD QC 3H 3D", "AS AH AD AC 4C"], ["2H 2D 9C", "TS TH TD TC JH", "5S 6S 7S 8S 9S"], ["3C 4D 6H", "JS JC 8D 8H 5C", "6S 6C 6D 7H 7D"], ["4H 5D 7C", "KS KC 9D 9H 2S", "8C 9S TS JD QS"]]).totals,
   four([["QH QD QS", "8H 8D 8C 8S 4D", "AS AS AH AD AC"], ["JH TD 2C", "7C 7D 3H 2S KC", "9H 9D 6C 6S QC"], ["2H 3D 4C", "TC TS 3C 9S KD", "JS JC JD 2D 6D"], ["6H 7H 5C", "KH KS 3S 4S 5D", "TH TS 7S 7S 9C"]]).totals,
-], [6, 10, -15, 10, -6, [39, -15, -13, -11], [8, 34, -22, -20], [57, -21, -19, -17]],
-"對照 v2：打槍改回 3 分時，範例 2、3、4、8、10、11、12、13 完全等於規則書 v2 的分數（只改 SCORING.GUN_PENALTY 一處）");
+], [6, 8, -13, 9, -6, [33, -13, -11, -9], [8, 28, -19, -17], [48, -18, -16, -14]],
+"打槍改成 3 分時：範例 2、3、4、8、10、11、12、13 都是甲案分數再加「每一槍多 2 分」（只改 SCORING.GUN_PENALTY 一處）");
 SCORING.GUN_PENALTY = 1;
 
 for (const r of results) console.log(r);

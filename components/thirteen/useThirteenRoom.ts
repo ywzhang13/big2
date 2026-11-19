@@ -13,12 +13,15 @@ import type { ThReveal } from "./revealTimeline";
 import type { MatchStat } from "./ThResult";
 import { loadSkew, saveSkew, skewFromDateHeader, skewOnClosed } from "./roomScreen";
 
-export interface ThSettings { arrangeSec: number; totalHands: number }
+/** baseScore：底分（老闆 2026-11-19，50／100／200／500）；畫面讀最上層的 baseScore（舊房 settings 沒有這個欄位） */
+export interface ThSettings { arrangeSec: number; totalHands: number; baseScore?: number }
 export interface ThWaitingView {
   status: "waiting";
   code: string;
   hostId: string;
   settings: ThSettings;
+  /** 這房的底分（老柯 2026-11-19：讀最上層；舊房伺服器補 1） */
+  baseScore?: number;
   seats: { seat: number; name: string; playerId: string }[];
 }
 export interface ThGameView {
@@ -36,7 +39,8 @@ export interface ThGameView {
   stats?: MatchStat[];
   nextReady?: string[];
   playerScores?: number[];
-  players: { id: string; name: string; seat: number; submitted: boolean }[];
+  /** avatarUrl：LINE 大頭照（老柯 API；沒有就是 null，名牌照舊顯示名字第一個字） */
+  players: { id: string; name: string; seat: number; submitted: boolean; avatarUrl?: string | null }[];
   me: { seat: number; hand: Card[]; arrangement: Arrangement | null } | null;
   reveal: ThReveal | null;
 }
