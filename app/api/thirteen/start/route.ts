@@ -1,8 +1,13 @@
-// 十三支開局：POST { roomId, playerId }（房主本人）。四家到齊才能開；發牌、設理牌截止時間，每家的牌只送到自己的座位頻道
-import { getAuthUser, getPictureUrls } from "@/lib/auth";
+// 十三支開始：POST { roomId, playerId }（房主本人）。2026-11-20 起（老闆定案）不再直接發牌，而是「發起開局確認」：
+//   房主自己算同意，倒數 10 秒；另外三家要按 /api/thirteen/start-confirm 同意，四家都同意才發牌開局（開局後才扣房卡）。
+//   倒數到了還有人沒按 → 不開局、回到等人，房主要再按一次開始（重新倒數 10 秒）。已經有一個還在倒數的確認就回那一個，不重新計時。
+//   成功 → { ok, confirm: { startedBy, readyIds, seatIds, deadline, serverNow } }
+//   錯誤照舊：不是本人 403 not_your_seat、不是房主 403 not_host、已開打 400 started、不滿 4 人 400 not_full、
+//   有人被暫停 403 player_suspended（發起時擋一次；四家都同意、真的發牌前會再擋一次）、暫停開新局 503 paused
+import { getAuthUser } from "@/lib/auth";
 import { loadPlayers } from "@/lib/thirteen/db";
-import { clock, seatPlayers, startHand, touch } from "@/lib/thirteen/flow";
-import { fail, json, newGamesPaused, pausedResponse, saveAndAnnounce, withRoom } from "@/lib/thirteen/server";
+import { fail, newGamesPaused, pausedResponse, withRoom } from "@/lib/thirteen/server";
+import { beginConfirm } from "@/lib/thirteen/startConfirm";
 import { startBlockedError } from "@/lib/roomCard/guard";
 
 export async function POST(request: Request) {
@@ -20,12 +25,6 @@ export async function POST(request: Request) {
     // 房卡：房裡有人被暫停就不能開局（403 player_suspended，回那個人的座位和名字）
     const blocked = await startBlockedError(seats.map((p) => ({ userId: p.user_id, name: p.name, seat: p.seat })));
     if (blocked) return blocked;
-    const s = room.game_state;
-    const base = s.stateVersion;
-    seatPlayers(s, seats, await getPictureUrls(seats.map((p) => p.user_id))); // 大頭照開局時查一次（同麻將），查不到是 null、不擋開局
-    startHand(s, clock.now());
-    touch(s, me.player_id, clock.now()); // 房主開局＝牌局動作；其他人從開局時間起算
-    const sv = await saveAndAnnounce(room, s, base, { autoSeats: [], revealed: false, nextStarted: true }, [], "playing");
-    return json({ ok: true, handNo: s.handNo, arrangeDeadline: s.arrangeDeadline, sv });
+    return beginConfirm(room, seats, me.player_id);
   });
 }

@@ -11,7 +11,7 @@ import { tokens } from "../support/stub-auth";
 import { sent } from "../support/stub-broadcast";
 import { POST as createRoute } from "../../app/api/thirteen/create/route";
 import { POST as joinRoute } from "../../app/api/thirteen/join/route";
-import { POST as startRoute } from "../../app/api/thirteen/start/route";
+import { POST as startRoute } from "../support/thirteen-start-all"; // 開始＝房主發起＋其他三家同意（2026-11-20 起；確認本身見 flow-thirteen-start-confirm）
 import { GET as stateRoute } from "../../app/api/thirteen/state/route";
 import { POST as submitRoute } from "../../app/api/thirteen/submit/route";
 import { clock, dealer } from "../../lib/thirteen/flow";

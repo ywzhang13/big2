@@ -314,7 +314,15 @@ function ThirteenScreens() {
       if (block) { setBlocked(block); return { ok: true }; } // 已經跳視窗說明，等人畫面不再另外寫錯誤
       return r;
     };
-    return <><ThWaiting view={view} myPlayerId={join.playerId} onStart={start} onLeave={leaveRoom} />{blockedDialog}</>;
+    // 開局確認：四家都同意、發牌前伺服器再查一次暫停（403 player_suspended）→ 跟開始被擋一樣跳「不能開局」視窗
+    const agree = async (confirmId: string) => {
+      const r = await room.confirmStart(confirmId);
+      const block = r.ok ? null : blockedFrom((r as { body?: unknown }).body, join.code);
+      if (block) { setBlocked(block); return { ok: true }; }
+      return r;
+    };
+    return <><ThWaiting view={view} myPlayerId={join.playerId} clockSkew={room.clockSkew} onStart={start} onLeave={leaveRoom}
+      onAgree={agree} onCancel={room.cancelStart} onTimeUp={() => void room.tick()} />{blockedDialog}</>;
   }
 
   const me = view.me;

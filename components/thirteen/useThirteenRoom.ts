@@ -24,7 +24,13 @@ export interface ThWaitingView {
   baseScore?: number;
   /** avatarUrl：LINE 大頭照（老柯 API；沒有就是 null，座位照舊顯示名字第一個字） */
   seats: { seat: number; name: string; playerId: string; avatarUrl?: string | null }[];
+  /** 開局確認（老柯 2026-11-20〈十三支開局確認 API〉）：房主按了開始、還在等四家同意；沒有＝null。deadline、serverNow 是伺服器時間（毫秒） */
+  startConfirm?: StartConfirmState | null;
+  /** 上一次開局確認為什麼沒開成（timeout＝有人沒按、host＝房主取消、seats_changed＝有人離開、suspended＝有人被暫停）；房主重按或開局後＝null */
+  lastStartConfirm?: { at: number; reason: "timeout" | "host" | "seats_changed" | "suspended"; missingIds: string[] } | null;
 }
+/** id：這一輪確認的編號（老柯 R1 修正）；同意、取消都要帶，舊一輪晚到的請求伺服器回 409 stale_confirm */
+export interface StartConfirmState { id: string; startedBy: string; readyIds: string[]; seatIds: string[]; deadline: number; serverNow: number }
 export interface ThGameView {
   status: "playing" | "finished";
   code: string;
@@ -64,7 +70,8 @@ export interface ThClosed { roomId: string; message: string; record: ThFinalReco
 
 /** 十三支會送的事件（lib/thirteen/server.ts、app/api/thirteen/*）。全部只當「該重抓了」的訊號 */
 const EVENTS = ["th_player_joined", "th_player_left", "th_hand_start", "th_deal_hand", "th_submitted", "th_auto_arranged", "th_reveal",
-  "th_next_ready", "th_leave_request", "th_leave_vote", "th_room_closed", "th_spectators", "th_spectate_request"];
+  "th_next_ready", "th_leave_request", "th_leave_vote", "th_room_closed", "th_spectators", "th_spectate_request",
+  "th_start_confirm", "th_start_ready", "th_start_cancelled"]; // 開局確認（同樣只當「該重抓了」：重新整理、漏收也照伺服器狀態）
 
 export async function apiJson<T = Record<string, unknown>>(path: string, init?: RequestInit): Promise<{ status: number; body: T & { error?: string; message?: string }; date: string | null }> {
   const res = await mjFetch(path, init);
@@ -119,9 +126,11 @@ export function useThirteenRoom(join: ThJoin | null) {
       if (verdict === "drop") return;
       appliedSeqRef.current = seq;
       syncRef.current.noteVersion(sv, { fromState: true });
-      if (r.body.status !== "waiting" && typeof (r.body as ThGameView).serverNow === "number") {
+      // 伺服器時間：牌局狀態的 serverNow；等人時只有開局確認帶 serverNow（倒數 10 秒照伺服器的截止時間算）
+      const now = r.body.status !== "waiting" ? (r.body as ThGameView).serverNow : (r.body as ThWaitingView).startConfirm?.serverNow;
+      if (typeof now === "number") {
         // 用請求來回的中點估本機時間，減掉網路延遲的偏差
-        const skew = (r.body as ThGameView).serverNow - (sentAt + Date.now()) / 2;
+        const skew = now - (sentAt + Date.now()) / 2;
         setClockSkew(skew);
         saveSkew(window.sessionStorage, skew);
       }
@@ -189,6 +198,33 @@ export function useThirteenRoom(join: ThJoin | null) {
     return r.status === 200 ? { ok: true } : { ok: false, message: r.body.message ?? "開局失敗", body: r.body as unknown }; // body：房卡 403 player_suspended 由頁面跳視窗
   }, [kick]);
 
+  /** 開局確認：其他三家按「同意」（房主開始時已算同意）。第四家同意＝伺服器直接發牌；body 給頁面認 403 player_suspended。
+   *  confirmId＝畫面上這一輪的 startConfirm.id；409 stale_confirm（按的是上一輪）＝重讀狀態就好、不顯示錯誤 */
+  const confirmStart = useCallback(async (confirmId: string) => {
+    const j = joinRef.current;
+    if (!j) return { ok: false, message: "還沒入座" };
+    try {
+      const r = await apiJson("/api/thirteen/start-confirm", { method: "POST", body: JSON.stringify({ roomId: j.roomId, playerId: j.playerId, confirmId }) });
+      if (r.status === 200 || r.body.error === "stale_confirm") return { ok: true };
+      const msg = r.body.error === "expired" ? "時間到了，請房主重新開始" : r.body.error === "no_confirm" || r.body.error === "seats_changed" ? "這次開局已經取消" : r.body.message ?? "送出失敗，請再按一次";
+      return { ok: false, message: msg, body: r.body as unknown };
+    } catch {
+      return { ok: false, message: "網路不穩，請再按一次" };
+    } finally { kick(); }
+  }, [kick]);
+
+  /** 開局確認：房主取消（帶這一輪的 confirmId；上一輪的 409 stale_confirm＝重讀狀態、不顯示錯誤） */
+  const cancelStart = useCallback(async (confirmId: string) => {
+    const j = joinRef.current;
+    if (!j) return { ok: false, message: "還沒入座" };
+    try {
+      const r = await apiJson("/api/thirteen/start-cancel", { method: "POST", body: JSON.stringify({ roomId: j.roomId, playerId: j.playerId, confirmId }) });
+      return r.status === 200 || r.body.error === "stale_confirm" ? { ok: true } : { ok: false, message: r.body.message ?? "取消失敗，請再按一次" };
+    } catch {
+      return { ok: false, message: "網路不穩，請再按一次" };
+    } finally { kick(); }
+  }, [kick]);
+
   /** 送出三墩：網路錯誤重試 3 次；伺服器拒絕（截止時間過了、已送出）就照伺服器的狀態（重抓） */
   const submit = useCallback(async (a: Arrangement): Promise<{ ok: boolean; error?: string; message?: string }> => {
     const j = joinRef.current;
@@ -234,5 +270,5 @@ export function useThirteenRoom(join: ThJoin | null) {
     } finally { kick(); }
   }, [kick]);
 
-  return { view, closed: closedFor(closedRoom, join), forbidden: !!join && forbiddenJoin === join, clockSkew, refetch: kick, start, submit, tick, leave, next };
+  return { view, closed: closedFor(closedRoom, join), forbidden: !!join && forbiddenJoin === join, clockSkew, refetch: kick, start, confirmStart, cancelStart, submit, tick, leave, next };
 }

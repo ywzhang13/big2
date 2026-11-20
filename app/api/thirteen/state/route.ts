@@ -8,6 +8,7 @@ import { loadRoomSpectate } from "@/lib/mahjong/spectate/store";
 import { loadPlayers } from "@/lib/thirteen/db";
 import { baseScoreOf, clock, viewFor } from "@/lib/thirteen/flow";
 import { advanceAndSave, goneResponse, fail, json, seatOwnerError, withRoom } from "@/lib/thirteen/server";
+import { confirmView, settleStartConfirm } from "@/lib/thirteen/startConfirm";
 
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
@@ -22,8 +23,10 @@ export async function GET(request: Request) {
     if (room.status === "waiting") {
       if (playerId && !seats.some((p) => p.player_id === playerId && p.user_id === user.id)) return fail(403, "not_your_seat");
       const pics = await getPictureUrls(seats.map((p) => p.user_id)); // 等人畫面的大頭照：座位表沒有存，照帳號查（開局後改讀牌局狀態裡存好的）
+      const confirm = await settleStartConfirm(room, seats); // 開局確認：時間到或座位變了就作廢（保底輪詢也會觸發）
       return json({ status: "waiting", code: room.code, hostId: room.host_id, settings: room.game_state.settings, baseScore: baseScoreOf(room.game_state.settings),
-        seats: seats.map((p, i) => ({ seat: p.seat, name: p.name, playerId: p.player_id, avatarUrl: pics[i] })) });
+        seats: seats.map((p, i) => ({ seat: p.seat, name: p.name, playerId: p.player_id, avatarUrl: pics[i] })), startConfirm: confirmView(confirm, clock.now()),
+        lastStartConfirm: room.game_state.lastStartConfirm ?? null });
     }
     if (playerId) { const e = await seatOwnerError(request, room.game_state, playerId); if (e) return e; }
     const { s, sv, closed } = await advanceAndSave(room);

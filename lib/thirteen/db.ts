@@ -2,6 +2,7 @@
 // 寫法照麻將 lib/mahjong/db.ts：牌局狀態整包放 th_rooms.game_state，用 stateVersion 做樂觀鎖，同時送出不會互相覆蓋。
 // 和麻將不同：沒有 Redis 快取（十三支一局只有發牌、送出、亮牌幾次寫入，直接讀資料庫）。
 // 關房＋寫對局紀錄走共用的 lib/records/store.ts closeRoom("thirteen", …)，紀錄內容用這裡的 buildThirteenRecord 組。
+import type { StartConfirm } from "@/lib/lobby/startConfirm";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { MatchRecordInput, EndReason, MatchRecordSummary } from "@/lib/records/types";
 import type { Card } from "./cards";
@@ -72,6 +73,8 @@ export interface ThirteenGameState {
   revealedAt?: number | null;       // 這局亮牌的時間（伺服器毫秒）
   settleAt?: number | null;         // 結算面板出現的時間（＝revealedAt＋亮牌演出長度，見 flow.ts revealDurationMs）
   leaveRequest?: { requesterId: string; approvedBy: string[]; deniedBy?: string[] } | null; // 中途解散投票（判定見 flow.ts evaluateLeave）
+  startConfirm?: StartConfirm | null; // 等人階段的開局確認（房主按開始後 10 秒內四家都同意才發牌；見 lib/lobby/startConfirm.ts、lib/thirteen/startConfirm.ts）
+  lastStartConfirm?: { reason: "host" | "timeout" | "seats_changed" | "suspended"; missingIds: string[]; at: number } | null; // 上一次開局確認為什麼沒開成、誰沒按（房主重新按開始、開局時清掉）
   lastActive?: Record<string, number>; // 每位玩家最後一次「牌局動作」的時間（閒置不計票用，見 flow.ts）
 }
 

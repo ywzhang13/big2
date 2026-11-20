@@ -6,7 +6,8 @@
 // 和入座、開局存檔、閒置清除不會交錯（審伯 2026-11-18 必修 1、3）。
 import { getAuthUser } from "@/lib/auth";
 import { loadRoom, lobbyLeave } from "@/lib/thirteen/db";
-import { emptyLobbyClosed, fail, json, send } from "@/lib/thirteen/server";
+import { emptyLobbyClosed, fail, json, send, withRoom } from "@/lib/thirteen/server";
+import { settleStartConfirm } from "@/lib/thirteen/startConfirm";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { roomId?: unknown } | null;
@@ -21,7 +22,11 @@ export async function POST(request: Request) {
     if ("error" in r) return r.error === "game_in_progress" ? fail(409, r.error, "已經開局，請用解散投票") : fail(404, r.error);
     try {
       if (r.closed) await emptyLobbyClosed(room);
-      else await send(room, [{ event: "th_player_left", payload: { playerId: r.player_id, seat: r.seat, playerCount: r.player_count, hostId: r.host_id } }], r.state_version);
+      else {
+        await send(room, [{ event: "th_player_left", payload: { playerId: r.player_id, seat: r.seat, playerCount: r.player_count, hostId: r.host_id } }], r.state_version);
+        // 開局確認期間有人離開：這次確認作廢（座位變了），回到等人、房主要重新按開始
+        if (room.game_state?.startConfirm) await withRoom(roomId, async (fresh) => { await settleStartConfirm(fresh); return json({ ok: true }); });
+      }
     } catch (err) {
       console.error(`[th-leave] 房 ${roomId} 離開後清資料／廣播失敗（離開已成立）：`, err instanceof Error ? err.message : err);
     }
