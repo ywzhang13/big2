@@ -2,7 +2,7 @@
 //   A1 開局廣播 mj_game_start、牌局中讀 state（別家看）都有：LINE 登入的座位是網址，遊客、沒有大頭貼的座位是 null
 //   A2 回應和廣播裡沒有帳號 id、沒有 userId 欄位
 //   A3 下一局沿用（startNextGame 不清掉）
-import { POST as start } from "../../app/api/mahjong/start/route";
+import { POST as start } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { GET as getState } from "../../app/api/mahjong/state/route";
 import { rooms, seats } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";

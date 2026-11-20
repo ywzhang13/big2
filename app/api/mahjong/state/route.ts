@@ -1,4 +1,5 @@
-import { loadRoom, loadPlayers, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
+import { loadRoom, loadPlayers, StateConflictError, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
+import { confirmView, lobbyOf, settleMjConfirm } from "@/lib/mahjong/startConfirm";
 import { endedResponse } from "@/lib/records/close";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { privateChannelName, seatOwnerError } from "@/lib/mahjong/access";
@@ -36,6 +37,10 @@ export async function GET(request: Request) {
     // If no game state yet (still in lobby), return players from DB
     if (!room.game_state || !(room.game_state as unknown as Record<string, unknown>).status) {
       const dbPlayers = await loadPlayers(roomId);
+      // 開局確認：時間到、或座位變了就先作廢（回到等人），保底輪詢、前端倒數到 0 時讀一次都會觸發；寫入衝突就照讀到的回，下次再處理
+      const now = Date.now();
+      let lobby = lobbyOf(room);
+      try { lobby = await settleMjConfirm(room, dbPlayers ?? [], now); } catch (err) { if (!(err instanceof StateConflictError)) throw err; }
       // Extract roomSettings if they were saved at room creation
       const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings;
       return Response.json({
@@ -49,6 +54,8 @@ export async function GET(request: Request) {
           seat: p.seat,
         })),
         roomSettings: savedSettings ?? null,
+        startConfirm: confirmView(lobby.startConfirm, now),       // 開局確認：誰已同意、截止時間、這一輪的編號
+        lastStartConfirm: lobby.lastStartConfirm ?? null,         // 上一次為什麼沒開成、誰沒按
         gameState: null,
       });
     }

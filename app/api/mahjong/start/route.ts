@@ -1,21 +1,12 @@
-import { applyZimoFx, prefetchZimoFx } from "@/lib/mahjong/zimoFx/attach";
-import {
-  loadRoom,
-  loadPlayers,
-  saveGameStateIfUnchanged,
-  toPublicGameState,
-  retryOnConflict,
-} from "@/lib/mahjong/db";
+// 麻將開始（房主）：POST { roomId, playerId }。2026-11-20 起（老闆定案，同十三支、大老二）不直接發牌，而是發起開局確認：
+//   房主自己算同意，倒數 10 秒；另外三家按 /api/mahjong/start-confirm 同意，四家都同意才發牌開局、扣房卡。
+//   倒數到了還有人沒按 → 不開局、回到等人，房主要再按一次（重新倒數 10 秒）。已經有一個還在倒數的就回那一個，不重新計時。
+//   成功 200 { success, ok, confirm: { id, startedBy, readyIds, seatIds, deadline, serverNow } }（舊前端只看 success，不會壞）
+//   錯誤照舊：不是房主 403、已開始 400、不滿 4 人 400、沒登入 401／不是本人 403、有人被暫停 403 player_suspended（不進確認）
+import { loadRoom, loadPlayers, retryOnConflict } from "@/lib/mahjong/db";
 import { seatOwnerError } from "@/lib/mahjong/access";
-import { getPictureUrls } from "@/lib/auth";
-import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
-import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
-import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow, shuffleSeats } from "@/lib/mahjong/gameLogic";
-import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
-import { closeMahjongIfOver } from "@/lib/records/close";
 import { startBlockedError } from "@/lib/roomCard/guard";
-import { chargeMahjongHand } from "@/lib/roomCard/charge";
-import { mahjongChargeHand } from "@/lib/roomCard/rules";
+import { beginMjConfirm } from "@/lib/mahjong/startConfirm";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -27,11 +18,7 @@ export async function POST(request: Request) {
   return retryOnConflict((fresh) => handleStart(request, body, fresh));
 }
 
-/**
- * 開局。條件寫入：只有房間狀態還是讀出時的版本才寫入（同一筆 update 也把
- * status 改成 playing／finished），所以同時送兩次開局時，晚到的那次會衝突、
- * 重新讀到 status 已不是 waiting 而被擋下，不會蓋掉已開的局、也不會重複廣播。
- */
+/** 發起開局確認。寫入都是等人階段的條件寫入：同時送兩次只會成功一次，另一次重讀後回同一個確認 */
 async function handleStart(request: Request, body: unknown, fresh: boolean): Promise<Response> {
   const { roomId, playerId } = body as {
     roomId?: string;
@@ -69,94 +56,6 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   const blocked = await startBlockedError(players.map((p) => ({ userId: p.user_id ?? null, name: p.name, seat: p.seat })));
   if (blocked) return blocked;
 
-  // 開局隨機排座位（老闆 2026-10-17）：牌局狀態的座位以這個順序為準；mj_players.seat 只代表入座順序，不再改它。
-  // userId 跟著玩家走，所以 LINE 帳號認座位、找回房間、對局紀錄、整場統計都用新座位
-  const seated = shuffleSeats(players);
-
-  // Initialize game — pass room settings if present
-  const playerInfos = seated.map((p) => ({
-    id: p.player_id,
-    name: p.name,
-  }));
-
-  const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings as
-    | { totalRounds: number; basePoints: number; fanPoints: number }
-    | undefined;
-
-  let state = initGame(playerInfos, savedSettings);
-  state.roomCode = room.code;
-  // 記下每個座位綁定的使用者，之後每個動作都用它確認本人、整場結束寫進對局紀錄
-  state.players.forEach((p, i) => (p.userId = seated[i].user_id ?? null));
-  // 同桌顯示 LINE 大頭貼（老闆 2026-10-29）：開局時取一次，之後每局沿用
-  // 自摸特效和大頭貼同時查（不多串一次往返）：公開座位資料帶代號讓前端預載；起手就胡也照這個
-  const zimoFxPrefs = prefetchZimoFx(state);
-  const pics = await getPictureUrls(state.players.map((p) => p.userId));
-  state.players.forEach((p, i) => (p.avatarUrl = pics[i]));
-  applyZimoFx(state, await zimoFxPrefs);
-
-  // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
-  // 起莊者 = 開門者（第一局同一顆骰子）
-  const hostSeat = state.players.findIndex((p) => p.id === room.host_id);
-  const baseSeat = hostSeat >= 0 ? hostSeat : 0;
-  const d1 = 1 + Math.floor(Math.random() * 6);
-  const d2 = 1 + Math.floor(Math.random() * 6);
-  const d3 = 1 + Math.floor(Math.random() * 6);
-  const sum = d1 + d2 + d3;
-  const firstDealerSeat = (baseSeat + ((sum - 1) % 4)) % 4;
-  state.dealerSeat = firstDealerSeat;
-  if (state.roundInfo) {
-    state.roundInfo.initialDealerSeat = firstDealerSeat;
-  }
-
-  // 對局紀錄：記開局時間；打完幾局從 0 開始算（applySettlement 會加）
-  state.startedAt = new Date().toISOString();
-  state.handsCompleted = 0;
-  state = dealTiles(state);
-  const cardHand = mahjongChargeHand(state); // 房卡：要在下面「開局就八仙」的 applySettlement 之前算（它會把打完的把數 +1）
-
-  // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
-  state.dice = [d1, d2, d3];
-  state.doorSeat = firstDealerSeat;
-
-  // 開局補花就八仙過海：這局直接結束（先照常送開局事件，最後送 mj_game_over）
-  const endedAtDeal = state.status === "finished";
-  if (endedAtDeal) applySettlement(state);
-
-  // Save full state to DB
-  const baseVersion = (room.game_state as { stateVersion?: number } | null)?.stateVersion;
-  applyPace(state, dealPaceMs(state)); // 起手補花的特效播完，莊家才能打第一張
-  const sv = await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
-  await chargeMahjongHand(roomId, room.code, state, cardHand); // 房卡：存檔成功才扣，每人 1 張（老闆不扣；同一把只扣一次）
-
-  // Broadcast public game start (no hands)
-  const publicState = toPublicGameState(state);
-  await mjBroadcast(room.code, "mj_game_start", {
-    currentTurn: publicState.currentTurn,
-    dealerSeat: publicState.dealerSeat,
-    prevalentWind: publicState.prevalentWind,
-    wallCount: publicState.wallCount,
-    players: publicState.players,
-    roundInfo: state.roundInfo,
-    playerScores: state.playerScores,
-    dice: state.dice,
-    doorSeat: state.doorSeat,
-  }, sv);
-
-  // Send each player their hand privately (defensive: filter flowers from hand)
-  for (const player of state.players) {
-    await mjBroadcast(room.code, "mj_deal_hand", {
-      playerId: player.id,
-      hand: player.hand.filter((t) => t.suit !== "f"),
-      flowers: player.flowers,
-      // 開局莊家打第一張時可以宣告眼牌（同時算地聽）：能宣告的出牌選項（其他人是空陣列）
-      eyeOptions: eyeDiscardOptions(state, player.seat).map((t) => t.id),
-      eyeWithTing: canDeclareTingNow(state, player.seat),
-    }, sv);
-  }
-
-  // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
-  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(state)] : flowerRobEvents(state), sv);
-  if (endedAtDeal) await closeMahjongIfOver(roomId, room.code, state); // 只有一局又開局八仙：整場打完
-
-  return Response.json({ success: true });
+  // 2026-11-20 起（老闆定案）不直接發牌：發起開局確認，四家都同意才發牌（lib/mahjong/startConfirm.ts → lib/mahjong/startGame.ts）
+  return beginMjConfirm(room, players, playerId);
 }

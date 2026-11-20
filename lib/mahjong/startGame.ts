@@ -1,0 +1,106 @@
+// 麻將真正發牌開局（老柯 2026-11-20 從 app/api/mahjong/start/route.ts 原封不動搬出來）：
+// 開局確認（lib/mahjong/startConfirm.ts）四家都同意之後才呼叫。存檔是條件寫入（版本要是 room.game_state.stateVersion），
+// 中間有人取消、重新開始、退出、同時開局，版本就對不上 → 丟 StateConflictError，呼叫端（retryOnConflict）重讀再判斷，不會用舊的同意開局。
+// 存檔成功後才扣房卡（麻將每把扣、連莊不扣，規則不變）。
+import { applyZimoFx, prefetchZimoFx } from "@/lib/mahjong/zimoFx/attach";
+import { saveGameStateIfUnchanged, toPublicGameState, type MjPlayer, type MjRoom } from "@/lib/mahjong/db";
+import { getPictureUrls } from "@/lib/auth";
+import { mjBroadcast, mjBroadcastBatch } from "@/lib/mahjong/broadcast";
+import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
+import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow, shuffleSeats } from "@/lib/mahjong/gameLogic";
+import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
+import { closeMahjongIfOver } from "@/lib/records/close";
+import { chargeMahjongHand } from "@/lib/roomCard/charge";
+import { mahjongChargeHand } from "@/lib/roomCard/rules";
+
+export async function startMahjongGame(room: MjRoom, roomId: string, players: MjPlayer[]): Promise<void> {
+  // 開局隨機排座位（老闆 2026-10-17）：牌局狀態的座位以這個順序為準；mj_players.seat 只代表入座順序，不再改它。
+  // userId 跟著玩家走，所以 LINE 帳號認座位、找回房間、對局紀錄、整場統計都用新座位
+  const seated = shuffleSeats(players);
+
+  // Initialize game — pass room settings if present
+  const playerInfos = seated.map((p) => ({
+    id: p.player_id,
+    name: p.name,
+  }));
+
+  const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings as
+    | { totalRounds: number; basePoints: number; fanPoints: number }
+    | undefined;
+
+  let state = initGame(playerInfos, savedSettings);
+  state.roomCode = room.code;
+  // 記下每個座位綁定的使用者，之後每個動作都用它確認本人、整場結束寫進對局紀錄
+  state.players.forEach((p, i) => (p.userId = seated[i].user_id ?? null));
+  // 同桌顯示 LINE 大頭貼（老闆 2026-10-29）：開局時取一次，之後每局沿用
+  // 自摸特效和大頭貼同時查（不多串一次往返）：公開座位資料帶代號讓前端預載；起手就胡也照這個
+  const zimoFxPrefs = prefetchZimoFx(state);
+  const pics = await getPictureUrls(state.players.map((p) => p.userId));
+  state.players.forEach((p, i) => (p.avatarUrl = pics[i]));
+  applyZimoFx(state, await zimoFxPrefs);
+
+  // 第一局：從建房者開始逆時針數，第一把骰子點數決定第一個莊家
+  // 起莊者 = 開門者（第一局同一顆骰子）
+  const hostSeat = state.players.findIndex((p) => p.id === room.host_id);
+  const baseSeat = hostSeat >= 0 ? hostSeat : 0;
+  const d1 = 1 + Math.floor(Math.random() * 6);
+  const d2 = 1 + Math.floor(Math.random() * 6);
+  const d3 = 1 + Math.floor(Math.random() * 6);
+  const sum = d1 + d2 + d3;
+  const firstDealerSeat = (baseSeat + ((sum - 1) % 4)) % 4;
+  state.dealerSeat = firstDealerSeat;
+  if (state.roundInfo) {
+    state.roundInfo.initialDealerSeat = firstDealerSeat;
+  }
+
+  // 對局紀錄：記開局時間；打完幾局從 0 開始算（applySettlement 會加）
+  state.startedAt = new Date().toISOString();
+  state.handsCompleted = 0;
+  state = dealTiles(state);
+  const cardHand = mahjongChargeHand(state); // 房卡：要在下面「開局就八仙」的 applySettlement 之前算（它會把打完的把數 +1）
+
+  // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
+  state.dice = [d1, d2, d3];
+  state.doorSeat = firstDealerSeat;
+
+  // 開局補花就八仙過海：這局直接結束（先照常送開局事件，最後送 mj_game_over）
+  const endedAtDeal = state.status === "finished";
+  if (endedAtDeal) applySettlement(state);
+
+  // Save full state to DB
+  const baseVersion = (room.game_state as { stateVersion?: number } | null)?.stateVersion;
+  applyPace(state, dealPaceMs(state)); // 起手補花的特效播完，莊家才能打第一張
+  const sv = await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
+  await chargeMahjongHand(roomId, room.code, state, cardHand); // 房卡：存檔成功才扣，每人 1 張（老闆不扣；同一把只扣一次）
+
+  // Broadcast public game start (no hands)
+  const publicState = toPublicGameState(state);
+  await mjBroadcast(room.code, "mj_game_start", {
+    currentTurn: publicState.currentTurn,
+    dealerSeat: publicState.dealerSeat,
+    prevalentWind: publicState.prevalentWind,
+    wallCount: publicState.wallCount,
+    players: publicState.players,
+    roundInfo: state.roundInfo,
+    playerScores: state.playerScores,
+    dice: state.dice,
+    doorSeat: state.doorSeat,
+  }, sv);
+
+  // Send each player their hand privately (defensive: filter flowers from hand)
+  for (const player of state.players) {
+    await mjBroadcast(room.code, "mj_deal_hand", {
+      playerId: player.id,
+      hand: player.hand.filter((t) => t.suit !== "f"),
+      flowers: player.flowers,
+      // 開局莊家打第一張時可以宣告眼牌（同時算地聽）：能宣告的出牌選項（其他人是空陣列）
+      eyeOptions: eyeDiscardOptions(state, player.seat).map((t) => t.id),
+      eyeWithTing: canDeclareTingNow(state, player.seat),
+    }, sv);
+  }
+
+  // 開局就八仙過海 → 結束；開局就 7＋1 張花 → 等有 7 張的人決定要不要七搶一
+  await mjBroadcastBatch(room.code, endedAtDeal ? [gameOverEvent(state)] : flowerRobEvents(state), sv);
+  if (endedAtDeal) await closeMahjongIfOver(roomId, room.code, state); // 只有一局又開局八仙：整場打完
+
+}

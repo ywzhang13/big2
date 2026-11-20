@@ -102,8 +102,11 @@ export async function loadLobbySeats(roomId: string) {
 }
 /** 故障注入（審伯 2026-10-24 的補測）：claimError＞0 時丟一般錯誤；conflicts＞0 時丟版本衝突（每次減 1） */
 export const leaveFaults = { claimError: 0, conflicts: 0 };
+/** 測試用（開局確認的交錯）：等人階段條件寫入判斷之前插進來的事（模擬另一台伺服器剛好寫入、時間經過） */
+export const lobbyHooks: { beforeClaim?: (roomId: string, lobby: Record<string, unknown>) => Promise<void> | void } = {};
 export async function claimLobbyForLeave(roomId: string, base: number | undefined, lobby: Record<string, unknown>, newHostId?: string) {
   await wait();
+  await lobbyHooks.beforeClaim?.(roomId, lobby);
   if (leaveFaults.claimError > 0) { leaveFaults.claimError--; throw new Error("模擬資料庫錯誤"); }
   if (leaveFaults.conflicts > 0) { leaveFaults.conflicts--; stats.conflicts++; throw new StateConflictError(); }
   const r = rooms[roomId];

@@ -226,6 +226,12 @@ export interface MjClientState {
 export { getMjId };
 
 /** join 回應（登入房才有 playerId、privateChannel） */
+/** 開局確認（老柯〈麻將開局確認 API〉2026-11-20）：房主按開始後 10 秒內四家都同意才發牌；id＝這一輪的編號（同意、取消都要帶）；deadline、serverNow 是伺服器毫秒 */
+export interface MjStartConfirm { id: string; startedBy: string; readyIds: string[]; seatIds: string[]; deadline: number; serverNow: number }
+/** 上一次開局確認為什麼沒開成（timeout＝有人沒按、host＝房主取消、seats_changed＝有人退出、suspended＝有人被暫停）；房主重按或開局後＝null */
+export interface MjLastStartConfirm { reason: "timeout" | "host" | "seats_changed" | "suspended"; missingIds: string[]; at: number }
+export interface MjConfirmInfo { startConfirm: MjStartConfirm | null; lastStartConfirm: MjLastStartConfirm | null; clockSkew: number }
+
 export interface MjJoinInfo {
   roomId: string;
   playerId?: string;
@@ -246,6 +252,11 @@ export function useMahjong(
   myIdRef.current = myId;
   const onAuthErrorRef = useRef(onAuthError);
   onAuthErrorRef.current = onAuthError;
+
+  // 開局確認：一律照 GET state 的 startConfirm、lastStartConfirm（廣播只當「該重抓了」），重新整理也一樣；clockSkew＝伺服器 − 本機
+  const [startCfm, setStartCfm] = useState<MjConfirmInfo>({ startConfirm: null, lastStartConfirm: null, clockSkew: 0 });
+  const startCfmRef = useRef(startCfm);
+  startCfmRef.current = startCfm;
 
   const [state, setState] = useState<MjClientState>({
     roomCode,
@@ -572,6 +583,13 @@ export function useMahjong(
         if (left > 0) showPace({ seat: g?.currentTurn ?? -1, kind: "wait" }, Math.min(left, PACE_NOTE_MAX_MS));
       }
 
+      {
+        // 開局確認：等人階段才有（開局後就是 null）；只有確認中才帶伺服器時間，拿來換算倒數
+        const recvAt = Date.now();
+        const top = data as { startConfirm?: MjStartConfirm | null; lastStartConfirm?: MjLastStartConfirm | null };
+        const sc = data.gameState ? null : top.startConfirm ?? null;
+        setStartCfm((prev) => ({ startConfirm: sc, lastStartConfirm: data.gameState ? null : top.lastStartConfirm ?? null, clockSkew: sc ? sc.serverNow - recvAt : prev.clockSkew }));
+      }
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
         // Update players from DB
@@ -1006,6 +1024,15 @@ export function useMahjong(
       const counts = (payload as { counts?: Record<string, number> }).counts;
       setState((prev) => ({ ...prev, ...(counts ? { spectatorCounts: counts } : {}), spectateTick: (prev.spectateTick ?? 0) + 1 }));
     });
+
+    // --- 開局確認（mj_start_confirm／mj_start_ready／mj_start_cancelled）：都只當「該重抓了」，誰同意、截止時間、為什麼沒開成都讀 state ---
+    for (const ev of ["mj_start_confirm", "mj_start_ready", "mj_start_cancelled"]) {
+      channel.on("broadcast", { event: ev }, () => {
+        if (ev === "mj_start_cancelled") setStartCfm((prev) => ({ ...prev, startConfirm: null })); // 先關視窗，原因等 state
+        const rid = roomIdRef.current;
+        if (rid && !closedRef.current) fetchStateRef.current?.(rid);
+      });
+    }
 
     // --- mj_player_joined ---
     onHeld(channel, "mj_player_joined", ({ payload }) => {
@@ -1693,14 +1720,52 @@ export function useMahjong(
     [myId]
   );
 
+  // 開始遊戲（老闆 2026-11-20）：房主按開始＝發起開局確認，倒數 10 秒、四家都同意伺服器才發牌；回應的確認馬上讀一次狀態接上
   const startGame = useCallback(async () => {
     const rid = roomIdRef.current;
     if (!rid) return;
-    await call("/api/mahjong/start", {
-      roomId: rid,
-      playerId: myId,
-    });
+    try {
+      await call("/api/mahjong/start", {
+        roomId: rid,
+        playerId: myId,
+      });
+    } finally { fetchStateRef.current?.(rid); }
   }, [myId, call]);
+
+  /** 開局確認：按「同意」，帶畫面上這一輪的編號。409 stale_confirm（上一輪）、started（已開局）＝重讀狀態就好、不顯示錯誤；
+   *  403 player_suspended 回 body 給頁面跳「不能開局」 */
+  const confirmStart = useCallback(async (): Promise<{ ok: boolean; message?: string; body?: unknown }> => {
+    const rid = roomIdRef.current;
+    const confirmId = startCfmRef.current.startConfirm?.id;
+    if (!rid || !confirmId) return { ok: false, message: "這次開局已經取消" };
+    try {
+      await call("/api/mahjong/start-confirm", { roomId: rid, playerId: myIdRef.current, confirmId });
+      return { ok: true };
+    } catch (err) {
+      const m = (err as Error).message;
+      if (/stale_confirm|"started"/.test(m)) return { ok: true };
+      let body: unknown = null;
+      try { body = JSON.parse(m); } catch { /* 不是 JSON */ }
+      return { ok: false, body, message: /expired/.test(m) ? "時間到了，請房主重新開始" : /no_confirm/.test(m) ? "這次開局已經取消" : "送出失敗，請再按一次" };
+    } finally { fetchStateRef.current?.(rid); }
+  }, [call]);
+
+  /** 開局確認：房主取消（帶這一輪的編號；上一輪的 409 stale_confirm＝重讀狀態就好） */
+  const cancelStart = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
+    const rid = roomIdRef.current;
+    const confirmId = startCfmRef.current.startConfirm?.id;
+    if (!rid || !confirmId) return { ok: true };
+    try {
+      await call("/api/mahjong/start-cancel", { roomId: rid, playerId: myIdRef.current, confirmId });
+      return { ok: true };
+    } catch (err) {
+      if (/stale_confirm/.test((err as Error).message)) return { ok: true };
+      return { ok: false, message: "取消失敗，請再按一次" };
+    } finally { fetchStateRef.current?.(rid); }
+  }, [call]);
+
+  /** 倒數到 0：麻將沒有 tick，讀一次狀態，伺服器就會判斷要不要作廢 */
+  const refreshState = useCallback(() => { const rid = roomIdRef.current; if (rid) fetchStateRef.current?.(rid); }, []);
 
   const drawTileAction = useCallback(async () => {
     const rid = roomIdRef.current;
@@ -1989,6 +2054,10 @@ export function useMahjong(
     needsDraw,
     needsDiscard,
     startGame,
+    startConfirm: startCfm,
+    confirmStart,
+    cancelStart,
+    refreshState,
     nextGame,
     requestLeave,
     voteLeave,

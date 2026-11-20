@@ -2,7 +2,10 @@
 
 import MjLeaveVoteStatus from "@/components/mahjong/MjLeaveVoteStatus";
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
-import { useMahjong, getMjId, type MjJoinInfo } from "@/hooks/useMahjong";
+import { useMahjong, getMjId, type MjJoinInfo, type MjConfirmInfo } from "@/hooks/useMahjong";
+import StartConfirm, { secondsLeftOf } from "@/components/gameLobby/StartConfirm";
+import { mjConfirmNote, mjConfirmSeats } from "@/components/mahjong/mjStartConfirmView";
+import { START_CONFIRM_MS } from "@/lib/lobby/startConfirm";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import { isGuestTab, mjFetch, mjStorage, ROOM_CODE_RE } from "@/lib/mahjong/clientAuth";
 import { AuthBar, GuestGate, LoginGate, PairedNotice, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
@@ -790,6 +793,10 @@ function RoomView({
     needsDraw,
     needsDiscard,
     startGame,
+    startConfirm,
+    confirmStart,
+    cancelStart,
+    refreshState,
     nextGame,
     requestLeave,
     voteLeave,
@@ -1010,6 +1017,15 @@ function RoomView({
 
           {/* Start button */}
           <BlockedDialog blocked={startBlocked} onClose={() => setStartBlocked(null)} />
+          {/* 開局確認（老闆 2026-11-20）：房主按開始後蓋共用的 StartConfirm（四家小牌子、10 秒倒數、同意／房主取消）；
+              四家都同意伺服器就發牌（畫面跟著狀態換成牌桌）；時間到沒到齊就回等人，上面一條提示誰沒按 */}
+          <MjStartConfirm players={state.players} myId={state.myId} isHost={isHost} info={startConfirm} onTimeUp={refreshState} onCancel={cancelStart}
+            onAgree={async () => {
+              const r = await confirmStart();
+              const b = r.ok ? null : blockedFrom(r.body, code); // 發牌前伺服器再查一次暫停：跟開始被擋一樣跳「不能開局」
+              if (b) { setStartBlocked(b); return { ok: true }; }
+              return r;
+            }} />
           {isHost ? (
             <button
               onClick={() => {
@@ -1325,5 +1341,52 @@ function RoomView({
         />
       )}
     </div>
+  );
+}
+
+// ─── 開局確認（共用 StartConfirm；倒數照伺服器截止時間，到 0 讀一次狀態讓伺服器判斷） ───
+function MjStartConfirm({ players, myId, isHost, info, onAgree, onCancel, onTimeUp }: {
+  players: { id: string; name: string; seat: number }[]; myId: string; isHost: boolean; info: MjConfirmInfo;
+  onAgree: () => Promise<{ ok: boolean; message?: string }>; onCancel: () => Promise<{ ok: boolean; message?: string }>; onTimeUp: () => void;
+}) {
+  const sc = info.startConfirm;
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [errO, setErr] = useState<{ deadline: number | null; msg: string } | null>(null);
+  const firedFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sc) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [sc]);
+  const secs = sc ? secondsLeftOf(sc.deadline, now, info.clockSkew) : 0;
+  useEffect(() => {
+    if (!sc) return;
+    if (secs === 0 && firedFor.current !== sc.deadline) { firedFor.current = sc.deadline; onTimeUp(); }
+  }, [sc, secs, onTimeUp]);
+  // 到 0 之後伺服器還沒回到等人（時差、網路）：每 2 秒再讀一次
+  useEffect(() => {
+    if (!sc || secs > 0) return;
+    const t = setInterval(onTimeUp, 2000);
+    return () => clearInterval(t);
+  }, [sc, secs, onTimeUp]);
+  const deadline = sc?.deadline ?? null;
+  const err = errO && errO.deadline === deadline ? errO.msg : null;
+  const run = async (fn: () => Promise<{ ok: boolean; message?: string }>) => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    const r = await fn();
+    setBusy(false);
+    if (!r.ok) setErr({ deadline, msg: r.message ?? "送出失敗，請再按一次" });
+  };
+  const note = mjConfirmNote(info.lastStartConfirm, !!sc, players, myId, isHost);
+  return (
+    <>
+      {note && <div className="sc-note" role="status" data-mj-start-note={info.lastStartConfirm?.reason}>{note}</div>}
+      {sc && (
+        <StartConfirm seats={mjConfirmSeats(players, sc.readyIds, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost} busy={busy} error={err}
+          onAgree={() => void run(onAgree)} onCancel={() => void run(onCancel)} />
+      )}
+    </>
   );
 }

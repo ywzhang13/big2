@@ -6,7 +6,7 @@
 import { POST as guestLogin, DELETE as guestDelete } from "../../app/api/auth/guest/route";
 import { POST as create } from "../../app/api/mahjong/create/route";
 import { POST as join } from "../../app/api/mahjong/join/route";
-import { POST as start } from "../../app/api/mahjong/start/route";
+import { POST as start } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { GET as stateGet } from "../../app/api/mahjong/state/route";

@@ -1,5 +1,5 @@
 // ① 開局補花就八仙過海／七搶一：走真的 start、next-game、action、discard 路由，確認不會卡住
-import { POST as start } from "../../app/api/mahjong/start/route";
+import { POST as start } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { POST as nextGame } from "../../app/api/mahjong/next-game/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { POST as discard } from "../../app/api/mahjong/discard/route";
@@ -16,7 +16,7 @@ async function call(fn: (r: Request) => Promise<Response>, body: object) {
   return { status: r.status, body: await r.json() };
 }
 const st = () => rooms.R.game_state;
-const evs = () => sent.map((e) => e.event);
+const evs = () => sent.map((e) => e.event).filter((e) => !e.startsWith("mj_start_")); // 開局確認的事件（2026-11-20 起四家同意才發牌）不在這支測的範圍
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
   const ok = JSON.stringify(a) === JSON.stringify(e);

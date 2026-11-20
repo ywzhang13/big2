@@ -11,7 +11,7 @@
 //   B7 大老二發牌讀完座位、改房間狀態前有人退出：不開局（房間仍 waiting、剩 3 人、沒有 game_start）（審伯 2026-10-24）
 //   B8 大老二正常發牌、下一場（continue 從 finished）照常開局；狀態不對不開局
 import { POST as leave } from "../../app/api/mahjong/leave/route";
-import { POST as start } from "../../app/api/mahjong/start/route";
+import { POST as start } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { POST as join } from "../../app/api/mahjong/join/route";
 import { GET as myRoom } from "../../app/api/mahjong/my-room/route";
 import { POST as big2Leave } from "../../app/api/game/leave/route";
@@ -114,7 +114,7 @@ const left = () => sent.filter((e) => e.event === "mj_player_left").map((e) => e
     const started = room?.status === "playing" || room?.status === "finished";
     const ok = started
       ? lv.status === 409 && s!.players.length === 4 && seats[r.id].length === 4 && s!.players.some((p) => p.id === "g2")
-      : lv.status === 200 && st.status === 400 && seats[r.id].length === 3;
+      : lv.status === 200 && (st.status === 400 || st.status === 409) && seats[r.id].length === 3; // 2026-11-20 起開始＝發起確認：確認中有人退出 → 作廢，同意回 409
     if (started) startWon++; else leaveWon++;
     if (ok) consistent++; else console.error("L7 不一致", i, JSON.stringify({ started, status: room?.status, lv, st, seats: seats[r.id]?.length, players: s?.players?.length }));
   }

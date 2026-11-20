@@ -61,6 +61,9 @@ export async function POST(request: Request) {
       const rest = (await loadLobbySeats(roomId)).filter((p) => p.player_id !== mine.player_id); // 最早加入的在前
       const newHost = cur.host_id === mine.player_id ? rest[0]?.player_id : undefined;
       const lobby = { ...((cur.game_state as unknown as Record<string, unknown> | null) ?? {}) };
+      // 開局確認中有人退出：這次確認作廢（座位變了），記下原因和還沒按的人，房主要重新按開始（lib/mahjong/startConfirm.ts）
+      const sc = lobby.startConfirm as { seatIds: string[]; readyIds: string[] } | null | undefined;
+      if (sc) { lobby.startConfirm = null; lobby.lastStartConfirm = { reason: "seats_changed", missingIds: sc.seatIds.filter((id) => !sc.readyIds.includes(id)), at: Date.now() }; }
       try {
         await claimLobbyForLeave(roomId, lobby.stateVersion as number | undefined, lobby, newHost);
       } catch (err) {
@@ -75,6 +78,7 @@ export async function POST(request: Request) {
           await closeMahjongRoom(roomId, room.code, lobby as unknown as MahjongGameState, "dissolved", { stateVersion: lobby.stateVersion as number });
         } else {
           await mjBroadcast(room.code, "mj_player_left", { playerId: mine.player_id, seat: mine.seat, playerCount: rest.length, hostId });
+          if (sc) await mjBroadcast(room.code, "mj_start_cancelled", { reason: "seats_changed", missingIds: (lobby.lastStartConfirm as { missingIds: string[] }).missingIds });
         }
       } catch (err) {
         console.error(`[mj-leave] 房 ${roomId} 退出後關房／廣播失敗（退出已成立）：`, err instanceof Error ? err.message : err);

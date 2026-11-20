@@ -1,6 +1,6 @@
 // 開房開局同時送兩次：只開一局、狀態不被蓋掉、事件不重複；開局八仙過海／七搶一也一樣。
 // 對照組把樂觀鎖關掉（＝修之前「讀完整筆蓋回去」），證明測試抓得到問題。
-import { POST as start } from "../../app/api/mahjong/start/route";
+import { POST as start } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { force } from "../support/forced-deal";
 import { rooms, opts, stats } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
@@ -40,7 +40,8 @@ async function race(unsafe: boolean) {
     // 存下來的手牌要和廣播出去的手牌一致（沒被第二次開局蓋掉）
     const dealt = sent.filter((e) => e.event === "mj_deal_hand").map((e) => JSON.stringify((e.payload.hand as { id: number }[]).map((t) => t.id)));
     const saved = s.players.map((p) => JSON.stringify(p.hand.filter((t) => t.suit !== "f").map((t) => t.id)));
-    const okPlain = r.map((x) => x.status).sort().join() === "200,400" && rooms.R.status === "playing"
+    // 2026-11-20 起開始＝發起確認（再按一次回同一個確認），四家同意才開：兩次都送完，只會開一局；回應是 200 或 409 started，不會有錯誤
+    const okPlain = r.every((x) => x.status === 200 || (x.status === 409 && x.body.error === "started")) && rooms.R.status === "playing"
       && count("mj_game_start") === 1 && dealt.length === 4 && JSON.stringify(dealt) === JSON.stringify(saved);
     if (!okPlain) fail.plain++;
 

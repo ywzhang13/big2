@@ -28,7 +28,7 @@ import { POST as thSubmit } from "../../app/api/thirteen/submit/route";
 import { POST as thNext } from "../../app/api/thirteen/next-game/route";
 import { POST as mjCreate } from "../../app/api/mahjong/create/route";
 import { POST as mjJoin } from "../../app/api/mahjong/join/route";
-import { POST as mjStart } from "../../app/api/mahjong/start/route";
+import { POST as mjStart } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { POST as mjNext } from "../../app/api/mahjong/next-game/route";
 import { GET as adminPlayers } from "../../app/api/admin/cards/players/route";
 import { GET as adminLedger } from "../../app/api/admin/cards/ledger/route";

@@ -12,7 +12,7 @@ import { POST as action } from "../../app/api/mahjong/action/route";
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";
 import { GET as getState } from "../../app/api/mahjong/state/route";
-import { POST as start } from "../../app/api/mahjong/start/route";
+import { POST as start } from "../support/mj-start-all"; // 開始＋三家同意（2026-11-20 起四家同意才發牌）
 import { rooms, seats } from "../support/stub-db";
 import { sent } from "../support/stub-broadcast";
 import { tokens } from "../support/stub-auth";
