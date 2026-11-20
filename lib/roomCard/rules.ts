@@ -38,3 +38,25 @@ export function taipeiDayStart(now: number): number {
   const local = now + TPE_OFFSET_MS;
   return local - (((local % DAY_MS) + DAY_MS) % DAY_MS) - TPE_OFFSET_MS;
 }
+
+/** 全部流水帳的期間：今天／本週（週一起）／本月（1 號起），台北時間；all＝全部期間（null） */
+export type FeedPeriod = "today" | "week" | "month" | "all";
+export const isFeedPeriod = (x: unknown): x is FeedPeriod => x === "today" || x === "week" || x === "month" || x === "all";
+export function periodStart(period: FeedPeriod, now: number): number | null {
+  if (period === "all") return null;
+  const day = taipeiDayStart(now);
+  if (period === "today") return day;
+  const local = new Date(day + TPE_OFFSET_MS); // 當成 UTC 看就是台北的日期
+  if (period === "week") return day - ((local.getUTCDay() + 6) % 7) * DAY_MS; // 週一＝0
+  return Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) - TPE_OFFSET_MS;
+}
+
+/** 流水帳的「操作人」分類：system＝扣卡、owner＝老闆在後台操作、donate_debt＝上線時斗內欠款轉房卡（老柯 2026-11-20 補扣）、other＝其他 */
+export const DONATE_DEBT_ACTOR = "斗內欠款轉房卡";
+export type ActorKind = "system" | "owner" | "donate_debt" | "other";
+export function actorKind(actor: string, ownerId: string): ActorKind {
+  if (actor === "system") return "system";
+  if (actor === ownerId) return "owner";
+  if (actor === DONATE_DEBT_ACTOR) return "donate_debt";
+  return "other";
+}

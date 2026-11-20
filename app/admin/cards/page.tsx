@@ -3,7 +3,7 @@
 // 權限在伺服器：先打一次玩家名單，401／403 就只顯示「沒有權限」，不顯示任何資料（直接打網址也一樣，照斗內後台）。
 // 兩個頁籤：玩家（統計格、搜尋、名單）、欠卡名單。點一列開玩家明細（狀態條、流水帳）；充值、回收（只填張數，可以收到負數）、暫停、恢復（按一下就生效）。
 // 寫入按一次只生效一次：視窗打開時產生操作編號 opId，送出中按鈕變「處理中…」，失敗時視窗留著、重試用同一個 opId。
-// 「全部流水帳」頁籤（4-4 後半）後端還沒做，這一版沒有放。
+// 「流水帳」頁籤（4-4 後半，房卡第二批）：components/roomCard/LedgerAll；掛在已確認是老闆的畫面裡，key＝帳號 id（換人就重來）。
 // 名單、統計、明細、視窗、提示都綁「讀它的那個帳號」（adminState）：登出、換帳號那一次畫面就不顯示前一個人的，舊回應晚到也不寫回。
 // 張數欄位照原樣留住打的字，不是 1～100000 的整數就不能送，欄位下面寫原因（不會偷偷改成別的數字）。
 import { useEffect, useMemo, useState } from "react";
@@ -13,11 +13,12 @@ import {
   cardWrite, fmtAt, fmtCards, getCardLedger, getCardPlayers,
   type CardEntry, type CardOp, type CardPlayer,
 } from "@/components/roomCard/client";
+import LedgerAll from "@/components/roomCard/LedgerAll";
 import { adminAccess, cardInputHint, loadAdmin, mine, parseCardInput, type AdminView, type Owned } from "@/components/roomCard/adminState";
 import "@/components/mahjong/fxshop/fxshop.css";
 import "@/components/roomCard/roomCard.css";
 
-type Tab = "players" | "debt";
+type Tab = "players" | "debt" | "ledger";
 const GAME: Record<string, string> = { mahjong: "麻將", thirteen: "十三支" };
 const balCls = (b: number) => (b < 0 ? " neg" : b === 0 ? " zero" : "");
 
@@ -76,6 +77,7 @@ export default function RoomCardAdminPage() {
           <div className="fxs-tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === "players"} className={tab === "players" ? "on" : ""} onClick={() => setTab("players")} data-rc-tab="players">玩家</button>
             <button type="button" role="tab" aria-selected={tab === "debt"} className={tab === "debt" ? "on" : ""} onClick={() => setTab("debt")} data-rc-tab="debt">欠卡名單 {debtors.length}</button>
+            <button type="button" role="tab" aria-selected={tab === "ledger"} className={tab === "ledger" ? "on" : ""} onClick={() => setTab("ledger")} data-rc-tab="ledger">流水帳</button>
           </div>
         </div>
         {tab === "players" && stats && (
@@ -89,6 +91,8 @@ export default function RoomCardAdminPage() {
         {tab === "debt" && (
           <div className="fxs-bar"><b className="rc-red" data-rc-debt-sum>欠卡　{debtors.length} 人・{debtors.reduce((a, p) => a - p.balance, 0)} 張</b></div>
         )}
+        {tab === "ledger" && authId && <LedgerAll key={authId} />}
+        {tab !== "ledger" && <>
         <div className="fxs-bar">
           <input className="fxs-in" placeholder="名字或編號" value={q} onChange={(e) => setQ(e.target.value)} aria-label="搜尋玩家" data-rc-search />
         </div>
@@ -110,6 +114,7 @@ export default function RoomCardAdminPage() {
             </div>
           ))}
         </div>
+        </>}
       </div>
       {current && <PlayerSheet p={current} reloadKey={ledgerKey} onClose={() => setDetailO(null)} onOp={(op) => setFormO(own({ op, p: current }))} />}
       {form && formO && (

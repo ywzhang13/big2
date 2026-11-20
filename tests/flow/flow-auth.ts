@@ -243,7 +243,8 @@ let roomId = "", code = "";
   const usesAuth = files.filter((f) => /from "@\/lib\/auth"|from "\.\.?\/.*auth"|mahjong\/access"/.test(readFileSync(path.join(ROOT, f), "utf8")));
   const outside = usesAuth.filter((f) => !f.startsWith("app/api/mahjong/") && !f.startsWith("app/api/auth/") && !f.startsWith("lib/mahjong/") && f !== "lib/records/close.ts"
     && !f.startsWith("app/api/thirteen/") && !f.startsWith("lib/thirteen/") // 十三支也要登入（老柯 2026-11-16）
-    && !f.startsWith("app/api/cards/") && !f.startsWith("app/api/admin/cards/") && !f.startsWith("lib/roomCard/")); // 房卡（老柯 2026-11-20）：玩家查自己的張數、老闆後台都要登入；大老二不扣卡、沒接
+    && !f.startsWith("app/api/cards/") && !f.startsWith("app/api/admin/cards/") && !f.startsWith("lib/roomCard/") // 房卡（老柯 2026-11-20）：玩家查自己的張數、老闆後台都要登入；大老二不扣卡、沒接
+    && f !== "app/api/records/route.ts"); // 總大廳歷史紀錄（老柯 2026-11-20 第二批）：查自己的對局要登入；大老二路由照舊不接登入
   eq([outside, files.filter((f) => f.startsWith("app/api/game/") && usesAuth.includes(f))], [[], []], "E1 會檢查登入的程式只在麻將路由／登入路由（app/api/auth）／麻將函式庫／十三支路由與函式庫／房卡路由與函式庫；大老二的路由（app/api/game）、頁面、共用函式庫都沒有接登入");
   const b2 = buildBig2Record({ id: "B", code: "3001", status: "finished", created_at: "2026-10-20T08:00:00.000Z", records_enabled: true, scores: {} },
     [0, 1, 2, 3].map((seat) => ({ player_id: `b${seat}`, name: `大${seat}`, seat, hand: seat === 0 ? [] : ["3C" as never] })), "dissolved");

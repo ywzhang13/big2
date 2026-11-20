@@ -37,6 +37,42 @@ export type CardOp = "topup" | "reclaim" | "suspend" | "resume";
 export const cardWrite = (op: CardOp, body: { userId: string; opId: string; cards?: number }) =>
   call<{ userId: string; balance?: number; suspended?: boolean; suspendedAt?: number | null; replay: boolean }>("POST", `/api/admin/cards/${op}`, body);
 
+/** 全部流水帳（老柯〈房卡第二批 API〉第 1 節）：扣卡一把一筆、新到舊；stats 不受 kind 影響 */
+export type LedgerKind = "topup" | "charge" | "reclaim" | "suspend" | "resume";
+export type LedgerPeriod = "today" | "week" | "month" | "all";
+export interface LedgerAllEntry {
+  cursor: string; kind: LedgerKind; at: number; userId: string; shortId: string; name: string; avatarUrl: string | null;
+  cards: number | null; balanceAfter: number | null; game: "mahjong" | "thirteen" | null; roomCode: string | null; handNo: number | null;
+  actor: string; actorKind: "system" | "owner" | "donate_debt" | "other";
+}
+export interface LedgerAllPage {
+  serverNow: number; period: LedgerPeriod; kind: LedgerKind | null;
+  stats: { topup: number; charge: number; reclaim: number }; entries: LedgerAllEntry[]; nextCursor: string | null;
+}
+export function getLedgerAll(q: { kind: LedgerKind | null; period: LedgerPeriod; cursor: string | null }) {
+  const qs = new URLSearchParams({ period: q.period, limit: "50" });
+  if (q.kind) qs.set("kind", q.kind);
+  if (q.cursor) qs.set("cursor", q.cursor);
+  return call<LedgerAllPage>("GET", `/api/admin/cards/ledger/all?${qs}`);
+}
+
+/** 總大廳歷史紀錄（同上第 2 節）：只回自己入座的場次；沒有房卡欄位、沒有帳號 id */
+export type RecordGame = "all" | "mahjong" | "thirteen" | "big2";
+export interface HistoryItem {
+  id: string; game: "mahjong" | "thirteen" | "big2"; roomCode: string; endedAt: string; endReason: "completed" | "dissolved";
+  totalRounds: number | null; totalHands: number | null; handsPlayed: number | null; myScore: number;
+  players: { seat: number; playerName: string; totalScore: number; isMe: boolean }[];
+}
+export interface HistoryPage {
+  items: HistoryItem[]; nextCursor: string | null;
+  counts: Record<RecordGame, number>; summary: { matches: number; totalScore: number | null };
+}
+export function getHistory(game: RecordGame, cursor: string | null) {
+  const qs = new URLSearchParams({ game, limit: "20" });
+  if (cursor) qs.set("cursor", cursor);
+  return call<HistoryPage>("GET", `/api/records?${qs}`);
+}
+
 /** 開房、加入被擋（2-1）、開局被擋（2-2）：從 API 的錯誤回應認出來 */
 export type Blocked = { kind: "suspended"; at: number | null } | { kind: "players"; code: string | null; players: { seat: number; name: string }[] };
 export function blockedFrom(body: unknown, code: string | null = null): Blocked | null {

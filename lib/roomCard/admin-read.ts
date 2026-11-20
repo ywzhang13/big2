@@ -1,7 +1,8 @@
-// 房卡後台的查詢：玩家名單（含統計格）、單一玩家明細和流水帳。只有老闆帳號能用（路由先 requireOwner）。
-import { isOwner } from "@/lib/mahjong/zimoFx/rules";
-import { taipeiDayStart, type CardGame } from "./rules";
-import { chargedSince, history, lineUsers, nowMs, playerRows, type LedgerRow, type LineUser, type PlayerRow } from "@/lib/roomCard/store";
+// 房卡後台的查詢：玩家名單（含統計格）、單一玩家明細和流水帳、全部流水帳（2026-11-20 第二批）。只有老闆帳號能用（路由先 requireOwner）。
+import { isOwner, OWNER_USER_ID } from "@/lib/mahjong/zimoFx/rules";
+import { isCursorTime } from "@/lib/records/cursorTime";
+import { actorKind, periodStart, taipeiDayStart, type ActorKind, type CardGame, type FeedPeriod } from "./rules";
+import { chargedSince, history, ledgerAll, lineUsers, nowMs, playerRows, type FeedCursor, type FeedKind, type LedgerRow, type LineUser, type PlayerRow } from "@/lib/roomCard/store";
 
 export interface AdminPlayer {
   userId: string; shortId: string; name: string; avatarUrl: string | null;
@@ -48,4 +49,44 @@ export async function playerHistory(u: LineUser, limit = 500): Promise<{ player:
   for (const a of h.audit) entries.push({ kind: a.action, at: a.at, cards: null, balanceAfter: null, actor: a.actor });
   entries.sort((a, b) => b.at - a.at);
   return { player: toPlayer(u, rows.find((r) => r.userId === u.userId)), entries };
+}
+
+export interface FeedEntry {
+  cursor: string; kind: FeedKind; at: number; userId: string; shortId: string; name: string; avatarUrl: string | null;
+  cards: number | null; balanceAfter: number | null; game: CardGame | null; roomCode: string | null; handNo: number | null;
+  actor: string; actorKind: ActorKind;
+}
+const encodeCursor = (r: { at: string; src: string; id: number }) => `${r.at}|${r.src}|${r.id}`;
+/** 上一頁回傳的 nextCursor 解回來；格式不對回 undefined（路由回 400） */
+// 恰好三段「時間|來源|編號」：時間要是真的存在的日期時間（isCursorTime），來源 l／a，編號是正整數；其他一律 undefined（400）
+export function decodeCursor(raw: string | null): FeedCursor | null | undefined {
+  if (raw === null || raw === "") return null;
+  const parts = raw.split("|");
+  if (parts.length !== 3) return undefined;
+  const [at, src, id] = parts;
+  if (!isCursorTime(at) || (src !== "l" && src !== "a") || !/^[1-9]\d{0,14}$/.test(id)) return undefined;
+  return { at, src, id: Number(id) };
+}
+
+/**
+ * 全部流水帳：所有玩家的充值、扣卡、回收、暫停、恢復，新到舊；可以只看一種、只看某段期間，keyset 分頁（nextCursor）。
+ * 每一筆附玩家名稱和頭像；老闆帳號的資料不會出現（資料庫函式排除）。stats＝這段期間（不看種類）充值、扣卡、回收各幾張。
+ */
+export async function ledgerFeed(o: { kind: FeedKind | null; period: FeedPeriod; limit: number; cursor: FeedCursor | null }) {
+  const now = nowMs();
+  const [res, users] = await Promise.all([
+    ledgerAll({ kind: o.kind, since: periodStart(o.period, now), limit: o.limit + 1, cursor: o.cursor, skip: OWNER_USER_ID }),
+    lineUsers(),
+  ]);
+  const byId = new Map(users.map((u) => [u.userId, u]));
+  const rows = res.entries.slice(0, o.limit);
+  const entries: FeedEntry[] = rows.map((r) => {
+    const u = byId.get(r.userId);
+    return { cursor: encodeCursor(r), kind: r.kind, at: Date.parse(r.at), userId: r.userId, shortId: r.userId.slice(-4), name: u?.name ?? "（已刪除的帳號）",
+      avatarUrl: u?.avatarUrl ?? null, cards: r.cards, balanceAfter: r.balanceAfter, game: r.game, roomCode: r.roomCode, handNo: r.handNo,
+      actor: r.actor, actorKind: actorKind(r.actor, OWNER_USER_ID) };
+  });
+  const last = rows[rows.length - 1];
+  return { serverNow: now, period: o.period, kind: o.kind, stats: res.stats, entries,
+    nextCursor: res.entries.length > o.limit && last ? encodeCursor(last) : null };
 }

@@ -12,8 +12,8 @@ import RoomCardChip from "./RoomCardChip";
 import { useMyCards } from "./useMyCards";
 import "./roomCard.css";
 
-/** 歷史紀錄：總大廳的跨遊戲紀錄頁還沒做（小宜 v1.2 第 3 節），先進麻將大廳的歷史紀錄 */
-export const HISTORY_HREF = "/mahjong?records=1";
+/** 歷史紀錄：總大廳的跨遊戲紀錄頁（小宜 v1.2 第 3 節，房卡第二批） */
+export const HISTORY_HREF = "/records";
 
 export default function HomeAccount() {
   const auth = useMjAuth();

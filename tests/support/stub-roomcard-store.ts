@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SUPABASE_SETUP } from "./pg-mj";
 import type { CardGame } from "../../lib/roomCard/rules";
-import type { Account, AdjustResult, AuditRow, LedgerRow, LineUser, PlayerRow, SuspendResult } from "../../lib/roomCard/store";
+import type { Account, AdjustResult, AuditRow, FeedCursor, FeedKind, FeedRow, LedgerRow, LineUser, PlayerRow, SuspendResult } from "../../lib/roomCard/store";
 
 export const clock = { now: Date.parse("2026-11-20T04:00:00Z") };
 export const nowMs = () => clock.now;
@@ -26,8 +26,8 @@ export function db(): Promise<PGlite> {
       create table public.mj_players (room_id uuid, user_id uuid);
       create table public.th_rooms (id uuid primary key, code text, status text);
       create table public.th_players (room_id uuid, user_id uuid);`);
-    const sql = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations/20261120_room_cards.sql");
-    await d.exec(readFileSync(sql, "utf8"));
+    for (const f of ["20261120_room_cards.sql", "20261120_room_cards_ledger_all.sql"])
+      await d.exec(readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations", f), "utf8"));
     return d;
   })();
   return dbp;
@@ -91,4 +91,11 @@ export async function lineUsers(): Promise<LineUser[]> {
 export async function lineUser(userId: string): Promise<LineUser | null> {
   const r = await (await db()).query<{ id: string; raw_app_meta_data: Record<string, unknown>; raw_user_meta_data: Record<string, unknown> }>("select * from auth.users where id = $1", [userId]);
   return r.rows[0] ? toLine(r.rows[0]) : null;
+}
+
+export async function ledgerAll(o: { kind: FeedKind | null; since: number | null; limit: number; cursor: FeedCursor | null; skip: string }): Promise<{ entries: FeedRow[]; stats: { topup: number; charge: number; reclaim: number } }> {
+  const r = await (await db()).query<{ r: { entries: FeedRow[]; stats: { topup: number; charge: number; reclaim: number } } }>(
+    "select public.room_card_ledger_all($1, $2, $3, $4, $5, $6, $7) as r",
+    [o.kind, o.since === null ? null : new Date(o.since).toISOString(), o.limit, o.cursor?.at ?? null, o.cursor?.src ?? null, o.cursor?.id ?? null, o.skip]);
+  return r.rows[0].r;
 }

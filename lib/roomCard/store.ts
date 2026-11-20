@@ -98,3 +98,12 @@ export async function lineUser(userId: string): Promise<LineUser | null> {
   if (error || !data.user) return null;
   return toLineUser(data.user);
 }
+
+export type FeedKind = "topup" | "charge" | "reclaim" | "suspend" | "resume";
+export interface FeedRow { src: "l" | "a"; id: number; at: string; userId: string; kind: FeedKind; cards: number | null; balanceAfter: number | null; game: CardGame | null; roomCode: string | null; handNo: number | null; actor: string }
+export interface FeedCursor { at: string; src: "l" | "a"; id: number }
+/** 全部流水帳（充值、扣卡、回收、暫停、恢復合在一起，新到舊）：函式在 20261120_room_cards_ledger_all.sql */
+export async function ledgerAll(o: { kind: FeedKind | null; since: number | null; limit: number; cursor: FeedCursor | null; skip: string }): Promise<{ entries: FeedRow[]; stats: { topup: number; charge: number; reclaim: number } }> {
+  return rpc("room_card_ledger_all", { p_kind: o.kind, p_since: o.since === null ? null : new Date(o.since).toISOString(), p_limit: o.limit,
+    p_cursor_at: o.cursor?.at ?? null, p_cursor_src: o.cursor?.src ?? null, p_cursor_id: o.cursor?.id ?? null, p_skip: o.skip });
+}

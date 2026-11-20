@@ -32,7 +32,7 @@ import { SpectateManage, SpectateRequestCard, useSpectateManage } from "@/compon
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 import BlockedDialog from "@/components/roomCard/BlockedDialog";
 import { blockedFrom, type Blocked } from "@/components/roomCard/client";
-import { refreshMyCards } from "@/components/roomCard/useMyCards";
+import { refreshMyCards, useMyCards } from "@/components/roomCard/useMyCards";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -146,6 +146,8 @@ export default function MahjongPage() {
   const [showRecords, setShowRecords] = useState(false);
   // 開房、加入被伺服器擋下（房卡 v1.2 2-4：帳號已暫停）
   const [blocked, setBlocked] = useState<Blocked | null>(null);
+  // 被暫停（房卡 v1.2 2-4，房卡第二批）：大廳按鈕上面紅條、建立／加入變灰不能按；歷史紀錄、排行榜、回到房間照常
+  const suspended = !!useMyCards(auth.status === "in" ? auth.user : null)?.suspended;
   // 總大廳頭像選單的「歷史紀錄」（/mahjong?records=1）：直接打開歷史紀錄，網址拿掉參數
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -457,12 +459,14 @@ export default function MahjongPage() {
                   <b>回到房間 {myRoom.code}</b>
                 </button>
               )}
+              {suspended && <div className="rc-ban" role="status" data-rc-suspended-ban>帳號已暫停</div>}
               <button
                 onClick={() => {
                   setScreen("create");
                   setError("");
                 }}
-                className="mjl-btn primary"
+                disabled={suspended}
+                className={`mjl-btn primary${suspended ? " rc-lock" : ""}`}
               >
                 建立房間
               </button>
@@ -471,7 +475,8 @@ export default function MahjongPage() {
                   setScreen("join");
                   setError("");
                 }}
-                className="mjl-btn second"
+                disabled={suspended}
+                className={`mjl-btn second${suspended ? " rc-lock" : ""}`}
               >
                 加入房間
               </button>

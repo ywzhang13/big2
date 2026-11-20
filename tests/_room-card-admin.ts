@@ -150,6 +150,8 @@ export const getCardPlayers = (...a) => globalThis.__api.getCardPlayers(...a);
 export const getCardLedger = (...a) => globalThis.__api.getCardLedger(...a);
 export const cardWrite = (...a) => globalThis.__api.cardWrite(...a);`),
     "@/components/roomCard/adminState": url("components/roomCard/adminState.ts"),
+    // 流水帳頁籤（房卡第二批）有自己的測試（_room-card-ledger-all.ts），這裡換成空元件
+    "@/components/roomCard/LedgerAll": put("ledger.mjs", "export default function LedgerAll() { return null; }"),
   };
   let js = ts.transpileModule(readFileSync(PAGE, "utf8"), {
     fileName: "page.tsx", compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },

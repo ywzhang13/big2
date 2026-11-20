@@ -3,11 +3,13 @@
 //   建立房間、加入房間用三款共用的元件（components/gameLobby，小宜〈共用開房流程 v1.1〉2026-11-19）：
 //   建立：暱稱＋理牌時間（15～120 秒，每次 15）、局數 8／16／32、底分 30／50／100／200＋自訂 10～100000
 //   加入：房號 4 碼＋暱稱
+// 房卡第二批（小宜〈房卡 v1.2〉2-4、第 3 節）：被暫停時按鈕上面紅條「帳號已暫停」、建立／加入變灰不能按；「歷史紀錄」進總大廳紀錄的十三支頁籤
 import { useState } from "react";
 import { CreateRoomShell, JoinByCode, parseCustom, type LobbySection } from "@/components/gameLobby/GameLobby";
 import { makeCard } from "@/lib/thirteen";
 import type { MjAuthUser } from "@/hooks/useMjAuth";
 import { AuthBar } from "@/components/mahjong/MjLobbyAuth";
+import { useMyCards } from "@/components/roomCard/useMyCards";
 import { cardSrc } from "./cardArt";
 import { ARRANGE_DEFAULT, ARRANGE_MAX, ARRANGE_MIN, ARRANGE_STEP, normalizeArrangeSec } from "./arrangeTime";
 
@@ -59,6 +61,7 @@ export default function ThLobby({ user, onSignOut, busy, error, resume, nameInit
 }) {
   const [screen, setScreen] = useState<"home" | "create" | "join">("home");
   const top = <AuthBar user={user} onSignOut={onSignOut} />;
+  const sus = !!useMyCards(user)?.suspended;
   if (screen === "create") {
     return <CreateRoomShell className="mjl" attrs={{ "data-th-lobby": "create" }} brand={<ThBrand />} top={top} sections={TH_SECTIONS} initialName={nameInit} busy={busy} error={error}
       onCreate={(v, name) => onCreate(v.sec, v.hands, v.base, name)} onBack={() => setScreen("home")} />;
@@ -78,8 +81,10 @@ export default function ThLobby({ user, onSignOut, busy, error, resume, nameInit
               <b>回到房間 {resume.code}</b>
             </button>
           )}
-          <button onClick={() => setScreen("create")} className="mjl-btn primary">建立房間</button>
-          <button onClick={() => setScreen("join")} className="mjl-btn second">加入房間</button>
+          {sus && <div className="rc-ban" role="status" data-rc-suspended-ban>帳號已暫停</div>}
+          <button onClick={() => setScreen("create")} disabled={sus} className={`mjl-btn primary${sus ? " rc-lock" : ""}`}>建立房間</button>
+          <button onClick={() => setScreen("join")} disabled={sus} className={`mjl-btn second${sus ? " rc-lock" : ""}`}>加入房間</button>
+          <a href="/records?game=thirteen" className="mjl-btn ghost text-center" data-th-records>歷史紀錄</a>
           <button onClick={onHome} className="mjl-foot">返回首頁</button>
         </div>
         {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
