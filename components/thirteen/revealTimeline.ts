@@ -29,7 +29,7 @@ export interface ThReveal {
   /** 這房的底分（舊房伺服器補 1） */
   baseScore?: number;
   /** 計分規則（老柯 API 0-1c、v4）："v4"＝v4 上線後開的房；"jia"＝甲案；沒有＝更早的舊房，照舊規則 v1 */
-  scoreRule?: "jia" | "v1" | "v4";
+  scoreRule?: "jia" | "v1" | "v4" | "v5";
   /** 這一局的彩金牌（v4 房；舊房 null 或沒有） */
   luckyCard?: Card | null;
   playerScores: number[];
@@ -208,6 +208,8 @@ export function breakdown(st: HandStat): { label: string; pts: number }[] {
     else items.push({ label: st.guns ? `打槍 ×${st.guns}` : `被打槍 ×${st.gunned}`, pts: st.gunPoints });
   }
   if (st.homeRun || st.homeRunned) items.push({ label: st.homeRun ? "全壘打" : "被全壘打", pts: st.homeRunPoints });
+  // v5 彩金分（老柯 stats.luckyPoints，墩數單位）：拿到的人 +3、其他三家各 −1；舊局／沒有彩金分＝沒有這個欄位或 0，不列。左欄一律是墩數，跟其他行一樣不乘底分
+  if (st.luckyPoints) items.push({ label: "彩金分", pts: st.luckyPoints });
   return items;
 }
 

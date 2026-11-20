@@ -5,7 +5,7 @@
 // 65 張發完剩下的 1 張：v4 的房是這一局的彩金牌（luckyCard，開局就公開）；舊規則房照舊不給。別人沒用到的牌（unusedCards）亮牌後才給。
 import { deal, sortCards, type Card } from "./cards";
 import { autoArrange, validateSubmission, type ArrangeError, type Arrangement } from "./arrange";
-import { bonusOf, handRuleOf, homeRunPenaltyOf, revealOrder, ROWS, rowPoints, scoreRound, SCORING, type Row, type RoundResult, type ScoreRule } from "./score";
+import { bonusOf, handRuleOf, homeRunPenaltyOf, isV4Family, revealOrder, ROWS, rowPoints, scoreRound, SCORING, type Row, type RoundResult, type ScoreRule } from "./score";
 import { CAT, CAT_NAME, type HandRule } from "./hand";
 import type { ThirteenGameState, ThirteenHandResult, ThirteenSettings, ThPlayer } from "./db";
 
@@ -51,6 +51,7 @@ export interface HandStat {
   bonuses: { name: string; points: number }[];   // 特殊加分：衝三、中墩鐵支、尾墩五龍…；自己拿到的正、付給別人的負（同名合併）
   guns: number; gunned: number; gunPoints: number;  // 打槍幾家、被幾家打槍、打槍的分數
   homeRun: boolean; homeRunned: boolean; homeRunPoints: number; // 全壘打、被全壘打、全壘打的分數
+  luckyPoints?: number;                          // 彩金分（v5）：一道擺 3 張以上彩金點數 +3，別家擺了各 −1；其他規則 0（舊局存的明細沒有這個欄位＝0）
   total: number;
 }
 const ROW_LABEL: Record<Row, string> = { front: "頭墩", middle: "中墩", back: "尾墩" };
@@ -80,7 +81,8 @@ export function handStats(result: RoundResult, rule: ScoreRule = "v4"): HandStat
     const gunPoints = (guns - gunned) * SCORING.GUN_PENALTY;
     const pen = homeRunPenaltyOf(rule);
     const homeRunPoints = homeRun ? 3 * pen : homeRunned ? -pen : 0;
-    return { rows, bonuses, guns, gunned, gunPoints, homeRun, homeRunned, homeRunPoints, total: result.totals[seat] };
+    const luckyPoints = result.luckyPoints?.[seat] ?? 0; // 舊局存的結果沒有 luckyPoints
+    return { rows, bonuses, guns, gunned, gunPoints, homeRun, homeRunned, homeRunPoints, luckyPoints, total: result.totals[seat] };
   });
 }
 /** 整場累計（v5 總結算的右欄）：每家打槍、被打槍、全壘打、被全壘打次數和總分（依座位） */
@@ -206,9 +208,9 @@ export function autoArrangeLate(s: ThirteenGameState, now: number): number[] {
 export const baseScoreOf = (settings: ThirteenSettings): number => settings.baseScore ?? 1;
 /** 這房的計分規則（審伯 2026-11-19 必修）：開房時記了 scoreRule "jia" 才是甲案；上線前開的房沒有這個欄位，整場照舊規則 v1 */
 export const scoreRuleOf = (settings: ThirteenSettings): ScoreRule =>
-  settings.scoreRule === "v4" ? "v4" : settings.scoreRule === "jia" ? "jia" : "v1"; // v4：2026-11-19 定案後開的房
+  settings.scoreRule === "v5" ? "v5" : settings.scoreRule === "v4" ? "v4" : settings.scoreRule === "jia" ? "jia" : "v1"; // v5：2026-11-20 起開的房（打槍新規則）；v4：11-19 定案後開的房
 /** 這一局的彩金牌（v4 的房：65 張發完剩下的那 1 張，開局就公開）；舊規則房沒有彩金牌（剩下的那張照舊不給）＝null */
-export const luckyCardOf = (s: ThirteenGameState): Card | null => (scoreRuleOf(s.settings) === "v4" ? s.rest?.[0] ?? null : null);
+export const luckyCardOf = (s: ThirteenGameState): Card | null => (isV4Family(scoreRuleOf(s.settings)) ? s.rest?.[0] ?? null : null);
 /** 這一局的牌型判斷規則（v4 含彩金點數） */
 export const handRuleFor = (s: ThirteenGameState): HandRule => handRuleOf(scoreRuleOf(s.settings), luckyCardOf(s)?.rank ?? null);
 /** 一局四家的分數＝墩數 × 底分；更早存的局沒有 scores 欄位就照當時的底分補算 */
@@ -240,12 +242,13 @@ export interface ScoredStat {
   shotPoints: number;                           // 打槍拿到的分（≥ 0）＝guns × GUN_PENALTY × 底分
   shotByPoints: number;                         // 被打槍付出的分（≤ 0）＝−gunned × GUN_PENALTY × 底分
   homeRunPoints: number;                        // 全壘打分 × 底分
-  total: number;                                // ＝rows＋bonuses 合計＋gunPoints＋homeRunPoints＝這局的 scores[seat]
+  luckyPoints: number;                          // 彩金分 × 底分（v5；其他規則 0）
+  total: number;                                // ＝rows＋bonuses 合計＋gunPoints＋homeRunPoints＋luckyPoints＝這局的 scores[seat]
 }
 export function scoredStat(st: HandStat, base: number): ScoredStat {
   return { rows: st.rows * base, bonuses: st.bonuses.map((b) => ({ name: b.name, points: b.points * base })), gunPoints: st.gunPoints * base,
     shotPoints: st.guns * SCORING.GUN_PENALTY * base, shotByPoints: -st.gunned * SCORING.GUN_PENALTY * base,
-    homeRunPoints: st.homeRunPoints * base, total: st.total * base };
+    homeRunPoints: st.homeRunPoints * base, luckyPoints: (st.luckyPoints ?? 0) * base, total: st.total * base };
 }
 
 /** 四家都有三墩了就亮牌結算：本局結果（result 是墩數）存進 hands，分數＝墩數 × 底分，累計加進 playerScores */

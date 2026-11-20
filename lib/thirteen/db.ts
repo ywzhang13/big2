@@ -32,7 +32,7 @@ export const BASE_SCORE_MESSAGE = "底分要是 10～100000 的整數";
 export interface ThirteenSettings {
   arrangeSec: ArrangeSec; // 理牌時間
   totalHands: number;     // 這場打幾局
-  scoreRule?: "jia" | "v4"; // 計分規則：2026-11-19 定案後開房記 "v4"；"jia"＝甲案時期開的房；沒有＝更早的房（v1）。整場不變（見 flow.ts scoreRuleOf）
+  scoreRule?: "jia" | "v4" | "v5"; // 計分規則：2026-11-20 起開房記 "v5"（打槍新規則）；"v4"＝11-19～20 開的房；"jia"＝甲案時期；沒有＝更早的房（v1）。整場不變（見 flow.ts scoreRuleOf）
   baseScore?: BaseScore;  // 底分（2026-11-19 起開房必有；更早的房沒有＝1，見 flow.ts baseScoreOf）
 }
 

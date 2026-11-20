@@ -44,8 +44,8 @@ export interface ThGameView {
   players: { id: string; name: string; seat: number; submitted: boolean; avatarUrl?: string | null }[];
   me: { seat: number; hand: Card[]; arrangement: Arrangement | null } | null;
   reveal: ThReveal | null;
-  /** 這房的計分規則（老柯 v4 API：牌局狀態都帶）："v4" 新房、"jia" 甲案、"v1" 更早 */
-  scoreRule?: "v1" | "jia" | "v4";
+  /** 這房的計分規則（老柯 v4 API：牌局狀態都帶）："v5" 新房（打槍：沒輸任何一墩、至少贏一墩）、"v4" 較早的新房、"jia" 甲案、"v1" 更早 */
+  scoreRule?: "v1" | "jia" | "v4" | "v5";
   /** 這一局的彩金牌（v4 房開始理牌就公開；舊規則房、等人時 null） */
   luckyCard?: Card | null;
 }

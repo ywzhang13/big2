@@ -4,11 +4,13 @@
 //   &final=1  當成整場最後一局（結算按鈕是「看總結算」，再進總結算）
 //   &unused=1 每家多帶 3 張沒用到的牌（照老柯 v4 的 unusedCards：本局結算最右邊那組）
 //   &lucky=9S 這一局的彩金牌（只看畫面：中央看板、金卡、本局結算；牌型照預覽牌局原本算的）
+//   &v5=1     （要同時有 lucky）照 v5 房用真的計分引擎重算這一局：本局結算左欄會有「彩金分」一行（老馬 2026-11-20）
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { previewAllowed } from "../gate";
 import { buildCase } from "./cases";
-import { buildDeck, parseCards, type Card } from "@/lib/thirteen";
+import { buildDeck, parseCards, revealOrder, scoreRound, type Card } from "@/lib/thirteen";
+import { handStats } from "@/lib/thirteen/flow";
 import ThRevealPreview from "@/components/thirteen/ThRevealPreview";
 
 export const metadata: Metadata = { title: "十三支亮牌預覽", robots: { index: false } };
@@ -24,5 +26,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const unusedCards = one("unused") === "1" ? [0, 1, 2, 3].map((s) => left.slice(s * 3, s * 3 + 3)) : undefined;
   let luckyCard: Card | null = null;
   try { if (one("lucky")) luckyCard = parseCards(one("lucky")!)[0]; } catch { /* 看不懂就不放 */ }
+  if (one("v5") === "1" && luckyCard) {
+    const result = scoreRound(rv.arrangements, "v5", luckyCard.rank);
+    return <ThRevealPreview rv={{ ...rv, result, stats: handStats(result, "v5"), order: revealOrder(rv.arrangements, "v5", luckyCard.rank), playerScores: result.totals, scoreRule: "v5",
+      over: one("final") === "1", unusedCards, luckyCard }} />;
+  }
   return <ThRevealPreview rv={{ ...rv, over: one("final") === "1", unusedCards, luckyCard }} />;
 }

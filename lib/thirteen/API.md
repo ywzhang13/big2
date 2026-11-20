@@ -130,7 +130,7 @@ SCORING.BONUS                  // 特殊加分，輸掉那一道的人付給贏�
 
 計分怎麼算：
 - 兩家之間三道各自比：贏 +1、輸 −1、平手 0。輸的人另外付贏家那一道的特殊加分。
-- 三道全贏才算打槍，有平手就不算。被打槍的人再多付 `GUN_PENALTY`。
+- 打槍（v4 以前）：三道全贏才算，有平手就不算。被打槍的人再多付 `GUN_PENALTY`。v5 的打槍改了，見下一節。
   - 例：對方中道鐵支又打槍你，你要付 3＋1＋4＝8 分。
 - 一家打槍另外三家就是全壘打，另外三家各再付 `HOME_RUN_PENALTY`。
 
@@ -140,11 +140,18 @@ SCORING.BONUS                  // 特殊加分，輸掉那一道的人付給贏�
 
 | 值 | 哪些房 | 一道的輸贏 | 特殊牌型 | 全壘打 | 牌型 |
 |---|---|---|---|---|---|
-| `"v4"` | 這次上線後新開的房（`create` 寫進 `settings.scoreRule`） | **不算分** | 那一道被你贏過的人各付 `SCORING.BONUS_V4` | 三家各再付 2 | 黑桃同花順、彩金牌型 |
+| `"v5"` | 2026-11-20 起新開的房（`create` 寫進 `settings.scoreRule`） | **不算分** | 那一道被你贏過的人各付 `SCORING.BONUS_V5`（彩金牌型改了，見下） | 同 v4（三家各再付 2） | 同 v4。**打槍**：沒有一道輸給對方、至少贏一道就算（平手的道不影響）。**彩金分**：見下 |
+| `"v4"` | 2026-11-19 上線後、11-20 v5 上線前開的房 | **不算分** | 那一道被你贏過的人各付 `SCORING.BONUS_V4` | 三家各再付 2 | 黑桃同花順、彩金牌型 |
 | `"jia"` | 甲案上線後、這次上線前開的房 | 1 墩 | 只算 `SCORING.BONUS` | 三家各再付 3 | 舊牌型 |
 | `"v1"` | 設定裡沒有 `scoreRule` 的房 | 1 墩 | 1＋`SCORING.BONUS` | 三家各再付 3 | 舊牌型 |
 
-舊房整場照原本的規則，不會中途換。打槍（三道都贏同一家）三種規則都是向那家收 1。牌局狀態、亮牌內容（`reveal`、`th_reveal`、410 的 `record.finalHand`）都帶 `scoreRule`。
+**v5 的彩金規則（老闆 2026-11-20 定案）**：
+- 彩金分：任何一道擺了 3 張以上彩金點數（`SCORING.LUCKY_ROW_MIN`），**不管那道輸贏**，另外三家各付 1（`SCORING.LUCKY_POINT`）。結果在 `RoundResult.luckyPoints`（四家淨額，合計 0），左欄明細 `HandStat.luckyPoints`、`ScoredStat.luckyPoints`（乘底分）。
+- 彩金牌型加分（`SCORING.BONUS_V5`，一樣只向那一道被你贏過的人收、每贏一家收一次）：頭墩彩金衝三照衝三 1；中墩彩金三條 0、彩金葫蘆 1、彩金鐵支 9；尾墩彩金三條 0、彩金葫蘆 0、彩金鐵支 4。其他牌型和 v4 一樣，牌型大小不變。
+- 例：中墩彩金鐵支贏三家、其他道沒贏＝9×3＋彩金分 3＝+30，三家各 −10。
+- 一副 65 張每個點數 5 張、彩金牌本身不在手上，所以一局最多一個人、一道拿到彩金分。
+
+舊房整場照原本的規則，不會中途換。打槍都是向那家收 1：v4、jia、v1 要三道都贏同一家；v5 只要沒有一道輸給他、至少贏一道（例：平手、贏、贏；贏、平手、平手；三道全平不算），判定在 `gunnerOf`。牌局狀態、亮牌內容（`reveal`、`th_reveal`、410 的 `record.finalHand`）都帶 `scoreRule`。
 
 ### 彩金牌 `luckyCard`
 
@@ -214,8 +221,10 @@ type HandRule = "legacy" | { lucky: number | null }   // v4 → { lucky: 彩金�
 evalFive(cards, rule?)  evalThree(cards, rule?)  evalRow(cards, rule?)
 checkArrangement(a, rule?)  autoArrange(cards, rule?)  validateSubmission(dealt, ids, rule?)
 bonusOf(row, value, rule?: ScoreRule | HandRule)
-scoreRound(arrs, rule?: "v1" | "jia" | "v4", lucky?: number | null)   revealOrder(arrs, rule?, lucky?)
-handRuleOf(scoreRule, lucky?)   // "v4" → { lucky }，"v1"／"jia" → "legacy"
+scoreRound(arrs, rule?: "v1" | "jia" | "v4" | "v5", lucky?: number | null)   revealOrder(arrs, rule?, lucky?)
+handRuleOf(scoreRule, lucky?)   // "v4"／"v5" → { lucky }，"v1"／"jia" → "legacy"
+isV4Family(scoreRule)           // "v4"、"v5" → true（牌型、彩金牌、加分表、全壘打分一樣）
+gunnerOf(a, b, aWins, bWins, scoreRule)  // 這一組誰打槍（v5 新規則；其他三道全贏）
 sortCards(cards)                // 顯示順序 A、2…K
 ```
 

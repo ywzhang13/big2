@@ -25,7 +25,7 @@ import { clock, dealer, NEXT_HAND_MAX_MS } from "../../lib/thirteen/flow";
 import { publicChannel, privateChannel } from "../../lib/thirteen/server";
 import { parseCards, type Card } from "../../lib/thirteen/cards";
 import { autoArrange, type Arrangement } from "../../lib/thirteen/arrange";
-import { revealOrder, scoreRound } from "../../lib/thirteen/score";
+import { revealOrder, scoreRound, type ScoreRule } from "../../lib/thirteen/score";
 import { insertRoom } from "../../lib/thirteen/db";
 import { ruleOf } from "../support/thirteen-rule";
 
@@ -274,7 +274,8 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   const arrs = (fh?.arrangements ?? []) as Arrangement[];
   const perSeat = arrs.map((a) => [...a.front, ...a.middle, ...a.back].map((c) => c.id).sort());
   const lucky = (fh?.luckyCard as Card | null | undefined)?.rank ?? null; // v4：照這一局的彩金牌重算
-  const recomputed = arrs.length === 4 ? scoreRound(arrs, "v4", lucky) : null;
+  const rule = fh?.scoreRule as ScoreRule; // 照這房記的規則重算（2026-11-20 起新房是 v5）
+  const recomputed = arrs.length === 4 ? scoreRound(arrs, rule, lucky) : null;
   const { sv: _sv, ...liveReveal } = (live ?? {}) as Record<string, unknown>; // 即時廣播多帶存檔版本號 sv（前端補抓用），不屬於亮牌內容
   eq([!!live, typeof _sv, stable(fh) === stable(liveReveal)], [true, "number", true],
     "S4 紀錄裡的最後一局和當時即時廣播的亮牌（th_reveal，扣掉版本號 sv）逐欄一模一樣：三墩、翻牌順序、結算、累計、代排名單");
@@ -282,7 +283,7 @@ const m1Totals: number[][] = []; // 每一局四家的本局分（N2 逐家比�
   eq([perSeat.map((ids, i) => ids.length === 13 && new Set(ids).size === 13 && ids.every((id) => (hands3[i] as string[]).includes(id))), arrs.map((a) => [a.front.length, a.middle.length, a.back.length])],
     [[true, true, true, true], [[3, 5, 5], [3, 5, 5], [3, 5, 5], [3, 5, 5]]],
     "S4 每一家的三墩（頭 3、中 5、尾 5）共 13 張，全部是那一家這局發到的 16 張裡的牌，沒有混到別家的牌、沒有重複");
-  eq([stable(fh?.result), stable(fh?.order)], [stable(recomputed), stable(arrs.length === 4 ? revealOrder(arrs, "v4", lucky) : null)],
+  eq([rule, stable(fh?.result), stable(fh?.order)], ["v5", stable(recomputed), stable(arrs.length === 4 ? revealOrder(arrs, rule, lucky) : null)],
     "S4 用紀錄裡的四家三墩重新給引擎算：6 組結算（每墩勝負、加分、打槍）、全壘打、本局分、翻牌順序都和紀錄裡的一模一樣");
 }
 

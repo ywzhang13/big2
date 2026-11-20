@@ -136,8 +136,9 @@ for (const base of [50, 100, 200, 500, undefined] as const) {
     rv.stats.forEach((st, seat) => {
       const sc = st.scored, r = raw[seat];
       const want = { rows: r.rows * k, bonuses: r.bonuses.map((b) => ({ name: b.name, points: b.points * k })), gunPoints: r.gunPoints * k,
-        shotPoints: r.guns * SCORING.GUN_PENALTY * k, shotByPoints: -r.gunned * SCORING.GUN_PENALTY * k, homeRunPoints: r.homeRunPoints * k, total: rv.scores[seat] };
-      const sumOk = sc.rows + sc.bonuses.reduce((n, b) => n + b.points, 0) + sc.gunPoints + sc.homeRunPoints === rv.scores[seat]
+        shotPoints: r.guns * SCORING.GUN_PENALTY * k, shotByPoints: -r.gunned * SCORING.GUN_PENALTY * k, homeRunPoints: r.homeRunPoints * k,
+        luckyPoints: (r.luckyPoints ?? 0) * k, total: rv.scores[seat] }; // v5 彩金分（2026-11-20）：也乘底分，左欄多一行
+      const sumOk = sc.rows + sc.bonuses.reduce((n, b) => n + b.points, 0) + sc.gunPoints + sc.homeRunPoints + (sc.luckyPoints ?? 0) === rv.scores[seat]
         && sc.shotPoints + sc.shotByPoints === sc.gunPoints;
       const rawKept = st.rows === r.rows && st.gunPoints === r.gunPoints && st.total === totals[seat] && rv.result.totals[seat] === totals[seat];
       if (JSON.stringify(sc) !== JSON.stringify(want) || !sumOk || !rawKept) bad.push({ seat, sc, want, sumOk, rawKept });

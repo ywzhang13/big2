@@ -2,7 +2,7 @@
 // 環境變數 THIRTEEN_PAUSE_NEW=1 時：
 //   K1 開房一律 503 paused（不用登入就擋，退回時用 curl 就能確認開關生效），資料庫沒有新增房間
 //   K2 已經開好、還在等人的房按「開始」也 503 paused，房間維持 waiting
-//   K3 暫停前已經開打的 v4 房照常打：送出、亮牌、下一局都照 v4 規則（luckyCard、scoreRule v4）
+//   K3 暫停前已經開打的 v4 房照常打：送出、亮牌、下一局都照 v4 規則（luckyCard、scoreRule；2026-11-20 起新房記 v5，彩金牌和牌型同 v4）
 //   K4 已經開打的房可以照常投票解散：寫中途解散紀錄（打完的局都在、分數照 v4），關房
 //   K5 關掉開關（不是 "1"）就恢復開房
 import { setupThirteenDb } from "../support/thirteen-pg";
@@ -77,8 +77,8 @@ process.env.THIRTEEN_PAUSE_NEW = "1";
   const rv1 = await playHand(playing.roomId);
   for (const p of PIDS) await post(nextRoute, { roomId: playing.roomId, playerId: p }, p);
   const v2 = (await state(playing.roomId, "p0")).body;
-  eq([rv1.phase, rv1.reveal?.scoreRule, !!rv1.reveal?.luckyCard, v2.phase, v2.handNo, v2.scoreRule, !!v2.luckyCard], ["revealed", "v4", true, "arranging", 2, "v4", true],
-    "K3 暫停前開打的房照常打：第 1 局照 v4 亮牌（有彩金牌）、四家確認後開第 2 局，仍是 v4");
+  eq([rv1.phase, rv1.reveal?.scoreRule, !!rv1.reveal?.luckyCard, v2.phase, v2.handNo, v2.scoreRule, !!v2.luckyCard], ["revealed", "v5", true, "arranging", 2, "v5", true],
+    "K3 暫停前開打的房照常打：第 1 局照新房規則（v5，有彩金牌）亮牌、四家確認後開第 2 局，規則不變");
 }
 // K4
 {
@@ -89,8 +89,8 @@ process.env.THIRTEEN_PAUSE_NEW = "1";
     `select end_reason, hands_played, settings->'finalHand'->>'scoreRule' rule, (select count(*)::int from match_record_players p where p.match_id = r.id) n from match_records r where room_id = $1`, [playing.roomId])).rows[0];
   const players = (await db.query<{ total_score: number }>(`select p.total_score from match_record_players p join match_records r on r.id = p.match_id where r.room_id = $1 order by p.seat`, [playing.roomId])).rows.map((x) => x.total_score);
   const gone = (await db.query<{ n: number }>(`select count(*)::int n from th_rooms where id = $1`, [playing.roomId])).rows[0].n;
-  eq([req.status, rec?.end_reason, rec?.hands_played, rec?.rule, rec?.n, players, gone], [200, "dissolved", 2, "v4", 4, rv2.playerScores, 0],
-    "K4 暫停中照常投票解散：寫中途解散紀錄（打完的 2 局、scoreRule v4、四家總分＝亮牌時的累計），房間關掉");
+  eq([req.status, rec?.end_reason, rec?.hands_played, rec?.rule, rec?.n, players, gone], [200, "dissolved", 2, "v5", 4, rv2.playerScores, 0],
+    "K4 暫停中照常投票解散：寫中途解散紀錄（打完的 2 局、scoreRule v5、四家總分＝亮牌時的累計），房間關掉");
 }
 // K5
 {
