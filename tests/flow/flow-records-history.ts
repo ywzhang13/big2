@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { POST as thCreate } from "../../app/api/thirteen/create/route";
 import { POST as thJoin } from "../../app/api/thirteen/join/route";
-import { POST as thStart } from "../../app/api/thirteen/start/route";
+import { POST as thStart } from "../support/thirteen-start-all"; // 開始＝房主發起＋其他三家照各自登入同意（2026-11-20 起四家同意才發牌；確認本身見 flow-thirteen-start-confirm）
 import { GET as thState } from "../../app/api/thirteen/state/route";
 import { POST as thSubmit } from "../../app/api/thirteen/submit/route";
 import { POST as thNext } from "../../app/api/thirteen/next-game/route";
