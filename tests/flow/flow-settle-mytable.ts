@@ -13,6 +13,7 @@
 //      老闆同桌」還要有 myTable=true 的資料；這裡驗證的是「欄位一定在、值穩定是 false、不會是 undefined 讓畫面炸掉」，
 //      畫面「收到 true 時會不會顯示」改用 Playwright 搭假資料驗證（見截圖），已回報阿哲：要讓進行中場次真的能顯示，
 //      需要另外查「正在打」的即時座位（mj_players／mj_rooms），不在這次「只接畫面」的範圍內
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { GET as settleGet, POST as settlePost } from "../../app/api/mahjong/admin/settlements/route";
 import { POST as revokePost } from "../../app/api/mahjong/admin/settlements/revoke/route";
 import { tokens } from "../support/stub-auth";

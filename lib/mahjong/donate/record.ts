@@ -1,3 +1,5 @@
+// 斗內下架（老柯 2026-11-20）：自摸次數預設不再記（斗內卡、結清用的 mj_zimo_wins），舊的次數照舊保留；
+// 每把的胡牌、放槍（對戰紀錄用）照常記。MJ_DONATE_WRITES=1 才照舊記自摸次數（lib/mahjong/donate/off.ts）。
 // 每局結算存檔成功後，記下這局自摸胡的帳號（斗內卡的自摸次數用）。
 // 由 lib/mahjong/db.ts 的兩個存檔函式呼叫；同一個結算狀態存好幾次也只記一筆（資料庫主鍵擋重複）。
 // 遊客不記：開局後的牌局狀態分不出誰是遊客，所以由資料庫函式 mj_zimo_record 以 auth.users 的 app_metadata.guest 為準排除。
@@ -6,6 +8,7 @@
 import { isSelfDrawWin, settledWinners } from "@/lib/mahjong/gameLogic";
 import type { MahjongGameState } from "@/lib/mahjong/gameState";
 import { recordHandResults, recordZimo, type HandResult } from "@/lib/mahjong/donate/store";
+import { donateWritesEnabled } from "./off";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,6 +41,7 @@ export async function recordZimoWins(roomId: string, s: MahjongGameState): Promi
       console.error(`[mj-hands] 房 ${roomId} 第 ${h.handNo} 局的胡牌／放槍沒有記到：`, err instanceof Error ? err.message : err);
     }
   }
+  if (!donateWritesEnabled()) return; // 斗內下架：不記新的自摸次數
   const z = zimoUserIds(s);
   if (!z || z.userIds.length === 0) return;
   try {

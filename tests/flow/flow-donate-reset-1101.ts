@@ -5,6 +5,7 @@
 //   R4 後台清單：歸零方式是 system（系統重置）、清掉幾次＝重置前的次數；應斗＝次數 × 10
 //   R5 重置後再自摸：次數從 1 開始、斗內卡出現；記一筆的自動抵扣只扣 11/1 之後的
 //   R6 再套用一次不會再重置、也不會多寫紀錄；回滾：重置後沒動過的人還原成備份（重置時新增的列刪掉），記過帳的人保留抵扣、只加回清掉的次數
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

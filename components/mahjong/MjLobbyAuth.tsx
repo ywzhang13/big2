@@ -7,6 +7,8 @@ import { openPrefs } from "@/lib/mahjong/prefs";
 import { authHeaders } from "@/lib/mahjong/clientAuth";
 import { refreshMyPicture } from "@/lib/linePicture/client";
 import { GearIcon } from "./MjIcons";
+import RoomCardChip from "@/components/roomCard/RoomCardChip";
+import { useMyCards } from "@/components/roomCard/useMyCards";
 import type { GuestLoginError, MjAuthStatus, MjAuthUser, MjHandoff } from "@/hooks/useMjAuth";
 
 /** LINE 登入按鈕：icon 用官方素材 public/line/btn_base.png，文字用「使用 LINE 登入」 */
@@ -218,10 +220,12 @@ export function PairedNotice({ name, onOk, onNotMe, inline }: { name: string; on
   );
 }
 
-/** 已登入時右上角：頭像＋LINE 名稱＋登出 */
+/** 已登入時右上角：房卡張數（房卡 v1.2 2-1，老闆、遊客不顯示）＋頭像＋LINE 名稱＋登出 */
 export function AuthBar({ user, onSignOut }: { user: MjAuthUser; onSignOut: () => void }) {
+  const cards = useMyCards(user);
   return (
     <div className="mjl-authbar">
+      <RoomCardChip me={cards} />
       <div className="mjl-who">
         <Avatar user={user} self />
         <span className="nm">{user.displayName}</span>

@@ -25,6 +25,9 @@ import { clearLastJoin, confirmView, finalSeen, loadLastJoin, markFinalSeen, rev
 import { toServerArrangeSec } from "@/components/thirteen/arrangeTime";
 import { apiJson, useThirteenRoom, type ThGameView, type ThJoin } from "@/components/thirteen/useThirteenRoom";
 import "@/components/thirteen/thRoom.css";
+import BlockedDialog from "@/components/roomCard/BlockedDialog";
+import { blockedFrom, type Blocked } from "@/components/roomCard/client";
+import { refreshMyCards } from "@/components/roomCard/useMyCards";
 
 /** 本機送出要比伺服器截止早一點：倒數到 0 的自動送出才不會晚到被拒（伺服器到點也會自己代排） */
 const SUBMIT_EARLY_MS = 1000;
@@ -63,6 +66,9 @@ function ThirteenScreens() {
   const [join, setJoin] = useState<ThJoin | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // 開房、加入、開局被伺服器擋下（房卡 v1.2 2-4 帳號已暫停、2-5 不能開局）
+  const [blocked, setBlocked] = useState<Blocked | null>(null);
+  const blockedDialog = <BlockedDialog blocked={blocked} onClose={() => setBlocked(null)} />;
   const [resume, setResume] = useState<{ code: string; status: string } | null>(null);
   const [invite, setInvite] = useState<string | null>(null); // 點邀請連結進來、這台還沒存過名字：先問名字（小宜 v1.1 §6）
   const [arrangeKey, setArrangeKey] = useState(0);
@@ -94,7 +100,9 @@ function ThirteenScreens() {
       const r = await apiJson<{ roomId: string; seat: number; playerId: string; channel: string }>("/api/thirteen/join",
         { method: "POST", body: JSON.stringify({ code, playerId: playerId(), name }) });
       if (r.status !== 200) {
-        setError(r.body.message ?? (r.status === 404 ? "找不到這個房號" : "加入失敗"));
+        const block = blockedFrom(r.body);
+        if (block) { setBlocked(block); refreshMyCards(); }
+        else setError(r.body.message ?? (r.status === 404 ? "找不到這個房號" : "加入失敗"));
         if (hashRoom() === code) history.replaceState(null, "", window.location.pathname);
         return;
       }
@@ -113,7 +121,11 @@ function ThirteenScreens() {
     setBusy(true); setError("");
     try {
       const c = await apiJson<{ roomId: string; code: string }>("/api/thirteen/create", { method: "POST", body: JSON.stringify({ hostId: playerId(), arrangeSec: toServerArrangeSec(arrangeSec), totalHands, baseScore }) });
-      if (c.status !== 200) { setError(c.body.message ?? "開房失敗"); return; }
+      if (c.status !== 200) {
+        const block = blockedFrom(c.body);
+        if (block) { setBlocked(block); refreshMyCards(); } else setError(c.body.message ?? "開房失敗");
+        return;
+      }
       await doJoin(c.body.code, name, true);
     } catch {
       setError("網路不穩，請再試一次");
@@ -286,16 +298,24 @@ function ThirteenScreens() {
   }
 
   if (!join && invite) {
-    return <InviteNamePrompt className="mjl" brand={<ThBrand />} top={<AuthBar user={auth.user!} onSignOut={auth.signOut} />} code={invite}
-      initialName={initialName(storedName(), lineName)} busy={busy} error={error} onJoin={(name) => void doJoin(invite, name, true)} onBack={backToLobby} />;
+    return <><InviteNamePrompt className="mjl" brand={<ThBrand />} top={<AuthBar user={auth.user!} onSignOut={auth.signOut} />} code={invite}
+      initialName={initialName(storedName(), lineName)} busy={busy} error={error} onJoin={(name) => void doJoin(invite, name, true)} onBack={backToLobby} />{blockedDialog}</>;
   }
   if (!join || !view) {
     if (join || (busy && hashRoom())) return <div className="th-room th-loading">進入房間中…</div>;
-    return <ThLobby user={auth.user!} onSignOut={auth.signOut} busy={busy} error={error} resume={resume} nameInit={initialName(storedName(), lineName)}
-      onCreate={doCreate} onJoin={(code, name) => void doJoin(code, name, true)} onResume={(code) => void doJoin(code, autoName())} onHome={goHome} />;
+    return <><ThLobby user={auth.user!} onSignOut={auth.signOut} busy={busy} error={error} resume={resume} nameInit={initialName(storedName(), lineName)}
+      onCreate={doCreate} onJoin={(code, name) => void doJoin(code, name, true)} onResume={(code) => void doJoin(code, autoName())} onHome={goHome} />{blockedDialog}</>;
   }
 
-  if (view.status === "waiting") return <ThWaiting view={view} myPlayerId={join.playerId} onStart={room.start} onLeave={leaveRoom} />;
+  if (view.status === "waiting") {
+    const start = async () => {
+      const r = await room.start();
+      const block = r.ok ? null : blockedFrom(r.body, join.code);
+      if (block) { setBlocked(block); return { ok: true }; } // 已經跳視窗說明，等人畫面不再另外寫錯誤
+      return r;
+    };
+    return <><ThWaiting view={view} myPlayerId={join.playerId} onStart={start} onLeave={leaveRoom} />{blockedDialog}</>;
+  }
 
   const me = view.me;
   if (view.phase === "arranging" && me && !me.arrangement && view.arrangeDeadline !== null) {

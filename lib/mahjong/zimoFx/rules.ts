@@ -37,14 +37,14 @@ export const ZIMO_PRICE = 10;
 export const parseFxExpiry = (v: string): number => (v === "infinity" ? Infinity : Date.parse(v));
 /** 胡牌時用的「這個座位目前的特效」：until＝null 表示永久（老闆帳號、永久開通） */
 export interface ZimoFxNow { code: WinFx; until: number | null }
-/** 從資料庫查到的「選用＋有效到期」換成這一刻能不能播。
- *  金色自摸是安全回退：未設定、未開通、已到期、已收回及查詢失敗都回它。 */
+/** 從資料庫查到的「選用」換成這一刻要播哪一種。
+ *  自摸特效全開（老柯 2026-11-20，規劃 v1 第 2 節第 6 點）：6 種自摸特效所有帳號永久可用，不再看開通紀錄和到期時間（pref.until 不用了）；
+ *  老闆專屬特效（OWNER_FX，如來神掌）照舊只有老闆能播，其他人選到也回金色。
+ *  金色自摸是安全回退：未設定、選了不能用的、查詢失敗都回它。 */
 export function resolveZimoFx(userId: string | null | undefined, pref: { fx: string; until: number | null } | undefined): ZimoFxNow | undefined {
   if (!userId) return undefined;
-  if (pref?.fx === GOLDEN_ZIMO_FX) return { code: GOLDEN_ZIMO_FX, until: null };
-  if (isOwner(userId) && (isZimoFx(pref?.fx) || isOwnerFx(pref?.fx))) return { code: pref.fx, until: null };
-  if (!pref || !isZimoFx(pref.fx) || pref.until === null) return { code: GOLDEN_ZIMO_FX, until: null };
-  return { code: pref.fx, until: pref.until }; // 永久是 Infinity，存進牌局 JSON 會變成 null，兩者 zimoFxValid 都算有效
+  if (isZimoFx(pref?.fx) || (isOwner(userId) && isOwnerFx(pref?.fx))) return { code: pref.fx, until: null };
+  return { code: GOLDEN_ZIMO_FX, until: null };
 }
 /** 這一刻還有效嗎（永久或還沒到期） */
 export const zimoFxValid = (fx: ZimoFxNow | undefined, now: number): WinFx | undefined =>

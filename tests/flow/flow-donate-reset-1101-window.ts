@@ -4,6 +4,7 @@
 //      F 沒舊欠、00:30 自摸、01:00 斗 NT$10 → 0（那次已經付了）；G 舊欠 2、00:30 自摸、01:00 斗 NT$100 → 0；H 舊欠 1、00:30 自摸、沒記帳 → 1
 //   W2 回滾不蓋掉重置後的事：E 重置後又自摸、看過斗內卡；H 重置後記帳 → 看過、抵扣都保留，只加回清掉的次數；F、G 沒動過 → 整列還原成備份
 //   W3 回滾只做一次：再跑什麼都不變；備份表改名保留，不刪；自摸、斗內、操作紀錄筆數都沒變
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

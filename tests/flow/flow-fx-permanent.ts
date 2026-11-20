@@ -3,9 +3,10 @@
 //   P1 開通：6 列永久，回應沒有到期日；玩家 API 6 種都是 null；後台 active 也是 null 且目前選用不會被打回金色
 //   P2 胡牌：永久的特效存進牌局（JSON 來回）照樣有效，幾年後也有效；parseFxExpiry 認得正式庫回傳的 'infinity'
 //   P3 大廳後台入口：永久開通的玩家 isOwner=false，老闆 true
-//   P4 收回：全部收回、回到只能預覽（金色）、紀錄都留著；再開通又是永久
+//   P4 收回：全部收回、紀錄都留著；自摸特效全開（2026-11-20）後收回不影響能不能用；再開通又是永久
 //   M1 migration：有效的轉永久（新增 6 列、舊列保留、1 筆操作紀錄）；過期、收回、qa- 帳號（開通者／名稱／email）不轉；舊的有期限開通照舊到期；重跑不多寫
 //   M2 回滾：永久全部收回（不刪）；轉永久的人靠舊開通繼續有效；上線後才開的人補有期限開通
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,8 +91,8 @@ applyZimoFx(st2, await prefetchZimoFx(st2));
 const kept = await allRows(A);
 const g2 = await post(fxPost, { userId: A }, "boss");
 eq([rv.body.revoked, mine2.available, mine2.selected, deny.status, admin2.active, st2.players[0].zimoFx, kept, await auditN(A, "fx_revoke"), g2.body.granted, await permRows(A), await allRows(A)],
-  [6, { golden: null }, "golden", 403, {}, { code: "golden", until: null }, 6, 1, 6, 6, 12],
-  "P4 收回：6 列都收回、回到只能預覽（只剩金色）、選風暴 403、自摸金色；紀錄 6 列還在、寫 1 筆操作紀錄；再開通又是 6 列永久（共 12 列）");
+  [6, { golden: null, ...SIX }, "sakura", 200, {}, { code: "storm", until: null }, 6, 1, 6, 6, 12],
+  "P4 收回：6 列都收回、紀錄 6 列還在、寫 1 筆操作紀錄；自摸特效全開（2026-11-20）後收回不影響能不能用：照樣 6 種永久、選風暴成功、自摸風暴；再開通又是 6 列永久（共 12 列）");
 
 // ---- M1 migration ----
 const EXP = 12; // 有期限開通的到期日：NOW 之後 12 天（還有效）
@@ -123,7 +124,7 @@ await d.query("insert into mj_fx_prefs (user_id, fx, updated_at) values ($1, 'st
 const qBefore = (await get(fxGet, `/?userId=${Q}`, "boss")).body.active.storm === T(EXP);
 const r1 = [await n("select count(*)::int n from mj_fx_audit") === audit1, await permRows(X), qBefore, await fxAt(Q, EXP - 1 / 86400), await fxAt(Q, EXP), await fxAt(X, EXP + 15)];
 clock.now = T(0);
-eq(r1, [true, 6, true, "storm", "golden", "storm"], "M1 重跑不多寫；沒轉的 qa 舊開通還是到原本到期前 1 秒有效、到期那一刻回金色；轉永久的 X 過了原本到期日 15 天照樣有效");
+eq(r1, [true, 6, true, "storm", "storm", "storm"], "M1 重跑不多寫；沒轉的 qa 舊開通到期前 1 秒有效；自摸特效全開（2026-11-20）後到期那一刻也照樣是風暴；轉永久的 X 過了原本到期日 15 天照樣有效");
 
 // ---- M2 回滾 ----
 await post(fxPost, { userId: W }, "boss"); // 上線後才開的：只有永久列

@@ -12,6 +12,8 @@ import { startNextGame, isAllRoundsComplete, eyeDiscardOptions, canDeclareTingNo
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { closeMahjongIfOver } from "@/lib/records/close";
 import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
+import { chargeMahjongHand } from "@/lib/roomCard/charge";
+import { mahjongChargeHand } from "@/lib/roomCard/rules";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -88,6 +90,7 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
     nextGameReady: [],
   };
   const newState = startNextGame(clearedState);
+  const cardHand = mahjongChargeHand(newState); // 房卡：連莊是 null（不扣）；要在 applySettlement 之前算
 
   // Save full state to DB
   // 開局補花就八仙過海：這局直接結束（先照常送開局事件，最後送 mj_game_over）
@@ -95,6 +98,7 @@ async function handleNextGame(request: Request, body: unknown, fresh: boolean): 
   if (endedAtDeal) applySettlement(newState);
   applyPace(newState, dealPaceMs(newState)); // 起手補花的特效播完，莊家才能打第一張
   const sv = await saveGameStateIfUnchanged(roomId, state.stateVersion, newState, endedAtDeal ? "finished" : "playing");
+  await chargeMahjongHand(roomId, room.code, newState, cardHand); // 房卡：存檔成功才扣（同一把重送只扣一次）
 
   // Broadcast public game start
   const publicState = toPublicGameState(newState);

@@ -13,6 +13,9 @@ import { applyPace, dealPaceMs } from "@/lib/mahjong/pace";
 import { initGame, dealTiles, eyeDiscardOptions, canDeclareTingNow, shuffleSeats } from "@/lib/mahjong/gameLogic";
 import { applySettlement, flowerRobEvents, gameOverEvent } from "@/lib/mahjong/events";
 import { closeMahjongIfOver } from "@/lib/records/close";
+import { startBlockedError } from "@/lib/roomCard/guard";
+import { chargeMahjongHand } from "@/lib/roomCard/charge";
+import { mahjongChargeHand } from "@/lib/roomCard/rules";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -62,6 +65,9 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   if (players.length !== 4) {
     return Response.json({ error: "需要 4 位玩家才能開始" }, { status: 400 });
   }
+  // 房卡：房裡有人被暫停就不能開局（403 player_suspended，回那個人的座位和名字）
+  const blocked = await startBlockedError(players.map((p) => ({ userId: p.user_id ?? null, name: p.name, seat: p.seat })));
+  if (blocked) return blocked;
 
   // 開局隨機排座位（老闆 2026-10-17）：牌局狀態的座位以這個順序為準；mj_players.seat 只代表入座順序，不再改它。
   // userId 跟著玩家走，所以 LINE 帳號認座位、找回房間、對局紀錄、整場統計都用新座位
@@ -106,6 +112,7 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   state.startedAt = new Date().toISOString();
   state.handsCompleted = 0;
   state = dealTiles(state);
+  const cardHand = mahjongChargeHand(state); // 房卡：要在下面「開局就八仙」的 applySettlement 之前算（它會把打完的把數 +1）
 
   // 第一局起莊 = 開門，覆寫 dealTiles 重新骰出的 dice/doorSeat
   state.dice = [d1, d2, d3];
@@ -119,6 +126,7 @@ async function handleStart(request: Request, body: unknown, fresh: boolean): Pro
   const baseVersion = (room.game_state as { stateVersion?: number } | null)?.stateVersion;
   applyPace(state, dealPaceMs(state)); // 起手補花的特效播完，莊家才能打第一張
   const sv = await saveGameStateIfUnchanged(roomId, baseVersion, state, endedAtDeal ? "finished" : "playing");
+  await chargeMahjongHand(roomId, room.code, state, cardHand); // 房卡：存檔成功才扣，每人 1 張（老闆不扣；同一把只扣一次）
 
   // Broadcast public game start (no hands)
   const publicState = toPublicGameState(state);

@@ -186,7 +186,7 @@ export function useThirteenRoom(join: ThJoin | null) {
     if (!j) return { ok: false, message: "還沒入座" };
     const r = await apiJson("/api/thirteen/start", { method: "POST", body: JSON.stringify({ roomId: j.roomId, playerId: j.playerId }) });
     kick();
-    return r.status === 200 ? { ok: true } : { ok: false, message: r.body.message ?? "開局失敗" };
+    return r.status === 200 ? { ok: true } : { ok: false, message: r.body.message ?? "開局失敗", body: r.body as unknown }; // body：房卡 403 player_suspended 由頁面跳視窗
   }, [kick]);
 
   /** 送出三墩：網路錯誤重試 3 次；伺服器拒絕（截止時間過了、已送出）就照伺服器的狀態（重抓） */

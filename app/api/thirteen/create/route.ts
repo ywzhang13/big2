@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { ARRANGE_SEC_MESSAGE, BASE_SCORE_MESSAGE, DEFAULT_BASE_SCORE, insertRoom, isArrangeSec, isBaseScore, isTotalHands, TOTAL_HANDS_MESSAGE } from "@/lib/thirteen/db";
 import { fail, json, newGamesPaused, pausedResponse, sweepIdleThirteenRooms } from "@/lib/thirteen/server";
+import { suspendedError } from "@/lib/roomCard/guard";
 
 export async function POST(request: Request) {
   if (newGamesPaused()) return pausedResponse(); // 退回前排空用（上線計畫第 6 節）
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   const baseScore = body && "baseScore" in body ? body.baseScore : DEFAULT_BASE_SCORE;
   if (!isBaseScore(baseScore)) return fail(400, "bad_base_score", BASE_SCORE_MESSAGE);
   try {
+    const suspended = await suspendedError(user.id); // 房卡：被暫停的人不能開新房（403 suspended）
+    if (suspended) return suspended;
     for (let i = 0; i < 10; i++) {
       const code = String(randomInt(0, 10000)).padStart(4, "0");
       const r = await insertRoom({ code, host_id: hostId, host_user_id: user.id, settings: { arrangeSec, totalHands, baseScore, scoreRule: "v4" } });

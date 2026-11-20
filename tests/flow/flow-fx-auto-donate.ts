@@ -17,6 +17,7 @@
 //      雙連線同時作廢同一玩家最後兩筆有效斗內：以兩邊都寫完之後的最終狀態決定收回，恆為 1 筆自動收回紀錄、0 筆有效開通
 //   T9 回滾：函式改回舊版、系統自動開通的還有效的先收回（手動開通不動）、mj_fx_auto_block 整張刪掉；
 //      斗內／結清／手動開通紀錄一筆都沒少；重套一次（表已經不存在）照常成功
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

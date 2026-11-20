@@ -1,3 +1,4 @@
+// 斗內下架（老柯 2026-11-20）：POST 預設停用、回 410 donate_disabled（lib/mahjong/donate/off.ts）；MJ_DONATE_WRITES=1 才照下面原本的說明寫入
 // 斗內後台：以場結清（老闆 2026-11-02）。只有老闆帳號能用。一場＝一間房；應給＝這場 11/1 00:00（台灣時間）之後的自摸次數 × NT$10。
 //   GET：未結清的人 → { price, total, players: [{ userId, name, avatarUrl, matches, zimo, amount, myTableCount }] }（已打完的場次；金額多的在前，同額看最早的場次）
 //   GET ?userId=：這個人的場次 → { price, unpaid: [場次], playing: [還在打的場次（不能結清）], paid: [最近 30 天結清的], totalDue }
@@ -9,6 +10,7 @@ import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
 import { ZIMO_PRICE } from "@/lib/mahjong/zimoFx/rules";
 import { lineProfile, lineProfiles, nowMs, ownerSeatedRooms, settledMatches, settleMatches, unsettledMatches } from "@/lib/mahjong/zimoFx/store";
 import { isUuid } from "@/lib/mahjong/spectate/rules";
+import { unlessDonateDisabled } from "@/lib/mahjong/donate/off";
 
 const PAID_DAYS = 30;
 const match = (m: { roomId: string; roomCode: string | null; startedAt: number | null; endedAt: number | null; zimo: number; due: number }, mine: Set<string>) =>
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export const POST = unlessDonateDisabled(async function POST(request: Request) {
   try {
     const owner = await requireOwner(request);
     if (owner instanceof Response) return owner;
@@ -71,4 +73,4 @@ export async function POST(request: Request) {
     console.error("[mj-admin] settle", err instanceof Error ? err.message : err);
     return fail(500, "server_error");
   }
-}
+});

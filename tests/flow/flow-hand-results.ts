@@ -7,6 +7,7 @@
 //   H6 對戰紀錄：每一把都有紀錄的場次回每人胡牌（含自摸）、自摸、放槍數；不齊的場次和舊場次胡牌／放槍回 null、自摸照舊從自摸紀錄算
 //   H8 一炮三響：三家各記一列、各算胡 1；放槍的人那一把只算放槍 1 次
 //   H7 老闆帳號不算斗內：不產生應給、不在後台未結清、斗內卡 0、不能結清、對戰紀錄 myDue null；自摸紀錄保留；其他人不變
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { GET as donateGet } from "../../app/api/mahjong/donate/route";

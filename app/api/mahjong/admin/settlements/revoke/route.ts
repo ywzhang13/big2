@@ -1,11 +1,13 @@
+// 斗內下架（老柯 2026-11-20）：POST 預設停用、回 410 donate_disabled（lib/mahjong/donate/off.ts）；MJ_DONATE_WRITES=1 才照下面原本的說明寫入
 // 斗內後台：撤回一批結清。POST { batchId, reason? }（batchId＝結清時回傳的那筆斗內 id）。只有老闆帳號能用。
 //   同一批結清的場次全部回到未結清，那筆斗內（含打賞）整筆作廢；寫操作紀錄 match_unsettle。
 //   成功 → { batchId, amount, rooms: [{ roomId, roomCode, zimo, due }] }；404 not_found＝沒有這批或已經撤回
 import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
 import { unsettleBatch } from "@/lib/mahjong/zimoFx/store";
 import { isUuid } from "@/lib/mahjong/spectate/rules";
+import { unlessDonateDisabled } from "@/lib/mahjong/donate/off";
 
-export async function POST(request: Request) {
+export const POST = unlessDonateDisabled(async function POST(request: Request) {
   try {
     const owner = await requireOwner(request);
     if (owner instanceof Response) return owner;
@@ -20,4 +22,4 @@ export async function POST(request: Request) {
     console.error("[mj-admin] unsettle", err instanceof Error ? err.message : err);
     return fail(500, "server_error");
   }
-}
+});

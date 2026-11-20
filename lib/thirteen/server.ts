@@ -14,6 +14,7 @@ import type { ChatMessage } from "@/lib/social/events";
 import { deleteRoomSpectate } from "@/lib/mahjong/spectate/store";
 import { IDLE_ACTIVE_MS, IDLE_WAITING_MS } from "@/lib/records/types";
 import { deleteThirteenChat } from "./chat";
+import { chargeThirteenHand } from "@/lib/roomCard/charge";
 import { buildThirteenRecord, closeThirteen, findThirteenRecord, listIdleThirteenRooms, loadPlayers, loadRoom, saveGameStateIfUnchanged, StateConflictError,
   type CloseResult, type ThirteenGameState, type ThRoom } from "./db";
 import { advance, cancelIfDenied, clock, evaluateLeave, luckyCardOf, revealPayload, isOver } from "./flow";
@@ -106,6 +107,8 @@ export async function saveAndAnnounce(room: ThRoom, s: ThirteenGameState, baseVe
   if (happened.revealed) events.push({ event: "th_reveal", payload: revealPayload(s) });
   if (happened.nextStarted) events.push(...dealEvents(s));
   await send(room, events, sv);
+  // 房卡：剛開了一局（房主開局、四家按下一局、時間到自動開）→ 存檔成功後扣卡（奇數局每人 1 張；同一局只扣一次）
+  if (happened.nextStarted) await chargeThirteenHand(room.id, room.code, s);
   if (isOver(s)) await finishMatch(room, s, sv, "completed");
   return sv;
 }

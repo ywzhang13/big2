@@ -1667,7 +1667,9 @@ export function useMahjong(
       return await api("POST", path, body);
     } catch (err) {
       const status = (err as { status?: number }).status;
-      if (status === 401 || status === 403) onAuthErrorRef.current?.(status);
+      // 開局時房裡有人被暫停（房卡，403 player_suspended）不是登入問題：不回大廳，由等人畫面跳「不能開局」
+      const playerSuspended = status === 403 && /"player_suspended"/.test((err as Error).message);
+      if ((status === 401 || status === 403) && !playerSuspended) onAuthErrorRef.current?.(status);
       throw err;
     }
   }, []);

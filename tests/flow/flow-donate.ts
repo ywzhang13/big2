@@ -9,6 +9,7 @@
 //   D8 訪客：自摸不寫入資料庫（伺服器分不出時由資料庫以 auth.users 排除）、按斗內不寫入；沒登入按斗內 401
 //   D10 帳號刪除：自摸紀錄和歸零點跟著刪（外鍵 on delete cascade）
 //   D9 自摸的判斷和整場統計一致（八仙過海算自摸、七搶一不算）；上線前的舊局、沒綁帳號的座位不記
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { GET as donateGet } from "../../app/api/mahjong/donate/route";

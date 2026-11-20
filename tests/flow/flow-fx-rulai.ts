@@ -5,6 +5,7 @@
 //   R4 非老闆的列就算被直接寫成 rulai：GET 回金色、牌局也是金色
 //   R5 老闆自摸：胡牌紀錄、廣播、同桌 state、座位公開資料、觀戰者畫面都帶 rulai；老闆胡別人打的牌沒有；沒有帳號 id
 //   M1 回滾：選了 rulai 的改回金色並留紀錄，其他人的選用和開通不變，檢查限制收回；再套一次 migration 老闆又能選
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,8 +59,8 @@ await post(mySet, { fx: "storm" }, "a");
 {
   const [boss, a, b, g, none] = [await get(myGet, "/", "boss"), await get(myGet, "/", "a"), await get(myGet, "/", "b"), await get(myGet, "/", "guest"), await get(myGet, "/")];
   eq([boss.body.ownerFx, boss.body.available.rulai, "ownerFx" in a.body, "ownerFx" in b.body, a.body.available, b.body.available, g.status, none.status],
-    [["rulai"], null, false, false, { golden: null, ...SIX }, { golden: null }, 403, 401],
-    "R1 老闆的回應帶 ownerFx=[rulai]、available 有 rulai（永久）；永久開通的玩家和沒開通的玩家都沒有 ownerFx、available 沒有 rulai；遊客 403、沒登入 401");
+    [["rulai"], null, false, false, { golden: null, ...SIX }, { golden: null, ...SIX }, 403, 401],
+    "R1 老闆的回應帶 ownerFx=[rulai]、available 有 rulai（永久）；永久開通的玩家和沒開通的玩家都沒有 ownerFx、available 沒有 rulai（自摸特效全開 2026-11-20：兩人都是 6 種永久）；遊客 403、沒登入 401");
 }
 
 // ---- R2 POST ----

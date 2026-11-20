@@ -3,6 +3,7 @@ import { getAuthUser, getPictureUrls } from "@/lib/auth";
 import { loadPlayers } from "@/lib/thirteen/db";
 import { clock, seatPlayers, startHand, touch } from "@/lib/thirteen/flow";
 import { fail, json, newGamesPaused, pausedResponse, saveAndAnnounce, withRoom } from "@/lib/thirteen/server";
+import { startBlockedError } from "@/lib/roomCard/guard";
 
 export async function POST(request: Request) {
   if (newGamesPaused()) return pausedResponse(); // 退回前排空用：已開好的房也不能開打（上線計畫第 6 節）
@@ -16,6 +17,9 @@ export async function POST(request: Request) {
     if (room.host_id !== me.player_id || room.game_state.hostUserId !== user.id) return fail(403, "not_host", "只有房主可以開始");
     if (room.status !== "waiting") return fail(400, "started", "已經開始了");
     if (seats.length < 4) return fail(400, "not_full", "滿 4 人才能開始");
+    // 房卡：房裡有人被暫停就不能開局（403 player_suspended，回那個人的座位和名字）
+    const blocked = await startBlockedError(seats.map((p) => ({ userId: p.user_id, name: p.name, seat: p.seat })));
+    if (blocked) return blocked;
     const s = room.game_state;
     const base = s.stateVersion;
     seatPlayers(s, seats, await getPictureUrls(seats.map((p) => p.user_id))); // 大頭照開局時查一次（同麻將），查不到是 null、不擋開局

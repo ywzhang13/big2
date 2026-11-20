@@ -3,6 +3,7 @@ import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { endedResponse } from "@/lib/records/close";
 import { getAuthUser } from "@/lib/auth";
 import { notLoggedIn, notYourSeat, privateChannelName } from "@/lib/mahjong/access";
+import { suspendedError } from "@/lib/roomCard/guard";
 
 export async function POST(request: Request) {
   try {
@@ -60,6 +61,10 @@ export async function POST(request: Request) {
     if (guestRoom !== user.isGuest) {
       return Response.json({ error: guestRoom ? "guest_room" : "guest_not_allowed", started }, { status: 403 });
     }
+
+    // 房卡：被暫停的人不能加入新房（403 suspended）；上面已經坐下的人重新加入不擋，正在打的那一場照常打完
+    const suspended = await suspendedError(user.id);
+    if (suspended) return suspended;
 
     // New player — only allow if still in lobby
     if (started) {

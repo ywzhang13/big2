@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import "./home-games.css";
+import HomeAccount from "@/components/roomCard/HomeAccount";
 
 // 首頁（綠金華麗風，小宜 2026-10-24 設計、老闆確認）：深綠牌桌底、老闆的「阿瑋 CASINO」徽章、兩張金框遊戲卡。
 // 素材在 public/home/（由原始 PNG 裁掉透明留白、縮成網頁用寬度的 WebP）；排版在 globals.css 的 .home-*
@@ -17,6 +18,8 @@ export default function Lobby() {
 
   return (
     <div className="home has-3">
+      {/* 右上角：房卡張數、頭像選單（房卡後台／歷史紀錄／登出）、設定（房卡 v1.2 2-2）；沒登入不放 */}
+      <HomeAccount />
       <header className="home-brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="home-badge" src="/home/home-badge.webp" alt="阿瑋 CASINO" width={640} height={452} />

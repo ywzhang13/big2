@@ -5,7 +5,8 @@
 // 入座的檢查和寫入都在資料庫函式 th_lobby_join 的同一個交易裡（鎖住房間那一列）：和離開、開局存檔、空房關閉、閒置清除不會交錯；
 // 入座會把牌局版本 +1、更新房間的最後活動時間（舊的閒置清除快照因此失效，審伯 2026-11-18 必修 2）
 import { getAuthUser } from "@/lib/auth";
-import { loadRoomByCode, lobbyJoin } from "@/lib/thirteen/db";
+import { loadPlayers, loadRoomByCode, lobbyJoin } from "@/lib/thirteen/db";
+import { suspendedError } from "@/lib/roomCard/guard";
 import { fail, json, privateChannel, send } from "@/lib/thirteen/server";
 import { NAME_MESSAGE, normalizeName } from "@/lib/thirteen/playerName";
 
@@ -26,6 +27,11 @@ export async function POST(request: Request) {
   try {
     const room = await loadRoomByCode(code);
     if (!room) return fail(404, "room_not_found");
+    // 房卡：被暫停的人不能加入新房（403 suspended）；已經坐在這房的人重新加入不擋，正在打的那一場照常打完
+    if (!(await loadPlayers(room.id)).some((p) => p.user_id === user.id)) {
+      const suspended = await suspendedError(user.id);
+      if (suspended) return suspended;
+    }
     const r = await lobbyJoin(room.id, playerId, name, user.id);
     if ("error" in r) { const [status, message] = MESSAGES[r.error] ?? [500]; return fail(status, r.error, message); }
     const channel = privateChannel(room.id, room.code, r.player_id, user.id);

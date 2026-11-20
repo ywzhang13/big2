@@ -8,6 +8,7 @@
 //   K7 後台清單：每人次數、應斗（次數 × 10）、上次歸零時間／方式／清掉幾次；0 次的人也列出；不含遊客；非老闆 403
 //   K8 操作紀錄寫明抵扣：記帳前幾次、抵扣幾次、剩幾次、打賞、單價
 //   K9 記帳那一刻之後才記進來的自摸不會被抵扣（留到下一輪）；作廢斗內不還原次數；舊的 mj_donation_add 介面也一樣是抵扣
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { GET as donateGet } from "../../app/api/mahjong/donate/route";
 import { POST as donateSeen } from "../../app/api/mahjong/donate/seen/route";
 import { legacyDonationsAdd as donationsAdd } from "../support/legacy-donation"; // 以場結清上線前的記一筆（自動抵扣）

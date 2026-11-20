@@ -7,6 +7,7 @@
 //   F7 公開座位資料帶代號（開局就能預載）：牌局中所有登入帳號 players[i].winFx="golden"；
 //      開局廣播 mj_game_start 的 players 也一樣（開局會隨機排座位，用玩家 id 對）
 //   F6 全部廣播和 state 回應裡都沒有帳號 id（userId）（含 F7 的回應）
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { POST as action } from "../../app/api/mahjong/action/route";
 import { POST as discard } from "../../app/api/mahjong/discard/route";
 import { POST as draw } from "../../app/api/mahjong/draw/route";

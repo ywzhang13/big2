@@ -6,7 +6,7 @@ import ZimoFxPreferencePreview from "./ZimoFxPreferencePreview";
 import type { Tile } from "@/lib/mahjong/tiles";
 import { BACKS, FELTS, THEMES, DEFAULT_PREFS, usePrefs, setPrefs, type BackId, type FeltId } from "@/lib/mahjong/prefs";
 import { CloseIcon, SpeakerIcon } from "./MjIcons";
-import { getMyFx, rejectedSelected, selectMyFx, ZIMO_FX_LIST, type MyZimoFx, type ZimoFxChoice } from "@/lib/mahjong/zimoFxClient";
+import { getMyFx, rejectedSelected, selectMyFx, type MyZimoFx, type ZimoFxChoice } from "@/lib/mahjong/zimoFxClient";
 
 type FxChoice = ZimoFxChoice;
 
@@ -39,13 +39,6 @@ const PREVIEW_TILES: Tile[] = [
  *  改了立刻生效；點遮罩、關閉鈕、「完成」或 Esc 關閉。
  *  「自摸特效」分頁（老馬 2026-10-31，小宜〈自摸特效庫與斗內系統〉5）：打開面板時問一次伺服器，有開通的特效才出現；
  *  點卡片＝預覽（先顯示特效名稱，新特效素材到了再換成真的動畫），按「確定」才存好並關閉（老闆 2026-11-05：拿掉「套用」）；沒按確定就關閉不改設定。老闆：不顯示到期、說明文字 */
-/** 特效開通狀態（小宜〈斗內改版〉D2、D3；老闆 2026-11-02：一次開通全部 6 種，頁首不顯示到期日）：有任何一種開通＝全部開通；老闆帳號永久 */
-function FxGrantPill({ fx }: { fx: MyZimoFx }) {
-  const until = ZIMO_FX_LIST.map((f) => fx.available[f.code]).filter((v): v is number | null => v !== undefined);
-  if (until.length === 0) return <span className="mjp-grant off" data-prefs-fx-grant="off">未開通・只能預覽</span>;
-  return <span className="mjp-grant" data-prefs-fx-grant={until.some((v) => v === null) ? "permanent" : "on"}>✓ 全部開通</span>;
-}
-
 export default function MjPrefsPanel() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"look" | "sound" | "fx">("look");
@@ -115,7 +108,7 @@ export default function MjPrefsPanel() {
                 className={tab === id ? "on" : ""} onClick={() => setTab(id)}>{name}</button>
             ))}
           </div>
-          {tab === "fx" && fx && <FxGrantPill fx={fx} />}
+          {/* 斗內下架（2026-11-20）：特效全部開放，拿掉開通狀態的膠囊 */}
           <button type="button" className="mjp-x" aria-label="關閉" onClick={close}><CloseIcon /></button>
         </div>
         <div className="mjp-body" id="mjp-body" role="tabpanel" aria-labelledby={`mjp-tab-${tab}`} data-prefs-body={tab}>

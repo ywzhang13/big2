@@ -13,6 +13,7 @@
 //   Z6 老闆帳號：6 種永久全開；沒選過＝金色自摸；選雷霆後自摸帶 thunder；不能被開通／收回；資料庫查不到時回金色
 //   Z7 玩家自己選：金色自摸永久可選；其他只能選有效開通的；過期、收回後 403；遊客 403
 //   Z8 胡別人打的牌不帶特效；牌局狀態、廣播沒有帳號 id；存著的特效過期了（沒重查）也不播
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { GET as players } from "../../app/api/mahjong/admin/players/route";
 import { GET as donationsGet, POST as donationsAdd } from "../../app/api/mahjong/admin/donations/route";
 import { POST as donationVoid } from "../../app/api/mahjong/admin/donations/void/route";
@@ -206,8 +207,8 @@ let idA = "", idB = "";
   const r3 = await post(fxRevoke, { userId: B }, "boss");
   const info = (await get(fxGet, `/?userId=${B}`, "boss")).body;
   eq([r1.body.revoked, z1.fx, r2.body.revoked, z2.fx, r3.body.revoked, info.active, info.selected, info.grants.length, (await post(fxRevoke, { userId: BOSS }, "boss")).body.error],
-    [12, "golden", 0, "golden", 0, {}, "golden", 18, "owner_permanent"],
-    "Z5 一次全開（2026-11-02）：收回一律全部收回（舊格式只帶冰封也一樣）→ 連同阿華 Z3 斗內自動開通、還有效的 6 列一起收回 12 列、自摸安全回退金色；再收回 0 列；開通紀錄保留 18 筆（Z2 自動開通又因作廢收回的 6＋Z3 自動開通的 6＋這裡手動開通的 6）；老闆帳號不能收回");
+    [12, "blackhole", 0, "blackhole", 0, {}, "golden", 18, "owner_permanent"],
+    "Z5 一次全開（2026-11-02）：收回一律全部收回（舊格式只帶冰封也一樣）→ 連同阿華 Z3 斗內自動開通、還有效的 6 列一起收回 12 列；自摸特效全開（2026-11-20）後收回不影響能不能用，自摸照樣是選好的黑洞；再收回 0 列；開通紀錄保留 18 筆（Z2 自動開通又因作廢收回的 6＋Z3 自動開通的 6＋這裡手動開通的 6）；老闆帳號不能收回");
 }
 
 // ---- Z6 老闆永久 ----
@@ -241,8 +242,8 @@ let idA = "", idB = "";
   const after = await get(myFxGet, "/", "a");
   const guest = [(await get(myFxGet, "/", "guest")).status, (await post(myFxSet, { fx: "meteor" }, "guest")).status, (await get(myFxGet, "/")).status];
   eq([list.body.displayName, Object.keys(list.body.available).sort(), list.body.selected, ok1.status, no1.body.error, z1.fx, no2.body.error, no3.body.error, after.body.available, after.body.selected, guest],
-    ["阿明", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"], "sakura", 200, null, "blackhole", "not_granted", "not_granted", { golden: null }, "golden", [403, 403, 401]],
-    "Z7 API 回傳登入者 LINE 顯示名供預覽大字使用；阿明這週有開通 → 6 種全開（一次全開 2026-11-02），選雷霆、再選黑洞都可以，自摸帶 blackhole；收回後、11/9 週一過期後都 403；過期後只剩金色自摸；遊客 403、沒登入 401");
+    ["阿明", ["blackhole", "frost", "golden", "meteor", "sakura", "storm", "thunder"], "sakura", 200, null, "blackhole", null, null, { golden: null, meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null }, "sakura", [403, 403, 401]],
+    "Z7 API 回傳登入者 LINE 顯示名供預覽大字使用；6 種全開，選雷霆、再選黑洞都可以，自摸帶 blackhole；自摸特效全開（2026-11-20）後收回、過期都不影響，照樣能選、6 種永久；遊客 403、沒登入 401");
 }
 
 // ---- Z8 胡別人的牌、帳號 id、存著的特效過期 ----
@@ -355,8 +356,8 @@ let idA = "", idB = "";
   let invalidPref = "沒擋";
   try { await d.exec("insert into mj_fx_prefs (user_id, fx, updated_at) values ('invalid-fx', 'rainbow', now())"); } catch { invalidPref = "擋下"; }
   eq([unset.body.available, unset.body.selected, fallback.fx, denied.body.error, golden.status, golden.body.selected, selected.body.selected, invalidPref],
-    [{ golden: null }, "golden", "golden", "not_granted", 200, "golden", "golden", "擋下"],
-    "Z13 金色自摸：未設定帳號自摸和 API 都回金色；未開通的隕石不能套用；金色可永久套用；資料庫拒絕未知代號");
+    [{ golden: null, meteor: null, thunder: null, storm: null, frost: null, blackhole: null, sakura: null }, "golden", "golden", null, 200, "golden", "golden", "擋下"],
+    "Z13 金色自摸：未設定帳號自摸和 API 都回金色；自摸特效全開（2026-11-20）後沒開通也能套用隕石、6 種永久；金色可永久套用；資料庫拒絕未知代號");
 }
 
 // ---- Z14 沒權限的特效不會變成「看起來有套用」 ----

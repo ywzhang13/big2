@@ -11,6 +11,7 @@
 //   S8 後台清單、一個人的場次；對戰紀錄每場每人自摸次數、每一把、我的應給和結清狀態
 //   S9 一般玩家呼叫結清／撤回 403；記一筆只記打賞，不結清任何場次；特效開通一次開 6 種、不改玩家的選擇
 //   S10 回滾：新函式拿掉、欠款和特效函式改回舊版；結清、斗內、操作紀錄一筆都沒少；再套用一次會被擋下（表已經在）
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

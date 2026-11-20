@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { notLoggedIn } from "@/lib/mahjong/access";
 import { after } from "next/server";
 import { sweepIdleRooms } from "@/lib/records/close";
+import { suspendedError } from "@/lib/roomCard/guard";
 
 function generateCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
     // 麻將一定要登入（LINE 或遊客）才能建房
     const user = await getAuthUser(request);
     if (!user) return notLoggedIn();
+    // 房卡：被暫停的人不能開新房（403 suspended）
+    const suspended = await suspendedError(user.id);
+    if (suspended) return suspended;
 
     // Validate settings
     const validRounds = [1, 2, 4, 8];

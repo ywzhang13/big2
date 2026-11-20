@@ -30,7 +30,9 @@ import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
 import { SpectateManage, SpectateRequestCard, useSpectateManage } from "@/components/mahjong/spectate/SpectateHost";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
-import { getMyFx } from "@/lib/mahjong/zimoFxClient";
+import BlockedDialog from "@/components/roomCard/BlockedDialog";
+import { blockedFrom, type Blocked } from "@/components/roomCard/client";
+import { refreshMyCards } from "@/components/roomCard/useMyCards";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -142,6 +144,16 @@ export default function MahjongPage() {
   const [joined, setJoined] = useState<MjJoinInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
+  // 開房、加入被伺服器擋下（房卡 v1.2 2-4：帳號已暫停）
+  const [blocked, setBlocked] = useState<Blocked | null>(null);
+  // 總大廳頭像選單的「歷史紀錄」（/mahjong?records=1）：直接打開歷史紀錄，網址拿掉參數
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("records") !== "1") return;
+    setShowRecords(true);
+    q.delete("records");
+    history.replaceState(null, "", window.location.pathname + (q.toString() ? `?${q}` : "") + window.location.hash);
+  }, []);
   // Room settings
   const [totalRounds, setTotalRounds] = useState(1);
   const [basePoints, setBasePoints] = useState(100);
@@ -204,9 +216,17 @@ export default function MahjongPage() {
 
   // 401：登入失效 → 退回登入閘門（在房間裡就是「加入房間 XXXX」）；403：座位不是你的、或遊客／LINE 不同桌 → 回大廳
   const { expire } = auth;
-  const handleAuthError = useCallback((status: 401 | 403, code?: string) => {
+  const handleAuthError = useCallback((status: 401 | 403, code?: string, body?: unknown) => {
     if (status === 401) {
       expire();
+      return;
+    }
+    const block = code === "suspended" ? blockedFrom(body ?? { error: code }) : null; // 用邀請網址進房被擋（房卡 v1.2 2-4）：跳視窗、回大廳
+    if (block) {
+      setBlocked(block);
+      refreshMyCards();
+      setJoined(null);
+      window.location.hash = "";
       return;
     }
     setError(
@@ -231,6 +251,12 @@ export default function MahjongPage() {
     if (data.started && data.error !== "guest_room") {
       if (auth.user?.isGuest) setError("需要 LINE 登入才能觀戰");
       else window.location.href = `/mahjong/watch?code=${encodeURIComponent(code)}`;
+      return null;
+    }
+    const block = blockedFrom(data);
+    if (block) {
+      setBlocked(block);
+      refreshMyCards();
       return null;
     }
     if (res.status === 401 || res.status === 403) {
@@ -270,14 +296,7 @@ export default function MahjongPage() {
     };
   }, [lobbyHome]);
 
-  // 斗內後台入口（老馬 2026-10-31）：只有老闆帳號看得到（伺服器回 isOwner；不能用「特效都是永久」判斷，一般玩家開通後也是永久）；真正的權限由後台 API 在伺服器檢查
-  const [isOwner, setIsOwner] = useState(false);
-  useEffect(() => {
-    if (!lobbyHome) return;
-    let alive = true;
-    void getMyFx().then((r) => { if (alive) setIsOwner(r.ok && r.data.isOwner); });
-    return () => { alive = false; };
-  }, [lobbyHome]);
+  // 斗內後台入口拿掉（老闆 2026-11-20 斗內下架；房卡後台入口在總大廳頭像選單）
 
   async function handleResume(code: string) {
     if (isSubmitting) return;
@@ -324,6 +343,12 @@ export default function MahjongPage() {
       const data = await res.json();
       if (res.status === 401) {
         handleAuthError(401);
+        return;
+      }
+      const block = blockedFrom(data);
+      if (block) {
+        setBlocked(block);
+        refreshMyCards();
         return;
       }
       if (!res.ok) {
@@ -420,6 +445,7 @@ export default function MahjongPage() {
         <PortraitHint label="返回首頁" onClick={goHome} />
         <AuthBar user={auth.user} onSignOut={auth.signOut} />
         <MjPrefsPanel />
+        <BlockedDialog blocked={blocked} onClose={() => setBlocked(null)} />
         {auth.pairedAs !== null && <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} />}
         <Brand />
         <div className={`mjl-col${screen === "create" ? " mjl-form" : ""}`}>
@@ -458,10 +484,9 @@ export default function MahjongPage() {
               >
                 歷史紀錄
               </button>
-              {/* 排行榜（公開，輸贏／斗內）；老闆帳號同一列多一顆「斗內後台」 */}
+              {/* 排行榜（公開）；斗內後台入口拿掉（2026-11-20 斗內下架） */}
               <div className="flex gap-3">
                 <a href="/mahjong/ranks" className="mjl-btn ghost text-center flex-1" data-lobby-board>排行榜</a>
-                {isOwner && <a href="/mahjong/admin" className="mjl-btn ghost text-center flex-1" data-lobby-admin>斗內後台</a>}
               </div>
               <button onClick={goHome} className="mjl-foot">
                 返回首頁
@@ -744,7 +769,7 @@ function RoomView({
   initialJoin: MjJoinInfo | null;
   onSetName: (n: string) => void;
   onNameEdited: () => void;
-  onAuthError: (status: 401 | 403, code?: string) => void;
+  onAuthError: (status: 401 | 403, code?: string, body?: unknown) => void;
   onGoHome: () => void;
   /** 等人時退出房間成功（回麻將大廳） */
   onLeft: () => void;
@@ -772,6 +797,7 @@ function RoomView({
     leaveWaiting,
     roomId,
   } = useMahjong(code, nameReady ? playerName : "", onAuthError);
+  const [startBlocked, setStartBlocked] = useState<Blocked | null>(null);
 
   // 等人時「退出房間」（老闆 2026-10-24）：伺服器真的把你移出房間、空出座位，才回大廳；失敗留在原畫面並提示
   const [leaving, setLeaving] = useState(false);
@@ -831,7 +857,7 @@ function RoomView({
           const data = await res.json();
           // 這場已結束、房間已刪：顯示總結算
           if (res.status === 410) markClosed(closedFromResponse(data));
-          else if (res.status === 401 || res.status === 403) onAuthError(res.status, data.error);
+          else if (res.status === 401 || res.status === 403) onAuthError(res.status, data.error, data);
           else if (data.roomId) applyJoin(data as MjJoinInfo);
         })
         .catch((err) => console.error("[mj] auto-join failed:", err));
@@ -978,9 +1004,18 @@ function RoomView({
           </div>
 
           {/* Start button */}
+          <BlockedDialog blocked={startBlocked} onClose={() => setStartBlocked(null)} />
           {isHost ? (
             <button
-              onClick={startGame}
+              onClick={() => {
+                // 房裡有人被暫停（房卡 v1.2 2-5）：伺服器回 403 player_suspended，跳「不能開局」列出座位；房間維持等人
+                startGame().catch((e: unknown) => {
+                  let body: unknown = null;
+                  try { body = JSON.parse((e as Error).message); } catch { /* 不是 JSON：照舊不處理 */ }
+                  const b = blockedFrom(body, code);
+                  if (b) setStartBlocked(b);
+                });
+              }}
               disabled={state.players.length !== 4}
               className="mjw-start w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
                          cursor-pointer active:scale-95 transition-all duration-150

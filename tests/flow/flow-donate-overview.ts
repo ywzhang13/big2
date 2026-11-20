@@ -4,6 +4,7 @@
 //   O2 玩家斗內總覽：一般玩家（自摸總數、11/1 後場次數、已結清／未結清場次數、還欠金額）
 //   O3 老闆帳號：規則上不算斗內，settledMatches／unsettledMatches／due 固定 0，afterCutoffMatches 照實際數字回
 //   O4 權限：一般玩家呼叫 403；帳號格式錯 400
+process.env.MJ_DONATE_WRITES = "1"; // 斗內下架（2026-11-20）後寫入預設停用；這支測的是保留下來的舊斗內流程，打開恢復開關照舊跑（停用的行為見 flow-donate-off）
 import { GET as recordsGet } from "../../app/api/mahjong/records/route";
 import { POST as settlePost } from "../../app/api/mahjong/admin/settlements/route";
 import { GET as overviewGet } from "../../app/api/mahjong/admin/donate-overview/route";

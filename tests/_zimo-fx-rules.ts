@@ -19,9 +19,11 @@ eq([weekOf(T("2026-11-02T00:00:00")).start === NEXT, weekOf(T("2026-10-25T23:59:
 eq(weekOf(Date.parse("2026-11-01T16:00:00Z")).start === NEXT, true, "R1 用 UTC 看是週日 16:00、台北已經是週一 00:00：算下一週");
 const g = resolveZimoFx("u:a", { fx: "storm", until: NEXT });
 eq([zimoFxValid(g, T("2026-11-01T23:59:59")), zimoFxValid(g, T("2026-11-02T00:00:00")) ?? null, zimoFxValid(resolveZimoFx(OWNER_USER_ID, { fx: "thunder", until: null }), T("2099-01-01T00:00:00"))],
-  ["storm", null, "thunder"], "R2 開通到週日 23:59:59 還有效、週一 00:00:00 失效；老闆選雷霆永久有效");
+  ["storm", "storm", "thunder"], "R2 自摸特效全開（2026-11-20）：一般帳號選的風暴不看開通到期，週一 00:00:00 之後照樣有效；老闆選雷霆永久有效");
 eq([resolveZimoFx(OWNER_USER_ID, undefined), resolveZimoFx("u:a", undefined) ?? null, resolveZimoFx("u:a", { fx: "storm", until: null }) ?? null, resolveZimoFx(null, { fx: "storm", until: NEXT }) ?? null, resolveZimoFx("u:a", { fx: "rainbow", until: NEXT }) ?? null],
-  [{ code: "golden", until: null }, { code: "golden", until: null }, { code: "golden", until: null }, null, { code: "golden", until: null }], "R3 老闆或一般帳號沒選、一般帳號選未開通特效、不認得代號＝金色自摸；沒綁帳號仍沒有特效");
+  [{ code: "golden", until: null }, { code: "golden", until: null }, { code: "storm", until: null }, null, { code: "golden", until: null }], "R3 老闆或一般帳號沒選、不認得代號＝金色自摸；自摸特效全開（2026-11-20）後一般帳號沒開通也能用風暴（永久）；沒綁帳號仍沒有特效");
+eq([resolveZimoFx("u:a", { fx: "rulai", until: null }), resolveZimoFx(OWNER_USER_ID, { fx: "rulai", until: null })], [{ code: "golden", until: null }, { code: "rulai", until: null }],
+  "R3 自摸特效全開後，老闆專屬的如來神掌照舊只有老闆能播，一般帳號選到也回金色");
 const row = (userId: string, amount: number, at: string, o: { voided?: boolean; name?: string } = {}) =>
   ({ userId: `uid-${userId}`, name: o.name ?? userId, avatarUrl: `https://pic/${userId}`, amount, donatedAt: T(at), voided: !!o.voided });
 const now = T("2026-10-30T12:00:00");

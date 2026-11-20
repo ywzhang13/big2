@@ -1,3 +1,4 @@
+// 斗內下架（老柯 2026-11-20）：POST 預設停用、回 410 donate_disabled（lib/mahjong/donate/off.ts）；MJ_DONATE_WRITES=1 才照下面原本的說明寫入
 // 斗內後台：斗內紀錄。只有老闆帳號能用。
 //   GET ?scope=week（預設，本週）|all：列出紀錄（含作廢的，作廢的有 voidedAt、voidReason）和本週有效合計
 //   POST { userId, amount, donatedAt, note? }：記一筆打賞（不開通特效、不結清任何場次；同時寫操作紀錄）→ { id, tip }
@@ -5,6 +6,7 @@
 import { fail, ok, readBody, requireOwner } from "@/lib/mahjong/zimoFx/admin";
 import { weekOf } from "@/lib/mahjong/zimoFx/rules";
 import { addTip, lineProfile, listDonations, nowMs } from "@/lib/mahjong/zimoFx/store";
+import { unlessDonateDisabled } from "@/lib/mahjong/donate/off";
 
 export async function GET(request: Request) {
   try {
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export const POST = unlessDonateDisabled(async function POST(request: Request) {
   try {
     const owner = await requireOwner(request);
     if (owner instanceof Response) return owner;
@@ -40,4 +42,4 @@ export async function POST(request: Request) {
     console.error("[mj-admin] donation add", err instanceof Error ? err.message : err);
     return fail(500, "server_error");
   }
-}
+});
