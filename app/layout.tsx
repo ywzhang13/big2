@@ -5,6 +5,11 @@ import { FxBgWarmRoot } from "@/components/mahjong/FxBgWarmRoot";
 export const metadata: Metadata = {
   title: "阿瑋娛樂城",
   description: "多人線上娛樂遊戲 — 大老二、台灣麻將",
+  // 全站「加到主畫面」：圖示和名稱用麻將那張封面；/mahjong 的 layout 會用自己的 manifest 蓋掉這組
+  manifest: "/app.webmanifest",
+  icons: {
+    apple: "/mahjong-app/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
