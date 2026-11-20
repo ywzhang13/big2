@@ -200,16 +200,18 @@ export const allOpen = (): RevealFrame => ({
 /** 本局結算左欄：自己的明細（伺服器的 stats；有就列、沒有就不列），加起來＝本局分數 */
 export function breakdown(st: HandStat): { label: string; pts: number }[] {
   // 老闆 2026-11-19 定案：本局結算左欄一律是墩數（stats 本身，不乘底分）；右欄四家和名牌才是乘過底分的輸贏（scores、playerScores）
-  const items: { label: string; pts: number }[] = [{ label: "墩分", pts: st.rows }];
-  for (const b of st.bonuses) items.push({ label: b.points < 0 ? `被${b.name}` : b.name, pts: b.points });
+  // 老闆 2026-11-20：彩金分放最上面（各墩牌型加分之前）；左欄的「彩金衝三」一律寫「衝三」（比較不會有爭議，牌上的徽章、大字特效、配音照舊叫彩金衝三）
+  const items: { label: string; pts: number }[] = [];
+  // v5 彩金分（老柯 stats.luckyPoints，墩數單位）：拿到的人 +3、其他三家各 −1；舊局／沒有彩金分＝沒有這個欄位或 0，不列。左欄一律是墩數，跟其他行一樣不乘底分
+  if (st.luckyPoints) items.push({ label: "彩金分", pts: st.luckyPoints });
+  items.push({ label: "墩分", pts: st.rows });
+  for (const b of st.bonuses) { const name = b.name.replace("彩金衝三", "衝三"); items.push({ label: b.points < 0 ? `被${name}` : name, pts: b.points }); }
   if (st.guns || st.gunned) {
     const per = SCORING.GUN_PENALTY; // 打槍幾家、被幾家打槍是伺服器給的次數；gunPoints＝(guns−gunned)×每槍墩數
     if (st.guns && st.gunned) { items.push({ label: `打槍 ×${st.guns}`, pts: st.guns * per }); items.push({ label: `被打槍 ×${st.gunned}`, pts: -st.gunned * per }); }
     else items.push({ label: st.guns ? `打槍 ×${st.guns}` : `被打槍 ×${st.gunned}`, pts: st.gunPoints });
   }
   if (st.homeRun || st.homeRunned) items.push({ label: st.homeRun ? "全壘打" : "被全壘打", pts: st.homeRunPoints });
-  // v5 彩金分（老柯 stats.luckyPoints，墩數單位）：拿到的人 +3、其他三家各 −1；舊局／沒有彩金分＝沒有這個欄位或 0，不列。左欄一律是墩數，跟其他行一樣不乘底分
-  if (st.luckyPoints) items.push({ label: "彩金分", pts: st.luckyPoints });
   return items;
 }
 
