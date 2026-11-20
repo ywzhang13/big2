@@ -164,6 +164,8 @@ export default function Home() {
                            hover:border-gold hover:bg-gold/5">
                 加入房間
               </button>
+              {/* 回到總大廳（跟十三支大廳一樣放在最下面）；以前退出房間回到這裡後沒有出口 */}
+              <button onClick={goHome} className="mjl-foot" data-big2-home>返回首頁</button>
             </div>
           ) : screen === "create" ? (
             <div className="flex flex-col gap-4 w-full fade-in">

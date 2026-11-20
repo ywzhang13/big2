@@ -47,7 +47,7 @@ export default function GameOver({
   });
 
   return (
-    <div className="flex flex-col items-center gap-5 p-6 fade-in overflow-y-auto flex-1">
+    <div className="flex flex-col items-center gap-5 p-6 fade-in overflow-y-auto flex-1 max-h-dvh">
       {/* Winner celebration */}
       <div className="text-center">
         <div className="text-5xl mb-2 trophy-bounce">{"\u{1F3C6}"}</div>
@@ -136,12 +136,13 @@ export default function GameOver({
         })}
       </div>
 
-      <div className="flex flex-col gap-3 w-full max-w-sm mt-2">
+      {/* 按鈕列固定在畫面最下面：手機橫向（390 高）牌很多、清單很長，不用捲到底才找得到「回到大廳」；矮螢幕兩顆並排 */}
+      <div className="sticky bottom-0 z-10 flex flex-col gap-3 w-full max-w-sm mt-2 py-3 bg-felt/90 backdrop-blur-sm [@media(max-height:500px)]:flex-row" data-big2-gameover-actions>
         {onPlayAgain && (
           <button
             onClick={iAgreed ? undefined : onPlayAgain}
             disabled={iAgreed}
-            className={`w-full px-8 py-3.5 rounded-2xl font-bold text-lg
+            className={`w-full px-8 py-3.5 rounded-2xl font-bold text-lg [@media(max-height:500px)]:flex-1
                        cursor-pointer active:scale-95 transition-transform
                        ${iAgreed
                          ? "bg-white/10 text-white/60 cursor-not-allowed"
@@ -156,15 +157,15 @@ export default function GameOver({
           </button>
         )}
         <button
-          onClick={onGoHome}
-          className={`px-8 py-3.5 rounded-2xl font-bold text-lg cursor-pointer
+          onClick={onGoHome} data-big2-back-lobby
+          className={`px-8 py-3.5 rounded-2xl font-bold text-lg cursor-pointer [@media(max-height:500px)]:flex-1
                      active:scale-95 transition-transform
                      ${onPlayAgain
                        ? "border-2 border-gold/40 text-gold-light bg-transparent"
                        : "bg-gold text-felt"
                      }`}
         >
-          回首頁
+          回到大廳
         </button>
       </div>
     </div>
