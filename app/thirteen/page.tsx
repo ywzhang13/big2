@@ -20,6 +20,7 @@ import ThReveal from "@/components/thirteen/ThReveal";
 import { ThFinalResult, type MatchStat } from "@/components/thirteen/ThResult";
 import type { ThReveal as Reveal } from "@/components/thirteen/revealTimeline";
 import ThWaiting from "@/components/thirteen/ThWaiting";
+import ThSocial, { type ThSocialPhase } from "@/components/thirteen/ThSocial";
 import { applyFelt, loadFelt } from "@/components/thirteen/feltTheme";
 import { clearLastJoin, confirmView, finalSeen, loadLastJoin, markFinalSeen, revealClock, revealScreen, saveLastJoin, sendConfirm, syncShow, type ConfirmState, type RevealShow } from "@/components/thirteen/roomScreen";
 import { toServerArrangeSec } from "@/components/thirteen/arrangeTime";
@@ -236,6 +237,12 @@ function ThirteenScreens() {
     );
   }
 
+  /** 聊天與互動（小宜〈十三支共用聊天互動 v1〉）：理牌、牌桌、本局結算三個階段都掛，位置由 ThSocial 照階段量 */
+  const social = (phase: ThSocialPhase, hold = false) => (join && view && view.status !== "waiting" && auth.user ? (
+    <ThSocial phase={phase} hold={hold} join={join} account={auth.user.id} guest={!!auth.user.isGuest} players={view.players} hand={view.handNo}
+      revealed={view.phase === "revealed"} />
+  ) : null);
+
   // 亮牌、本局結算、整場總結算（下一局開始發牌了就回理牌畫面）
   const newHandStarted = !!show && !!view && view.status !== "waiting" && view.phase === "arranging" && view.handNo > show.rv.handNo;
   // 非末局亮牌、本局結算確認前或確認後收到解散關房：不再播亮牌、等下一局，直接進下面的關房總結算（審伯必修 2）
@@ -267,6 +274,7 @@ function ThirteenScreens() {
         confirmBy={!show.final && nextHandAt !== null ? nextHandAt - room.clockSkew : null}
         confirmed={!show.final && cv.confirmed} sending={!show.final && cv.sending} error={show.final ? null : cv.error}
         confirmLabel={show.final ? "看總結算" : "確認"}
+        social={show.final ? undefined : (s) => social(s.phase, s.hold)}
         onConfirm={() => {
           if (show.final) { setConfirmedKey(show.key); markFinalSeen(tabStore(), join.roomId); return; }
           void sendConfirm(room.next, show.key, setConfirmSt);
@@ -332,8 +340,9 @@ function ThirteenScreens() {
         <ThArrange key={`${view.handNo}-${arrangeKey}`} cards={me.hand} deadline={view.arrangeDeadline - room.clockSkew - SUBMIT_EARLY_MS} onSubmit={onSubmit}
           rule={handRuleOf(view.scoreRule ?? "v1", view.luckyCard?.rank ?? null)} lucky={view.luckyCard ?? null} />
         {notice && <div className="th-toast" role="alert">{notice}</div>}
+        {social("arrange")}
       </>
     );
   }
-  return <ThTable view={view} now={now} clockSkew={room.clockSkew} />;
+  return <><ThTable view={view} now={now} clockSkew={room.clockSkew} />{social("table")}</>;
 }

@@ -1,0 +1,40 @@
+/* 三款共用的聊天鈕、泡泡、輸入面板（components/social/SocialChatDock.tsx；小宜〈十三支共用聊天互動 v1〉§2～3）。
+   數值沿用麻將 .mjc-*（globals.css），泡泡本身直接用 .mjc-b；聊天室是共用 .scb（social.css）。新加的前綴 .sc- */
+
+/* 聊天鈕：手機 32 高、內距 10、字 13，點擊範圍補到 44 高；桌機 36 高、內距 14、字 14。z 57（泡泡 58、聊天室 59、選單 60） */
+.sc-btn { position: fixed; z-index: 57; display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 32px; padding: 0 10px;
+  border-radius: 999px; color: #f0d68a; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer;
+  background: rgba(8,27,47,.7); border: 1px solid rgba(201,169,110,.55); }
+.sc-btn::before { content: ""; position: absolute; inset: -6px -4px; }
+.sc-btn.d { height: 36px; padding: 0 14px; font-size: 14px; }
+.sc-btn.d::before { inset: -4px; }
+.sc-btn.on { background: rgba(201,169,110,.22); }
+.sc-btn:active { transform: scale(.97); }
+.sc-btn:focus-visible { outline: 2px solid #F0D68A; outline-offset: 2px; }
+@media (hover: hover) { .sc-btn:hover { background: rgba(201,169,110,.16); } }
+
+/* 泡泡：一家一串，貼名牌那一則在 pos 上；up＝往上疊 */
+.sc-stack { position: fixed; z-index: 58; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+.sc-stack.up { flex-direction: column-reverse; }
+.sc-stack.end { align-items: flex-end; }
+.sc-stack.d .mjc-b { max-width: 220px; min-height: 38px; }
+/* 理牌畫面：每則前面一個 22px 的頭像字（名字第一個字） */
+.mjc-b.who { display: flex; align-items: center; gap: 6px; padding-left: 6px; }
+.mjc-b.who i { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.12); border: 1px solid rgba(201,169,110,.6);
+  font: 700 11px/20px sans-serif; font-style: normal; text-align: center; color: #f0d68a; }
+
+/* 輸入面板（放在聊天室下方那一格）：快捷短語一列平分、輸入框＋送出一列。內距 8/10、列間 6 */
+.scb .sc-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: rgba(8,27,47,.6); }
+.scb .sc-panel .ph { display: flex; gap: 6px; }
+.scb .sc-panel .ph button { position: relative; flex: 1 1 0; min-width: 0; height: 34px; padding: 0 4px; border-radius: 10px; font-size: 13px; line-height: 20px;
+  color: #f0d68a; border: 1px solid rgba(201,169,110,.55); background: rgba(255,255,255,.04); white-space: nowrap; }
+.scb .sc-panel .row { display: flex; gap: 6px; margin: 0; }
+.scb .sc-panel input { flex: 1 1 auto; min-width: 0; height: 34px; padding: 0 12px; border-radius: 999px; font-size: 15px; color: #fff;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(201,169,110,.4); }
+.scb .sc-panel input::placeholder { color: rgba(255,255,255,.45); }
+.scb .sc-panel .send { flex: 0 0 auto; height: 34px; padding: 0 12px; border: 0; border-radius: 999px; font-size: 14px; font-weight: 700; color: #0f2a1a;
+  background: linear-gradient(135deg, #C9A96E, #e8c97a); }
+.scb .sc-panel button:disabled { opacity: .4; cursor: default; }
+.scb .sc-panel button:active:not(:disabled) { transform: scale(.97); }
+@media (hover: hover) { .scb .sc-panel .ph button:hover:not(:disabled) { background: rgba(201,169,110,.16); } .scb .sc-panel .send:hover:not(:disabled) { background: linear-gradient(135deg, #d4b57a, #f0d488); } }
+

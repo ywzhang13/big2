@@ -14,7 +14,7 @@ import { useRevealSfx } from "./sfx";
 /** 本局結算確認鈕的倒數（v5 §5） */
 export const CONFIRM_MS = 30_000; // 老柯 4b25124：結算面板出現後 30 秒（＝nextHandAt）沒人按也開下一局
 
-export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy, confirmed, sending = false, error = null, onConfirm, confirmLabel }: {
+export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy, confirmed, sending = false, error = null, onConfirm, confirmLabel, social }: {
   view: ThGameView;
   rv: Reveal;
   startAt: number;
@@ -29,6 +29,8 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
   error?: string | null;
   onConfirm: () => void;
   confirmLabel?: string;
+  /** 聊天與互動（ThSocial）：亮牌中是牌桌（牌型大字播放中 hold），結算面板出現後是 result */
+  social?: (s: { phase: "table" | "result"; hold: boolean }) => React.ReactNode;
 }) {
   const tl = useMemo(() => buildTimeline(rv), [rv]);
   const [now, setNow] = useState(() => Date.now());
@@ -67,6 +69,7 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
         <ThRoundResult rv={rv} names={names} mySeat={view.me?.seat ?? 0} secondsLeft={secondsLeft} confirmed={confirmed} sending={sending} error={error}
           onConfirm={onConfirm} confirmLabel={confirmLabel} ready={ready} />
       )}
+      {social?.({ phase: showPanel ? "result" : "table", hold: !showPanel && t >= 0 && frame.active.length > 0 })}
     </>
   );
 }
