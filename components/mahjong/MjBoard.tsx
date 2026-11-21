@@ -7,16 +7,15 @@ import type { MjPlayer, MjOpponentHand } from "@/hooks/useMahjong";
 import MjTile, { TileMatchContext } from "./MjTile";
 import MjHand from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
-import { DeclareFx, Die, fxClass } from "./MjBoardMobile";
+import { DeclareFx, MjPlate } from "./MjBoardMobile";
+import MjCenterBoard from "./MjCenterBoard";
 import MjClaimFx from "./MjClaimFx";
 import MjClaimBanner from "./MjClaimBanner";
 import { MjMeldArrow } from "./MjMeldArrow";
 import { paceText } from "./paceText";
-import { seatWindChar } from "./seatWind";
 import { tileKey } from "@/lib/mahjong/tiles";
 import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
-import { MjAvatar, MjTingStrip } from "./MjTingStrip";
-import SpectateBadge from "./spectate/SpectateBadge";
+import { MjTingStrip } from "./MjTingStrip";
 import { forbidHint, useChiHint } from "@/lib/mahjong/chiForbid";
 
 export interface MjBoardProps {
@@ -67,69 +66,6 @@ export interface MjBoardProps {
   flowerLabel?: boolean;
 }
 
-/** 已宣告地聽的標示（小宜規格的聽牌標）；pop＝宣告特效期間彈入 */
-function TingTag({ pop }: { pop?: boolean }) {
-  return (
-    <span
-      className={`px-1.5 py-[1px] rounded-full text-[9px] font-black leading-none ${pop ? "mjm-pop" : ""}`}
-      style={{
-        background: "linear-gradient(135deg, #059669, #34d399)",
-        color: "#042f1f",
-        border: "1px solid rgba(167,243,208,0.7)",
-        whiteSpace: "nowrap",
-      }}
-    >
-      聽
-    </span>
-  );
-}
-
-/** 已宣告眼牌的標示（小宜眼牌 v3） */
-function EyeTag({ pop }: { pop?: boolean }) {
-  return (
-    <span
-      className={`px-1.5 py-[1px] rounded-full text-[9px] font-black leading-none ${pop ? "mjm-pop" : ""}`}
-      style={{
-        background: "linear-gradient(135deg, #7c3aed, #c4b5fd)",
-        color: "#2b0f55",
-        border: "1px solid rgba(233,213,255,0.8)",
-        whiteSpace: "nowrap",
-      }}
-    >
-      眼
-    </span>
-  );
-}
-
-/** MIGI（＝地聽）的標示：第一輪宣告眼牌同時成立地聽時，取代「聽」＋「眼」（小宜眼牌 v5：放大加光暈） */
-function MigiTag({ pop }: { pop?: boolean }) {
-  return (
-    <span
-      className={`rounded-full font-black leading-none ${pop ? "mjm-pop" : ""}`}
-      style={{
-        background: "linear-gradient(135deg, #059669, #34d399)",
-        color: "#042f1f",
-        border: "1px solid rgba(209,250,229,0.95)",
-        boxShadow: "0 0 10px rgba(52,211,153,0.55)",
-        fontSize: 11,
-        padding: "3px 7px",
-        letterSpacing: ".06em",
-        fontFamily: '"Chakra Petch", system-ui, sans-serif',
-        whiteSpace: "nowrap",
-      }}
-    >
-      MIGI
-    </span>
-  );
-}
-
-/** 聽／眼標示：地聽＋眼牌＝只顯示 MIGI；只有眼牌＝眼；只有地聽（舊牌局）＝聽 */
-function DeclareTags({ ting, eye, fx }: { ting?: boolean; eye?: boolean; fx?: { both: boolean } }) {
-  if (ting && eye) return <MigiTag pop={!!fx} />;
-  if (eye) return <EyeTag pop={!!fx} />;
-  if (ting) return <TingTag pop={!!fx} />;
-  return null;
-}
 
 /** 眼牌者看到的手牌：橫向(對家)、下家(右)摸進的那張排最前面；上家(左)排最後一張；其餘牌保留 h.hand 原本
  *  的 sortTiles 順序，不會因為排最前面／最後面而被打亂（審伯必修②，2026-11-08 第二次更正） */
@@ -145,7 +81,6 @@ function PlayerPanel({
   player,
   position,
   isCurrent,
-  windChar,
   score,
   dealerConsecutive,
   isTing,
@@ -158,7 +93,6 @@ function PlayerPanel({
   player: MjPlayer | undefined;
   position: "top" | "left" | "right";
   isCurrent: boolean;
-  windChar: string;
   score?: number;
   dealerConsecutive?: number;
   isTing?: boolean;
@@ -188,71 +122,19 @@ function PlayerPanel({
       ${isCurrent ? "" : "opacity-60"}`} data-fx-seat-row={player.seat}>
       {/* 名牌＋花膠囊：對家花在名牌右邊，左右家在名牌下面。
           輪到這家時只放大這一塊：原本整區 scale-105，牌背 18px 變 18.9px，3 倍螢幕上牌和縫各自捨入，縫一寬一窄（老闆 2026-10-21） */}
-      <div className={`flex ${isHorizontal ? "flex-row" : "flex-col"} items-center gap-1 transition-transform duration-300 ${isCurrent ? "scale-105" : ""}`}>
-      {/* Avatar + Name badge */}
-      <div data-fx-seat={player.seat} className={`flex items-center gap-2 px-2 py-1 rounded-xl transition-all duration-300 ${fxClass(fx)}
-        ${isCurrent
-          ? "bg-gradient-to-r from-[#C9A96E]/30 to-[#e8c97a]/20 border border-[#C9A96E]/50 shadow-lg shadow-[#C9A96E]/10"
-          : "bg-black/30 border border-white/10"
-        }`}>
-        <MjAvatar url={player.avatarUrl} size={28} fallback={
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
-          ${isCurrent ? "bg-[#C9A96E] text-[#0f2a1a]" : "bg-white/10 text-white/60"}`}>
-          {windChar}
-        </div>} />
-        <div className="flex flex-col">
-          {(() => {
-            // 標示順序：連N → 聽 → 眼。對家放在名字同一行；左右家換到名字下一行（名牌寬度固定，不被畫面邊緣切掉）
-            const tags = (
-              <>
-                {/* 連N pill — inline, no absolute positioning so it never clips against viewport edges. */}
-                {player.isDealer && !!dealerConsecutive && dealerConsecutive > 0 && (
-                  <span
-                    className="px-1 py-[1px] rounded-full text-[8px] font-black tracking-wider"
-                    style={{
-                      background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
-                      color: "#fff8dc",
-                      border: "1px solid rgba(240,214,138,0.6)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    連{dealerConsecutive}
-                  </span>
-                )}
-                <DeclareTags ting={isTing} eye={isEye} fx={fx} />
-              </>
-            );
-            const name = (
-              // 名字都是一行、不斷行（老闆 2026-10-24）：左右家最寬 80px、對家 76px，中文 7 字、英文 10 個字母放得下，再長結尾才是「…」
-              <span className={`text-[10px] font-bold truncate ${isHorizontal ? "max-w-[76px]" : "max-w-[80px]"} ${isCurrent ? "text-[#f0d68a]" : "text-white/70"}`}>
-                {player.name}
-              </span>
-            );
-            return isHorizontal ? (
-              <div className="flex items-center gap-1">{name}{tags}</div>
-            ) : (
-              <>
-                {name}
-                {(isTing || isEye || (player.isDealer && !!dealerConsecutive)) && (
-                  <div className="flex items-center gap-1 flex-wrap">{tags}</div>
-                )}
-              </>
-            );
-          })()}
-          <span className="text-[8px] text-white/30">
-            {player.tileCount} 張{player.isDealer ? " · 莊" : ""}
-          </span>
-          {score != null && (
-            <span className={`text-[9px] font-bold leading-tight ${
-              score > 0 ? "text-green-400" : score < 0 ? "text-red-400" : "text-white/40"
-            }`}>
-              {score > 0 ? "+" : ""}{score}
-            </span>
-          )}
+      <div className={`flex ${isHorizontal ? "flex-row gap-2" : "flex-col relative"} items-center`} style={{ "--gp-s": 1.5 } as React.CSSProperties}>
+      {/* 名牌＝共用 GamePlate（小宜〈麻將換共用元件 v1〉§2；桌機 1.5 倍）：莊N、聽／眼／MIGI 旗、觀戰掛在名牌上，
+          不放風位、「N 張」、「拉N」（風位和開門在中央看板） */}
+      <MjPlate player={player} rel={position === "top" ? "t" : position === "left" ? "l" : "r"} on={isCurrent} score={score} dealerConsecutive={dealerConsecutive}
+        ting={!!isTing} eye={!!isEye} fx={fx} desk />
+      {isHorizontal ? (
+        <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
+      ) : (
+        // 左右家（小宜 v1 §2-1）：名牌垂直中心對齊海底中線，花牌膠囊掛在名牌正下方 +6、左對齊（有觀戰掛牌再往下讓 6），不跟名牌一起置中
+        <div style={{ position: "absolute", left: 0, top: `calc(100% + ${player.viewerCount ? 18 : 9}px)` }}>
+          <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
         </div>
-      </div>
-      <SpectateBadge desk count={player.viewerCount} />
-      <MjFlowerTag flowers={player.flowers} name={player.name} w={18} h={25} popW={26} popH={35} busy={busy} />
+      )}
       </div>
 
       {/* 眼牌者：這家的手牌翻開，比吃碰槓大（對家 26×35、左右家 22×30 旋轉，牌貼緊、摸到的那張最左／最後＋空一格，不用金框，老闆 2026-11-08）。
@@ -381,86 +263,6 @@ function PlayerPanel({
   );
 }
 
-/** Center wind direction dial */
-function WindDial({
-  currentTurn,
-  mySeat,
-  wallRemaining,
-  doorSeat,
-  dealerSeat,
-  dice,
-}: {
-  currentTurn: number;
-  mySeat: number;
-  wallRemaining: number;
-  doorSeat?: number;
-  dealerSeat: number;
-  dice?: [number, number, number];
-}) {
-  // Position winds relative to player's seat
-  const winds = [0, 1, 2, 3].map((offset) => {
-    const seat = (mySeat + offset) % 4;
-    return {
-      char: seatWindChar(seat, doorSeat, dealerSeat),
-      isActive: seat === currentTurn,
-      isDoor: doorSeat != null && seat === doorSeat,
-      position: offset, // 0=bottom, 1=right, 2=top, 3=left
-    };
-  });
-
-  const posStyle = [
-    { bottom: "2px", left: "50%", transform: "translateX(-50%)" },     // bottom (me)
-    { right: "2px", top: "50%", transform: "translateY(-50%)" },       // right
-    { top: "2px", left: "50%", transform: "translateX(-50%)" },        // top
-    { left: "2px", top: "50%", transform: "translateY(-50%)" },        // left
-  ];
-
-  return (
-    <div className="relative w-[92px] h-[92px] rounded-xl flex items-center justify-center"
-      style={{
-        background: "radial-gradient(circle, rgba(201,169,110,0.08) 0%, rgba(0,0,0,0.3) 100%)",
-        border: "1.5px solid rgba(201,169,110,0.25)",
-        boxShadow: "inset 0 0 12px rgba(0,0,0,0.3)",
-      }}>
-      {/* Remaining count */}
-      <div className="flex flex-col items-center">
-        <span className="text-xl font-bold text-[#f0d68a]" style={{ textShadow: "0 0 8px rgba(240,214,138,0.3)" }}>
-          {wallRemaining}
-        </span>
-        <span className="text-[7px] text-[#C9A96E]/50 tracking-wider">剩餘</span>
-        {/* 骰子：剩餘張數下面一行（只顯示骰子，不寫點數） */}
-        {dice && (
-          <div className="flex items-center gap-[2px] mt-[3px]" data-center-dice>
-            <Die value={dice[0]} size={13} />
-            <Die value={dice[1]} size={13} />
-            <Die value={dice[2]} size={13} />
-          </div>
-        )}
-      </div>
-      {/* Wind markers */}
-      {winds.map((w) => (
-        <div
-          key={w.position}
-          className={`absolute flex items-center gap-[2px] text-[10px] font-bold transition-all duration-300
-            ${w.isActive
-              ? "text-[#f0d68a] scale-110"
-              : w.isDoor
-                ? "text-[#dc2626]"
-                : "text-white/20"
-            }`}
-          style={{
-            ...posStyle[w.position] as React.CSSProperties,
-            ...(w.isActive ? { textShadow: "0 0 6px rgba(240,214,138,0.6)" } : {}),
-            ...(w.isDoor && !w.isActive ? { textShadow: "0 0 6px rgba(220,38,38,0.7)" } : {}),
-          }}
-        >
-          {w.isDoor && <span className="text-[7px] font-black" style={{ color: "#dc2626" }}>門</span>}
-          {w.char}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function MjBoard({
   players,
@@ -549,7 +351,6 @@ export default function MjBoard({
   const migiFx = declareFx.find((f) => f.both);
   const eyeFx = declareFx.find((f) => !f.both);
 
-  const getWindChar = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
   // 選中一張手牌還沒打出：海底和吃碰區同一種牌亮起來
   const [pickKind, setPickKind] = useState<string | null>(null);
   const [chiHint, showChiHint] = useChiHint();
@@ -572,7 +373,6 @@ export default function MjBoard({
           player={top}
           position="top"
           isCurrent={top?.seat === currentTurn}
-          windChar={getWindChar(top?.seat ?? 2)}
           score={top && playerScores ? playerScores[top.seat] : undefined}
             isTing={top != null && tingSeats.includes(top.seat)}
           isEye={top != null && eyeSeats.includes(top.seat)}
@@ -586,13 +386,12 @@ export default function MjBoard({
 
       {/* Middle row: left | table | right */}
       <div className="flex-1 flex items-stretch px-2 min-h-0">
-        {/* Left */}
-        <div className="flex-shrink-0 flex items-center justify-center">
+        {/* Left（左欄左緣 40：外層 px-2 的 8 再加 32，小宜 v1 §2-1） */}
+        <div className="flex-shrink-0 flex items-center justify-center pl-8">
           <PlayerPanel
             player={left}
             position="left"
             isCurrent={left?.seat === currentTurn}
-            windChar={getWindChar(left?.seat ?? 3)}
             score={left && playerScores ? playerScores[left.seat] : undefined}
             isTing={left != null && tingSeats.includes(left.seat)}
             isEye={left != null && eyeSeats.includes(left.seat)}
@@ -677,7 +476,8 @@ export default function MjBoard({
                 {/* Center: wind dial + last discard */}
                 {/* 中間：風盤（剩餘張數＋風位＋骰子同一個框，老闆 2026-10-17）、剛打出的牌在右（一直亮到下一張打出） */}
                 <div className="flex-1 flex flex-row items-center justify-center gap-4 min-w-0">
-                  <WindDial currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} dice={dice} />
+                  {/* 中央看板（小宜 v1 §3）：和手機同一個元件、1.5 倍，拿掉「門」字（桌機頂部本來就有圈局，看板不重複放） */}
+                  <MjCenterBoard className="d" currentTurn={currentTurn} mySeat={mySeat} wallRemaining={wallRemaining} doorSeat={doorSeat} dealerSeat={dealerSeat} dice={dice} />
                   {/* 加槓中的牌：不是打出去的牌，只在中央提示，不進棄牌區 */}
                   {pendingAddKong && (
                     <div className="flex flex-col items-center gap-1">
@@ -835,13 +635,12 @@ export default function MjBoard({
           )}
         </div>
 
-        {/* Right */}
-        <div className="flex-shrink-0 flex items-center justify-center">
+        {/* Right（右欄右緣 40） */}
+        <div className="flex-shrink-0 flex items-center justify-center pr-8">
           <PlayerPanel
             player={right}
             position="right"
             isCurrent={right?.seat === currentTurn}
-            windChar={getWindChar(right?.seat ?? 1)}
             score={right && playerScores ? playerScores[right.seat] : undefined}
             isTing={right != null && tingSeats.includes(right.seat)}
             isEye={right != null && eyeSeats.includes(right.seat)}
@@ -865,42 +664,13 @@ export default function MjBoard({
           {previewWaits.length > 0 ? <MjTingStrip waits={previewWaits} className="dock" testId="preview" /> : eyeWaits.length > 0 && <MjTingStrip waits={eyeWaits} className="dock" testId="dock" />}
           {/* 左右兩邊等寬，吃碰區夾在中間就會置中；左邊放不下時不縮，吃碰區往右讓 */}
           <div className="flex flex-[1_0_0] items-center gap-3">
-          {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變） */}
-          <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} style={{ gap: 12 }} data-fx-seat={mySeat}>
-          {/* Wind avatar */}
-          <MjAvatar url={me?.avatarUrl} size={28} fallback={
-          <div className="w-7 h-7 rounded-full bg-[#C9A96E] text-[#0f2a1a] flex items-center justify-center text-xs font-bold">
-            {getWindChar(mySeat)}
-          </div>} />
-          <span className="text-xs text-[#f0d68a] font-bold">{playerName}</span>
-          {me?.isDealer && (
-            <span className="text-[9px] text-[#C9A96E] bg-[#C9A96E]/15 px-1.5 py-0.5 rounded">
-              莊
-            </span>
-          )}
-          {me?.isDealer && !!dealerConsecutive && dealerConsecutive > 0 && (
-            <span
-              className="px-1.5 py-[1px] rounded-full text-[9px] font-black tracking-wider"
-              style={{
-                background: "linear-gradient(135deg, #dc2626 0%, #C9A96E 100%)",
-                color: "#fff8dc",
-                border: "1px solid rgba(240,214,138,0.6)",
-                boxShadow: "0 0 8px rgba(255,140,0,0.5)",
-              }}
-            >
-              連{dealerConsecutive}·拉{dealerConsecutive}
-            </span>
-          )}
-          <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
-          </span>
-          <SpectateBadge desk count={me?.viewerCount} />
-          {playerScores && mySeat >= 0 && (
-            <span className={`text-[11px] font-bold ${
-              playerScores[mySeat] > 0 ? "text-green-400" :
-              playerScores[mySeat] < 0 ? "text-red-400" : "text-white/40"
-            }`}>
-              {playerScores[mySeat] > 0 ? "+" : ""}{playerScores[mySeat]}
-            </span>
+          {/* 自己的名牌（小宜 v1 §2-1）：共用 GamePlate 1.5 倍，左緣 16、下緣對齊資訊列下緣、往上凸進狀態列 */}
+          {me && (
+            // 1.5 倍；左緣 16（資訊列內距 12＋4）；抵掉資訊列下面的內距，下緣對齊這一列下緣，往上凸進狀態列
+            <div style={{ "--gp-s": 1.5, alignSelf: "flex-end", margin: "-17px 0 -6px 4px", display: "flex" } as React.CSSProperties}>
+              <MjPlate player={{ ...me, name: playerName || me.name }} rel="b" me on={currentTurn === mySeat} score={playerScores && mySeat >= 0 ? playerScores[mySeat] : undefined}
+                dealerConsecutive={dealerConsecutive} ting={isTing} eye={isEye} fx={fxOf(mySeat)} desk />
+            </div>
           )}
           </div>
 

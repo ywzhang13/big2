@@ -39,3 +39,10 @@
 .gp[data-seat=r] .gp-think::after { left: 100%; top: 50%; margin-top: -4px; border-right: 0; border-left-color: #fff; }
 @keyframes gp-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
 @keyframes gp-in { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: scale(1); } }
+/* 2026-11-21 麻將補（小宜〈麻將換共用元件 v1〉§2-2；選填，十三支不用）：輪到這家、跟著排版走、右上角小旗、右下角觀戰 */
+.gp.in-flow { position: relative; flex: 0 0 auto; zoom: var(--gp-s, 1); }
+.gp.on { background: linear-gradient(90deg, rgba(201,169,110,.35), rgba(232,201,122,.18)); border-color: rgba(201,169,110,.6); box-shadow: 0 0 10px rgba(201,169,110,.3); }
+.gp.on .gp-av { background: #C9A96E; color: #0f2a1a; }
+.gp.on .gp-nm { color: #f0d68a; }
+.gp-flag { position: absolute; right: -3px; top: -8px; display: flex; z-index: 2; }
+.gp-view { position: absolute; right: -3px; bottom: -11px; display: flex; z-index: 2; }

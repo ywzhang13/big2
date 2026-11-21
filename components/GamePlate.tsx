@@ -2,14 +2,30 @@
 //   左邊圓頭像（名字第一個字）、右邊兩行（名字、分數）。標記都掛在框外的固定位置，不改變名牌大小：
 //   右下角彈孔（十三支被打槍）、左下角離線（樣式先做好，資料還沒有）、思考中泡泡貼在 bubble 錨點外 6px（朝牌桌中心那一邊）。
 // 錨點（設計說明 §5）：根元素掛 data-fx-seat，量到的範圍一定是 88×38（×放大倍率）；center＝正中心、bubble＝朝牌桌中心那一邊的中點。
-// 樣式前綴 .gp-（gamePlate.css），不借用、不改麻將的 .mjm-*。目前只接十三支；大老二、麻將之後各自一張卡。
+// 樣式前綴 .gp-（gamePlate.css），不借用、不改麻將的 .mjm-*。十三支、麻將在用（麻將 2026-11-21 小宜〈麻將換共用元件 v1〉§2 補選填參數）。
+// 麻將補的都是選填，不給就和原本一樣（十三支不用改）：
+//   on＝輪到這家（整塊金）、fxSeat＝特效錨點改用絕對座位號、flag＝右上角小旗（聽／眼／MIGI）、badge＝第二行分數右邊（莊N）、
+//   viewers＝右下角（觀戰人數）、inFlow＝跟著排版走（不用絕對座標；倍率 --gp-s）
+import type { ReactNode } from "react";
 import "./gamePlate.css";
 
 /** 座位（相對自己）：b 自己、t 對家、l 左家、r 右家——決定思考中泡泡朝哪邊 */
 export type PlateSeat = "b" | "t" | "l" | "r";
 
-export default function GamePlate({ seat, name, score, me = false, offline = false, thinking = false, shot = 0, plateId, className, style, avatarUrl = null }: {
+export default function GamePlate({ seat, name, score, me = false, offline = false, thinking = false, shot = 0, plateId, className, style, avatarUrl = null, on = false, fxSeat, flag, badge, viewers, inFlow = false }: {
   seat: PlateSeat;
+  /** 輪到這家：整塊金色漸層、金框、光暈 */
+  on?: boolean;
+  /** 特效錨點（data-fx-seat）的值：麻將用絕對座位號 0～3；不給＝seat 字母 */
+  fxSeat?: number | string;
+  /** 右上角小旗（往外 3、往上 8） */
+  flag?: ReactNode;
+  /** 第二行分數右邊的小膠囊 */
+  badge?: ReactNode;
+  /** 右下角（往外 3、往下 11）；和十三支彈孔同一個位置 */
+  viewers?: ReactNode;
+  /** 跟著排版走（position: relative），大小乘 --gp-s */
+  inFlow?: boolean;
   name: string;
   /** LINE 大頭照（老闆 2026-11-19）；沒有或載不到就照舊顯示名字第一個字。名牌大小、位置不變 */
   avatarUrl?: string | null;
@@ -29,17 +45,19 @@ export default function GamePlate({ seat, name, score, me = false, offline = fal
 }) {
   const sc = score > 0 ? ["pos", `+${score}`] : score < 0 ? ["neg", `−${-score}`] : ["zero", "0"];
   return (
-    <div className={`gp${me ? " is-me" : ""}${offline ? " is-off" : ""}${className ? ` ${className}` : ""}`} data-seat={seat} data-fx-seat={seat} data-gp-seat={plateId} style={style}>
+    <div className={`gp${me ? " is-me" : ""}${offline ? " is-off" : ""}${on ? " on" : ""}${inFlow ? " in-flow" : ""}${className ? ` ${className}` : ""}`} data-seat={seat} data-fx-seat={fxSeat ?? seat} data-gp-seat={plateId} style={style}>
       <span className="gp-av">{Array.from(name)[0] ?? ""}{avatarUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="gp-pic" src={avatarUrl} alt="" draggable={false} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = "none"; }} />
       )}</span>
       <span className="gp-tx">
         <span className="gp-nm">{name}</span>
-        <span className="gp-l2"><span className={`gp-sc is-${sc[0]}`}>{sc[1]}</span></span>
+        <span className="gp-l2"><span className={`gp-sc is-${sc[0]}`}>{sc[1]}</span>{badge}</span>
       </span>
       {shot > 0 && <span className="gp-hang is-shot" data-gp-shot={shot}><i />−{shot}</span>}
       {offline && <span className="gp-off">離線</span>}
+      {flag && <span className="gp-flag">{flag}</span>}
+      {viewers && <span className="gp-view">{viewers}</span>}
       {thinking && (
         <span className="gp-think" data-gp-thinking={plateId} role="img" aria-label={`${name} 思考中`}>思考中<i>.</i><i>.</i><i>.</i></span>
       )}

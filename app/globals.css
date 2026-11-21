@@ -28,8 +28,8 @@
   --gold-l: #f0d68a;
   --tile-hand-w: clamp(30px, calc((100dvw - env(safe-area-inset-left) - env(safe-area-inset-right) - 64px) / 18), 38px);
   --tile-hand-h: calc(var(--tile-hand-w) * 1.36);
-  --row-top: 38px; /* 左右家版面 2026-10-17：44→38、動作列 46→40，側欄才放得下 17 張 12px 的手牌 */
-  --col-side: 72px;
+  --row-top: 46px; /* 左右家版面 2026-10-17：44→38、動作列 46→40；2026-11-21 換共用名牌（小宜 v1 §2-1）：38→46，對家名牌右上角的旗往上凸 8 */
+  --col-side: 88px; /* 2026-11-21：72→88（共用名牌 88 寬） */
   --row-action: 40px;
   --row-myinfo: 24px;
   position: fixed;
@@ -1725,3 +1725,36 @@ body:has(.zf-l, .mt, .b8L, [data-win-cele]) .mjc-panel { z-index: 66; } /* 胡�
   font-size: max(9px, calc(var(--av) * .5)) !important; line-height: 1; border: 1px solid rgba(226, 199, 111, .8); }
 .mjm-avatar { display: inline-block; flex: 0 0 auto; width: var(--av); height: var(--av); border-radius: 50%; }
 .mjm-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 1px solid rgba(201, 169, 110, .75); }
+
+/* ===== 麻將換共用名牌＋中央看板（小宜〈麻將換共用元件 v1〉§2、§3，2026-11-21） ===== */
+/* 名牌位置：對家下緣貼這一列底（y 8，右上角的旗往上凸 8 不被切）；自己的名牌下緣在資訊列下緣上面 6、往上凸 20 進動作列 */
+.mjm-top .gp { align-self: flex-end; }
+.mjm-me-l { gap: 8px; align-self: stretch; } /* 這一格和資訊列一樣高（24），名牌才會往上凸、不把整列撐高 */
+.mjm-me-l .gp { align-self: flex-end; margin-bottom: 6px; }
+/* 左右家：名牌垂直中心對齊海底中線，花牌膠囊在名牌正下方 +6、左對齊（有觀戰掛牌時再往下讓 6），不跟名牌一起置中 */
+.mjm-side .sideplate { position: relative; }
+.mjm-side .sideplate > .gp + * { position: absolute; left: 0; top: calc(50% + 19px + 6px); }
+.mjm-side .sideplate > .gp:has(.gp-view) + * { top: calc(50% + 19px + 12px); }
+.mjm-me .dock { left: 104px; } /* 聽牌剩張條：名牌右緣 +8 */
+/* 名牌上的標記：莊N（第二行分數右邊）、右上角旗（聽／眼／MIGI 13 高）、右下角觀戰 */
+.mj-gp-dl { height: 12px; padding: 0 4px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 8px; font-weight: 900; line-height: 1;
+  background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; border: 1px solid rgba(240,214,138,.6); box-sizing: border-box; }
+.gp-flag .mjm-tag { height: 13px; box-sizing: border-box; display: inline-flex; align-items: center; padding: 0 5px; font-size: 9px; line-height: 1; border-radius: 999px; }
+.gp-flag .mjm-tag.migi { font-size: 9px; padding: 0 5px; letter-spacing: .04em; }
+.gp .gp-view .spx-badge { height: 13px; box-sizing: border-box; margin: 0; gap: 2px; padding: 0 5px; border-radius: 999px; font-size: 9px; background: rgba(15,20,12,.92); border: 1px solid rgba(201,169,110,.6); color: #f0d68a; } /* 深底金框膠囊（小宜 v1 §2-2） */
+.gp .gp-view .spx-badge svg { width: 9px; height: 9px; }
+.gp.mjm-declare { border-radius: 10px; }
+/* 中央看板：104×92，四邊 16×16 格放風位（flex 置中），中間剩餘、圈局、骰子；桌機 1.5 倍 */
+.mj-cb { position: relative; box-sizing: border-box; flex: 0 0 auto; width: 104px; height: 92px; border-radius: 12px; zoom: var(--cb-s, 1);
+  background: radial-gradient(circle, rgba(201,169,110,.08), rgba(0,0,0,.3)); border: 1.5px solid rgba(201,169,110,.25); box-shadow: inset 0 0 12px rgba(0,0,0,.35);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.mj-cb .big { font: 800 20px/1 "Chakra Petch", system-ui, sans-serif; color: #f0d68a; text-shadow: 0 0 8px rgba(240,214,138,.3); font-variant-numeric: tabular-nums; }
+.mj-cb .rnd { font-size: 9px; font-weight: 700; line-height: 1.2; color: rgba(255,255,255,.55); white-space: nowrap; }
+.mj-cb .dice { display: flex; gap: 2px; }
+.mj-cb .w { position: absolute; width: 16px; height: 16px; box-sizing: border-box; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; line-height: 1; color: rgba(255,255,255,.28); transition: color .2s, scale .2s; }
+.mj-cb .w.b { bottom: 3px; left: 50%; translate: -50% 0; } .mj-cb .w.t { top: 3px; left: 50%; translate: -50% 0; }
+.mj-cb .w.l { left: 3px; top: 50%; translate: 0 -50%; } .mj-cb .w.r { right: 3px; top: 50%; translate: 0 -50%; }
+.mj-cb .w.door { box-shadow: 0 0 0 1px #dc2626; color: #f3ead2; }
+.mj-cb .w.turn { color: #f0d68a; text-shadow: 0 0 6px rgba(240,214,138,.85); scale: 1.15; }
+.mj-cb.d { --cb-s: 1.5; }

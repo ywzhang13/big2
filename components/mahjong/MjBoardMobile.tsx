@@ -18,11 +18,12 @@ import { SlowDrawTile } from "./MjHand";
 import MjFlowerTag from "./MjFlowerTag";
 import MjClaimFx from "./MjClaimFx";
 import MjClaimBanner from "./MjClaimBanner";
-import { seatWindChar } from "./seatWind";
 import { tileKey } from "@/lib/mahjong/tiles";
 import { discardTingOptions, waitsLeft } from "@/lib/mahjong/tingInfo";
-import { MjAvatar, MjTingStrip } from "./MjTingStrip";
+import { MjTingStrip } from "./MjTingStrip";
 import SpectateBadge from "./spectate/SpectateBadge";
+import GamePlate, { type PlateSeat } from "@/components/GamePlate";
+import MjCenterBoard from "./MjCenterBoard";
 
 interface MjBoardMobileProps extends MjBoardProps {
   roomCode: string;
@@ -33,31 +34,6 @@ interface MjBoardMobileProps extends MjBoardProps {
   /** 觀戰（老馬 2026-10-30）：觀戰者的選單寫「離開觀戰」；被觀戰的玩家選單多一列「觀戰管理」 */
   leaveLabel?: string;
   spectateMenu?: { count: number; onOpen: () => void };
-}
-
-function scoreClass(score: number) {
-  return score > 0 ? "pos" : score < 0 ? "neg" : "zero";
-}
-
-function Score({ score }: { score?: number }) {
-  if (score == null) return null;
-  return (
-    <span className={`mjm-sc ${scoreClass(score)}`}>
-      {score > 0 ? "+" : ""}
-      {score}
-    </span>
-  );
-}
-
-/** short＝左右家名牌（寬度固定）：連莊只顯示數字，「莊2」＝連 2 */
-function DealerTag({ player, consecutive, withLa, short }: { player: MjPlayer; consecutive?: number; withLa?: boolean; short?: boolean }) {
-  if (!player.isDealer) return null;
-  const n = consecutive ?? 0;
-  return (
-    <span className="mjm-tag dealer">
-      莊{n > 0 ? (short ? n : ` 連${n}${withLa ? `·拉${n}` : ""}`) : ""}
-    </span>
-  );
 }
 
 /** 吃碰槓（花改成 MjFlowerTag 收合）。暗槓：自己看得到牌面，別家全部蓋牌（我眼牌時 reveal＝翻開）。
@@ -133,6 +109,30 @@ function DeclareTags({ ting, eye, fx }: { ting: boolean; eye: boolean; fx?: { bo
   if (ting && eye) return <span className={`mjm-tag migi ${fx ? "pop" : ""}`}>MIGI</span>;
   if (eye) return <EyeTag on pop={!!fx} />;
   return <TingTag on={ting} pop={!!fx} />;
+}
+
+/** 名牌上的莊家膠囊（小宜 v1 §2-2：第二行分數右邊，「莊」或「莊2」；連 N 一定拉 N，不另外寫） */
+export function DealerBadge({ on, consecutive }: { on: boolean; consecutive?: number }) {
+  if (!on) return null;
+  const n = consecutive ?? 0;
+  return <span className="mj-gp-dl" data-plate-dealer={n}>莊{n > 0 ? n : ""}</span>;
+}
+
+/** 麻將的名牌＝三款共用的 GamePlate（小宜〈麻將換共用元件 v1〉§2）：特效錨點用絕對座位號（fxSeat）；
+ *  右上角小旗＝聽／眼／MIGI（宣告時彈出）、第二行＝莊N、右下角＝觀戰人數、輪到這家整塊金；跟著排版走（in-flow）。
+ *  不放風位、開門（搬到中央看板）、其他家的「N 張」、「拉N」 */
+export function MjPlate({ player, rel, me = false, on, score, dealerConsecutive, ting, eye, fx, desk = false, offline = false }: {
+  player: MjPlayer; rel: PlateSeat; me?: boolean; on: boolean; score?: number; dealerConsecutive?: number; ting: boolean; eye: boolean; fx?: { both: boolean }; desk?: boolean;
+  /** 離線：左下角「離線」、頭像和字變灰（小宜 v1 §2-2：後端有斷線資料時才會亮，樣式先做；目前牌桌沒有傳） */
+  offline?: boolean;
+}) {
+  return (
+    <GamePlate seat={rel} fxSeat={player.seat} plateId={player.seat} name={player.name} avatarUrl={player.avatarUrl ?? null} score={score ?? 0} me={me} on={on} inFlow offline={offline}
+      className={fxClass(fx) || undefined}
+      flag={ting || eye ? <DeclareTags ting={ting} eye={eye} fx={fx} /> : undefined}
+      badge={<DealerBadge on={player.isDealer} consecutive={dealerConsecutive} />}
+      viewers={player.viewerCount ? <SpectateBadge count={player.viewerCount} desk={desk} /> : undefined} />
+  );
 }
 
 /** 名牌宣告特效：牌桌中央的字飛到名牌時（--fx-arrive），名牌亮一下、標示才彈出來（桌機共用） */
@@ -220,14 +220,12 @@ function TopBacks({ count, drew }: { count: number; drew: boolean }) {
 function SidePanel({
   player,
   isCurrent,
-  isDoor,
   score,
   dealerConsecutive,
   isTing,
   isEye,
   fx,
   opponent,
-  windChar,
   side,
   busy,
   mySeat,
@@ -236,8 +234,6 @@ function SidePanel({
   side: "left" | "right";
   player: MjPlayer | undefined;
   isCurrent: boolean;
-  isDoor: boolean;
-  windChar: string;
   score?: number;
   dealerConsecutive?: number;
   isTing: boolean;
@@ -249,28 +245,14 @@ function SidePanel({
   drew: boolean;
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
-  const plate = (
-    <div className={`mjm-plate mjm-plate-v ${isCurrent ? "on" : ""} ${fxClass(fx)}`} data-fx-seat={player.seat}>
-      {/* 名牌固定大小（88×54，窄螢幕 80×54）：風位＋分數一行／名字獨立一行、不斷行（中文 7 字、英文 10 個字母都放得下，再長結尾才是「…」）／標示一行（不換行），
-          名字或標示變多也不會把名牌撐大（老闆 2026-10-24：名牌留在左右兩側、海底左右縮窄） */}
-      <div className="l1">
-        <MjAvatar url={player.avatarUrl} size={16} fallback={<span className={`mjm-wind ${isDoor ? "door" : ""}`}>{windChar}</span>} />
-        <Score score={score} />
-      </div>
-      <span className="mjm-nm">{player.name}</span>
-      <div className="l2">
-        <DealerTag player={player} consecutive={dealerConsecutive} short />
-        <DeclareTags ting={isTing} eye={isEye} fx={fx} />
-      </div>
-    </div>
-  );
+  // 名牌＝共用 GamePlate 88×38（小宜 v1 §2-1：垂直中心對齊海底中線，花牌膠囊在名牌下方 +6、觀戰掛牌在名牌右下角）
+  const plate = <MjPlate player={player} rel={side === "left" ? "l" : "r"} on={isCurrent} score={score} dealerConsecutive={dealerConsecutive} ting={isTing} eye={isEye} fx={fx} />;
   // 吃碰區 v2：由外往內＝名牌（下面接花膠囊）→ 手牌欄（12×16）→ 吃碰槓（17×23、轉向、靠海底）。
   // 我眼牌時牌背翻成牌面、暗槓翻開，吃碰槓縮成 10×14（翻開的手牌要比吃碰牌大）；吃碰欄有最小寬度，縮小時版面不跳（左右家版面 2026-10-17）
   return (
     <div className={`mjm-side ${side} handside`}>
       <div className="sideplate">
         {plate}
-        <SpectateBadge count={player.viewerCount} />
         <MjFlowerTag flowers={player.flowers} name={player.name} w={12} h={16} popW={20} popH={27} busy={busy} />
       </div>
       <SideHand count={player.tileCount} h={opponent} drew={drew} />
@@ -404,7 +386,6 @@ export default function MjBoardMobile({
   const left = seatPlayer(3);
   const right = seatPlayer(1);
   const me = players.find((p) => p.seat === mySeat);
-  const windOf = (seat: number) => seatWindChar(seat, doorSeat, dealerSeat);
   const nameOf = (seat: number) => players.find((p) => p.seat === seat)?.name ?? "";
   const scoreOf = (p?: MjPlayer) => (p && playerScores ? playerScores[p.seat] : undefined);
 
@@ -516,14 +497,8 @@ export default function MjBoardMobile({
       <div className="mjm-top" data-fx-seat-row={top?.seat}>
         {top && (
           <>
-            <div className={`mjm-plate ${top.seat === currentTurn ? "on" : ""} ${fxClass(fxOf(top.seat))}`} data-fx-seat={top.seat}>
-              <MjAvatar url={top.avatarUrl} size={18} fallback={<span className={`mjm-wind ${doorSeat === top.seat ? "door" : ""}`}>{windOf(top.seat)}</span>} />
-              <span className="mjm-nm">{top.name}</span>
-              <DealerTag player={top} consecutive={dealerConsecutive} />
-              <DeclareTags ting={tingSeats.includes(top.seat)} eye={eyeSeats.includes(top.seat)} fx={fxOf(top.seat)} />
-              <Score score={scoreOf(top)} />
-              <SpectateBadge count={top.viewerCount} />
-            </div>
+            <MjPlate player={top} rel="t" on={top.seat === currentTurn} score={scoreOf(top)} dealerConsecutive={dealerConsecutive}
+              ting={tingSeats.includes(top.seat)} eye={eyeSeats.includes(top.seat)} fx={fxOf(top.seat)} />
             <MjFlowerTag flowers={top.flowers} name={top.name} w={12} h={16} popW={20} popH={27} busy={flowerBusy} />
             {oppOf(top.seat) ? (
               <>
@@ -548,7 +523,6 @@ export default function MjBoardMobile({
           side="left"
           player={left}
           isCurrent={left?.seat === currentTurn}
-          isDoor={left != null && doorSeat === left.seat}
           score={scoreOf(left)}
           dealerConsecutive={dealerConsecutive}
           isTing={left != null && tingSeats.includes(left.seat)}
@@ -556,7 +530,6 @@ export default function MjBoardMobile({
           fx={fxOf(left?.seat)}
           opponent={oppOf(left?.seat)}
           busy={flowerBusy}
-          windChar={left ? windOf(left.seat) : ""}
           drew={left != null && left.seat === drawnSeat}
         />
 
@@ -572,18 +545,8 @@ export default function MjBoardMobile({
             <VerticalDiscards tiles={left?.discards ?? []} side="left" />
             {/* 中間：剩餘張數＋風圈＋骰子同一個框（老闆 2026-10-17），剛打出的牌在右（一直亮到下一張打出） */}
             <div className="mjm-center">
-              <div className="mjm-info">
-                <span className="big">{wallRemaining}</span>
-                <span className="lab">剩餘</span>
-                {roundLabel && <span className="rnd">{roundLabel}</span>}
-                {dice && (
-                  <span className="dice" data-center-dice>
-                    <Die value={dice[0]} size={10} />
-                    <Die value={dice[1]} size={10} />
-                    <Die value={dice[2]} size={10} />
-                  </span>
-                )}
-              </div>
+              {/* 中央看板（小宜 v1 §3）：四邊風位（開門紅框、輪到誰金字放大）、剩餘張數、圈局、骰子 */}
+              <MjCenterBoard wallRemaining={wallRemaining} roundLabel={roundLabel} dice={dice} mySeat={mySeat} doorSeat={doorSeat} dealerSeat={dealerSeat} currentTurn={currentTurn} />
               {pendingAddKong ? (
                 <div className="mjm-focus alert">
                   <div className="tile"><MjTile tile={pendingAddKong.tile} width={30} height={41} /></div>
@@ -626,7 +589,6 @@ export default function MjBoardMobile({
           side="right"
           player={right}
           isCurrent={right?.seat === currentTurn}
-          isDoor={right != null && doorSeat === right.seat}
           score={scoreOf(right)}
           dealerConsecutive={dealerConsecutive}
           isTing={right != null && tingSeats.includes(right.seat)}
@@ -634,7 +596,6 @@ export default function MjBoardMobile({
           fx={fxOf(right?.seat)}
           opponent={oppOf(right?.seat)}
           busy={flowerBusy}
-          windChar={right ? windOf(right.seat) : ""}
           drew={right != null && right.seat === drawnSeat}
         />
       </div>
@@ -681,15 +642,9 @@ export default function MjBoardMobile({
         <div className="mjm-me-info">
           {/* 左右兩邊等寬，吃碰區夾在中間就會置中；左邊放不下時不縮，吃碰區往右讓 */}
           <div className="mjm-me-l">
-            {/* 風位＋名字＋標示包一層當宣告特效的錨點（外觀不變，分數留在外面） */}
-            <span className={`mjm-me-who ${fxClass(fxOf(mySeat))}`} data-fx-seat={mySeat}>
-              <MjAvatar url={me?.avatarUrl} size={18} fallback={<span className={`mjm-wind ${doorSeat === mySeat ? "door" : ""}`}>{windOf(mySeat)}</span>} />
-              <span className="mjm-nm">{playerName}</span>
-              {me && <DealerTag player={me} consecutive={dealerConsecutive} withLa />}
-              <DeclareTags ting={isTing} eye={isEye} fx={fxOf(mySeat)} />
-            </span>
-            <Score score={scoreOf(me)} />
-            <SpectateBadge count={me?.viewerCount} />
+            {/* 自己的名牌（小宜 v1 §2-1）：下緣在這一列下緣上面 6，往上凸 20 進動作列；名牌 → 花牌膠囊（+8） */}
+            {me && <MjPlate player={{ ...me, name: playerName || me.name }} rel="b" me on={currentTurn === mySeat} score={scoreOf(me)} dealerConsecutive={dealerConsecutive}
+              ting={isTing} eye={isEye} fx={fxOf(mySeat)} />}
             {me && <MjFlowerTag flowers={me.flowers} name={me.name} w={14} h={19} popW={20} popH={27} busy={flowerBusy} />}
           </div>
           {me && <Melds revealed={me.revealed} w={14} h={19} mine seat={mySeat} mySeat={mySeat} />}

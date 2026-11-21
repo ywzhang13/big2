@@ -155,10 +155,10 @@ export default function MjChat({
   }, [open, desk]);
   const inSlot = !!slot && slot.isConnected;
 
-  // 底板位置：手機在左下（自己資訊列上方，不蓋手牌）；桌機在聊天室側欄底部（inSlot，正常版面，不用量）。鍵盤出現時貼著鍵盤上緣
+  // 底板位置（2026-11-21 自己的名牌換成共用 GamePlate：.gp[data-seat="b"]）：手機在左下（自己資訊列上方，不蓋手牌）；桌機在聊天室側欄底部（inSlot，正常版面，不用量）。鍵盤出現時貼著鍵盤上緣
   const placePanel = useCallback(() => {
     if (inSlot) { panelPosRef.current = null; place(); return; }
-    const me = rectOf(desk ? '[data-fx-seat].mjm-me-who' : ".mjm-me");
+    const me = rectOf(desk ? '.gp[data-seat="b"][data-fx-seat]' : ".mjm-me");
     if (!me) return;
     const vv = window.visualViewport;
     const vh = window.innerHeight;
@@ -366,7 +366,7 @@ function ChatStatus({ desk }: { desk: boolean }) {
   const show = st.sending || !!st.failed || !!st.note;
   useLayoutEffect(() => {
     if (!show) return;
-    const btn = rectOf("[data-chat-btn]") ?? rectOf('[data-fx-seat].mjm-me-who');
+    const btn = rectOf("[data-chat-btn]") ?? rectOf('.gp[data-seat="b"][data-fx-seat]');
     // 聊天鈕左邊、同一列
     setPos(ref.current, btn ? { right: window.innerWidth - btn.left + 8, top: (btn.top + btn.bottom) / 2 } : null);
   }, [show, desk, st.note?.text]);
