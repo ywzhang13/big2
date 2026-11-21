@@ -53,6 +53,8 @@ interface MjResultMobileProps {
   dealerConsecutive?: number;
   /** 總積分榜標題下那一行（例：「4 圈・底 100 台 20」） */
   roomLine?: string;
+  /** 整場打完一打開先看哪一頁（預設最後一局；測試用 "rank" 直接看總積分榜） */
+  initialFinalTab?: "last" | "rank";
 }
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");
@@ -97,6 +99,7 @@ export default function MjResultMobile({
   dealerSeat,
   dealerConsecutive = 0,
   roomLine,
+  initialFinalTab = "last",
 }: MjResultMobileProps) {
   const isDraw = winner.seat < 0;
   const flowerName = winner.score.fans.find((f) => FLOWER_WIN_NAMES.includes(f.name))?.name;
@@ -125,10 +128,16 @@ export default function MjResultMobile({
   const readyCount = players.filter((p) => nextGameReady?.includes(p.id)).length;
   const waiting = players.filter((p) => !nextGameReady?.includes(p.id)).map((p) => (p.id === myId ? "你" : p.name));
   const leaveLabel = spectator ? "離開觀戰" : gameOver ? "回大廳" : "離開";
+  // 整場打完（老闆 2026-11-22「回大廳用以前的方式呈現，看得到最後一把的手牌胡什麼」）：分頁「最後一局／總積分榜」，預設最後一局
+  const [finalTab, setFinalTab] = useState<"last" | "rank">(initialFinalTab);
+  const finalTabs = gameOver && playerScores ? [
+    { key: "last", label: "最後一局", on: finalTab === "last", onClick: () => setFinalTab("last"), attrs: { "data-mj-final-tab": "last" } as const },
+    { key: "rank", label: "總積分榜", on: finalTab === "rank", onClick: () => setFinalTab("rank"), attrs: { "data-mj-final-tab": "rank" } as const },
+  ] : undefined;
   const bySeat = [...players].sort((a, b) => a.seat - b.seat);
 
   // ---- 整場打完：總積分榜（高分在前），只有回大廳 ----
-  if (gameOver && playerScores) {
+  if (gameOver && playerScores && finalTab === "rank") {
     const ranking = [...players].sort((a, b) => playerScores[b.seat] - playerScores[a.seat]);
     const rows: GrRow[] = ranking.map((p, i) => ({
       key: p.seat, rank: i, name: p.name, me: !spectator && p.seat === mySeat, delta: playerScores[p.seat],
@@ -144,7 +153,7 @@ export default function MjResultMobile({
     return (
       <>
         <div ref={fitRef} aria-hidden style={{ position: "fixed", inset: 0, visibility: "hidden", pointerEvents: "none" }} />
-        <GameResultFrame title="總積分榜" subs={roomLine ? [roomLine] : undefined} rows={rows} scaleVar={String(z)}
+        <GameResultFrame tabs={finalTabs} title="總積分榜" subs={roomLine ? [roomLine] : undefined} rows={rows} scaleVar={String(z)}
           primary={{ label: leaveLabel, onClick: onLeave, attrs: { "data-mj-result-leave": "" } }} attrs={{ "data-mj-result": "final" }} />
       </>
     );
@@ -233,6 +242,7 @@ export default function MjResultMobile({
     <>
       <div ref={fitRef} aria-hidden style={{ position: "fixed", inset: 0, visibility: "hidden", pointerEvents: "none" }} />
       <GameResultFrame
+        tabs={finalTabs}
         title={title}
         titleTone={isDraw ? "draw" : undefined}
         subs={subs}
@@ -252,7 +262,7 @@ export default function MjResultMobile({
           ? { label: iAmReady ? "已同意" : sending ? "送出中…" : "下一局", disabled: iAmReady || sending, onClick: () => void pressNext(), attrs: { "data-mj-result-next": "" } }
           : { label: leaveLabel, onClick: onLeave, attrs: { "data-mj-result-leave": "" } }}
         scaleVar={String(z)}
-        attrs={{ "data-mj-result": isDraw ? "draw" : "hand" }}
+        attrs={{ "data-mj-result": isDraw ? "draw" : "hand", ...(finalTabs ? { "data-mj-final": "last" } : {}) }}
       />
     </>
   );

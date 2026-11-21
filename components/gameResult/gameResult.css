@@ -13,6 +13,11 @@
 .gr .gr-tool { position: relative; height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #f0d68a; background: rgba(255,255,255,.06);
   border: 1px solid rgba(201,169,110,.45); white-space: nowrap; }
 .gr-tool::after { content: ""; position: absolute; inset: -8px -4px; } /* 可按範圍上下各多 8 */
+/* 左欄最上面的分頁（麻將整場打完：最後一局／總積分榜）：膠囊兩段，選中金底 */
+.gr-tabs { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 4px; border-radius: 999px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,169,110,.45); }
+.gr .gr-tabs button { position: relative; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.75); background: none; border: 0; white-space: nowrap; cursor: pointer; }
+.gr .gr-tabs button::after { content: ""; position: absolute; inset: -8px -1px; } /* 可按範圍上下各多 8 */
+.gr .gr-tabs button.on { background: linear-gradient(135deg, #C9A96E, #e8c97a); color: #0f2a1a; }
 .gr .gr-tool:hover { background: rgba(255,255,255,.12); } .gr .gr-tool:active { transform: scale(.96); }
 .gr-items { box-sizing: border-box; width: 100%; padding: 7px 10px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(201,169,110,.3); font-size: 12px; line-height: 1.5; }
 .gr-item { display: flex; justify-content: space-between; gap: 10px; }

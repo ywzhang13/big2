@@ -75,7 +75,7 @@ const seatRow = (h: string, seat: number) => h.slice(h.indexOf(`data-mj-result-s
   ok(/class="gr-title">七搶一</.test(h) && /<span class="n">七搶一<\/span><b class="v plain">8 台<\/b>/.test(h), "M6 七搶一：標題、「七搶一 8 台」");
 }
 {
-  const h = R({ winner: win(0, [["門清", 1]]), isZimo: false, gameOver: true, roomLine: "4 圈・底 100 台 20", handStats: { wins: [3, 1, 1, 0], dealIns: [0, 1, 2, 1], selfDraws: [1, 0, 1, 0] }, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  const h = R({ initialFinalTab: "rank", winner: win(0, [["門清", 1]]), isZimo: false, gameOver: true, roomLine: "4 圈・底 100 台 20", handStats: { wins: [3, 1, 1, 0], dealIns: [0, 1, 2, 1], selfDraws: [1, 0, 1, 0] }, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
   ok(/class="gr-title">總積分榜</.test(h) && /gr-sub">4 圈・底 100 台 20</.test(h) && /gr-rank r0">1<\/span><span class="gr-fname">阿美/.test(h) && /gr-rank r3">4<\/span><span class="gr-fname">老王/.test(h),
     "M7a 總積分榜：「4 圈・底 100 台 20」、照總分排名");
   ok(count(h, /class="gr-btn/g) === 1 && /data-mj-result-leave="">回大廳/.test(h) && !/同意|還在等|看牌庫/.test(h) && /data-hand-stat="0">胡<b>2<\/b>/.test(h), "M7b 只有「回大廳」，沒有同意、還在等、看牌庫；胡／放槍／自摸（胡 3 次裡 1 次是自摸 → 胡顯示 2，老闆 2026-11-22 自摸不算進胡）");
@@ -97,11 +97,37 @@ const seatRow = (h: string, seat: number) => h.slice(h.indexOf(`data-mj-result-s
   hand([W(0, 2)]);                        // 阿美胡、座位 2 放槍
   hand([W(0, 3), W(1, 3), W(2, 3)]);      // 一炮三響：座位 3 放槍，0、1、2 都胡
   const hs = s.handStats!;
-  const h = R({ winner: win(0, [["門清", 1]]), isZimo: false, gameOver: true, handStats: hs, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  const h = R({ initialFinalTab: "rank", winner: win(0, [["門清", 1]]), isZimo: false, gameOver: true, handStats: hs, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
   const rowOf = (seat: number) => { const a = h.indexOf(`data-mj-result-seat="${seat}"`), b = h.indexOf("data-mj-result-seat=", a + 1); return h.slice(a, b < 0 ? undefined : b); }; // 總積分榜照總分排，不是照座位
   const cell = (seat: number, label: string) => (rowOf(seat).match(new RegExp(`>${label}<b>(\\d+)</b>`)) ?? [])[1];
   ok(cell(0, "胡") === "2" && cell(0, "自摸") === "1" && cell(1, "胡") === "1" && cell(2, "胡") === "1" && cell(3, "放槍") === "1" && cell(2, "放槍") === "1",
     `M7c 一場裡阿美自摸 1、放槍胡 2 → 總積分榜阿美「胡 2、自摸 1」；一炮三響的另外兩家各胡 1；放槍照舊（實際：${[0, 1, 2, 3].map((x) => `座位${x} 胡${cell(x, "胡")} 放槍${cell(x, "放槍")} 自摸${cell(x, "自摸")}`).join("、")}）`);
+}
+
+// M9 老闆 2026-11-22「回大廳用以前的方式呈現，看得到最後一把的手牌胡什麼」：整場打完預設先看「最後一局」（台數明細、四家攤牌、輸贏），
+// 分頁切到「總積分榜」；按鈕只有「回大廳」（觀戰者「離開觀戰」）；流局、一炮多響、自摸當最後一局都照每局結算畫
+{
+  const over = { gameOver: true, roomLine: "4 圈・底 100 台 20", handStats: { wins: [1, 0, 0, 0], dealIns: [0, 1, 0, 0], selfDraws: [0, 0, 0, 0] } };
+  const tabs = (h: string) => /class="gr-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" class="on" data-mj-final-tab="last">最後一局<\/button><button type="button" role="tab" aria-selected="false" data-mj-final-tab="rank">總積分榜<\/button><\/div>/.test(h);
+  const onlyLeave = (h: string, label: string) => count(h, /class="gr-btn/g) === 1 && new RegExp(`data-mj-result-leave="">${label}<`).test(h) && !/下一局|還在等|同意 \d\/4/.test(h);
+  const h = R({ ...over, winner: win(0, [["門清", 1], ["莊家", 1]]), isZimo: false, fromName: "阿德", settlement: { deltas: [2, -2, 0, 0], reason: "win", fanTotal: 2, paymentPerPlayer: 2 } });
+  ok(tabs(h) && /data-mj-result="hand" data-mj-final="last"/.test(h) && /class="gr-title">胡</.test(h) && /mj-gr-from">阿德 放槍</.test(h)
+    && /<span class="n">共<\/span><b class="v plain">2 台<\/b>/.test(h) && count(h, /data-mj-result-seat=/g) === 4 && count(h, /class="mj-gr-body"/g) === 4 && /gr-row me win"/.test(h) && /累計/.test(h),
+    "M9a 整場打完預設「最後一局」：分頁兩個（最後一局選中）、誰胡誰放槍、台數明細、四家攤牌和輸贏、累計");
+  ok(onlyLeave(h, "回大廳") && !/總積分榜<\/div>/.test(h), "M9b 最後一局那頁只有「回大廳」，沒有下一局、同意、還在等");
+  const sp = R({ ...over, spectator: true, myId: "", winner: win(0, [["門清", 1]]), isZimo: false, fromName: "阿德", settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  ok(tabs(sp) && onlyLeave(sp, "離開觀戰") && !/gr-row me/.test(sp), "M9c 觀戰者：一樣兩個分頁、最後一局，按鈕「離開觀戰」");
+  const dr = R({ ...over, winner: { seat: -1, name: "", score: { fans: [], totalFan: 0 }, allHands: hands }, isZimo: false, settlement: { deltas: [0, 0, 0, 0], reason: "draw", fanTotal: 0, paymentPerPlayer: 0 } });
+  ok(tabs(dr) && /class="gr-title draw">流局</.test(dr) && count(dr, /class="mj-gr-body"/g) === 4 && onlyLeave(dr, "回大廳"), "M9d 最後一局是流局：灰字流局、四家攤牌、回大廳");
+  const mu = R({ ...over, winner: win(1, [["門清", 1]]), winners: [win(1, [["門清", 1]]), win(3, [["平胡", 1]])], isZimo: false, fromName: "老王", settlement: { deltas: [0, 1, -2, 1], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  ok(tabs(mu) && count(mu, /class="gr-row win"/g) === 2 && /阿德.*、.*小林.* 胡牌/.test(mu) && onlyLeave(mu, "回大廳"), "M9e 最後一局是一炮多響：兩家胡牌列、誰胡、回大廳");
+  const zm = R({ ...over, winner: win(2, [["自摸", 1]]), isZimo: true, settlement: { deltas: [-1, -1, 3, -1], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  ok(tabs(zm) && /class="gr-title">自摸</.test(zm) && !/放槍/.test(zm.slice(0, zm.indexOf("gr-r"))) && onlyLeave(zm, "回大廳"), "M9f 最後一局是自摸：標題自摸、沒有放槍、回大廳");
+  const rk = R({ ...over, initialFinalTab: "rank", winner: win(0, [["門清", 1]]), isZimo: false, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  ok(/aria-selected="true" class="on" data-mj-final-tab="rank">總積分榜/.test(rk) && /class="gr-title">總積分榜</.test(rk) && count(rk, /class="gr-row[^"]* is-final"/g) === 4 && onlyLeave(rk, "回大廳"),
+    "M9g 切到「總積分榜」分頁：四家名次、胡放槍自摸、總分、回大廳");
+  const nr = R({ winner: win(0, [["門清", 1]]), isZimo: false, fromName: "阿德", settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  ok(!/gr-tabs/.test(nr) && /data-mj-result-next/.test(nr), "M9h 還沒打完的每局結算：沒有分頁，照舊有下一局");
 }
 
 for (const r of results) console.log(r);

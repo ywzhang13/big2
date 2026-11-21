@@ -36,7 +36,9 @@ export interface GrRow {
   stats?: { label: string; value: number; attrs?: Attrs }[];
 }
 
-export default function GameResultFrame({ title, titleTone, sub, subs, tool, items, total, rows, overlay, next = null, ready = null, primary, secondary, peek = false, onBack, error = null, attrs, scaleVar }: {
+export default function GameResultFrame({ tabs, title, titleTone, sub, subs, tool, items, total, rows, overlay, next = null, ready = null, primary, secondary, peek = false, onBack, error = null, attrs, scaleVar }: {
+  /** 左欄最上面的分頁（麻將整場打完：「最後一局／總積分榜」，老闆 2026-11-22）；不給＝沒有分頁 */
+  tabs?: { key: string; label: string; on: boolean; onClick: () => void; attrs?: Attrs }[];
   title: string;
   /** draw＝灰字、沒有光暈（麻將流局） */
   titleTone?: "draw";
@@ -74,6 +76,13 @@ export default function GameResultFrame({ title, titleTone, sub, subs, tool, ite
     <div className={`gr${peek ? " peek" : ""}`} role="dialog" aria-label={title} style={z} {...attrs}>
       <div className="gr-in">
         <div className="gr-l">
+          {tabs && tabs.length > 0 && (
+            <div className="gr-tabs" role="tablist">
+              {tabs.map((t) => (
+                <button key={t.key} type="button" role="tab" aria-selected={t.on} className={t.on ? "on" : undefined} onClick={t.onClick} {...t.attrs}>{t.label}</button>
+              ))}
+            </div>
+          )}
           <div className={`gr-title${titleTone ? ` ${titleTone}` : ""}`}>{title}</div>
           {sub && <div className="gr-sub">{sub}</div>}
           {subs?.map((x, i) => <div key={i} className="gr-sub">{x}</div>)}
