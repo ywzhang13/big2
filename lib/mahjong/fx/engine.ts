@@ -6,6 +6,8 @@
 //   4. 播完一定清乾淨：取消殘留動畫、清空特效層、拿掉名牌上的發光和抖動
 //   5. 音效只在預載完成、圖片已經放上畫面之後才播
 //   6. 分頁切到背景：正在播的立刻收掉、排隊的丟掉，回來時畫面是乾淨的
+import { whenScreenImagesLoaded } from "@/lib/perf/tableFirst";
+
 export type FxKind = "love" | "cash" | "egg" | "water" | "punch" | "clap";
 export type FxView = "sender" | "victim" | "bystander";
 export const FX_KINDS: FxKind[] = ["love", "cash", "egg", "water", "punch", "clap"];
@@ -372,10 +374,12 @@ export function playBigWin8Sound(url: string, zeroAt: number | null): () => void
   };
 }
 
-/** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋） */
+/** 進牌桌就呼叫：全部圖片解碼好、Lottie 跑過一次才算 ready（音效載不到不擋）。
+ *  牌優先（老馬 2026-11-21）：等牌桌上的牌面、大頭照載完才開始下載（約 1.4MB 圖＋25 個音效），4G 下手牌才不會空白好幾秒 */
 export function preloadFx(): Promise<boolean> {
   readyPromise ??= (async () => {
     try {
+      await whenScreenImagesLoaded();
       await Promise.all([...(Object.keys(IMG) as ImgKey[]).map(loadImg), loadEgg(), loadClap(), loadSounds()]);
       ready = true;
       return true;

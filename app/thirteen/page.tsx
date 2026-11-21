@@ -5,7 +5,7 @@
 // 登入沿用麻將（LINE／測試用遊客）；資料同步見 components/thirteen/useThirteenRoom.ts
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { handRuleOf, type Arrangement } from "@/lib/thirteen";
+import { buildDeck, handRuleOf, type Arrangement } from "@/lib/thirteen";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 import { migrateOldSfxSwitch } from "@/components/thirteen/sfx";
@@ -25,6 +25,8 @@ import { applyFelt, loadFelt } from "@/components/thirteen/feltTheme";
 import { clearLastJoin, confirmView, finalSeen, loadLastJoin, markFinalSeen, revealClock, revealScreen, saveLastJoin, sendConfirm, syncShow, type ConfirmState, type RevealShow } from "@/components/thirteen/roomScreen";
 import { toServerArrangeSec } from "@/components/thirteen/arrangeTime";
 import { apiJson, useThirteenRoom, type ThGameView, type ThJoin } from "@/components/thirteen/useThirteenRoom";
+import { cardSrc, deckSrcs } from "@/components/thirteen/cardArt";
+import { warmImages } from "@/lib/perf/tableFirst";
 import "@/components/thirteen/thRoom.css";
 import BlockedDialog from "@/components/roomCard/BlockedDialog";
 import { blockedFrom, type Blocked } from "@/components/roomCard/client";
@@ -77,6 +79,7 @@ function ThirteenScreens() {
   const [now, setNow] = useState(() => Date.now());
   const room = useThirteenRoom(join);
   useEffect(() => { applyFelt(loadFelt(), false); }, []); // 簡約牌桌：用本機記的那一款（v7 §1；設定在特效測試頁可以切）
+  useEffect(() => { warmImages(deckSrcs(buildDeck())); }, []); // 牌優先：進大廳就在背景先載整副牌面，開局時手牌不用一張張等（lib/perf/tableFirst.ts）
   const loggedIn = auth.status === "in" && !!auth.user;
   // 共用設定（聲音）跟著登入的人：和麻將同一份（LINE 帳號存伺服器、訪客和沒登入存這台 mj.prefs.v4）；
   // 綁好之後把舊的十三支音效開關 th_sfx 轉一次（有帳號時等伺服器的設定回來再轉）
@@ -163,6 +166,9 @@ function ThirteenScreens() {
 
   const deadline = view && view.status !== "waiting" ? view.arrangeDeadline : null;
   const arranging = !!view && view.status !== "waiting" && view.phase === "arranging";
+  const luckyRank = view && view.status !== "waiting" ? view.luckyCard?.rank ?? null : null;
+  // 牌優先：彩金點數每局才定，知道了就先載這個點數的 4 張金卡（自己手上和亮牌時別家的），不用等到亮出來才下載
+  useEffect(() => { if (luckyRank !== null) warmImages(buildDeck().filter((c) => c.rank === luckyRank).map((c) => cardSrc(c, luckyRank))); }, [luckyRank]);
   useEffect(() => {
     if (!arranging) return;
     const t = setInterval(() => setNow(Date.now()), 500);

@@ -39,6 +39,13 @@ function getTileFace(tile: Tile): string {
   return "Blank";
 }
 
+/** 全部牌面圖（萬筒條 1～9、字牌 7 種、花 8 種）：進麻將大廳就在背景先載，開局時手牌不用一張張等（lib/perf/tableFirst.ts） */
+export const TILE_FACE_SRCS: string[] = [
+  ...(["m", "p", "s"] as const).flatMap((suit) => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((rank) => ({ suit, rank }))),
+  ...[1, 2, 3, 4, 5, 6, 7].map((rank) => ({ suit: "z" as const, rank })),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((rank) => ({ suit: "f" as const, rank })),
+].map(({ suit, rank }) => `/tiles/faces/${getTileFace({ id: 0, suit, rank, display: "" })}.webp`);
+
 export default function MjTile({ tile, selected, onClick, small, tiny, faceDown, width, height, matchable }: MjTileProps) {
   const matchKind = useContext(TileMatchContext);
   const match = matchable && matchKind && !faceDown && tileKind(tile) === matchKind ? "hit" : null;

@@ -9,6 +9,7 @@ import { useLayoutEffect, useState } from "react";
 import type { Step } from "./revealTimeline";
 import { POS_BY_OFFSET, type Pos } from "./ThTable";
 import { CARD_BACK_SRC } from "./cardArt";
+import { whenScreenImagesLoaded } from "@/lib/perf/tableFirst";
 import { stageScale } from "./stageScale";
 import { fxCenter, fxWidth } from "./fanLayout";
 
@@ -34,12 +35,13 @@ let preloaded: Promise<void> | null = null;
 export function preloadRevealFx(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   const srcs = [CARD_BACK_SRC, ...FX_NAMES.map((n) => src(n, isDesktop() ? "d" : "m"))]; // 牌背也先載：理牌時只看得到牌面
-  preloaded ??= Promise.all(srcs.map((src) => new Promise<void>((done) => {
+  // 牌優先（老馬 2026-11-21）：等理牌畫面的牌面載完才開始下載（手機約 2.8MB），4G 下手牌才不會一張張冒出來
+  preloaded ??= whenScreenImagesLoaded().then(() => Promise.all(srcs.map((src) => new Promise<void>((done) => {
     const img = new Image();
     img.onload = () => { img.decode().catch(() => {}).finally(done); };
     img.onerror = () => done(); // 載不到也不卡住牌局
     img.src = src;
-  }))).then(() => undefined);
+  })))).then(() => undefined);
   return preloaded;
 }
 

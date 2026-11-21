@@ -17,7 +17,8 @@ import MjBoard from "@/components/mahjong/MjBoard";
 import MjBoardMobile from "@/components/mahjong/MjBoardMobile";
 import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import MjFlowerFx from "@/components/mahjong/MjFlowerFx";
-import MjTile from "@/components/mahjong/MjTile";
+import MjTile, { TILE_FACE_SRCS } from "@/components/mahjong/MjTile";
+import { warmImages } from "@/lib/perf/tableFirst";
 import type { Tile } from "@/lib/mahjong/tiles";
 import RoomClosed from "@/components/RoomClosed";
 import { closedFromResponse } from "@/hooks/roomClosed";
@@ -101,6 +102,7 @@ function Brand() {
 
 export default function MahjongPage() {
   const auth = useMjAuth();
+  useEffect(() => { warmImages(TILE_FACE_SRCS); }, []); // 牌優先：進麻將大廳就在背景先載全部牌面，開局時手牌不用一張張等（lib/perf/tableFirst.ts）
   // 偏好設定跟著登入的人：LINE 帳號用帳號的、訪客和沒登入用這台的；換帳號、登出就換主人（不沿用上一個帳號的顏色）
   const prefsUserId = auth.status === "in" ? auth.user?.id ?? null : null;
   const prefsGuest = !!auth.user?.isGuest;
