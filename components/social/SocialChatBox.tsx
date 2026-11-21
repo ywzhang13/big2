@@ -55,6 +55,7 @@ export default function SocialChatBox({
 
   // dock 的位置：由遊戲量（直接寫到元素上，不經過 React state）
   const placeRef = useRef(place);
+  // eslint-disable-next-line react-hooks/refs -- 把最新的位置放進 ref（latest ref），給下面的 layout effect 用
   placeRef.current = place;
   useLayoutEffect(() => {
     if (!open || variant !== "dock") return;
@@ -79,8 +80,10 @@ export default function SocialChatBox({
 
   // 點聊天室以外的地方：關閉，那一下不傳到牌桌
   const closeRef = useRef(onClose);
+  // eslint-disable-next-line react-hooks/refs -- 把最新的 callback 放進 ref（latest ref），給下面的 effect 用
   closeRef.current = onClose;
   const ignoreRef = useRef(ignoreDismiss);
+  // eslint-disable-next-line react-hooks/refs -- 把最新的 callback 放進 ref（latest ref），給下面的 effect 用
   ignoreRef.current = ignoreDismiss;
   useEffect(() => {
     if (!open) return;

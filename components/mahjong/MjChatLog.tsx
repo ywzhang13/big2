@@ -46,6 +46,7 @@ export function useMjChatFeed({ account, roomId, roomCode, me, spectator }: {
 
   // 歷史：進房、重新整理、回到前景、網路恢復時各讀一次（同一則用 id 去重）
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 離房時清掉觀戰頻道，原本就這樣
     if (!key) { setSpxChannel(null); return; }
     let alive = true;
     const load = () => void loadChatHistory(async () => {

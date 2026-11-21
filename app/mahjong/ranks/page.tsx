@@ -49,6 +49,7 @@ export default function MahjongRanksPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 進頁時讀網址參數只做一次（SSR 時讀不到 window），原本就這樣
     setSel({ kind: q.get("type") === "donate" ? "donate" : "win", range: q.get("range") === "all" ? "all" : "week" });
   }, []);
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function MahjongRanksPage() {
   const me = rows?.find((r) => r.me) ?? null;
   useEffect(() => {
     const el = meRef.current;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 沒有自己那列時取消置底，原本就這樣
     if (!me || !el) { setPin(false); return; }
     const io = new IntersectionObserver(([e]) => setPin(!e.isIntersecting));
     io.observe(el);

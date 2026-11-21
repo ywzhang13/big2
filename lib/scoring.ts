@@ -15,7 +15,7 @@ import { getCardRank } from "./card";
 export function calculateScore(hand: Card[]): number {
   if (hand.length === 0) return 0;
 
-  let base = hand.length * -5;
+  const base = hand.length * -5;
 
   // Count 2s
   const twos = hand.filter((c) => getCardRank(c) === "2").length;

@@ -304,13 +304,13 @@ eq([shape(A), shape(B)], [
   });
   const S1 = fresh(STUCK);
   const dealer = rooms[S1]!.game_state.players[rooms[S1]!.game_state.dealerSeat];
-  const req = rooms[S1]?.game_state.players.find((p) => p.id !== dealer.id)!;
+  const req = rooms[S1]!.game_state.players.find((p) => p.id !== dealer.id)!;
   const r1 = await post(leaveRequest, { roomId: S1, playerId: req.id });
   const s1 = (await status(S1, req.id)).body;
   eq([r1.body.needed, idleNames(s1), s1.activityUnknown], [2, [dealer.name], false],
     "S1 這場剛開局、莊家 4 分鐘沒打第一張：以開局時間起算，莊家不計票；其他等待中的兩家要同意");
   const S2 = fresh(60_000);
-  const req2 = rooms[S2]?.game_state.players.find((p) => p.seat !== rooms[S2]?.game_state.dealerSeat)!;
+  const req2 = rooms[S2]!.game_state.players.find((p) => p.seat !== rooms[S2]!.game_state.dealerSeat)!;
   const r2 = await post(leaveRequest, { roomId: S2, playerId: req2.id });
   eq(r2.body.needed, 3, "S2 剛開局 1 分鐘：還沒超過 3 分鐘，莊家照樣要同意");
 }

@@ -50,6 +50,7 @@ export default function Home() {
   useEffect(() => {
     const code = getRoomFromHash();
     if (code) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 進頁時讀網址 #room= 只做一次，原本就這樣，不改時序
       setRoomCode(code);
       setScreen("room");
     }

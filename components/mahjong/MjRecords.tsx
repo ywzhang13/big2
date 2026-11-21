@@ -112,6 +112,7 @@ function ReplayEntry({ matchId, onOpen, onUnauthorized }: { matchId: string; onO
     else setSt({ k: "ok", expiresAt: r.data.expiresAt });
   }, [matchId]);
   useEffect(() => { void check(); }, [check]);
+  // eslint-disable-next-line react-hooks/purity -- 「還剩幾天」照現在時間顯示，每次 render 重算是預期的
   const exp = st.k === "ok" ? expiryText(st.expiresAt, Date.now()) : null;
   return (
     <div className="replay" data-record-replay={st.k === "err" ? st.e : st.k}>

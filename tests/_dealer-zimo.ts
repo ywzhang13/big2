@@ -19,7 +19,7 @@ const s: MahjongGameState = {
   winners: [{ seat: 0, score: { fans: [
     {name:"自摸",value:1}, {name:"莊家",value:1}, {name:"連2",value:2}, {name:"拉2",value:2}
   ], totalFan: 6 } }],
-} as any;
+} as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- 測試替身只填用得到的欄位
 s.winner = s.winners![0];
 const r = calculateSettlement(s);
 console.log("莊家連2自摸 deltas:", r.deltas);

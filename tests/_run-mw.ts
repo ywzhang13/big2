@@ -23,7 +23,7 @@ function baseState(discarderSeat: number): MahjongGameState {
     roomSettings: { totalRounds: 1, basePoints: 100, fanPoints: 20 },
     roundInfo: { currentRound: 1, currentGame: 1, dealerConsecutive: 0, initialDealerSeat: 0 },
     playerScores: [0,0,0,0],
-  } as any;
+  } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- 測試替身只填用得到的欄位
 }
 
 function fakeWinner(seat: number, totalFan: number) {

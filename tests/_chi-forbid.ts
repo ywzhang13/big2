@@ -121,7 +121,7 @@ const tryDiscard = (s: MahjongGameState, key: string) => {
   for (let h = 0; h < 2000; h++) {
     stats.hands++;
     let s = dealTiles(initGame(["a", "b", "c", "d"].map((id) => ({ id, name: id })), { totalRounds: 1, basePoints: 100, fanPoints: 20 }));
-    let steps = 0, done = false;
+    let steps = 0; const done = false;
     try {
       while (!done) {
         if (++steps > 600) { stats.stuck++; break; }

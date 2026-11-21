@@ -137,6 +137,7 @@ export default function MjReplay({ matchId, onClose, onUnauthorized }: { matchId
   const result = useMemo(() => (loaded ? resultAt(loaded.rec, loaded.frames) : null), [loaded]);
 
   const nameOf = (s: number) => list?.players.find((p) => p.seat === s)?.name ?? `座位 ${s + 1}`;
+  // eslint-disable-next-line react-hooks/purity -- 「還剩幾天」照現在時間顯示，每次 render 重算是預期的
   const expiry = list ? expiryText(list.expiresAt, Date.now()) : null;
   const rec = loaded?.rec;
   const roundLabel = rec && rec.round != null && rec.game != null ? `${WIND[(rec.round - 1) % 4]}風圈 第${rec.game}局` : undefined;

@@ -324,6 +324,7 @@ function OverviewTab() {
   const [data, setData] = useState<DonateOverview | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 沒選玩家時清空明細，原本就這樣
     if (!p) { setData(null); setErr(""); return; }
     let alive = true;
     setData(null); setErr("");

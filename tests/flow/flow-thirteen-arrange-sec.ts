@@ -17,7 +17,7 @@ function eq(a: unknown, e: unknown, msg: string) {
   results.push(`${ok ? "✅" : "❌"} ${msg}${ok ? "" : `\n   預期=${JSON.stringify(e)}\n   實際=${JSON.stringify(a)}`}`);
 }
 const db = await setupThirteenDb();
-let NOW = Date.parse("2026-11-18T12:00:00Z");
+const NOW = Date.parse("2026-11-18T12:00:00Z");
 clock.now = () => NOW;
 const PIDS = ["p0", "p1", "p2", "p3"];
 PIDS.forEach((p, i) => { tokens[`tk-${p}`] = { id: `00000000-0000-4000-8000-0000000000e${i}`, displayName: null, pictureUrl: null, isGuest: false }; });

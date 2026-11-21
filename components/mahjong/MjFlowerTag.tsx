@@ -34,6 +34,7 @@ export default function MjFlowerTag({
   const [open, setOpen] = useState(false);
   const tagRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/purity -- Math.random() 每次 render 都會算，但 ref 保留第一次的結果當這顆標籤的識別，之後不變
   const idRef = useRef(Math.random());
   const shown = open && !busy && flowers.length > 0;
 

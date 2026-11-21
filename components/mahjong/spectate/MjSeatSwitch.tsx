@@ -59,6 +59,7 @@ export default function MjSeatSwitch({ mode, options, current, onSelect, doorSea
   }, [collapsible, open]);
   // 收合式選好一家：收回，焦點回到「視角」鈕（選項按鈕會被拿掉，鍵盤使用者不會失去位置）
   const pick = (seat: number) => {
+    // eslint-disable-next-line react-hooks/globals, react-hooks/purity -- 點選時（事件處理，不是 render）記下焦點保護的截止時間
     if (collapsible) { setOpen(false); toggleRef.current?.focus(); if (seat !== current) refocusUntil = Date.now() + REFOCUS_MS; }
     if (seat !== current) onSelect(seat);
   };

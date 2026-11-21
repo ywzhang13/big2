@@ -30,7 +30,7 @@ function spectatorView(s: MahjongGameState, id: string) {
 
 let s = dealTiles(initGame(["a", "b", "c", "d"].map((id) => ({ id, name: id })), { totalRounds: 1, basePoints: 100, fanPoints: 20 }));
 const ids = s.players.map((p) => p.id);
-let mismatch: string[] = [], steps = 0, rawUnsorted = 0, drawnSeen = 0;
+const mismatch: string[] = []; let steps = 0, rawUnsorted = 0, drawnSeen = 0;
 const check = (label: string) => {
   for (const id of ids) {
     const a = playerView(s, id), b = spectatorView(s, id);

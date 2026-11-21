@@ -146,6 +146,7 @@ export default function MjChat({
   // 桌機：底板放進聊天室側欄底部的那一格（SocialChatBox 的 data-chat-slot），接在訊息下面（小宜 2026-11-13 必修）
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 聊天室關閉時清掉插槽，原本就這樣
     if (!open || !desk) { setSlot(null); return; }
     const find = () => setSlot(document.querySelector<HTMLElement>("[data-chat-slot]"));
     find();

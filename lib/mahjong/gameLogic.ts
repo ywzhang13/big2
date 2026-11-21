@@ -339,7 +339,7 @@ export function handleFlowers(
   state: MahjongGameState,
   seat: number
 ): MahjongGameState {
-  let s = cloneState(state);
+  const s = cloneState(state);
   const player = s.players[seat];
 
   let hasFlower = true;
