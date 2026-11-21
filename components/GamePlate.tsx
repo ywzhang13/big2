@@ -1,10 +1,10 @@
-// 三個遊戲共用的名牌（小宜〈共用名牌-設計說明-十三支麻將大老二-2026-11-18〉）：四家同一個尺寸 88×38（基準 844×390；2026-11-19 方向 A 從 88×32 加高、名字最多兩行），
+// 三個遊戲共用的名牌（小宜〈共用名牌-設計說明-十三支麻將大老二-2026-11-18〉）：四家同一個尺寸 88×44（基準 844×390；2026-11-19 方向 A 從 88×32 加高到 38、2026-11-22 B1 再加高到 44、名字最多兩行），
 //   左邊圓頭像（名字第一個字）、右邊兩行（名字、分數）。標記都掛在框外的固定位置，不改變名牌大小：
 //   右下角彈孔（十三支被打槍）、左下角離線（樣式先做好，資料還沒有）、思考中泡泡貼在 bubble 錨點外 6px（朝牌桌中心那一邊）。
-// 錨點（設計說明 §5）：根元素掛 data-fx-seat，量到的範圍一定是 88×38（×放大倍率）；center＝正中心、bubble＝朝牌桌中心那一邊的中點。
+// 錨點（設計說明 §5）：根元素掛 data-fx-seat，量到的範圍一定是 88×44（×放大倍率）；center＝正中心、bubble＝朝牌桌中心那一邊的中點。
 // 樣式前綴 .gp-（gamePlate.css），不借用、不改麻將的 .mjm-*。十三支、麻將在用（麻將 2026-11-21 小宜〈麻將換共用元件 v1〉§2 補選填參數）。
 // 麻將補的都是選填，不給就和原本一樣（十三支不用改）：
-//   on＝輪到這家（整塊金）、fxSeat＝特效錨點改用絕對座位號、flag＝右上角小旗（聽／眼／MIGI）、badge＝第二行分數右邊（莊N）、
+//   on＝輪到這家（整塊金）、fxSeat＝特效錨點改用絕對座位號、flag＝右上角小旗（聽／眼／MIGI）、badge＝頭像正下方（莊N；2026-11-22 B1 從分數右邊搬過來，分數那一行只放分數）、
 //   viewers＝右下角（觀戰人數）、inFlow＝跟著排版走（不用絕對座標；倍率 --gp-s）
 import type { ReactNode } from "react";
 import "./gamePlate.css";
@@ -20,7 +20,7 @@ export default function GamePlate({ seat, name, score, me = false, offline = fal
   fxSeat?: number | string;
   /** 右上角小旗（往外 3、往上 8） */
   flag?: ReactNode;
-  /** 第二行分數右邊的小膠囊 */
+  /** 頭像正下方的小膠囊（莊、莊N；B1） */
   badge?: ReactNode;
   /** 右下角（往外 3、往下 11）；和十三支彈孔同一個位置 */
   viewers?: ReactNode;
@@ -52,8 +52,9 @@ export default function GamePlate({ seat, name, score, me = false, offline = fal
       )}</span>
       <span className="gp-tx">
         <span className="gp-nm">{name}</span>
-        <span className="gp-l2"><span className={`gp-sc is-${sc[0]}`}>{sc[1]}</span>{badge}</span>
+        <span className="gp-l2"><span className={`gp-sc is-${sc[0]}`}>{sc[1]}</span></span>
       </span>
+      {badge && <span className="gp-dl">{badge}</span>}
       {shot > 0 && <span className="gp-hang is-shot" data-gp-shot={shot}><i />−{shot}</span>}
       {offline && <span className="gp-off">離線</span>}
       {flag && <span className="gp-flag">{flag}</span>}

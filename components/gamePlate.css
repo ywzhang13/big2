@@ -1,14 +1,16 @@
-/* 共用名牌（components/GamePlate.tsx；小宜〈共用名牌-設計說明〉§2～3）。本體固定 88×38（老闆 2026-11-19 選小宜〈名牌放 8 個字〉方向 A：加高 6、名字最多兩行），標記都是絕對定位、不算在本體尺寸裡 */
-.gp { position: absolute; box-sizing: border-box; width: 88px; height: 38px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1);
-  display: flex; align-items: center; gap: 5px; padding: 0 5px 0 3px; text-shadow: none; white-space: nowrap; }
+/* 共用名牌（components/GamePlate.tsx；小宜〈共用名牌-設計說明〉§2～3）。標記都是絕對定位、不算在本體尺寸裡。
+   2026-11-22 小宜〈三款遊戲 iPhone UI 修正規格 v1〉P5、B1：88×38 → 88×44；頭像固定 (6, 8)、名字固定兩行區 y 3–27、分數單獨一行 y 29–41、
+   「莊／莊N」掛頭像正下方（y 29–42）、小旗在右上角框外（top −10）。座標以名牌左上（含 1px 框）為原點，所以內距要扣掉框 1px */
+.gp { position: absolute; box-sizing: border-box; width: 88px; height: 44px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1);
+  display: flex; align-items: flex-start; gap: 6px; padding: 2px 5px 0 5px; text-shadow: none; white-space: nowrap; }
 /* 頭像 24：名字第一個字 */
-.gp-av { position: relative; box-sizing: border-box; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,.1); border: 1.5px solid transparent;
+.gp-av { position: relative; box-sizing: border-box; flex: 0 0 24px; width: 24px; height: 24px; margin-top: 5px; border-radius: 50%; background: rgba(255,255,255,.1); border: 1.5px solid transparent;
   display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1; color: rgba(255,255,255,.6); }
 .gp-pic { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; border-radius: 50%; object-fit: cover; } /* 大頭照蓋在名字第一個字上面；載不到就藏起來 */
 .gp.is-me .gp-av { border-color: #C9A96E; }
-/* 文字：名字（寬 49，一行 4 個字，最多兩行＝8 個字；4 個字以內一行、上下置中）、分數；每行 12px（方向 A） */
-.gp-tx { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
-.gp-nm { font-size: 11px; font-weight: 700; line-height: 12px; color: rgba(255,255,255,.72); white-space: normal; word-break: break-all; overflow: hidden;
+/* 文字：名字固定兩行區（寬 46，一行 4 個字，最多兩行＝8 個字；只有一行時第二行留空，四家的分數才對齊）、分數單獨一行；每行 12px */
+.gp-tx { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 2px; }
+.gp-nm { height: 24px; font-size: 10.5px; font-weight: 700; line-height: 12px; color: rgba(255,255,255,.72); white-space: normal; word-break: break-all; overflow: hidden;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .gp.is-me .gp-nm { color: #f0d68a; }
 .gp-l2 { display: flex; align-items: center; gap: 4px; height: 12px; white-space: nowrap; }
@@ -19,8 +21,8 @@
   font: 800 9px/11px "Chakra Petch", system-ui, sans-serif; white-space: nowrap; }
 .gp-hang.is-shot { color: #b91c1c; background: rgba(243,234,210,.95); box-shadow: 0 1px 3px rgba(0,0,0,.4); animation: gp-in .25s ease-out both; }
 .gp-hang.is-shot i { width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle, #000 0 35%, #4a3a2a 36% 60%, transparent 61%); }
-/* 左下角：離線（頭像和文字變灰） */
-.gp-off { position: absolute; left: -3px; bottom: -11px; height: 13px; box-sizing: border-box; padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 800; line-height: 11px;
+/* 左下角：離線（頭像和文字變灰）。B1：往下 1（y 42–55），和頭像下緣的「莊」（y 29–42）剛好相接、不重疊 */
+.gp-off { position: absolute; left: -3px; bottom: -12px; height: 13px; box-sizing: border-box; padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 800; line-height: 11px;
   color: #e5e7eb; background: #4b5563; border: 1px solid rgba(255,255,255,.25); }
 .gp.is-off .gp-av, .gp.is-off .gp-tx { opacity: .4; filter: grayscale(1); }
 /* 思考中泡泡：貼在 bubble 錨點（朝牌桌中心那一邊的中點）外 6px，尖角指向名牌 */
@@ -44,5 +46,9 @@
 .gp.on { background: linear-gradient(90deg, rgba(201,169,110,.35), rgba(232,201,122,.18)); border-color: rgba(201,169,110,.6); box-shadow: 0 0 10px rgba(201,169,110,.3); }
 .gp.on .gp-av { background: #C9A96E; color: #0f2a1a; }
 .gp.on .gp-nm { color: #f0d68a; }
-.gp-flag { position: absolute; right: -3px; top: -8px; display: flex; z-index: 2; }
+.gp-flag { position: absolute; right: -3px; top: -11px; display: flex; z-index: 2; } /* B1：旗在 y −10～3（以名牌外框算；top 從框內緣算，所以多 1），避開名字第一行 y 3 起 */
+/* B1「莊／莊N」：頭像正下方置中、往上疊進頭像 3（y 29–42）；13 高、9px/900、內距 5。離線時跟著變灰 */
+.gp-dl { position: absolute; left: 17px; top: 28px; transform: translateX(-50%); display: flex; z-index: 2; }
+.gp-dl > * { height: 13px; box-sizing: border-box; padding: 0 5px; font-size: 9px; font-weight: 900; line-height: 1; white-space: nowrap; }
+.gp.is-off .gp-dl { filter: grayscale(1); opacity: .6; }
 .gp-view { position: absolute; right: -3px; bottom: -11px; display: flex; z-index: 2; }

@@ -20,7 +20,7 @@ const GamePlate = (await import("../components/GamePlate")).default;
 {
   const css = readFileSync("components/gamePlate.css", "utf8");
   const nm = css.match(/^\.gp-nm \{[^}]*\}/m)?.[0] ?? "";
-  ok(/^\.gp \{ position: absolute; box-sizing: border-box; width: 88px; height: 38px;/m.test(css), "N1 名牌本體 88×38（寬度不變、加高 6）");
+  ok(/^\.gp \{ position: absolute; box-sizing: border-box; width: 88px; height: 44px;/m.test(css), "N1 名牌本體 88×44（寬度不變；2026-11-22 B1 再加高 6）");
   ok(/white-space: normal/.test(nm) && /word-break: break-all/.test(nm) && /-webkit-line-clamp: 2/.test(nm) && !/text-overflow: ellipsis/.test(nm) && /line-height: 12px/.test(nm),
     "N2 名字可以換行、最多兩行、每行 12px，不再一行切成「…」");
   const room = readFileSync("components/thirteen/thRoom.css", "utf8");

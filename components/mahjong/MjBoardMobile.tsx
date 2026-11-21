@@ -111,7 +111,7 @@ function DeclareTags({ ting, eye, fx }: { ting: boolean; eye: boolean; fx?: { bo
   return <TingTag on={ting} pop={!!fx} />;
 }
 
-/** 名牌上的莊家膠囊（小宜 v1 §2-2：第二行分數右邊，「莊」或「莊2」；連 N 一定拉 N，不另外寫） */
+/** 名牌上的莊家膠囊（「莊」或「莊2」；連 N 一定拉 N，不另外寫）。2026-11-22 B1：掛在頭像正下方（GamePlate 的 badge），不再放分數右邊 */
 export function DealerBadge({ on, consecutive }: { on: boolean; consecutive?: number }) {
   if (!on) return null;
   const n = consecutive ?? 0;
@@ -119,7 +119,7 @@ export function DealerBadge({ on, consecutive }: { on: boolean; consecutive?: nu
 }
 
 /** 麻將的名牌＝三款共用的 GamePlate（小宜〈麻將換共用元件 v1〉§2）：特效錨點用絕對座位號（fxSeat）；
- *  右上角小旗＝聽／眼／MIGI（宣告時彈出）、第二行＝莊N、右下角＝觀戰人數、輪到這家整塊金；跟著排版走（in-flow）。
+ *  右上角小旗＝聽／眼／MIGI（宣告時彈出）、頭像下緣＝莊N（B1）、右下角＝觀戰人數、輪到這家整塊金；跟著排版走（in-flow）。
  *  不放風位、開門（搬到中央看板）、其他家的「N 張」、「拉N」 */
 export function MjPlate({ player, rel, me = false, on, score, dealerConsecutive, ting, eye, fx, desk = false, offline = false }: {
   player: MjPlayer; rel: PlateSeat; me?: boolean; on: boolean; score?: number; dealerConsecutive?: number; ting: boolean; eye: boolean; fx?: { both: boolean }; desk?: boolean;
@@ -245,7 +245,7 @@ function SidePanel({
   drew: boolean;
 }) {
   if (!player) return <div className={`mjm-side ${side}`} />;
-  // 名牌＝共用 GamePlate 88×38（小宜 v1 §2-1：垂直中心對齊海底中線，花牌膠囊在名牌下方 +6、觀戰掛牌在名牌右下角）
+  // 名牌＝共用 GamePlate 88×44（B1；小宜 v1 §2-1：垂直中心對齊海底中線，花牌膠囊在名牌下方 +6、觀戰掛牌在名牌右下角）
   const plate = <MjPlate player={player} rel={side === "left" ? "l" : "r"} on={isCurrent} score={score} dealerConsecutive={dealerConsecutive} ting={isTing} eye={isEye} fx={fx} />;
   // 吃碰區 v2：由外往內＝名牌（下面接花膠囊）→ 手牌欄（12×16）→ 吃碰槓（17×23、轉向、靠海底）。
   // 我眼牌時牌背翻成牌面、暗槓翻開，吃碰槓縮成 10×14（翻開的手牌要比吃碰牌大）；吃碰欄有最小寬度，縮小時版面不跳（左右家版面 2026-10-17）

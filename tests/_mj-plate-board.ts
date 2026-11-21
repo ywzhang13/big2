@@ -21,9 +21,9 @@ const CB = await import("../components/mahjong/MjCenterBoard").catch(() => null)
   ok(/^<div class="gp" data-seat="l" data-fx-seat="l" data-gp-seat="1">/.test(h) && !/gp-flag|gp-view|in-flow| on"/.test(h), "G1 不給新參數：和原本一樣（data-fx-seat＝座位字母、沒有小旗和觀戰）——十三支不變");
   const p = { seat: "r", name: "阿德", score: -2, plateId: 1, fxSeat: 1, on: true, inFlow: true, flag: createElement("i", { id: "f" }), badge: createElement("b", { id: "d" }), viewers: createElement("u", { id: "v" }) } as unknown as Parameters<typeof GamePlate>[0];
   const g = clean(renderToStaticMarkup(createElement(GamePlate, p)));
-  ok(/class="gp on in-flow" data-seat="r" data-fx-seat="1"/.test(g) && /<span class="gp-l2"><span class="gp-sc is-neg">−2<\/span><b id="d"><\/b><\/span>/.test(g)
+  ok(/class="gp on in-flow" data-seat="r" data-fx-seat="1"/.test(g) && /<span class="gp-l2"><span class="gp-sc is-neg">−2<\/span><\/span>/.test(g) && /<span class="gp-dl"><b id="d"><\/b><\/span>/.test(g)
     && /<span class="gp-flag"><i id="f"><\/i><\/span>/.test(g) && /<span class="gp-view"><u id="v"><\/u><\/span>/.test(g),
-    "G2 新參數：fxSeat 改特效錨點、on 整塊金、inFlow 跟著排版走、小旗在右上、莊N 在分數右邊、觀戰在右下");
+    "G2 新參數：fxSeat 改特效錨點、on 整塊金、inFlow 跟著排版走、小旗在右上、莊N 在頭像正下方（B1：分數那一行只放分數）、觀戰在右下");
 }
 
 // ---- P 手機牌桌四家 ----
@@ -72,7 +72,7 @@ const plate = (seat: number) => { const i = h.indexOf(`data-fx-seat="${seat}"`);
 // ---- L 手機格線 ----
 {
   const css = readFileSync("app/globals.css", "utf8");
-  ok(/--row-top: 46px;/.test(css) && /--col-side: 88px;/.test(css), "L1 手機上列 46、左右欄 88（小宜 v1 §2-1）");
+  ok(/--row-top: 54px;/.test(css) && /--col-side: 88px;/.test(css), "L1 手機上列 54（B1 名牌加高 6，對家的旗不被切）、左右欄 88（小宜 v1 §2-1）");
   ok(/\.mj-cb \{[^}]*width: 104px; height: 92px;/.test(css) && /\.mj-cb \.w \{[^}]*width: 16px; height: 16px;[^}]*display: flex; align-items: center; justify-content: center;/.test(css) && /\.mj-cb\.d \{ --cb-s: 1\.5; \}/.test(css),
     "L2 看板 104×92、風位格 16×16 字上下左右置中；桌機 1.5 倍");
 }
