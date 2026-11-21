@@ -17,6 +17,8 @@ export type ThemeSection = { kind: "theme"; title?: string; value: string | null
 /** 圖卡單選（麻將自摸特效）：status 是第三行的狀態字 */
 export type CardSection = {
   kind: "cards"; title?: string; value: string | null; onChange: (id: string) => void;
+  /** 桌機一列幾張（預設 2；手機橫向固定 4）。麻將自摸特效 7～8 張用 4，兩列就放得下、不用捲 */
+  cols?: number;
   options: { id: string; name: string; thumb: ReactNode; status?: { text: string; tone: "use" | "ready" | "lock" } }[];
 };
 /** 開關 */
@@ -44,11 +46,6 @@ export default function GamePrefsPanel({ open, onClose, tabs, game }: {
   /** 哪一款遊戲（只用來標 data-gpp，測試和截圖認得） */
   game: string;
 }) {
-  const shown = tabs.filter((t) => t.visible !== false);
-  const order = [...shown.filter((t) => !t.afterSound).map((t) => t.id), SOUND_TAB, ...shown.filter((t) => t.afterSound).map((t) => t.id)];
-  const [tab, setTab] = useState(order[0]);
-  const cur = shown.find((t) => t.id === tab) ?? null;
-  // 打開時停在第一個分頁（十三支是外觀、大老二是聲音）：GameMenu 每次打開都重新掛這個元件，分頁從 order[0] 開始
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -56,8 +53,18 @@ export default function GamePrefsPanel({ open, onClose, tabs, game }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
   if (!open || typeof document === "undefined") return null;
+  return createPortal(<GamePrefsCard onClose={onClose} tabs={tabs} game={game} />, document.body);
+}
+
+/** 面板本體（遮罩＋卡片）：GamePrefsPanel 用 portal 掛到 body；單獨匯出給測試在伺服器端畫（2026-11-21 小測要共用面板的自動測試） */
+export function GamePrefsCard({ onClose, tabs, game }: { onClose: () => void; tabs: PrefsTab[]; game: string }) {
+  const shown = tabs.filter((t) => t.visible !== false);
+  const order = [...shown.filter((t) => !t.afterSound).map((t) => t.id), SOUND_TAB, ...shown.filter((t) => t.afterSound).map((t) => t.id)];
+  // 打開時停在第一個分頁（十三支是外觀、大老二是聲音）：GameMenu 每次打開都重新掛這個元件，分頁從 order[0] 開始
+  const [tab, setTab] = useState(order[0]);
+  const cur = shown.find((t) => t.id === tab) ?? null;
   const name = (id: string) => (id === SOUND_TAB ? "聲音" : shown.find((t) => t.id === id)?.name ?? id);
-  return createPortal(
+  return (
     <div className="gpp-mask" onClick={onClose} data-gpp={game}>
       <div className={`gpp-card${cur?.preview ? "" : " sound"}`} role="dialog" aria-modal="true" aria-label="設定" onClick={(e) => e.stopPropagation()} data-gpp-tab={tab}>
         <div className="gpp-head">
@@ -83,8 +90,7 @@ export default function GamePrefsPanel({ open, onClose, tabs, game }: {
           <button type="button" className="gpp-done" data-gpp-done onClick={onClose}>完成</button>
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }
 
@@ -161,7 +167,7 @@ function Section({ s }: { s: PrefsSection }) {
       ))}
     </div></>);
   if (s.kind === "cards") return (<>{title}
-    <div className="gpp-cards">
+    <div className="gpp-cards" style={s.cols ? ({ "--gpp-cols": s.cols } as React.CSSProperties) : undefined}>
       {s.options.map((o) => (
         <button key={o.id} type="button" aria-pressed={s.value === o.id} data-gpp-pick={o.id} className={`gpp-pick${s.value === o.id ? " on" : ""}`} onClick={() => s.onChange(o.id)}>
           <span className="th">{o.thumb}</span>{o.name}

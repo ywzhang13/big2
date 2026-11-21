@@ -18,6 +18,7 @@ import { playMeteorSound, preloadMeteorSound } from "@/lib/mahjong/fx/engine";
 import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import { disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./meteorFx.css";
+import { gameVibrate } from "@/components/gamePrefs/vibrate"; // 共用設定「震動」關掉就不震
 
 const ART = "/mahjong-fx/meteor";
 /** 隕石圖裡岩石中心的位置（換圖後岩石不在這裡，改這兩個數字） */
@@ -312,7 +313,7 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
     }
     const ts = [setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? TOTAL_RM : METEOR_MS)];
     // 手機真的震動：重、停、輕（Android Chrome 等支援的瀏覽器；iPhone Safari 不支援，會直接略過）
-    if (!rm && !embedded) ts.push(setTimeout(() => { if (typeof navigator.vibrate === "function") navigator.vibrate([150, 60, 50]); }, IMPACT));
+    if (!rm && !embedded) ts.push(setTimeout(() => { gameVibrate([150, 60, 50]); }, IMPACT));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
   }, [rm, sfxUrl, warm, embedded, sound]);
 

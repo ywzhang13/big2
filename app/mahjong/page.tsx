@@ -34,6 +34,7 @@ import MjChatLogBox, { useMjChatFeed } from "@/components/mahjong/MjChatLog";
 import { useTableSounds } from "@/hooks/useTableSounds";
 import MjPrefsPanel from "@/components/mahjong/MjPrefsPanel";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
+import { gameVibrate } from "@/components/gamePrefs/vibrate";
 import { SpectateManage, SpectateRequestCard, useSpectateManage } from "@/components/mahjong/spectate/SpectateHost";
 import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 import BlockedDialog from "@/components/roomCard/BlockedDialog";
@@ -666,9 +667,7 @@ function RoomView({
   const prevIsMyTurn = useRef(false);
   useEffect(() => {
     if (isMyTurn && !prevIsMyTurn.current && state.status === "playing") {
-      try {
-        navigator.vibrate?.(200);
-      } catch {}
+      gameVibrate(200); // 共用設定「震動」關掉就不震（麻將換共用設定面板 2026-11-20）
     }
     prevIsMyTurn.current = isMyTurn;
   }, [isMyTurn, state.status]);

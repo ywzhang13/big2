@@ -28,6 +28,7 @@ import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./zimoFx.css";
+import { gameVibrate } from "@/components/gamePrefs/vibrate"; // 共用設定「震動」關掉就不震
 
 const ART = "/mahjong-fx/zimo";
 /** 主擊（ms）：雷霆、冰封的 zimoFx.css 百分比以 1.8 秒算（1.12 秒＝62.22%） */
@@ -583,7 +584,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       else go(null);
     }
     ts.push(setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? OWN_RM : zfxTotal(fx)));
-    if (!rm && fx !== "sakura") ts.push(setTimeout(() => { if (typeof navigator.vibrate === "function") navigator.vibrate([110, 50, 40]); }, boomOf(fx)));
+    if (!rm && fx !== "sakura") ts.push(setTimeout(() => { gameVibrate([110, 50, 40]); }, boomOf(fx)));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
   }, [fx, rm, warm, sound]);
 
