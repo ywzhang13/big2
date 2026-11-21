@@ -78,11 +78,30 @@ const seatRow = (h: string, seat: number) => h.slice(h.indexOf(`data-mj-result-s
   const h = R({ winner: win(0, [["門清", 1]]), isZimo: false, gameOver: true, roomLine: "4 圈・底 100 台 20", handStats: { wins: [3, 1, 1, 0], dealIns: [0, 1, 2, 1], selfDraws: [1, 0, 1, 0] }, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
   ok(/class="gr-title">總積分榜</.test(h) && /gr-sub">4 圈・底 100 台 20</.test(h) && /gr-rank r0">1<\/span><span class="gr-fname">阿美/.test(h) && /gr-rank r3">4<\/span><span class="gr-fname">老王/.test(h),
     "M7a 總積分榜：「4 圈・底 100 台 20」、照總分排名");
-  ok(count(h, /class="gr-btn/g) === 1 && /data-mj-result-leave="">回大廳/.test(h) && !/同意|還在等|看牌庫/.test(h) && /data-hand-stat="0">胡<b>3<\/b>/.test(h), "M7b 只有「回大廳」，沒有同意、還在等、看牌庫；胡／放槍／自摸");
+  ok(count(h, /class="gr-btn/g) === 1 && /data-mj-result-leave="">回大廳/.test(h) && !/同意|還在等|看牌庫/.test(h) && /data-hand-stat="0">胡<b>2<\/b>/.test(h), "M7b 只有「回大廳」，沒有同意、還在等、看牌庫；胡／放槍／自摸（胡 3 次裡 1 次是自摸 → 胡顯示 2，老闆 2026-11-22 自摸不算進胡）");
 }
 {
   const h = R({ winner: win(0, [["門清", 1]]), isZimo: false, fromName: "阿德", spectator: true, myId: "", settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
   ok(count(h, /class="gr-btn/g) === 1 && /data-mj-result-leave="">離開觀戰/.test(h) && !/gr-chip|同意|還在等|下一局/.test(h) && !/gr-row me/.test(h), "M8 觀戰者：只有「離開觀戰」，沒有同意小牌子、還在等、下一局，沒有自己那一列");
+}
+
+// M7c 老闆 2026-11-22：總積分榜的「胡」只算別人放槍給他的胡，自摸另外算、不重複；一炮多響每個胡的人各算 1 次胡。
+// 用伺服器真的 tallyHandStats 累積一場：阿美（座位 0）自摸 1、放槍胡 2（其中 1 次是一炮三響），再給總積分榜顯示
+{
+  const { tallyHandStats } = await import("../lib/mahjong/gameLogic");
+  type St = Parameters<typeof tallyHandStats>[0];
+  const W = (seat: number, from: number | null) => ({ seat, from, score: { total: 1, items: [] } });
+  const s = {} as St;
+  const hand = (winners: ReturnType<typeof W>[]) => { (s as { winners?: unknown; winner?: unknown }).winners = winners; (s as { winner?: unknown }).winner = winners[0]; tallyHandStats(s); };
+  hand([W(0, null)]);                     // 阿美自摸
+  hand([W(0, 2)]);                        // 阿美胡、座位 2 放槍
+  hand([W(0, 3), W(1, 3), W(2, 3)]);      // 一炮三響：座位 3 放槍，0、1、2 都胡
+  const hs = s.handStats!;
+  const h = R({ winner: win(0, [["門清", 1]]), isZimo: false, gameOver: true, handStats: hs, settlement: { deltas: [1, -1, 0, 0], reason: "win", fanTotal: 1, paymentPerPlayer: 1 } });
+  const rowOf = (seat: number) => { const a = h.indexOf(`data-mj-result-seat="${seat}"`), b = h.indexOf("data-mj-result-seat=", a + 1); return h.slice(a, b < 0 ? undefined : b); }; // 總積分榜照總分排，不是照座位
+  const cell = (seat: number, label: string) => (rowOf(seat).match(new RegExp(`>${label}<b>(\\d+)</b>`)) ?? [])[1];
+  ok(cell(0, "胡") === "2" && cell(0, "自摸") === "1" && cell(1, "胡") === "1" && cell(2, "胡") === "1" && cell(3, "放槍") === "1" && cell(2, "放槍") === "1",
+    `M7c 一場裡阿美自摸 1、放槍胡 2 → 總積分榜阿美「胡 2、自摸 1」；一炮三響的另外兩家各胡 1；放槍照舊（實際：${[0, 1, 2, 3].map((x) => `座位${x} 胡${cell(x, "胡")} 放槍${cell(x, "放槍")} 自摸${cell(x, "自摸")}`).join("、")}）`);
 }
 
 for (const r of results) console.log(r);

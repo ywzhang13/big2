@@ -133,7 +133,9 @@ export default function MjResultMobile({
     const rows: GrRow[] = ranking.map((p, i) => ({
       key: p.seat, rank: i, name: p.name, me: !spectator && p.seat === mySeat, delta: playerScores[p.seat],
       stats: handStats ? [
-        { label: "胡", value: handStats.wins[p.seat] ?? 0, attrs: { "data-hand-stat": p.seat } },
+        // 胡＝別人放槍給他的胡（老闆 2026-11-22：自摸另外算、不重複）。伺服器的 wins 含自摸（lib/mahjong/gameLogic.ts tallyHandStats），
+        // 在這裡扣掉，正在打的房間的舊資料也照新算法顯示，伺服器資料不用改
+        { label: "胡", value: Math.max(0, (handStats.wins[p.seat] ?? 0) - (handStats.selfDraws[p.seat] ?? 0)), attrs: { "data-hand-stat": p.seat } },
         { label: "放槍", value: handStats.dealIns[p.seat] ?? 0 },
         { label: "自摸", value: handStats.selfDraws[p.seat] ?? 0 },
       ] : undefined,
