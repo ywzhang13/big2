@@ -250,104 +250,6 @@
 .gr .mj-gr-wall .hd .x { margin-left: auto; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #f0d68a; background: rgba(255,255,255,.08); border: 1px solid rgba(201,169,110,.4); }
 .mj-gr-wall .tiles { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; min-height: 0; overflow-y: auto; }
 .mj-gr-wall .tiles > span { display: flex; border-radius: 3px; }
-.mjm-result {
-  --gold: #C9A96E; --gold-l: #f0d68a;
-  position: fixed; inset: 0; z-index: 50; display: flex; align-items: stretch; justify-content: center; gap: 14px;
-  padding: 10px calc(12px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
-  background: rgba(0,0,0,.86); color: #fff;
-}
-.mjm-result .lcol { flex: 0 0 auto; width: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0; }
-.mjm-result .rcol { flex: 1 1 auto; max-width: 600px; min-width: 0; display: flex; flex-direction: column; gap: 5px; justify-content: center; min-height: 0; }
-.mjm-result .hu {
-  font-size: 34px; font-weight: 900; letter-spacing: .12em; font-family: serif; line-height: 1; color: #fff8dc; white-space: nowrap;
-  text-shadow: 0 0 34px #FFD700, 0 0 70px #FFA500, 0 3px 10px rgba(0,0,0,.6);
-}
-.mjm-result .hu.draw { color: rgba(255,255,255,.75); text-shadow: none; }
-.mjm-result .who { font-size: 15px; font-weight: 700; color: var(--gold-l); white-space: nowrap; }
-/* 這局的骰子（三顆＋總和）和四家門風：門風東南西北的小方塊，莊家那家金底 */
-.mjm-result .dice { display: flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); white-space: nowrap; }
-.mjm-result .seat .who2 .wind {
-  display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px;
-  border-radius: 4px; font-style: normal; font-size: 10px; font-weight: 800; color: var(--gold-l); border: 1px solid rgba(201,169,110,.55);
-}
-.mjm-result .seat .who2 .wind.dealer { background: #c9a96e; color: #0f2a1a; border-color: #f0d68a; }
-.mjm-result.desk .dice { font-size: 15px; gap: 5px; }
-.mjm-result.desk .seat .who2 .wind { width: 20px; height: 20px; font-size: 13px; border-radius: 5px; margin-right: 6px; }
-.mjm-result .from { font-size: 12px; font-weight: 700; color: #f87171; }
-.mjm-result .fans {
-  width: 100%; padding: 6px 10px; border-radius: 10px; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px;
-  background: rgba(201,169,110,.1); border: 1px solid rgba(201,169,110,.3); font-size: 12px; line-height: 1.25;
-}
-.mjm-result .fans .n { color: var(--gold-l); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mjm-result .fans .v { color: var(--gold); font-weight: 800; text-align: right; white-space: nowrap; }
-.mjm-result .fans .tot { border-top: 1px solid rgba(201,169,110,.25); padding-top: 3px; }
-.mjm-result .seat {
-  display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 8px; min-width: 0;
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06);
-}
-.mjm-result .seat.win { background: rgba(201,169,110,.15); border-color: rgba(201,169,110,.35); }
-.mjm-result .seat .who2 { flex: 0 0 90px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mjm-result .seat .delta { flex: 0 0 auto; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; min-width: 48px; }
-.mjm-result .foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-/* 牌庫：四家攤牌包一層（間距和原本一樣），展開時整片蓋在上面，裡面的牌太多才自己捲 */
-.mjm-result .rows { position: relative; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
-.mjm-result.desk .rows { gap: 8px; }
-.mjm-result .wall { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(12,26,17,.97); border: 1px solid rgba(201,169,110,.45); overflow: hidden; }
-.mjm-result .wall .hd { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); white-space: nowrap; }
-.mjm-result .wall .hd b { color: var(--gold-l); }
-.mjm-result .wall .hd .x { margin-left: auto; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--gold-l); background: rgba(255,255,255,.08); border: 1px solid rgba(201,169,110,.4); }
-.mjm-result .wall .tiles { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; min-height: 0; overflow-y: auto; }
-.mjm-result .wall .tiles > span { display: flex; border-radius: 3px; }
-.mjm-result .wallbtn { padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--gold-l); background: rgba(255,255,255,.06); border: 1px solid rgba(201,169,110,.45); white-space: nowrap; }
-.mjm-result .wallbtn.on { background: rgba(201,169,110,.85); color: #0f2a1a; border-color: #f0d68a; }
-.mjm-result.desk .wall { padding: 10px 14px; gap: 10px; border-radius: 12px; }
-.mjm-result.desk .wall .hd { font-size: 14px; }
-.mjm-result.desk .wall .hd .x { font-size: 14px; padding: 5px 14px; }
-.mjm-result.desk .wallbtn { font-size: 15px; padding: 6px 16px; }
-/* 同意下一局：已同意＝金底＋✓，還沒按＝虛線框＋… ；整場打完時同一列改成總積分榜 */
-.mjm-result .nextline { margin-top: 4px; font-size: 11px; font-weight: 700; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mjm-result .nextline.err { color: #fca5a5; }
-.mjm-result.desk .nextline { font-size: 14px; margin-top: 8px; }
-.mjm-result .ready, .mjm-result .rank { display: flex; align-items: center; gap: 4px; margin-right: auto; min-width: 0; overflow: hidden; }
-/* 手機：總積分榜排 2×2（一列四格名字會被擠成一個字），標題在左邊跨兩列 */
-.mjm-result .rank { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); flex: 1 1 auto; }
-.mjm-result .rank .cnt { grid-row: span 2; }
-.mjm-result.desk .rank { display: flex; flex: 0 1 auto; }
-.mjm-result .cnt { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.55); white-space: nowrap; margin-right: 2px; font-variant-numeric: tabular-nums; }
-.mjm-result .chip {
-  display: inline-flex; align-items: center; gap: 3px; min-width: 0; flex: 0 1 auto; font-size: 10px; font-weight: 700; padding: 3px 6px; border-radius: 6px;
-  white-space: nowrap; max-width: 72px; overflow: hidden; text-overflow: ellipsis;
-}
-.mjm-result .chip i { font-style: normal; flex: 0 0 auto; }
-.mjm-result .ready .chip.ok { background: rgba(201,169,110,.85); color: #0f2a1a; border: 1px solid #f0d68a; }
-.mjm-result .ready .chip.wait { background: transparent; color: rgba(255,255,255,.5); border: 1px dashed rgba(255,255,255,.35); }
-.mjm-result .rank .chip { max-width: none; background: rgba(255,255,255,.06); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.1); }
-.mjm-result .rank .chip .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mjm-result .rank .chip b { flex: 0 0 auto; font-weight: 800; font-variant-numeric: tabular-nums; }
-.mjm-result .rank .chip i { width: 15px; height: 15px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900; color: #1a1408; }
-.mjm-result .rank .chip.r0 { border-color: rgba(255,215,0,.6); background: rgba(255,215,0,.14); }
-.mjm-result .rank .chip.r0 i { background: #FFD700; }
-.mjm-result .rank .chip.r1 i { background: #C0C0C0; }
-.mjm-result .rank .chip.r2 i { background: #CD7F32; }
-.mjm-result .rank .chip.r3 i { background: #6b7280; color: #fff; }
-
-/* 桌機：同一個版面放大 */
-.mjm-result.desk { gap: 28px; padding: 24px 32px; }
-.mjm-result.desk .lcol { width: 260px; gap: 10px; }
-.mjm-result.desk .rcol { max-width: 960px; gap: 8px; }
-.mjm-result.desk .hu { font-size: 52px; }
-.mjm-result.desk .who { font-size: 20px; }
-.mjm-result.desk .from { font-size: 15px; }
-.mjm-result.desk .fans { padding: 10px 14px; font-size: 15px; gap: 4px 14px; border-radius: 12px; }
-.mjm-result.desk .seat { gap: 12px; padding: 8px 12px; border-radius: 10px; }
-.mjm-result.desk .seat .who2 { flex-basis: 136px; font-size: 14px; }
-.mjm-result.desk .seat .delta { font-size: 18px; min-width: 64px; }
-.mjm-result.desk .foot { gap: 14px; margin-top: 8px; }
-.mjm-result.desk .cnt { font-size: 13px; }
-.mjm-result.desk .chip { font-size: 13px; padding: 5px 10px; border-radius: 8px; max-width: 120px; gap: 5px; }
-.mjm-result.desk .rank .chip { max-width: 170px; }
-.mjm-result.desk .rank .chip i { width: 20px; height: 20px; font-size: 11px; }
-.mjm-result.desk .mjm-btn { height: 44px; font-size: 15px; padding: 0 26px; }
 
 /* ===== 麻將「眼牌」v3（小宜 2026-10-15）===== */
 /* 1) 名牌標示「眼」：和既有 .mjm-tag.ting（聽）同規格，只換色相 */
@@ -1279,11 +1181,6 @@ body {
 /* 牌桌中間：骰子放在剩餘張數的框裡（最下面一行，只有骰子） */
 .mjm-info .dice { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
 
-/* 整場總結算：每家的胡牌／放槍／自摸次數（接在名字後面） */
-.mjm-result .seat .hstat { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.6); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.mjm-result .seat .hstat b { color: var(--gold-l); font-weight: 800; }
-.mjm-result.desk .seat .hstat { font-size: 13px; }
-
 /* ===== 輪到你可以吃碰槓胡：金色橫幅（小宜 2026-10-17 方向 A，老闆修改：不顯示誰打出哪張、倒數只是提醒） =====
    position: fixed 疊層，底邊由 JS 對齊我的資訊列上緣；不動 .mjm-app 的 grid 和 --row-action */
 .mjm-claimbar { position: fixed; left: 0; right: 0; z-index: 70; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none;
@@ -1505,10 +1402,10 @@ body {
   .mjp-replay { min-height: 22px; font-size: 9px; }
 }
 /* 牌桌上會捲動的區塊（設定內容、結算畫面的牌牆）：細的金色捲動軸，不用瀏覽器原生的白色 */
-.mjp-body, .mjm-result .wall .tiles { scrollbar-width: thin; scrollbar-color: rgba(201,169,110,.7) transparent; }
-.mjp-body::-webkit-scrollbar, .mjm-result .wall .tiles::-webkit-scrollbar { width: 4px; height: 4px; }
-.mjp-body::-webkit-scrollbar-track, .mjm-result .wall .tiles::-webkit-scrollbar-track { background: transparent; }
-.mjp-body::-webkit-scrollbar-thumb, .mjm-result .wall .tiles::-webkit-scrollbar-thumb { background: rgba(201,169,110,.7); border-radius: 999px; }
+.mjp-body { scrollbar-width: thin; scrollbar-color: rgba(201,169,110,.7) transparent; }
+.mjp-body::-webkit-scrollbar { width: 4px; height: 4px; }
+.mjp-body::-webkit-scrollbar-track { background: transparent; }
+.mjp-body::-webkit-scrollbar-thumb { background: rgba(201,169,110,.7); border-radius: 999px; }
 
 /* 設定入口：牌桌只在左上 ☰ 裡（右上齒輪拿掉了）；大廳登入列旁 40×40 齒輪（金色線條 SVG） */
 .mjl-gear { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 999px; background: rgba(0,0,0,.3); border: 1px solid rgba(201,169,110,.35); color: #f0d68a; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
