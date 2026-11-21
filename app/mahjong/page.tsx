@@ -991,6 +991,8 @@ function RoomView({
           dice={state.dice}
           doorSeat={state.doorSeat}
           dealerSeat={state.dealerSeat}
+          dealerConsecutive={state.roundInfo?.dealerConsecutive}
+          roomLine={state.roomSettings ? `${state.roomSettings.totalRounds} 圈・底 ${state.roomSettings.basePoints} 台 ${state.roomSettings.fanPoints}` : undefined}
           winner={state.winner}
           winners={state.winners}
           players={state.players}

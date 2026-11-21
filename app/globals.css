@@ -231,6 +231,19 @@
 
 /* 結算浮層（一般胡牌、流局、八仙過海、七搶一）。桌機和手機橫向共用，桌機加 .desk 放大。
    半透明黑底、看得到後面的牌桌（老闆選定原本手機版的樣子） */
+/* 麻將結算換成共用外框 GameResultFrame（小宜〈麻將換共用元件 v1〉§4，2026-11-21）：麻將自己畫的那幾塊（誰胡、放槍、骰子、攤牌那一塊、牌庫展開區） */
+.gr[data-mj-result] { z-index: 50; } /* 和原本的 .mjm-result 同一層，蓋過牌桌選單、聊天 */
+.mj-gr-who { font-size: 15px; font-weight: 700; color: #f0d68a; white-space: nowrap; }
+.mj-gr-from { font-size: 12px; font-weight: 700; color: #f87171; white-space: nowrap; }
+.mj-gr-dice { display: flex; align-items: center; gap: 3px; }
+.mj-gr-body { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; width: 100%; }
+.mj-gr-body .ln { max-width: 100%; font-size: 11px; font-weight: 700; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mj-gr-wall { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(12,26,17,.97); border: 1px solid rgba(201,169,110,.45); overflow: hidden; }
+.mj-gr-wall .hd { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); white-space: nowrap; }
+.mj-gr-wall .hd b { color: #f0d68a; }
+.gr .mj-gr-wall .hd .x { margin-left: auto; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #f0d68a; background: rgba(255,255,255,.08); border: 1px solid rgba(201,169,110,.4); }
+.mj-gr-wall .tiles { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; min-height: 0; overflow-y: auto; }
+.mj-gr-wall .tiles > span { display: flex; border-radius: 3px; }
 .mjm-result {
   --gold: #C9A96E; --gold-l: #f0d68a;
   position: fixed; inset: 0; z-index: 50; display: flex; align-items: stretch; justify-content: center; gap: 14px;

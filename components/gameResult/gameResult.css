@@ -23,7 +23,7 @@
 .gr .up { color: #6ee7a0; } .gr .down { color: #ff7b72; } .gr .zero { color: rgba(255,255,255,.75); }
 /* 右欄：最寬 600；四家（間隔 5）、等待那一行、最下面一列 */
 .gr-r { flex: 1 1 auto; max-width: 600px; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.gr-rows { display: flex; flex-direction: column; gap: 5px; }
+.gr-rows { position: relative; display: flex; flex-direction: column; gap: 5px; }
 .gr-row { box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-height: 61px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.035); border: 1px solid rgba(201,169,110,.22); }
 .gr-row.me { background: rgba(201,169,110,.15); border-color: #f0d68a; }
 .gr-row.is-final { min-height: 52px; }
@@ -62,3 +62,12 @@
 .gr-row.me .gr-fname { color: #f0d68a; }
 .gr-stat { flex: 0 0 74px; font-size: 11px; color: rgba(255,255,255,.6); white-space: nowrap; }
 .gr-stat b { margin-left: 4px; font: 700 13px "Chakra Petch", system-ui, sans-serif; color: #fff; }
+/* 2026-11-21 麻將補（小宜〈麻將換共用元件 v1〉§4-1；選填，十三支不用）：灰字標題、明細 plain、胡牌那一列、第二顆按鈕、蓋在四家列上的展開區、胡／莊標記 */
+.gr-title.draw { color: rgba(255,255,255,.75); text-shadow: none; }
+.gr .v.plain { color: #f0d68a; }
+.gr-row.win { background: rgba(201,169,110,.18); border-color: rgba(201,169,110,.5); }
+.gr-row.me.win { background: rgba(201,169,110,.15); border-color: #f0d68a; } /* 自己那列仍以金框為準 */
+.gr .gr-btn.ghost { min-width: 0; background: rgba(255,255,255,.06); color: #f0d68a; border: 1px solid rgba(201,169,110,.5); }
+.gr-overlay { position: absolute; inset: 0; z-index: 2; }
+.gr-mark.hu { background: rgba(201,169,110,.85); color: #0f2a1a; }
+.gr-mark.dl { background: linear-gradient(135deg, #dc2626, #C9A96E); color: #fff8dc; }

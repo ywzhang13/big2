@@ -594,6 +594,8 @@ export default function MahjongWatchPage() {
             dice={v.dice}
             doorSeat={v.doorSeat}
             dealerSeat={v.dealerSeat}
+            dealerConsecutive={v.roundInfo?.dealerConsecutive}
+            roomLine={v.roomSettings ? `${v.roomSettings.totalRounds} 圈・底 ${v.roomSettings.basePoints} 台 ${v.roomSettings.fanPoints}` : undefined}
             winner={v.winner}
             winners={v.winners}
             players={v.players}
