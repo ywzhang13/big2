@@ -4,6 +4,9 @@ import MjLeaveVoteStatus from "@/components/mahjong/MjLeaveVoteStatus";
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { useMahjong, getMjId, type MjJoinInfo, type MjConfirmInfo } from "@/hooks/useMahjong";
 import StartConfirm, { secondsLeftOf } from "@/components/gameLobby/StartConfirm";
+import { CreateRoomShell, InviteNamePrompt, JoinByCode, WaitingRoom } from "@/components/gameLobby/GameLobby";
+import { MJ_SECTIONS } from "@/components/mahjong/mjLobbySections";
+import { initialName, inviteNeedsName, loadGameName, saveGameName } from "@/components/gameLobby/name";
 import { mjConfirmNote, mjConfirmSeats } from "@/components/mahjong/mjStartConfirmView";
 import { START_CONFIRM_MS } from "@/lib/lobby/startConfirm";
 import { useMjAuth } from "@/hooks/useMjAuth";
@@ -67,41 +70,9 @@ function getRoomFromQuery(): string | null {
   return room && ROOM_CODE_RE.test(room) ? room : null;
 }
 
-// 暱稱來源（小宜規格 §8）：line＝登入時帶入的 LINE 名稱，manual＝自己改過（之後登入不再覆寫）
-type NameSource = "line" | "manual";
-
-/** 暱稱輸入框；名稱是 LINE 帶入的就在右側標「● LINE 名稱」，一改字就消失 */
-function NameField({
-  value,
-  onChange,
-  fromLine,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  fromLine: boolean;
-}) {
-  return (
-    <div className="mjl-field w-full">
-      <input
-        type="text"
-        maxLength={8}
-        placeholder="你的暱稱"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        // 手機橫向叫出鍵盤時，iOS 會把輸入框頂到鍵盤後面
-        onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
-        className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-lg
-                   placeholder:text-white/30 outline-none focus:ring-2 focus:ring-[#C9A96E]/50 transition-all"
-      />
-      {fromLine && (
-        <span className="mjl-from-line">
-          <i />
-          LINE 名稱
-        </span>
-      )}
-    </div>
-  );
-}
+// 開房、加入、取名、等人改用三款共用的 gameLobby（小宜〈共用開房流程 v1.1〉；老闆 2026-11-20「麻將開房還不是共用元件」）：
+//   名字照共用規則存在這台的 game_name（遊客分頁走 mjStorage＝sessionStorage），第一次讀會搬舊的 mj_name（自己改過的）／big2_name
+const storedName = () => loadGameName(mjStorage(), { mj: mjStorage(), big2: window.localStorage });
 
 // 大廳 Logo（小宜 C 書法橫式）：遊戲裡的平面牌（MjTile）＋細金線＋明體金漸層標題，橫排一行最省高度
 const BRAND_TILES: Tile[] = [
@@ -138,9 +109,7 @@ export default function MahjongPage() {
   }, [auth.status, prefsUserId, prefsGuest]);
   const [screen, setScreen] = useState<"home" | "create" | "join" | "room">("home");
   const [roomCode, setRoomCode] = useState("");
-  const [joinCode, setJoinCode] = useState("");
   const [name, setName] = useState("");
-  const [nameSource, setNameSource] = useState<NameSource | null>(null);
   const [nameReady, setNameReady] = useState(false);
   const [error, setError] = useState("");
   // 建房／加入成功的 join 回應（登入房有玩家 id 和座位頻道），交給牌桌
@@ -159,10 +128,6 @@ export default function MahjongPage() {
     q.delete("records");
     history.replaceState(null, "", window.location.pathname + (q.toString() ? `?${q}` : "") + window.location.hash);
   }, []);
-  // Room settings
-  const [totalRounds, setTotalRounds] = useState(1);
-  const [basePoints, setBasePoints] = useState(100);
-  const [fanPoints, setFanPoints] = useState(20);
 
   // Check hash on load
   useEffect(() => {
@@ -171,13 +136,12 @@ export default function MahjongPage() {
       setRoomCode(code);
       setScreen("room");
     }
-    const stored = mjStorage().getItem("mj_name");
-    if (stored) {
+    // 邀請連結：這台存過名字（game_name）就直接入座，沒有才問名字（v1.1 §6）
+    const stored = storedName();
+    if (!inviteNeedsName(stored)) {
       setName(stored);
       setNameReady(true);
     }
-    const src = mjStorage().getItem("mj_name_source");
-    if (src === "line" || src === "manual") setNameSource(src);
 
     const onHash = () => {
       const c = getRoomFromHash();
@@ -200,24 +164,9 @@ export default function MahjongPage() {
     if (code) window.history.replaceState(window.history.state, "", `/mahjong#room=${code}`);
   }, [auth.status]);
 
-  // 登入後暱稱帶入 LINE 名稱（自己改過就不覆寫；超過 8 字取前 8 字）
-  const lineName = auth.user?.displayName ?? "";
-  useEffect(() => {
-    if (!lineName || mjStorage().getItem("mj_name_source") === "manual") return;
-    const n = Array.from(lineName).slice(0, 8).join("");
-    mjStorage().setItem("mj_name", n);
-    mjStorage().setItem("mj_name_source", "line");
-    setName(n);
-    setNameSource("line");
-  }, [lineName]);
-
-  function editName(v: string) {
-    setName(v);
-    if (nameSource !== "manual") {
-      setNameSource("manual");
-      mjStorage().setItem("mj_name_source", "manual");
-    }
-  }
+  // 暱稱欄預設值（v1.1 §4-2）：game_name → 登入的 LINE 名稱前 8 個字（顯示「● LINE 名稱」）；遊客不帶 LINE 名稱
+  const lineName = auth.user && !auth.user.isGuest ? auth.user.displayName ?? "" : "";
+  const nameInit = () => initialName(storedName(), lineName);
 
   // 401：登入失效 → 退回登入閘門（在房間裡就是「加入房間 XXXX」）；403：座位不是你的、或遊客／LINE 不同桌 → 回大廳
   const { expire } = auth;
@@ -271,7 +220,7 @@ export default function MahjongPage() {
     // 410：這場已結束，進房後顯示總結算
     if (res.status === 410) return { roomId: "", ended: true };
     if (!res.ok) {
-      setError(data.error || "加入房間失敗");
+      setError((data.error === "bad_name" && data.message) || data.error || "加入房間失敗"); // 名字不合法：顯示伺服器的「名字要是 1～8 個字」
       return null;
     }
     return data as MjJoinInfo;
@@ -307,8 +256,7 @@ export default function MahjongPage() {
     if (isSubmitting) return;
     setIsSubmitting(true);
     setError("");
-    const nm = name.trim() || Array.from(lineName).slice(0, 8).join("") || "玩家";
-    mjStorage().setItem("mj_name", nm);
+    const nm = nameInit().name || "玩家";
     setName(nm);
     setNameReady(true);
     try {
@@ -329,21 +277,17 @@ export default function MahjongPage() {
     }
   }
 
-  async function handleCreate() {
+  /** 建立房間：設定卡回傳「代號 → 值」（rounds／base／fan），名字是暱稱欄去掉前後空白後的 */
+  async function handleCreate(values: Record<string, number>, nm: string) {
     if (isSubmitting) return; // prevent double-click
-    if (!name.trim()) {
-      setError("請輸入暱稱");
-      return;
-    }
     setIsSubmitting(true);
     setError("");
-    mjStorage().setItem("mj_name", name.trim());
-    setNameReady(true);
+    setName(nm);
     try {
       const myId = getMjId();
       const res = await mjFetch("/api/mahjong/create", {
         method: "POST",
-        body: JSON.stringify({ hostId: myId, totalRounds, basePoints, fanPoints }),
+        body: JSON.stringify({ hostId: myId, totalRounds: values.rounds, basePoints: values.base, fanPoints: values.fan }),
       });
       const data = await res.json();
       if (res.status === 401) {
@@ -361,8 +305,10 @@ export default function MahjongPage() {
         return;
       }
       // 房主加入：要等回應拿座位頻道，開局發牌才收得到
-      const info = await joinRoom(data.code);
+      const info = await joinRoom(data.code, nm);
       if (!info) return;
+      saveGameName(mjStorage(), nm); // 成功送出才存（v1.1 §4-2）
+      setNameReady(true);
       setRoomCode(data.code);
       setJoined(info.ended ? null : info);
       setScreen("room");
@@ -374,23 +320,17 @@ export default function MahjongPage() {
     }
   }
 
-  async function handleJoin() {
+  /** 輸入房號加入（房號 4 碼、名字由共用畫面檢查好才會送） */
+  async function handleJoin(joinCode: string, nm: string) {
     if (isSubmitting) return;
-    if (!joinCode || joinCode.length !== 4) {
-      setError("請輸入4位數房間碼");
-      return;
-    }
-    if (!name.trim()) {
-      setError("請輸入暱稱");
-      return;
-    }
     setIsSubmitting(true);
     setError("");
-    mjStorage().setItem("mj_name", name.trim());
-    setNameReady(true);
+    setName(nm);
     try {
-      const info = await joinRoom(joinCode);
+      const info = await joinRoom(joinCode, nm);
       if (!info) return;
+      saveGameName(mjStorage(), nm);
+      setNameReady(true);
       setRoomCode(joinCode);
       // 410：不帶 join 資訊，進房後自動加入會拿到「這場已結束」
       setJoined(info.ended ? null : info);
@@ -443,17 +383,36 @@ export default function MahjongPage() {
     );
   }
 
-  // --- Home / Create / Join screens ---
+  // --- Create / Join：三款共用的開房、加入畫面（設定卡、暱稱欄、按鈕都在共用外框裡；右上角帳號列、品牌區是麻將自己的） ---
+  if (screen === "create" || screen === "join") {
+    const back = () => { setScreen("home"); setError(""); };
+    return (
+      <>
+        <PortraitHint label="返回首頁" onClick={goHome} />
+        {screen === "create" ? (
+          <CreateRoomShell className="mjl" attrs={{ "data-mj-lobby": "create" }} brand={<Brand />} top={<AuthBar user={auth.user} onSignOut={auth.signOut} />}
+            sections={MJ_SECTIONS} initialName={nameInit()} busy={isSubmitting} error={error} onCreate={(v, nm) => void handleCreate(v, nm)} onBack={back} />
+        ) : (
+          <JoinByCode className="mjl" brand={<Brand />} top={<AuthBar user={auth.user} onSignOut={auth.signOut} />}
+            initialName={nameInit()} busy={isSubmitting} error={error} onJoin={(code, nm) => void handleJoin(code, nm)} onBack={back} />
+        )}
+        <MjPrefsPanel />
+        <BlockedDialog blocked={blocked} onClose={() => setBlocked(null)} />
+      </>
+    );
+  }
+
+  // --- Home screen ---
   if (screen !== "room") {
     return (
-      <div className={`mjl mjl-lobby flex-1 bg-[#0f2a1a]${screen === "create" ? " is-create" : ""}`}>
+      <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]">
         <PortraitHint label="返回首頁" onClick={goHome} />
         <AuthBar user={auth.user} onSignOut={auth.signOut} />
         <MjPrefsPanel />
         <BlockedDialog blocked={blocked} onClose={() => setBlocked(null)} />
         {auth.pairedAs !== null && <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} />}
         <Brand />
-        <div className={`mjl-col${screen === "create" ? " mjl-form" : ""}`}>
+        <div className="mjl-col">
           {screen === "home" ? (
             <div className="mjl-col fade-in">
               {myRoom && (
@@ -500,168 +459,7 @@ export default function MahjongPage() {
                 返回首頁
               </button>
             </div>
-          ) : screen === "create" ? (
-            <div className="mjl-create flex flex-col gap-4 w-full fade-in">
-              <NameField value={name} onChange={editName} fromLine={nameSource === "line" && !auth.user.isGuest} />
-
-              {/* 房間設定（手機橫向：左欄圈數＋底、右欄每台＋公式；桌機 mjl-cset 不影響排版，照舊一欄） */}
-              <div className="mjl-cgrid flex flex-col gap-3">
-                <div className="mjl-cset">
-
-                {/* 圈數 Card */}
-                <div className="mjl-card rounded-2xl p-4"
-                  style={{
-                    background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
-                    border: "1px solid rgba(201,169,110,0.15)",
-                  }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[#f0d68a] text-sm font-bold">圈數</span>
-                    <span className="mjl-sub text-white/40 text-xs">每圈4局</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[1, 2, 4, 8].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setTotalRounds(n)}
-                        className={`mjl-opt py-2.5 rounded-xl text-base font-bold cursor-pointer transition-all duration-150 active:scale-95
-                          ${totalRounds === n
-                            ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
-                            : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
-                          }`}
-                      >
-                        {n}圈
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 底 Card */}
-                <div className="mjl-card rounded-2xl p-4"
-                  style={{
-                    background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
-                    border: "1px solid rgba(201,169,110,0.15)",
-                  }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[#f0d68a] text-sm font-bold">底</span>
-                    <span className="mjl-sub text-white/40 text-xs">基本分</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[30, 50, 100, 200, 300, 500, 600, 1000].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setBasePoints(n)}
-                        className={`mjl-opt py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
-                          ${basePoints === n
-                            ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
-                            : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
-                          }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                </div>
-
-                <div className="mjl-cset">
-                {/* 每台 Card */}
-                <div className="mjl-card rounded-2xl p-4"
-                  style={{
-                    background: "linear-gradient(145deg, rgba(201,169,110,0.08) 0%, rgba(255,255,255,0.03) 100%)",
-                    border: "1px solid rgba(201,169,110,0.15)",
-                  }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[#f0d68a] text-sm font-bold">每台</span>
-                    <span className="mjl-sub text-white/40 text-xs">台數加成</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[10, 20, 30, 50, 100, 200].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setFanPoints(n)}
-                        className={`mjl-opt py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-150 active:scale-95
-                          ${fanPoints === n
-                            ? "bg-[#C9A96E] text-[#0f2a1a] shadow-lg shadow-[#C9A96E]/20"
-                            : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/5"
-                          }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 結算公式預覽 */}
-                <div className="mjl-formula rounded-xl px-4 py-3 flex items-center justify-center gap-2"
-                  style={{
-                    background: "rgba(0,0,0,0.25)",
-                    border: "1px dashed rgba(201,169,110,0.2)",
-                  }}>
-                  <span className="text-white/40 text-xs">每局</span>
-                  <span className="text-[#C9A96E] font-bold text-sm">{basePoints}</span>
-                  <span className="text-white/30 text-xs">+</span>
-                  <span className="text-white/60 text-xs">台數</span>
-                  <span className="text-white/30 text-xs">×</span>
-                  <span className="text-[#C9A96E] font-bold text-sm">{fanPoints}</span>
-                </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleCreate}
-                disabled={isSubmitting}
-                className="mjl-go w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
-                           cursor-pointer active:scale-95 transition-all duration-150
-                           hover:brightness-110 disabled:opacity-60 disabled:cursor-wait"
-              >
-                {isSubmitting ? "建立中..." : "建立房間"}
-              </button>
-              <button
-                onClick={() => {
-                  setScreen("home");
-                  setError("");
-                }}
-                className="mjl-back text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
-              >
-                返回
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4 w-full fade-in">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                placeholder="房間碼 (4位數)"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ""))}
-                onFocus={(e) => e.currentTarget.scrollIntoView({ block: "center" })}
-                className="w-full py-4 px-5 rounded-2xl bg-white/10 text-white text-center text-2xl
-                           tracking-[0.5em] placeholder:text-white/30 placeholder:tracking-normal
-                           placeholder:text-base outline-none focus:ring-2 focus:ring-[#C9A96E]/50 transition-all"
-              />
-              <NameField value={name} onChange={editName} fromLine={nameSource === "line" && !auth.user.isGuest} />
-              <button
-                onClick={handleJoin}
-                disabled={isSubmitting}
-                className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
-                           cursor-pointer active:scale-95 transition-all duration-150
-                           hover:brightness-110 disabled:opacity-60 disabled:cursor-wait"
-              >
-                {isSubmitting ? "加入中..." : "加入遊戲"}
-              </button>
-              <button
-                onClick={() => {
-                  setScreen("home");
-                  setError("");
-                }}
-                className="text-white/40 text-sm cursor-pointer hover:text-white/60 transition-colors"
-              >
-                返回
-              </button>
-            </div>
-          )}
+          ) : null}
 
           {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
         </div>
@@ -702,20 +500,14 @@ export default function MahjongPage() {
       code={roomCode}
       playerName={name}
       nameReady={nameReady}
-      nameFromLine={nameSource === "line" && !auth.user.isGuest}
+      nameInit={nameInit()}
       accountId={auth.user.id}
       guest={!!auth.user.isGuest}
       initialJoin={joined}
       onSetName={(n) => {
         setName(n);
         setNameReady(true);
-        mjStorage().setItem("mj_name", n);
-      }}
-      onNameEdited={() => {
-        if (nameSource !== "manual") {
-          setNameSource("manual");
-          mjStorage().setItem("mj_name_source", "manual");
-        }
+        saveGameName(mjStorage(), n);
       }}
       onAuthError={handleAuthError}
       onGoHome={goHome}
@@ -757,10 +549,9 @@ function RoomView({
   code,
   playerName,
   nameReady,
-  nameFromLine,
+  nameInit,
   initialJoin,
   onSetName,
-  onNameEdited,
   onAuthError,
   onGoHome,
   onLeft,
@@ -773,18 +564,15 @@ function RoomView({
   code: string;
   playerName: string;
   nameReady: boolean;
-  nameFromLine: boolean;
+  /** 邀請連結取名頁的暱稱欄預設值（game_name → LINE 名稱） */
+  nameInit: { name: string; fromLine: boolean };
   initialJoin: MjJoinInfo | null;
   onSetName: (n: string) => void;
-  onNameEdited: () => void;
   onAuthError: (status: 401 | 403, code?: string, body?: unknown) => void;
   onGoHome: () => void;
   /** 等人時退出房間成功（回麻將大廳） */
   onLeft: () => void;
 }) {
-  // 還沒改過字就顯示頁面的暱稱（登入後才帶入的 LINE 名稱也會跟上）
-  const [editedName, setEditedName] = useState<string | null>(null);
-  const localName = editedName ?? playerName;
 
   const {
     state,
@@ -812,16 +600,14 @@ function RoomView({
   const [startBlocked, setStartBlocked] = useState<Blocked | null>(null);
 
   // 等人時「退出房間」（老闆 2026-10-24）：伺服器真的把你移出房間、空出座位，才回大廳；失敗留在原畫面並提示
-  const [leaving, setLeaving] = useState(false);
-  const [leaveError, setLeaveError] = useState("");
-  const leaveRoom = async () => {
-    if (leaving) return;
-    setLeaving(true);
-    setLeaveError("");
+  // 等人時「退出房間」（老闆 2026-10-24）：伺服器真的把你移出房間、空出座位，才回大廳；失敗留在原畫面，由共用等人畫面顯示原因。
+  // 房間已滿、自己不在裡面（按鈕是「返回」）：直接回大廳
+  const leaveWaitingRoom = async (notSeated: boolean): Promise<{ ok: boolean; message?: string }> => {
+    if (notSeated) { onLeft(); return { ok: true }; }
     const err = await leaveWaiting();
-    setLeaving(false);
-    if (err) setLeaveError(err);
-    else onLeft();
+    if (err) return { ok: false, message: err };
+    onLeft();
+    return { ok: true };
   };
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -909,167 +695,53 @@ function RoomView({
     );
   }
 
-  // Name input (when joining via hash)
+  // 邀請連結進來、這台還沒存過名字：共用的取名頁（品牌區＋「加入房間 XXXX」＋暱稱欄＋加入）
   if (!nameReady) {
     return (
-      <div className="mjl flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] items-center justify-center px-6">
+      <>
         <PortraitHint label="返回首頁" onClick={onGoHome} />
-        <div className="flex flex-col items-center gap-6 w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-[#f0d68a] font-heading">加入房間 {code}</h2>
-          <NameField
-            value={localName}
-            onChange={(v) => {
-              setEditedName(v);
-              onNameEdited();
-            }}
-            fromLine={nameFromLine}
-          />
-          <button
-            onClick={() => {
-              if (localName.trim()) onSetName(localName.trim());
-            }}
-            className="w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
-                       cursor-pointer active:scale-95 transition-all duration-150"
-          >
-            加入
-          </button>
-        </div>
-      </div>
+        <InviteNamePrompt className="mjl" brand={<Brand />} code={code} initialName={nameInit} busy={false} error="" onJoin={(n) => onSetName(n)} onBack={onGoHome} />
+      </>
     );
   }
 
-  // Lobby (waiting for players)
+  // Lobby (waiting for players)：三款共用的等人畫面（房號卡＋複製邀請連結、設定摘要、四列座位、開始鈕、退出房間；v1.1 §7）
   if (state.status === "waiting") {
-    const isFull = state.players.length >= 4;
     const isInRoom = state.players.some((p) => p.id === state.myId);
-    const roomFull = isFull && !isInRoom;
-
+    const roomFull = state.players.length >= 4 && !isInRoom;
+    // 遊客的房間只有遊客能進：連結帶 ?guest=1，別的分頁打開就是遊客登入
+    const inviteUrl = typeof window === "undefined" ? `/mahjong#room=${code}` : `${window.location.origin}/mahjong${isGuestTab() ? "?guest=1" : ""}#room=${code}`;
+    const rs = state.roomSettings;
+    // 房裡有人被暫停（房卡 v1.2 2-5）：伺服器回 403 player_suspended，跳「不能開局」列出座位；房間維持等人
+    const start = async (): Promise<{ ok: boolean; message?: string }> => {
+      try {
+        await startGame();
+        return { ok: true };
+      } catch (e) {
+        let body: unknown = null;
+        try { body = JSON.parse((e as Error).message); } catch { /* 不是 JSON */ }
+        const b = blockedFrom(body, code);
+        if (b) { setStartBlocked(b); return { ok: true }; } // 已經跳視窗說明，等人畫面不再另外寫錯誤
+        return { ok: false, message: "開局失敗，請再按一次" };
+      }
+    };
     return (
-      <div className="mjl mjl-wait-page flex flex-col flex-1 min-h-dvh bg-[#0f2a1a] items-center justify-center px-6">
-        <PortraitHint label="退出房間" onClick={leaveRoom} />
-        {/* 手機橫向：左欄房間碼、底台、退出；右欄四個座位和開始鈕（.mjw 的 grid，桌機照舊一欄） */}
-        <div className="mjw flex flex-col items-center gap-6 w-full max-w-sm">
-          <h2 className="mjw-ttl text-xl font-bold text-[#f0d68a] font-heading">等待玩家加入</h2>
-
-          {roomFull && (
-            <div className="mjw-full w-full rounded-2xl bg-red-500/20 border border-red-500/30 p-4 text-center fade-in">
-              <p className="text-red-400 font-bold text-lg">房間已滿</p>
-              <p className="text-red-300/70 text-sm mt-1">此房間已有 4 位玩家</p>
-            </div>
-          )}
-
-          {/* Room code */}
-          <div className="mjw-code bg-white/10 rounded-2xl px-8 py-4 text-center">
-            <p className="text-white/50 text-xs mb-1">房間碼</p>
-            <p className="mjw-num text-4xl font-bold text-[#C9A96E] tracking-[0.3em] font-heading">{code}</p>
-            <button
-              onClick={() => {
-                const base = window.location.origin + "/mahjong";
-                // 遊客的房間只有遊客能進：連結帶 ?guest=1，別的分頁打開就是遊客登入
-                navigator.clipboard?.writeText(`${base}${isGuestTab() ? "?guest=1" : ""}#room=${code}`);
-              }}
-              className="mt-2 text-xs text-white/40 cursor-pointer active:text-[#C9A96E] hover:text-white/60 transition-colors"
-            >
-              點擊複製連結
-            </button>
-          </div>
-
-          {/* Room settings display */}
-          {state.roomSettings && (
-            <div className="mjw-set bg-white/5 rounded-xl px-4 py-2.5 w-full">
-              <div className="flex justify-center gap-6 text-sm">
-                <span className="text-white/40">{state.roomSettings.totalRounds}圈</span>
-                <span className="text-white/40">底{state.roomSettings.basePoints}</span>
-                <span className="text-white/40">台{state.roomSettings.fanPoints}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Player seats */}
-          <div className="mjw-seats grid grid-cols-2 gap-3 w-full">
-            {[0, 1, 2, 3].map((seat) => {
-              const player = state.players.find((p) => p.seat === seat);
-              return (
-                <div
-                  key={seat}
-                  className={`mjw-seat rounded-xl p-4 text-center transition-all duration-300 ${
-                    player
-                      ? "bg-[#C9A96E]/20 border border-[#C9A96E]/30"
-                      : "bg-white/5 border border-white/10"
-                  }`}
-                >
-                  <p className="text-xs text-white/40 mb-1">
-                    座位 {seat + 1}
-                  </p>
-                  {player ? (
-                    <p className="font-bold text-[#f0d68a]">
-                      {player.name}
-                      {player.id === state.myId && " (你)"}
-                      {player.id === state.hostId && " *"}
-                    </p>
-                  ) : (
-                    <p className="text-white/20">等待中...</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Start button */}
-          <BlockedDialog blocked={startBlocked} onClose={() => setStartBlocked(null)} />
-          {/* 開局確認（老闆 2026-11-20）：房主按開始後蓋共用的 StartConfirm（四家小牌子、10 秒倒數、同意／房主取消）；
-              四家都同意伺服器就發牌（畫面跟著狀態換成牌桌）；時間到沒到齊就回等人，上面一條提示誰沒按 */}
-          <MjStartConfirm players={state.players} myId={state.myId} isHost={isHost} info={startConfirm} onTimeUp={refreshState} onCancel={cancelStart}
-            onAgree={async () => {
-              const r = await confirmStart();
-              const b = r.ok ? null : blockedFrom(r.body, code); // 發牌前伺服器再查一次暫停：跟開始被擋一樣跳「不能開局」
-              if (b) { setStartBlocked(b); return { ok: true }; }
-              return r;
-            }} />
-          {isHost ? (
-            <button
-              onClick={() => {
-                // 房裡有人被暫停（房卡 v1.2 2-5）：伺服器回 403 player_suspended，跳「不能開局」列出座位；房間維持等人
-                startGame().catch((e: unknown) => {
-                  let body: unknown = null;
-                  try { body = JSON.parse((e as Error).message); } catch { /* 不是 JSON：照舊不處理 */ }
-                  const b = blockedFrom(body, code);
-                  if (b) setStartBlocked(b);
-                });
-              }}
-              disabled={state.players.length !== 4}
-              className="mjw-start w-full py-4 rounded-2xl bg-[#C9A96E] text-[#0f2a1a] font-bold text-lg
-                         cursor-pointer active:scale-95 transition-all duration-150
-                         disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              {state.players.length === 4
-                ? "開始遊戲"
-                : `等待玩家 (${state.players.length}/4)`}
-            </button>
-          ) : (
-            <div className="mjw-start w-full py-4 rounded-2xl bg-white/10 text-center">
-              <p className="text-white/50 font-medium">
-                {state.players.length === 4
-                  ? "等待房主開始遊戲"
-                  : `等待玩家 (${state.players.length}/4)`}
-              </p>
-            </div>
-          )}
-
-          <div className="mjw-back w-full flex flex-col items-center gap-1">
-            <button
-              onClick={leaveRoom}
-              disabled={leaving}
-              data-mj-leave
-              className="w-full py-2.5 rounded-2xl border border-[#C9A96E]/40 text-[#f0d68a] text-sm font-bold
-                         cursor-pointer active:scale-95 hover:bg-white/5 transition-all duration-150 disabled:opacity-50"
-            >
-              {leaving ? "退出中…" : "退出房間"}
-            </button>
-            {leaveError && <p className="text-red-300 text-xs text-center" role="alert">{leaveError}</p>}
-          </div>
-        </div>
-      </div>
+      <>
+        <PortraitHint label="退出房間" onClick={() => void leaveWaitingRoom(roomFull)} />
+        <WaitingRoom className="mjl" code={code} inviteUrl={inviteUrl} summary={rs ? [`${rs.totalRounds}圈`, `底${rs.basePoints}`, `台${rs.fanPoints}`] : []}
+          isHost={isHost} full={roomFull} onStart={start} onLeave={() => leaveWaitingRoom(roomFull)}
+          seats={state.players.map((p) => ({ seat: p.seat, name: p.name, avatarUrl: p.avatarUrl ?? null, me: p.id === state.myId, host: p.id === state.hostId }))} />
+        <BlockedDialog blocked={startBlocked} onClose={() => setStartBlocked(null)} />
+        {/* 開局確認（老闆 2026-11-20）：房主按開始後蓋共用的 StartConfirm（四家小牌子、10 秒倒數、同意／房主取消）；
+            四家都同意伺服器就發牌（畫面跟著狀態換成牌桌）；時間到沒到齊就回等人，上面一條提示誰沒按 */}
+        <MjStartConfirm players={state.players} myId={state.myId} isHost={isHost} info={startConfirm} onTimeUp={refreshState} onCancel={cancelStart}
+          onAgree={async () => {
+            const r = await confirmStart();
+            const b = r.ok ? null : blockedFrom(r.body, code); // 發牌前伺服器再查一次暫停：跟開始被擋一樣跳「不能開局」
+            if (b) { setStartBlocked(b); return { ok: true }; }
+            return r;
+          }} />
+      </>
     );
   }
 

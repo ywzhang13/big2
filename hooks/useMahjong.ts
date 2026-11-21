@@ -593,14 +593,15 @@ export function useMahjong(
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
         // Update players from DB
-        const lobbyData = data as { lobbyPlayers?: { id: string; name: string; seat: number }[]; hostId?: string; roomSettings?: RoomSettings };
+        // 等人座位的大頭照（老柯 2026-11-20：lobbyPlayers 帶 avatarUrl，沒有是 null）
+        const lobbyData = data as { lobbyPlayers?: { id: string; name: string; seat: number; avatarUrl?: string | null }[]; hostId?: string; roomSettings?: RoomSettings };
         const lobbyPlayers = lobbyData.lobbyPlayers || [];
         const hostId = lobbyData.hostId || "";
         const lobbySettings = lobbyData.roomSettings;
         if (lobbyPlayers.length > 0) {
           setState((prev) => {
             const players: MjPlayer[] = lobbyPlayers.map((p) => ({
-              id: p.id, name: p.name, seat: p.seat,
+              id: p.id, name: p.name, seat: p.seat, avatarUrl: p.avatarUrl ?? null,
               tileCount: 0, flowers: [], discards: [], revealed: [], isDealer: false,
             }));
             const mySeat = players.find((p) => p.id === myId)?.seat ?? prev.mySeat;
@@ -1035,19 +1036,22 @@ export function useMahjong(
     }
 
     // --- mj_player_joined ---
+    // 等人時改名也走這個事件（renamed: true，名字照下面「已在座就換名字」更新）；入座和改名都帶 avatarUrl（老柯 2026-11-20）
     onHeld(channel, "mj_player_joined", ({ payload }) => {
-      const { playerId, name, seat } = payload as {
+      const { playerId, name, seat, avatarUrl } = payload as {
         playerId: string;
         name: string;
         seat: number;
+        avatarUrl?: string | null;
       };
+      const av = avatarUrl === undefined ? {} : { avatarUrl };
       setState((prev) => {
         if (prev.status !== "waiting") return prev;
         const exists = prev.players.find((p) => p.id === playerId);
         let players: MjPlayer[];
         if (exists) {
           players = prev.players.map((p) =>
-            p.id === playerId ? { ...p, name, seat } : p
+            p.id === playerId ? { ...p, name, seat, ...av } : p
           );
         } else {
           players = [
@@ -1056,6 +1060,7 @@ export function useMahjong(
               id: playerId,
               name,
               seat,
+              ...av,
               tileCount: 0,
               flowers: [],
               discards: [],

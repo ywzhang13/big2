@@ -73,7 +73,7 @@ export async function insertRoom(row: { code: string; status: string; host_id: s
 }
 export async function loadSeats(roomId: string) {
   await wait();
-  return (seats[roomId] ?? []).map(({ seat, player_id, user_id }) => ({ seat, player_id, user_id })).sort((a, b) => a.seat - b.seat);
+  return (seats[roomId] ?? []).map(({ seat, player_id, user_id, name }) => ({ seat, player_id, user_id, name })).sort((a, b) => a.seat - b.seat);
 }
 export async function loadSeatsByUser(userId: string) {
   await wait();
@@ -115,6 +115,21 @@ export async function claimLobbyForLeave(roomId: string, base: number | undefine
   lobby.stateVersion = (base ?? 0) + 1;
   r.game_state = clone(lobby) as unknown as MahjongGameState; stats.writes++;
   if (newHostId) r.host_id = newHostId;
+}
+/** mj_lobby_rename 的記憶體版：await 之後沒有 await＝等同資料庫鎖住房間的同一個交易 */
+export async function renameLobbyPlayer(roomId: string, playerId: string, name: string) {
+  await wait();
+  const r = rooms[roomId];
+  if (!r) return "not_found";
+  if ((r.status ?? "waiting") !== "waiting") return "started";
+  const p = (seats[roomId] ?? []).find((x) => x.player_id === playerId);
+  if (!p) return "not_seated";
+  if (p.name === name) return "same";
+  p.name = name;
+  const gs = ((r.game_state as unknown as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+  r.game_state = { ...gs, stateVersion: ((gs.stateVersion as number | undefined) ?? 0) + 1 } as unknown as MahjongGameState;
+  stats.writes++;
+  return "renamed";
 }
 export async function deletePlayer(roomId: string, playerId: string) {
   await wait();

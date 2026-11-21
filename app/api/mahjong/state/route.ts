@@ -1,6 +1,7 @@
 import { loadRoom, loadPlayers, StateConflictError, toPlayerGameState, toPublicGameState } from "@/lib/mahjong/db";
 import { confirmView, lobbyOf, settleMjConfirm } from "@/lib/mahjong/startConfirm";
 import { endedResponse } from "@/lib/records/close";
+import { getPictureUrls } from "@/lib/auth";
 import { MahjongGameState } from "@/lib/mahjong/gameState";
 import { privateChannelName, seatOwnerError } from "@/lib/mahjong/access";
 import { viewerCounts } from "@/lib/mahjong/spectate/rules";
@@ -43,15 +44,17 @@ export async function GET(request: Request) {
       try { lobby = await settleMjConfirm(room, dbPlayers ?? [], now); } catch (err) { if (!(err instanceof StateConflictError)) throw err; }
       // Extract roomSettings if they were saved at room creation
       const savedSettings = (room.game_state as unknown as Record<string, unknown>)?.roomSettings;
+      const pics = await getPictureUrls((dbPlayers || []).map((p) => p.user_id ?? null)); // 等人畫面的大頭照：照帳號查（開局後改讀牌局狀態裡存好的）
       return Response.json({
         roomId: room.id,
         code: room.code,
         status: room.status,
         hostId: room.host_id,
-        lobbyPlayers: (dbPlayers || []).map((p: { player_id: string; name: string; seat: number }) => ({
+        lobbyPlayers: (dbPlayers || []).map((p: { player_id: string; name: string; seat: number }, i: number) => ({
           id: p.player_id,
           name: p.name,
           seat: p.seat,
+          avatarUrl: pics[i] ?? null,
         })),
         roomSettings: savedSettings ?? null,
         startConfirm: confirmView(lobby.startConfirm, now),       // 開局確認：誰已同意、截止時間、這一輪的編號

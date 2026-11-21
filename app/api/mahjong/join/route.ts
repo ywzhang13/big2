@@ -1,22 +1,29 @@
-import { insertPlayer, loadRoomByCode, loadSeats } from "@/lib/mahjong/db";
+// 名字（共用開房流程，和十三支一樣，2026-11-20）：去掉前後空白後 1～8 個字（Array.from 算，表情符號算 1 個字），不合法回 400 bad_name；
+// 等人時同一個帳號重新加入、名字換了 → 座位名字換新，廣播 mj_player_joined（renamed: true）；開局後重新加入名字不變。
+// 入座廣播帶 avatarUrl（LINE 大頭照，沒有是 null），等人畫面直接顯示。
+import { insertPlayer, loadRoomByCode, loadSeats, renameLobbyPlayer } from "@/lib/mahjong/db";
+import { NAME_MESSAGE, normalizeName } from "@/lib/thirteen/playerName";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { endedResponse } from "@/lib/records/close";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, getPictureUrls } from "@/lib/auth";
 import { notLoggedIn, notYourSeat, privateChannelName } from "@/lib/mahjong/access";
 import { suspendedError } from "@/lib/roomCard/guard";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { code, name, playerId } = body as {
+    const { code, name: rawName, playerId } = body as {
       code?: string;
       name?: string;
       playerId?: string;
     };
 
-    if (!code || !name || !playerId) {
+    if (!code || !playerId) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
+    // 名字：空字串、只有空白、不是字串、超過 8 字都回 bad_name（審伯 R2），不入座、不改名
+    const name = normalizeName(rawName);
+    if (!name) return Response.json({ error: "bad_name", message: NAME_MESSAGE }, { status: 400 });
 
     // Find room by code
     const room = await loadRoomByCode(code);
@@ -48,6 +55,12 @@ export async function POST(request: Request) {
     if (mine) {
       // 開局後座位已隨機打亂：以牌局狀態裡的座位為準（mj_players.seat 只是入座順序）
       const gameSeat = (room.game_state as { players?: { id: string; seat: number }[] } | null)?.players?.find((p) => p.id === mine.player_id)?.seat;
+      // 等人時換了名字：座位名字換新、通知同桌（開局後名字已寫進牌局，不改）。
+      // 改名和開局由資料庫函式排先後（審伯 R1）：這裡讀到 waiting 之後才開局的，函式會回 started，不改、不廣播
+      if (room.status === "waiting" && mine.name !== name && (await renameLobbyPlayer(room.id, mine.player_id, name)) === "renamed") {
+        const [avatarUrl] = await getPictureUrls([user.id]);
+        await mjBroadcast(room.code, "mj_player_joined", { playerId: mine.player_id, name, seat: mine.seat, playerCount: existingPlayers.length, renamed: true, avatarUrl });
+      }
       return Response.json({ seat: gameSeat ?? mine.seat, roomId: room.id, rejoined: true, ...seatInfo(mine.player_id) });
     }
 
@@ -101,12 +114,14 @@ export async function POST(request: Request) {
       return Response.json({ error: "加入房間失敗" }, { status: 500 });
     }
 
-    // Broadcast player joined
+    // Broadcast player joined（帶大頭照，等人畫面直接顯示）
+    const [avatarUrl] = await getPictureUrls([user.id]);
     await mjBroadcast(room.code, "mj_player_joined", {
       playerId,
       name,
       seat,
       playerCount: existingPlayers.length + 1,
+      avatarUrl,
     });
 
     return Response.json({ seat, roomId: room.id, ...seatInfo(playerId) });

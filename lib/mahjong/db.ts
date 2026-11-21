@@ -209,10 +209,10 @@ export async function insertRoom(row: {
 }
 
 /** 加入房間用：房間裡已經有的座位（查詢失敗丟出，不當成空房） */
-export async function loadSeats(roomId: string): Promise<Pick<MjPlayer, "seat" | "player_id" | "user_id">[]> {
+export async function loadSeats(roomId: string): Promise<Pick<MjPlayer, "seat" | "player_id" | "user_id" | "name">[]> {
   const { data, error } = await getSupabaseAdmin()
     .from("mj_players")
-    .select("seat, player_id, user_id")
+    .select("seat, player_id, user_id, name") // name：等人時重新加入要比對有沒有改名
     .eq("room_id", roomId)
     .order("seat", { ascending: true });
   if (error) throw new Error(`查詢玩家失敗：${error.message}`);
@@ -280,6 +280,19 @@ export async function claimLobbyForLeave(
   if (!data || data.length === 0) throw new StateConflictError();
   lobbyState.stateVersion = (baseVersion ?? 0) + 1;
   void cacheGameState(roomId, update.game_state as MahjongGameState).catch(() => {});
+}
+
+/**
+ * 等人階段重新加入換了名字（共用開房流程，和十三支一樣）：資料庫函式 mj_lobby_rename 在同一個交易裡鎖房間、
+ * 確認還在等人、改座位名字、等人階段版本 +1（審伯 R1：改名和開局不能交錯）。
+ * renamed＝改好了（開局那次存檔會撞版本、重讀到新名字）；started＝已經開局，不改；same＝名字一樣；not_seated／not_found
+ */
+export async function renameLobbyPlayer(roomId: string, playerId: string, name: string): Promise<"renamed" | "same" | "started" | "not_seated" | "not_found"> {
+  const { data, error } = await getSupabaseAdmin().rpc("mj_lobby_rename", { p_room_id: roomId, p_player_id: playerId, p_name: name });
+  if (error) throw new Error(`改名失敗：${error.message}`);
+  const r = data as { result: "renamed" | "same" | "started" | "not_seated" | "not_found"; game_state?: MahjongGameState };
+  if (r.result === "renamed" && r.game_state) void cacheGameState(roomId, r.game_state).catch(() => {}); // 等人階段版本變了，快取跟著換
+  return r.result;
 }
 
 /** 離座：刪掉這個玩家的座位（等人階段退出用），回傳刪了幾筆 */
