@@ -97,3 +97,9 @@
 .gpm { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 20; }
 .gpm .mjm-menu { --gold-l: #f0d68a; cursor: pointer; }
 .gpm .mjm-menu-pop .prefs { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: #f0d68a; font-weight: 700; border-radius: 8px; cursor: pointer; width: 100%; }
+/* 手機直向（只有總大廳的齒輪開得到；小宜規格 A8）：左右留 12、上下避開安全區；分頁不折行；快速主題 5 張放不下改 4＋1 */
+@media (max-width: 480px) and (orientation: portrait) {
+  .gpp-card { width: calc(100vw - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); }
+  .gpp-card .gpp-tabs button { min-width: 0; padding: 0 10px; font-size: 13px; white-space: nowrap; }
+  .gpp-themes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

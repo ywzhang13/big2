@@ -28,27 +28,27 @@ export default function StartConfirm({ seats, secondsLeft, totalSeconds, isHost,
   const n = seats.filter((s) => s.ok).length;
   const pct = Math.max(0, Math.min(100, (secondsLeft / totalSeconds) * 100));
   return (
-    <div className="sc-mask" data-start-confirm>
-      <div className="sc-card" role="dialog" aria-modal="true" aria-labelledby="sc-ttl">
-        <div className="sc-hd">
-          <b id="sc-ttl">準備開局</b>
-          <span className="sc-sec" aria-live="polite" data-start-confirm-sec={secondsLeft}>{secondsLeft}</span>
+    <div className="stc-mask" data-start-confirm>
+      <div className="stc-card" role="dialog" aria-modal="true" aria-labelledby="stc-ttl">
+        <div className="stc-hd">
+          <b id="stc-ttl">準備開局</b>
+          <span className="stc-sec" aria-live="polite" data-start-confirm-sec={secondsLeft}>{secondsLeft}</span>
         </div>
-        <div className="sc-bar" aria-hidden><i style={{ width: `${pct}%` }} /></div>
-        <div className="sc-seats">
+        <div className="stc-bar" aria-hidden><i style={{ width: `${pct}%` }} /></div>
+        <div className="stc-seats">
           <span className="cnt">同意 {n}/{seats.length}</span>
           {seats.map((s) => (
-            <span key={s.key} className={`sc-chip${s.ok ? " ok" : " wait"}${s.me ? " me" : ""}`} data-start-confirm-seat={s.key} data-ok={s.ok ? "1" : "0"}>
+            <span key={s.key} className={`stc-chip${s.ok ? " ok" : " wait"}${s.me ? " me" : ""}`} data-start-confirm-seat={s.key} data-ok={s.ok ? "1" : "0"}>
               <i>{s.ok ? "✓" : "…"}</i><span>{s.me ? "你" : s.name}</span>
             </span>
           ))}
         </div>
-        {error && <p className="sc-err" role="alert">{error}</p>}
-        <div className="sc-act">
+        {error && <p className="stc-err" role="alert">{error}</p>}
+        <div className="stc-act">
           {agreed
-            ? <div className="sc-btn mute" data-start-confirm-wait>已同意，等其他人</div>
-            : <button type="button" className="sc-btn" disabled={busy || secondsLeft <= 0} onClick={onAgree} data-start-confirm-agree>{busy ? "送出中…" : "同意"}</button>}
-          {isHost && <button type="button" className="sc-btn line" disabled={busy} onClick={onCancel} data-start-confirm-cancel>取消開局</button>}
+            ? <div className="stc-btn mute" data-start-confirm-wait>已同意，等其他人</div>
+            : <button type="button" className="stc-btn" disabled={busy || secondsLeft <= 0} onClick={onAgree} data-start-confirm-agree>{busy ? "送出中…" : "同意"}</button>}
+          {isHost && <button type="button" className="stc-btn line" disabled={busy} onClick={onCancel} data-start-confirm-cancel>取消開局</button>}
         </div>
       </div>
     </div>

@@ -608,7 +608,7 @@ function Big2StartConfirm({ players, myId, isHost, canCancel, readyIds, info, on
   const ready = sc ? new Set([...sc.readyIds, ...readyIds]) : readyIds;
   return (
     <>
-      {note && <div className="sc-note" role="status" data-big2-start-note={info.lastStartConfirm?.reason}>{note}</div>}
+      {note && <div className="stc-note" role="status" data-big2-start-note={info.lastStartConfirm?.reason}>{note}</div>}
       {sc && (
         // 「取消」只有拿得到入座憑證的房主才有（localStorage，重新整理也在）；沒有就等 10 秒自己作廢
         <StartConfirm seats={big2ConfirmSeats(players, ready, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost && canCancel} busy={busy} error={err}

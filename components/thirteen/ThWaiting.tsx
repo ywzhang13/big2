@@ -80,7 +80,7 @@ export default function ThWaiting({ view, myPlayerId, clockSkew = 0, onStart, on
       <WaitingRoom className="mjl" code={view.code} inviteUrl={typeof window === "undefined" ? `/thirteen#room=${view.code}` : `${window.location.origin}/thirteen#room=${view.code}`}
         summary={waitingSummary(view)} isHost={isHost} onStart={onStart} onLeave={onLeave}
         seats={view.seats.map((s) => ({ seat: s.seat, name: s.name, avatarUrl: s.avatarUrl ?? null, me: s.playerId === myPlayerId, host: s.playerId === view.hostId }))} />
-      {note && <div className="sc-note" role="status" data-th-start-note={view.lastStartConfirm?.reason}>{note}</div>}
+      {note && <div className="stc-note" role="status" data-th-start-note={view.lastStartConfirm?.reason}>{note}</div>}
       {sc && (
         <StartConfirm seats={confirmSeats(view, myPlayerId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost} busy={busy} error={err}
           onAgree={() => void run(() => onAgree(sc.id))} onCancel={() => void run(() => onCancel(sc.id))} />

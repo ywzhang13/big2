@@ -1057,7 +1057,7 @@ function MjStartConfirm({ players, myId, isHost, info, onAgree, onCancel, onTime
   const note = mjConfirmNote(info.lastStartConfirm, !!sc, players, myId, isHost);
   return (
     <>
-      {note && <div className="sc-note" role="status" data-mj-start-note={info.lastStartConfirm?.reason}>{note}</div>}
+      {note && <div className="stc-note" role="status" data-mj-start-note={info.lastStartConfirm?.reason}>{note}</div>}
       {sc && (
         <StartConfirm seats={mjConfirmSeats(players, sc.readyIds, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost} busy={busy} error={err}
           onAgree={() => void run(onAgree)} onCancel={() => void run(onCancel)} />

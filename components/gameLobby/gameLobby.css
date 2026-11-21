@@ -121,3 +121,10 @@ input.gl-opt { cursor: text; }
   .gl-seat .nm { font-size: 15px; }
   .gl-btn.line { height: 40px; }
 }
+/* iPhone SE 橫向（667×375）：設定區 420＋間距 20＋右欄 260＝700 > 667，名字欄和「建立房間」超出畫面（小宜規格 A5） */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 720px) {
+  .gl.has-set { gap: 12px; }
+  .gl.has-set .gl-col { width: 240px; }
+  .gl-set { width: 380px; }
+  .gl-opt { font-size: 13px; }
+}
