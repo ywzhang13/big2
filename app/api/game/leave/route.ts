@@ -36,7 +36,9 @@ export async function POST(request: Request) {
       const rest = players.filter((p) => p.player_id !== playerId); // 最早加入的在前
       const wasHost = room.host_id === playerId;
       const hostId = wasHost ? (rest[0]?.player_id ?? null) : room.host_id;
-      const patch: Record<string, unknown> = { status: "waiting", ready_players: [] }; // 準備確認中有人走 → 回到等人
+      const patch: Record<string, unknown> = { status: "waiting", ready_players: [], start_confirm: null }; // 準備確認中有人走 → 回到等人
+      const c = room.status === "ready_check" ? room.start_confirm : null;
+      if (c) patch.last_start_confirm = { reason: "seats_changed", missingIds: c.seatIds.filter((id) => !c.readyIds.includes(id)), at: Date.now() }; // 開局確認作廢的原因
       if (wasHost && hostId) patch.host_id = hostId;
       const newVersion = await claimRoom(roomId, room.row_version, patch);
       if (newVersion === null) continue; // 中間有人動過（例如開始發牌）：重讀再判斷

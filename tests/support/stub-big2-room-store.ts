@@ -31,6 +31,7 @@ export async function loadRoomState(roomId: string) {
     id: r.id, code: r.code, status: r.status, host_id: extra[roomId]?.host_id ?? null,
     current_turn: r.current_turn ?? null, last_play: r.last_play ?? null, pass_count: r.pass_count ?? 0, round_starter: r.round_starter ?? null,
     scores: r.scores, ready_players: extra[roomId]?.ready_players ?? [],
+    start_confirm: extra[roomId]?.start_confirm ?? null, last_start_confirm: extra[roomId]?.last_start_confirm ?? null,
   };
 }
 export async function loadRoomPlayers(roomId: string) {

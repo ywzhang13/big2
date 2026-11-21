@@ -10,6 +10,27 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { StateRequestGate } from "@/lib/mahjong/stateSync";
 
+/** 開局確認（老柯〈大老二開局確認 API〉2026-11-20）：房主按開始後 10 秒內四家都同意才發牌；deadline、serverNow 是伺服器毫秒 */
+/** id：這一輪確認的編號（老柯 R1 修正）；同意、取消都要帶，舊一輪晚到的請求伺服器回 409 stale_confirm */
+export interface Big2StartConfirm { id: string; startedBy: string; readyIds: string[]; seatIds: string[]; deadline: number; serverNow: number }
+/** 入座憑證（老柯〈大老二開局確認 API〉第 8 節，取代 cancelToken）：第一次入座成功時 join 回應帶 seatKey，
+ *  跟玩家 id 一樣存在 localStorage（依房間 id），重新整理、用連結回來都還在；房主按開始、取消都要帶。只填房主 id、別人的憑證一律 403 */
+const seatKeyKey = (roomId: string) => `big2_seat_key:${roomId}`;
+export function loadSeatKey(roomId: string | null | undefined): string | null {
+  if (!roomId || typeof window === "undefined") return null;
+  try { return window.localStorage.getItem(seatKeyKey(roomId)); } catch { return null; }
+}
+/** join 回應有 seatKey（只有第一次入座有）就存起來；重新加入、用連結回來不會再給，留著原本的 */
+export function saveSeatKey(join: { roomId?: string; seatKey?: string } | null | undefined) {
+  if (!join?.roomId || !join.seatKey || typeof window === "undefined") return;
+  try { window.localStorage.setItem(seatKeyKey(join.roomId), join.seatKey); } catch { /* 存不了：這個座位不能當房主開局，退出再入座 */ }
+}
+/** 沒有入座憑證（例如上線前就坐在房裡）或伺服器說不是房主：請他退出再入座 */
+export const NO_SEAT_KEY_MSG = "這個座位沒有開局權限，請退出房間再重新入座";
+/** 上一次開局確認為什麼沒開成：timeout＝有人沒按、host＝房主取消、seats_changed＝有人退出；房主重按或開局後＝null */
+export interface Big2LastStartConfirm { reason: "timeout" | "host" | "seats_changed"; missingIds: string[]; at: number }
+export interface Big2ConfirmInfo { startConfirm: Big2StartConfirm | null; lastStartConfirm: Big2LastStartConfirm | null; clockSkew: number }
+
 /** 大老二沒有慢慢摸牌的排隊：給 StateRequestGate 一個永遠沒在排隊的狀態 */
 const NO_HOLD = { on: false, gen: 0 };
 
@@ -58,6 +79,10 @@ export function useGame(roomCode: string, playerName: string) {
 
   const [roomId, setRoomId] = useState<string>("");
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // 開局確認：一律照 GET state 的 startConfirm、lastStartConfirm（廣播只當「該重抓了」），重新整理也一樣；clockSkew＝伺服器 − 本機
+  const [confirm, setConfirm] = useState<Big2ConfirmInfo>({ startConfirm: null, lastStartConfirm: null, clockSkew: 0 });
+  const confirmRef = useRef(confirm);
+  confirmRef.current = confirm; // 同意、取消送出時用「畫面上這一輪」的編號
   const stateRef = useRef(state);
   stateRef.current = state;
   const roomIdRef = useRef(roomId);
@@ -94,7 +119,10 @@ export function useGame(roomCode: string, playerName: string) {
         finishedHands?: Record<string, Card[]>;
         readyCheck?: boolean;
         readyPlayers?: string[];
+        startConfirm?: Big2StartConfirm | null;
+        lastStartConfirm?: Big2LastStartConfirm | null;
       }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`);
+      const recvAt = Date.now();
       const verdict = stateGateRef.current.settle(reqId, NO_HOLD.gen, NO_HOLD);
       if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
       if (verdict !== "apply") return;
@@ -131,6 +159,11 @@ export function useGame(roomCode: string, playerName: string) {
         finishedHands: data.finishedHands,
         readyCheck: isReadyCheck,
         readyPlayers: new Set(data.readyPlayers || []),
+      }));
+      const sc = data.startConfirm ?? null;
+      setConfirm((prev) => ({
+        startConfirm: sc, lastStartConfirm: data.lastStartConfirm ?? null,
+        clockSkew: sc ? sc.serverNow - recvAt : prev.clockSkew, // 只有確認中才有伺服器時間；回應剛收到時的本機時間當基準（輕微高估延遲，倒數寧可早一點到 0）
       }));
     } catch (err) {
       // 房間已刪：410 附總結算；404 表示房間不在了但沒有紀錄
@@ -201,22 +234,34 @@ export function useGame(roomCode: string, playerName: string) {
       });
     });
 
-    onEvent("ready_check", () => {
+    // 開局確認的三個廣播：先照廣播改畫面（快），再讀一次狀態（截止時間、上一次為什麼沒開成都以伺服器為準）
+    const refetch = () => { if (roomIdRef.current) void fetchStateRef.current?.(roomIdRef.current); };
+    onEvent("ready_check", ({ payload }) => {
       try { navigator.vibrate?.(200); } catch {}
+      const readyIds = (payload as { readyIds?: string[] }).readyIds ?? [];
       setState((prev) => ({
         ...prev,
         readyCheck: true,
-        readyPlayers: new Set(),
+        readyPlayers: new Set(readyIds),
       }));
+      refetch();
     });
 
     onEvent("player_ready", ({ payload }) => {
-      const { playerId } = payload as { playerId: string };
+      const { playerId, readyIds } = payload as { playerId: string; readyIds?: string[] };
       setState((prev) => {
-        const newReady = new Set(prev.readyPlayers);
+        const newReady = new Set(readyIds ?? prev.readyPlayers);
         newReady.add(playerId);
         return { ...prev, readyPlayers: newReady };
       });
+      refetch();
+    });
+
+    // 時間到、房主取消、有人退出：回到等人（誰沒按讀狀態的 lastStartConfirm）
+    onEvent("ready_check_cancelled", () => {
+      setState((prev) => (prev.status === "waiting" ? { ...prev, readyCheck: false, readyPlayers: new Set<string>() } : prev));
+      setConfirm((prev) => ({ ...prev, startConfirm: null }));
+      refetch();
     });
 
     // Next-game 四家同意制（繼續下一局）
@@ -412,38 +457,52 @@ export function useGame(roomCode: string, playerName: string) {
   // Host = seat 0 player
   const isHost = state.hostId === myId || (state.hostId === "" && state.mySeat === 0);
 
-  // Start game — host clicks and we deal directly (no ready-check gating,
-  // matches mahjong's flow per user request 2026-04-15).
-  const startGame = useCallback(async () => {
+  // 開始遊戲（老闆 2026-11-20）：房主按開始＝發起開局確認（ready-check），倒數 10 秒、四家都同意伺服器才發牌
+  const startGame = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
     const s = stateRef.current;
-    if (s.players.length !== 4) return;
-    if (s.status !== "waiting") return;
-    if (s.hostId !== myId) return;
+    if (s.players.length !== 4 || s.status !== "waiting" || s.hostId !== myId) return { ok: false, message: "還不能開始" };
     try {
-      await api("POST", "/api/game/deal", {
-        roomId: roomIdRef.current,
-        playerId: myId,
-      });
+      const seatKey = loadSeatKey(roomIdRef.current);
+      if (!seatKey) return { ok: false, message: NO_SEAT_KEY_MSG };
+      await api("POST", "/api/game/ready-check", { roomId: roomIdRef.current, playerId: myId, seatKey });
+      return { ok: true };
     } catch (err) {
-      console.error("[big2] deal failed:", err);
-    }
+      if ((err as { status?: number }).status === 403) return { ok: false, message: NO_SEAT_KEY_MSG }; // 憑證不對或不是房主
+      console.error("[big2] ready-check failed:", err);
+      return { ok: false, message: "開始失敗，請再按一次" };
+    } finally { if (roomIdRef.current) void fetchStateRef.current?.(roomIdRef.current); }
   }, [myId]);
 
-  // Confirm ready
-  const confirmReady = useCallback(async () => {
+  // 開局確認：按「同意」（第四家同意＝伺服器直接發牌）
+  const confirmReady = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
     try {
-      const data = await api<{ allReady: boolean }>("POST", "/api/game/ready", {
-        roomId: roomIdRef.current,
-        playerId: myId,
-      });
-      // If all ready, the backend will broadcast game_start + deal_hand
-      if (data.allReady) {
-        console.log("[big2] all players ready, game starting...");
-      }
+      const confirmId = confirmRef.current.startConfirm?.id;
+      if (!confirmId) return { ok: false, message: "這次開局已經取消" };
+      await api<{ allReady: boolean }>("POST", "/api/game/ready", { roomId: roomIdRef.current, playerId: myId, confirmId });
+      return { ok: true };
     } catch (err) {
-      console.error("[big2] ready failed:", err);
-    }
+      const m = (err as Error).message;
+      if (/stale_confirm|"started"/.test(m)) return { ok: true }; // 按的是上一輪、或已經開局：重讀狀態就好，不顯示錯誤
+      return { ok: false, message: /expired/.test(m) ? "時間到了，請房主重新開始" : /no_confirm|room_changed/.test(m) ? "這次開局已經取消" : "送出失敗，請再按一次" };
+    } finally { if (roomIdRef.current) void fetchStateRef.current?.(roomIdRef.current); }
   }, [myId]);
+
+  // 開局確認：房主取消
+  const cancelReady = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
+    try {
+      const confirmId = confirmRef.current.startConfirm?.id;
+      const seatKey = loadSeatKey(roomIdRef.current);
+      if (!confirmId || !seatKey) return { ok: false, message: NO_SEAT_KEY_MSG };
+      await api("POST", "/api/game/ready-cancel", { roomId: roomIdRef.current, playerId: myId, confirmId, seatKey });
+      return { ok: true };
+    } catch (err) {
+      if (/stale_confirm/.test((err as Error).message)) return { ok: true }; // 上一輪：重讀狀態就好
+      return { ok: false, message: "取消失敗，請再按一次" };
+    } finally { if (roomIdRef.current) void fetchStateRef.current?.(roomIdRef.current); }
+  }, [myId]);
+
+  // 倒數到 0：大老二沒有 tick，讀一次狀態，伺服器就會判斷要不要作廢（回到等人）
+  const refreshState = useCallback(() => { if (roomIdRef.current) void fetchStateRef.current?.(roomIdRef.current); }, []);
 
   // dealAndStart - in API mode, this is handled by the backend when all players are ready
   // Keep the function for interface compatibility but it's a no-op
@@ -558,6 +617,11 @@ export function useGame(roomCode: string, playerName: string) {
     isHost,
     startGame,
     confirmReady,
+    cancelReady,
+    refreshState,
+    confirm,
+    /** 這個分頁有沒有這間房的入座憑證（沒有就不能開局、不能取消） */
+    hasSeatKey: !!loadSeatKey(roomId),
     dealAndStart,
     continueGame,
     playCards,

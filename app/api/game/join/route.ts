@@ -1,6 +1,8 @@
 import { findRoomByCode, insertSeat, loadSeats } from "@/lib/big2/roomStore";
 import { broadcast } from "@/lib/broadcast";
 import { endedResponse } from "@/lib/records/close";
+import { hashSeatKey, newSeatKey } from "@/lib/big2/startConfirm";
+import { saveSeatKeyHash } from "@/lib/big2/startConfirmStore";
 
 export async function POST(request: Request) {
   try {
@@ -63,6 +65,11 @@ export async function POST(request: Request) {
     }
 
     // Insert player
+    // 入座憑證（審伯複審 R4）：只在第一次入座的這個回應給本人，資料庫只存雜湊；發起、取消開局確認時房主要帶（lib/big2/startConfirm.ts）。
+    // 重新加入（上面 rejoined）不再給：只知道玩家 id 的人拿不到。前端要把它和玩家 id 一起存著
+    // 雜湊存在只有伺服器能讀寫的 big2_seat_keys（公開表放雜湊，任何人都能改成自己的值）。先存再入座：存不進去就不入座
+    const seatKey = newSeatKey();
+    await saveSeatKeyHash(room.id, playerId, hashSeatKey(seatKey));
     const insertError = await insertSeat({ room_id: room.id, player_id: playerId, name, seat });
 
     if (insertError) {
@@ -80,7 +87,7 @@ export async function POST(request: Request) {
       playerCount: existingPlayers.length + 1,
     });
 
-    return Response.json({ seat, roomId: room.id });
+    return Response.json({ seat, roomId: room.id, seatKey });
   } catch {
     return Response.json({ error: "伺服器錯誤" }, { status: 500 });
   }

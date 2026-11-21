@@ -1,13 +1,24 @@
 // 測試用：lib/big2/leaveStore.ts 的記憶體版本。房間和座位放在 stub-records-store 的 big2Rooms
 // （關房 closeRoom 也看同一份），另外記 host_id、ready_players；座位陣列順序＝加入順序（created_at 先後）。
 import { big2Rooms } from "./stub-records-store";
-export const extra: Record<string, { host_id: string | null; ready_players: string[] }> = {};
+export const extra: Record<string, { host_id: string | null; ready_players: string[]; start_confirm?: unknown; last_start_confirm?: unknown }> = {};
+/** 把更新內容寫進房間（status 在 big2Rooms，其他在 extra）；開局確認、退出、發牌共用 */
+export function applyPatch(roomId: string, patch: Record<string, unknown>) {
+  const b = big2Rooms[roomId];
+  const x = (extra[roomId] ??= { host_id: null, ready_players: [] });
+  if (typeof patch.status === "string") b.room.status = patch.status;
+  if (Array.isArray(patch.ready_players)) x.ready_players = patch.ready_players as string[];
+  if (typeof patch.host_id === "string") x.host_id = patch.host_id;
+  if ("start_confirm" in patch) x.start_confirm = patch.start_confirm;
+  if ("last_start_confirm" in patch) x.last_start_confirm = patch.last_start_confirm;
+}
 const wait = () => new Promise((r) => setTimeout(r, 2));
 export async function loadRoom(roomId: string) {
   await wait();
   const b = big2Rooms[roomId];
   if (!b) return null;
-  return { id: b.room.id, code: b.room.code, status: b.room.status, host_id: extra[roomId]?.host_id ?? null, scores: b.room.scores, row_version: b.room.row_version ?? 0 };
+  return { id: b.room.id, code: b.room.code, status: b.room.status, host_id: extra[roomId]?.host_id ?? null, scores: b.room.scores, row_version: b.room.row_version ?? 0,
+    start_confirm: (extra[roomId]?.start_confirm ?? null) as never };
 }
 export async function loadPlayers(roomId: string) {
   await wait();
@@ -17,10 +28,7 @@ export async function claimRoom(roomId: string, rowVersion: number, patch: Recor
   await wait();
   const b = big2Rooms[roomId];
   if (!b || (b.room.row_version ?? 0) !== rowVersion || !["waiting", "ready_check"].includes(b.room.status)) return null;
-  const x = (extra[roomId] ??= { host_id: null, ready_players: [] });
-  if (typeof patch.status === "string") b.room.status = patch.status;
-  if (Array.isArray(patch.ready_players)) x.ready_players = patch.ready_players as string[];
-  if (typeof patch.host_id === "string") x.host_id = patch.host_id;
+  applyPatch(roomId, patch);
   b.room.row_version = rowVersion + 1; // trigger：每次更新 +1
   return b.room.row_version;
 }

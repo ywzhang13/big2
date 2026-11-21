@@ -10,7 +10,7 @@
 //     "mahjong/chat/store"（聊天冷卻、語音檔）換成記憶體版本（冷卻跑真的 SQL 函式，語音檔存在記憶體）；
 //     "mahjong/zimoFx/store"（自摸特效庫、斗內）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
 //     "mahjong/spectate/store"（觀戰申請、同意、收回）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
-//     "big2/leaveStore"、"big2/dealStore"、"big2/roomStore"（大老二等人階段退出、發牌、加入房間／讀牌桌狀態的資料存取）換成記憶體版本；
+//     "big2/leaveStore"、"big2/dealStore"、"big2/roomStore"、"big2/startConfirmStore"（大老二等人階段退出、發牌、加入房間／讀牌桌狀態的資料存取）換成記憶體版本；
 //     "mahjong/replay/store"（牌局回放）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
 //     "roomCard/store"（房卡帳）換成記憶體 PostgreSQL 版本（跑真的 migration 和 SQL 函式）；
 //     "next/server" 的 after() 在測試裡不跑
@@ -39,6 +39,7 @@ const STUBS = {
   "@/lib/big2/leaveStore": "tests/support/stub-big2-leave-store.ts",
   "@/lib/big2/dealStore": "tests/support/stub-big2-deal-store.ts",
   "@/lib/big2/roomStore": "tests/support/stub-big2-room-store.ts",
+  "@/lib/big2/startConfirmStore": "tests/support/stub-big2-start-confirm-store.ts",
   "@/lib/roomCard/store": "tests/support/stub-roomcard-store.ts",
   "next/server": "tests/support/stub-next-server.ts",
 };

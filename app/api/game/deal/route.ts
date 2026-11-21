@@ -1,41 +1,17 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
-import { dealAndStart } from "@/lib/deal-and-start";
+// 大老二「開始遊戲」舊入口：POST { roomId, playerId, seatKey }（房主本人）。2026-11-20 起不再直接發牌，
+// 和 /api/game/ready-check 一樣改成發起開局確認（四家都同意才發牌，見 lib/big2/startConfirm.ts），身分驗證和回傳也一樣：
+// 沒帶房主本人的入座憑證一律 403（審伯複審 R4）。舊版前端不會帶憑證，所以前端要和這版後端同一次上線。
+import { beginBig2Confirm } from "@/lib/big2/startConfirm";
+
+async function readBody(request: Request): Promise<{ roomId?: string; playerId?: string; seatKey?: unknown } | null> {
+  try { const b = await request.json(); return b && typeof b === "object" ? b : null; } catch { return null; }
+}
 
 export async function POST(request: Request) {
+  const body = await readBody(request);
+  if (!body?.roomId || !body.playerId) return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   try {
-    const body = await request.json();
-    const { roomId, playerId } = body as {
-      roomId?: string;
-      playerId?: string;
-    };
-
-    if (!roomId || !playerId) {
-      return Response.json({ error: "缺少必要欄位" }, { status: 400 });
-    }
-
-    const supabase = getSupabaseServer();
-
-    // Verify room exists and player is host
-    const { data: room, error: roomError } = await supabase
-      .from("big2_rooms")
-      .select("id, code, host_id, status")
-      .eq("id", roomId)
-      .single();
-
-    if (roomError || !room) {
-      return Response.json({ error: "找不到房間" }, { status: 404 });
-    }
-
-    if (room.host_id !== playerId) {
-      return Response.json({ error: "只有房主可以發牌" }, { status: 403 });
-    }
-
-    // 發牌途中有人退出、或房間已經不在等人／準備確認（房間版本或狀態變了）→ 不開局，回 409（審伯 2026-10-24）
-    if (!(await dealAndStart(roomId, room.code))) {
-      return Response.json({ error: "room_changed" }, { status: 409 });
-    }
-
-    return Response.json({ success: true });
+    return await beginBig2Confirm(body.roomId, body.playerId, body.seatKey);
   } catch {
     return Response.json({ error: "伺服器錯誤" }, { status: 500 });
   }

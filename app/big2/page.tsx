@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useGame } from "@/hooks/useGame";
+import { saveSeatKey, useGame, type Big2ConfirmInfo } from "@/hooks/useGame";
+import StartConfirm, { secondsLeftOf } from "@/components/gameLobby/StartConfirm";
+import { big2ConfirmNote, big2ConfirmSeats } from "@/hooks/big2StartConfirmView";
+import { START_CONFIRM_MS } from "@/lib/lobby/startConfirm";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
 import Hand from "@/components/Hand";
@@ -81,12 +84,13 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "建立房間失敗"); return; }
-      // Host also joins as a player
-      await fetch("/api/game/join", {
+      // Host also joins as a player（第一次入座的回應帶入座憑證 seatKey：存起來，開局、取消要用）
+      const jr = await fetch("/api/game/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: data.code, playerId: getMyId(), name: name.trim() }),
       });
+      saveSeatKey(await jr.json().catch(() => null));
       setRoomCode(data.code);
       setCreatedRoomId(data.roomId);
       setScreen("room");
@@ -108,6 +112,7 @@ export default function Home() {
         body: JSON.stringify({ code: joinCode, playerId: getMyId(), name: name.trim() }),
       });
       const data = await res.json();
+      saveSeatKey(data); // 第一次入座才有 seatKey
       // 410＝這場已結束：照樣進房間畫面，由房間顯示總結算
       if (!res.ok && res.status !== 410) { setError(data.message || data.error || "加入房間失敗"); return; }
       setRoomCode(joinCode);
@@ -229,12 +234,14 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, isHost, startGame, confirmReady, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed, leaveWaiting } = useGame(
+  const { state, isHost, startGame, confirmReady, cancelReady, refreshState, confirm, hasSeatKey, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed, leaveWaiting } = useGame(
     code, nameReady ? playerName : ""
   );
 
   // 等人時「退出房間」（老闆 2026-10-24）：伺服器真的把你移出房間、空出座位，才回大廳；失敗留在原畫面並提示
   const [leaving, setLeaving] = useState(false);
+  // 按開始沒開成的一句提示（例如沒有入座憑證：請他退出再入座），不跳錯誤畫面
+  const [startMsg, setStartMsg] = useState("");
   const [leaveError, setLeaveError] = useState("");
   const leaveRoom = async () => {
     if (leaving) return;
@@ -264,6 +271,7 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
       })
         .then(async (res) => {
           const data = await res.json();
+          saveSeatKey(data); // 用連結第一次入座也有 seatKey（回來的人不會再給，留著原本的）
           if (res.status === 410) markClosed(closedFromResponse(data));
           else if (res.status === 409 && data.error === "game_in_progress") onJoinBlocked(data.message || "房間已開始遊戲，無法加入");
           else if (data.roomId) setRoomId(data.roomId);
@@ -416,54 +424,23 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
             })}
           </div>
 
-          {/* Ready check modal (LOL style) */}
-          {state.readyCheck && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm fade-in">
-              <div className="bg-gradient-to-b from-[#1a2a1a] to-[#0d1a0d] rounded-3xl p-8 w-[340px] border border-gold/30 shadow-2xl text-center">
-                <div className="text-4xl mb-3">⚔️</div>
-                <h3 className="text-2xl font-bold text-gold-light font-heading mb-2">遊戲即將開始</h3>
-                <p className="text-white/50 text-sm mb-6">所有玩家準備後開始</p>
-
-                {/* Player ready status */}
-                <div className="grid grid-cols-2 gap-2 mb-6">
-                  {state.players.map((p) => {
-                    const ready = state.readyPlayers.has(p.id);
-                    return (
-                      <div key={p.id} className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-300 ${
-                        ready ? "bg-green-500/20 border border-green-500/40 text-green-400" : "bg-white/5 border border-white/10 text-white/40"
-                      }`}>
-                        {ready ? "✓ " : ""}{p.name}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Ready button or waiting */}
-                {!state.readyPlayers.has(state.myId) ? (
-                  <button onClick={confirmReady}
-                    className="w-full py-4 rounded-2xl bg-green-500 text-white font-bold text-lg
-                               cursor-pointer active:scale-95 transition-all duration-150 animate-pulse
-                               shadow-lg shadow-green-500/30">
-                    準備好了！
-                  </button>
-                ) : (
-                  <div className="w-full py-4 rounded-2xl bg-white/10">
-                    <p className="text-gold-light font-bold">{state.readyPlayers.size}/{state.players.length} 已準備</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* 開局確認（老闆 2026-11-20）：房主按開始後蓋共用的 StartConfirm（四家小牌子、10 秒倒數、同意／房主取消）；
+              四家都同意伺服器就發牌（畫面跟著狀態換成牌桌）；時間到沒到齊就回等人，上面一條提示誰沒按 */}
+          <Big2StartConfirm players={state.players} myId={state.myId} isHost={isHost} canCancel={hasSeatKey} readyIds={state.readyPlayers}
+            info={confirm} onAgree={confirmReady} onCancel={cancelReady} onTimeUp={refreshState} />
 
           {/* Start button (only when NOT in ready check) */}
           {!state.readyCheck && (
             isHost ? (
-              <button onClick={startGame} disabled={state.players.length !== 4}
+              <>
+              <button onClick={async () => { setStartMsg(""); const r = await startGame(); if (!r.ok && r.message) setStartMsg(r.message); }} disabled={state.players.length !== 4} data-big2-start
                 className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
                            cursor-pointer active:scale-95 transition-all duration-150
                            disabled:opacity-30 disabled:cursor-not-allowed">
                 {state.players.length === 4 ? "開始遊戲" : `等待玩家 (${state.players.length}/4)`}
               </button>
+              {startMsg && <p className="text-amber-200/90 text-sm text-center -mt-3" role="status" data-big2-start-msg>{startMsg}</p>}
+              </>
             ) : (
               <div className="w-full py-4 rounded-2xl bg-white/10 text-center">
                 <p className="text-white/50 font-medium">
@@ -587,5 +564,56 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── 開局確認（共用 StartConfirm；倒數照伺服器截止時間，到 0 讀一次狀態讓伺服器判斷） ───
+function Big2StartConfirm({ players, myId, isHost, canCancel, readyIds, info, onAgree, onCancel, onTimeUp }: {
+  /** canCancel：這個分頁有入座憑證（seatKey）才有「取消」 */
+  players: { id: string; name: string; seat: number }[]; myId: string; isHost: boolean; canCancel: boolean; readyIds: Set<string>; info: Big2ConfirmInfo;
+  onAgree: () => Promise<{ ok: boolean; message?: string }>; onCancel: () => Promise<{ ok: boolean; message?: string }>; onTimeUp: () => void;
+}) {
+  const sc = info.startConfirm;
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [errO, setErr] = useState<{ deadline: number | null; msg: string } | null>(null);
+  const firedFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sc) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [sc]);
+  const secs = sc ? secondsLeftOf(sc.deadline, now, info.clockSkew) : 0;
+  useEffect(() => {
+    if (!sc) return;
+    if (secs === 0 && firedFor.current !== sc.deadline) { firedFor.current = sc.deadline; onTimeUp(); }
+  }, [sc, secs, onTimeUp]);
+  // 到 0 之後伺服器還沒回到等人（時差、網路）：每 2 秒再讀一次
+  useEffect(() => {
+    if (!sc || secs > 0) return;
+    const t = setInterval(onTimeUp, 2000);
+    return () => clearInterval(t);
+  }, [sc, secs, onTimeUp]);
+  const deadline = sc?.deadline ?? null;
+  const err = errO && errO.deadline === deadline ? errO.msg : null;
+  const run = async (fn: () => Promise<{ ok: boolean; message?: string }>) => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    const r = await fn();
+    setBusy(false);
+    if (!r.ok) setErr({ deadline, msg: r.message ?? "送出失敗，請再按一次" });
+  };
+  const note = big2ConfirmNote(info.lastStartConfirm, !!sc, players, myId, isHost);
+  // 確認中的勾：伺服器的 readyIds（state 和廣播都會更新 readyPlayers）
+  const ready = sc ? new Set([...sc.readyIds, ...readyIds]) : readyIds;
+  return (
+    <>
+      {note && <div className="sc-note" role="status" data-big2-start-note={info.lastStartConfirm?.reason}>{note}</div>}
+      {sc && (
+        // 「取消」只有拿得到入座憑證的房主才有（localStorage，重新整理也在）；沒有就等 10 秒自己作廢
+        <StartConfirm seats={big2ConfirmSeats(players, ready, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost && canCancel} busy={busy} error={err}
+          onAgree={() => void run(onAgree)} onCancel={() => void run(onCancel)} />
+      )}
+    </>
   );
 }

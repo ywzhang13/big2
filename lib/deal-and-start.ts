@@ -10,16 +10,20 @@ import { loadRoomForDeal, loadSeatedPlayers, saveHand, startRoomIfUnchanged } fr
  * 最後改成 playing 時用「讀座位之前的 row_version」和狀態做條件（審伯 2026-10-24）：
  * 讀完座位後有人退出（退出會改房間、row_version +1），就不會用舊的 4 人名單開局。
  * statuses：允許從哪些狀態開局（第一場是 waiting／ready_check；/api/game/continue 的下一場是 finished）。
+ * expectedRowVersion：開局確認用，只有房間版本還是這個值才開（lib/big2/startConfirm.ts）。
  */
 export async function dealAndStart(
   roomId: string,
   roomCode: string,
   existingScores?: Record<string, number>,
-  statuses: string[] = ["waiting", "ready_check"]
+  statuses: string[] = ["waiting", "ready_check"],
+  expectedRowVersion?: number
 ): Promise<boolean> {
   // 先記下房間版本，再讀座位
   const before = await loadRoomForDeal(roomId);
   if (!before || !statuses.includes(before.status)) return false;
+  // 開局確認（審伯 R2）：只能用「四家都同意的那次寫入」之後的版本開局；中間有人取消、重新開始、退出，版本就變了，不開
+  if (expectedRowVersion !== undefined && before.row_version !== expectedRowVersion) return false;
 
   // Get players ordered by seat
   const players = await loadSeatedPlayers(roomId);
@@ -53,6 +57,8 @@ export async function dealAndStart(
     pass_count: 0,
     round_starter: starterSeat,
     ready_players: [],
+    start_confirm: null,      // 開局確認用完了（lib/big2/startConfirm.ts）
+    last_start_confirm: null,
   };
   if (existingScores !== undefined) {
     roomUpdate.scores = existingScores;

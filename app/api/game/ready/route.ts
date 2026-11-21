@@ -1,81 +1,18 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
-import { broadcast } from "@/lib/broadcast";
-import { dealAndStart } from "@/lib/deal-and-start";
+// 大老二開局確認：按同意。POST { roomId, playerId, confirmId }（confirmId＝這一輪確認的編號；舊一輪的 409 stale_confirm、沒帶 400 confirm_id_required）。四家都同意才發牌（lib/deal-and-start.ts）；規則見 lib/big2/startConfirm.ts。
+//   200 { allReady: false, confirm } 還在等別人；200 { allReady: true } 已發牌開局
+//   409 expired（倒數已到、這次沒開成）／no_confirm（房主沒按開始或已取消）／room_changed（發牌途中有人退出）；不在房裡 403 not_in_room
+// 名單寫入帶 row_version 條件（輸的重讀再加），四人同時按不會漏人。
+import { agreeBig2 } from "@/lib/big2/startConfirm";
+
+async function readBody(request: Request): Promise<{ roomId?: string; playerId?: string; confirmId?: unknown } | null> {
+  try { const b = await request.json(); return b && typeof b === "object" ? b : null; } catch { return null; }
+}
 
 export async function POST(request: Request) {
+  const body = await readBody(request);
+  if (!body?.roomId || !body.playerId) return Response.json({ error: "缺少必要欄位" }, { status: 400 });
   try {
-    const body = await request.json();
-    const { roomId, playerId } = body as {
-      roomId?: string;
-      playerId?: string;
-    };
-
-    if (!roomId || !playerId) {
-      return Response.json({ error: "缺少必要欄位" }, { status: 400 });
-    }
-
-    const supabase = getSupabaseServer();
-
-    // Get room
-    const { data: room, error: roomError } = await supabase
-      .from("big2_rooms")
-      .select("id, code, status, ready_players")
-      .eq("id", roomId)
-      .single();
-
-    if (roomError || !room) {
-      return Response.json({ error: "找不到房間" }, { status: 404 });
-    }
-
-    if (room.status !== "ready_check") {
-      return Response.json({ error: "目前不在準備確認階段" }, { status: 400 });
-    }
-
-    // Verify player is in the room
-    const { data: player } = await supabase
-      .from("big2_players")
-      .select("id")
-      .eq("room_id", roomId)
-      .eq("player_id", playerId)
-      .single();
-
-    if (!player) {
-      return Response.json({ error: "你不在這個房間" }, { status: 403 });
-    }
-
-    // Add to ready_players if not already there
-    const readyPlayers: string[] = Array.isArray(room.ready_players)
-      ? room.ready_players
-      : [];
-
-    if (!readyPlayers.includes(playerId)) {
-      readyPlayers.push(playerId);
-    }
-
-    const { error: updateError } = await supabase
-      .from("big2_rooms")
-      .update({ ready_players: readyPlayers })
-      .eq("id", roomId);
-
-    if (updateError) {
-      return Response.json({ error: "更新準備狀態失敗" }, { status: 500 });
-    }
-
-    await broadcast(room.code, "player_ready", {
-      playerId,
-      readyCount: readyPlayers.length,
-    });
-
-    // If all 4 ready, deal
-    if (readyPlayers.length >= 4) {
-      // 發牌途中有人退出（房間版本變了）→ 不開局，回 409（審伯 2026-10-24）
-      if (!(await dealAndStart(roomId, room.code))) {
-        return Response.json({ error: "room_changed" }, { status: 409 });
-      }
-      return Response.json({ allReady: true });
-    }
-
-    return Response.json({ allReady: false });
+    return await agreeBig2(body.roomId, body.playerId, body.confirmId);
   } catch {
     return Response.json({ error: "伺服器錯誤" }, { status: 500 });
   }

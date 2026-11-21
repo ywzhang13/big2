@@ -2,6 +2,7 @@
 // （big2_rooms／big2_players 的 RLS 允許公開金鑰讀寫，正式庫 2026-10-24 確認過）。
 // 測試時整個檔案換成 tests/support/stub-big2-leave-store.ts 的記憶體版本。
 import { getSupabaseServer } from "@/lib/supabase-server";
+import type { StartConfirm } from "@/lib/lobby/startConfirm";
 
 export interface Big2LeaveRoom {
   id: string;
@@ -10,12 +11,13 @@ export interface Big2LeaveRoom {
   host_id: string | null;
   scores: Record<string, number> | null;
   row_version: number;
+  start_confirm: StartConfirm | null; // 開局確認（退出時作廢，記下誰沒按）
 }
 
 export async function loadRoom(roomId: string): Promise<Big2LeaveRoom | null> {
   const { data, error } = await getSupabaseServer()
     .from("big2_rooms")
-    .select("id, code, status, host_id, scores, row_version")
+    .select("id, code, status, host_id, scores, row_version, start_confirm")
     .eq("id", roomId)
     .maybeSingle();
   if (error) throw new Error(`查詢房間失敗：${error.message}`);

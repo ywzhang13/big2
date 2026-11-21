@@ -28,7 +28,7 @@ export async function insertSeat(row: { room_id: string; player_id: string; name
 export async function loadRoomState(roomId: string) {
   const { data, error } = await getSupabaseServer()
     .from("big2_rooms")
-    .select("id, code, status, host_id, current_turn, last_play, pass_count, round_starter, scores, ready_players")
+    .select("id, code, status, host_id, current_turn, last_play, pass_count, round_starter, scores, ready_players, start_confirm, last_start_confirm")
     .eq("id", roomId)
     .single();
   return error || !data ? null : data;

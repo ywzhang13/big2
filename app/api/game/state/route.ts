@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { loadRoomPlayers, loadRoomState } from "@/lib/big2/roomStore";
 import { endedResponse } from "@/lib/records/close";
+import { confirmView, settleBig2Confirm } from "@/lib/big2/startConfirm";
 import type { Card } from "@/lib/constants";
 
 export async function GET(request: NextRequest) {
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
     if (!roomId || !playerId) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
+
+    // 開局確認中：時間到、或座位變了就先作廢（回到等人），再讀狀態（保底輪詢、前端倒數到 0 時讀一次都會觸發）
+    if ((await loadRoomState(roomId))?.status === "ready_check") await settleBig2Confirm(roomId);
 
     // Get room
     const room = await loadRoomState(roomId);
@@ -56,6 +60,8 @@ export async function GET(request: NextRequest) {
       roundStarter: room.round_starter,
       scores: room.scores,
       readyPlayers: room.ready_players,
+      startConfirm: room.status === "ready_check" ? confirmView(room.start_confirm, Date.now()) : null, // 開局確認：誰已同意、截止時間
+      lastStartConfirm: room.status === "waiting" ? (room.last_start_confirm ?? null) : null,         // 上一次為什麼沒開成、誰沒按
       players,
       myHand: me.hand as Card[],
       mySeat: me.seat,
