@@ -8,6 +8,7 @@
 //   ・訪客、觀戰：看得到、聽得到，按「聊天」只打開聊天框（只能看）
 //   ・按「聊天」同時打開本場聊天框（components/social/SocialChatBox，見 MjChatLog.tsx）（2026-11-13）；鈕上不顯示未讀數字（老闆 2026-11-13）
 // 狀態都在 lib/mahjong/chatClient.ts（綁「帳號＋房間＋座位」，換場全部清空）。
+import "@/components/social/chatFab.css";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -21,7 +22,7 @@ import { useChatLog } from "@/components/social/chatLog";
 
 const mmss = (ms: number) => `00:${String(Math.max(0, Math.ceil(ms / 1000))).padStart(2, "0")}`;
 
-/** 自己資訊列右側的「聊天」鈕（放在牌桌元件的 chatButton 位置） */
+/** 聊天鈕：三款共用的右下圓鈕（chatFab.css，iPhone UI 規格 P2、A3）。DOM 仍放在牌桌元件的 chatButton 位置，畫面位置是 fixed 右下 */
 export function MjChatButton({ canSend, desk }: { canSend: boolean; desk: boolean }) {
   const st = useChatState();
   const log = useChatLog();
@@ -29,15 +30,15 @@ export function MjChatButton({ canSend, desk }: { canSend: boolean; desk: boolea
   return (
     <button
       type="button"
-      className={`mjc-btn ${desk ? "d" : "m"} ${open ? "on" : ""}`}
+      className={`chat-fab ${desk ? "d" : "m"} ${open ? "on" : ""}`}
       data-chat-btn
       aria-expanded={open}
+      aria-label="聊天"
       onClick={() => toggleMjChatBox(canSend, !open)}
     >
-      <svg viewBox="0 0 24 24" width={desk ? 16 : 13} height={desk ? 16 : 13} aria-hidden>
+      <svg viewBox="0 0 24 24" width={desk ? 22 : 20} height={desk ? 22 : 20} aria-hidden>
         <path d="M4 5h16v10H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       </svg>
-      聊天
     </button>
   );
 }
@@ -98,7 +99,7 @@ export default function MjChat({
       const pp = rel === 0 ? panelPosRef.current : null;
       const pw = pp ? panelRef.current?.offsetWidth ?? 0 : 0;
       const floor = pp && pw ? Math.min(...[rectOf("[data-claim-banner]"), rectOf(".mjm-action")].map((r) => r?.top ?? vh)) : vh;
-      setPos(el, pp && pw ? { left: pp.left + pw + gap, bottom: Math.max(pp.bottom, vh - floor + gap) } // 自己、底板開著：貼底板右側
+      setPos(el, pp && pw ? { right: vw - pp.left + gap, bottom: Math.max(pp.bottom, vh - floor + gap) } // 自己、底板開著：貼底板左側（底板改在右邊，iPhone UI 規格 P3）
         : !p ? null
         : rel === 3 ? { left: p.right + gap, top: p.top } // 左家：往右
         : rel === 1 ? { right: vw - p.left + gap, top: p.top } // 右家：往左
@@ -167,10 +168,10 @@ export default function MjChat({
     const bar = claiming ? rectOf("[data-claim-banner] .bar") : null;
     const info = bar ? rectOf(desk ? "[data-my-info]" : ".mjm-me-info") : null;
     const above = bar && info ? vh - info.top + (bar.bottom - bar.top) + 4 : 0;
-    // 手機：左緣在左家名牌右邊，聊天室（MjChatLog）接在面板正上方、同一個左緣，不擋左家名牌（老闆 2026-11-13）
-    const left = desk ? 12 : mjDockLeft(mySeat);
-    // 手機動作列裡的按鈕（眼牌、打出）落在面板範圍內：面板移到它上面，不擋按鈕（狀態文字可以蓋）
+    // 手機：右緣在右家名牌左邊 −8，聊天室（MjChatLog）接在面板正上方、同一個左緣（iPhone UI 規格 P3：聊天鈕在右下，聊天室跟著開在右邊，不擋左家）
     const pw = panelRef.current?.offsetWidth ?? 0;
+    const left = desk ? 12 : mjDockLeft(mySeat, pw || 320);
+    // 手機動作列裡的按鈕（眼牌、打出）落在面板範圍內：面板移到它上面，不擋按鈕（狀態文字可以蓋）
     const btnTop = desk || !pw ? Infinity : Math.min(Infinity, ...[...document.querySelectorAll(".mjm-action button")]
       .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0 && r.left < left + pw && r.right > left).map((r) => r.top));
     const overBtn = Number.isFinite(btnTop) ? vh - btnTop + 4 : 0;
@@ -372,7 +373,7 @@ function ChatStatus({ desk }: { desk: boolean }) {
   }, [show, desk, st.note?.text]);
   if (!show) return null;
   return (
-    <div ref={ref} className={`mjc-status ${desk ? "d" : "m"} ${st.failed ? "fail" : ""}`} style={{ visibility: "hidden" }} data-chat-status>
+    <div ref={ref} className={`mjc-status chat-fab-status ${desk ? "d" : "m"} ${st.failed ? "fail" : ""}`} style={{ visibility: "hidden" }} data-chat-status>
       {st.sending ? (
         <span data-chat-sending>正在傳送…<i className="dots" aria-hidden><b /><b /><b /></i></span>
       ) : st.failed ? (

@@ -107,9 +107,11 @@ const boxOf = (el: Element | null): Box | null => {
 };
 
 /** 手機聊天室的左緣：在左家名牌右邊（不擋左家名牌）；輸入面板（MjChat）也用同一個左緣，兩塊才對齊 */
-export function mjDockLeft(mySeat: number): number {
-  const plate = boxOf(document.querySelector(`[data-fx-seat="${(mySeat + 3) % 4}"]`));
-  return Math.round(Math.max(8, plate ? plate.right + 6 : 8));
+export function mjDockLeft(mySeat: number, width: number): number {
+  // iPhone UI 規格 P3、A3：聊天鈕搬到右下，聊天室和輸入面板改開在右邊——右緣＝右家（下家）名牌左緣 −8（852×393 時 697），不再蓋左家
+  const plate = boxOf(document.querySelector(`[data-fx-seat="${(mySeat + 1) % 4}"]`));
+  const right = plate ? plate.left - 8 : window.innerWidth - 8;
+  return Math.round(Math.max(8, right - width));
 }
 
 /** 手機聊天室的位置：
@@ -119,8 +121,8 @@ export function mjDockLeft(mySeat: number): number {
 export function mjDockPlace(mySeat: number, spectator = false) {
   const vh = window.innerHeight;
   const panel = boxOf(document.querySelector("[data-chat-panel]"));
-  const left = panel ? Math.round(panel.left) : mjDockLeft(mySeat);
-  const width = Math.round(panel ? panel.width : Math.min(DOCK_W, window.innerWidth - left - 8));
+  const width = Math.round(panel ? panel.width : Math.min(DOCK_W, window.innerWidth - 16));
+  const left = panel ? Math.round(panel.left) : mjDockLeft(mySeat, width);
   const floor = panel ? panel.top - 3
     : Math.min(vh, ...(spectator ? [".mjm-me"] : [".mjm-me", ".mjm-action", "[data-claim-banner] .bar"]).map((s) => boxOf(document.querySelector(s))?.top ?? vh)) - 4;
   const plates = [...document.querySelectorAll("[data-fx-seat]")]

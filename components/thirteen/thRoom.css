@@ -113,4 +113,9 @@
 /* 共用名牌（components/GamePlate.tsx）的位置：小宜〈共用名牌-設計說明〉§4 十三支 v12 版面，左上角座標；方向 A 四家都是 88×38：
    自己往上 6（下緣不動）、左右家往上 3（中心不動）、對家不動 */
 .th-gp-bottom { left: 8px; top: 306px; } .th-gp-top { left: 214px; top: 8px; } .th-gp-left { left: 4px; top: 166px; } .th-gp-right { left: 752px; top: 166px; }
+/* iPhone UI 規格 A2：瀏海機左右家「名牌＋牌列」整組往內縮 Δ（牌桌座標，所以除以 --th-s），上家、自己的牌列不動、自己的名牌一起內縮；沒有安全區時 Δ＝0（min 那一項：安全區 0 就是 0） */
+.th-table { --th-dl: max(0px, min(calc(var(--sa-l) * 1000), calc((var(--sa-l) + 8px) / var(--th-s, 1) - 4px))); --th-dr: max(0px, min(calc(var(--sa-r) * 1000), calc((var(--sa-r) + 8px) / var(--th-s, 1) - 4px))); }
+.th-bg > .th-table .th-seatbox.th-at-left { margin-left: var(--th-dl); }
+.th-bg > .th-table .th-seatbox.th-at-right { margin-left: calc(-1 * var(--th-dr)); }
+.th-bg > .th-table .th-seatbox.th-at-bottom .th-gp-bottom { margin-left: var(--th-dl); }
 .th-arr .th-menu { zoom: var(--th-s2, 1); } /* v8-A 殘項：理牌畫面的 ⚙ 跟著版面放大（牌桌上的 ⚙ 在放大的牌桌裡，本來就跟著放大） */

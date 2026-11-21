@@ -14,6 +14,7 @@ import { rectOf, setPos, type Box, type Pos } from "@/lib/social/anchors";
 import { setChatLogOpen, useChatLog } from "./chatLog";
 import SocialChatBox from "./SocialChatBox";
 import "./socialDock.css";
+import "./chatFab.css";
 
 /** 聊天室寬：手機 250、桌機 360；桌機最高 420（小宜 §2-2） */
 export const DOCK_W = { m: 250, d: 360 } as const;
@@ -23,8 +24,8 @@ export const DOCK_MAX_H_DESK = 420;
 export type StackPlace = { pos: Pos; dir: "up" | "down"; align: "start" | "end" };
 /** 遊戲交的版面（每次重排都會呼叫，直接量 DOM）。btn＝聊天鈕量到的位置 */
 export type SocialDockLayout = {
-  /** 聊天鈕：左緣和垂直中心；量不到回 null（先藏起來） */
-  button: (size: { w: number; h: number }) => { left: number; top: number } | null;
+  /** 舊版：聊天鈕由遊戲量位置。不給＝固定右下的共用圓鈕（chatFab.css，iPhone UI 規格 P2） */
+  button?: (size: { w: number; h: number }) => { left: number; top: number } | null;
   /** 聊天室：左緣或右緣、上緣、下緣（螢幕座標）；寬由元件照手機／桌機決定 */
   dock: (btn: Box, width: number) => { left: number; top: number; bottom: number } | null;
   /** 某個座位的泡泡放哪；null＝這家不顯示 */
@@ -75,7 +76,7 @@ export default function SocialChatDock({ canSend, guest = false, desk, layout, b
   const relayout = useCallback(() => {
     const L = layoutRef.current;
     const b = btnRef.current;
-    if (b) setPos(b, L.button({ w: b.offsetWidth, h: b.offsetHeight }));
+    if (b) { if (L.button) setPos(b, L.button({ w: b.offsetWidth, h: b.offsetHeight })); else b.style.visibility = ""; }
     const btn = b && b.style.visibility !== "hidden" ? rectOf("[data-chat-btn]") : null;
     for (const [seat, el] of stackRefs.current) {
       const p = L.stack(seat, btn);
@@ -121,9 +122,9 @@ export default function SocialChatDock({ canSend, guest = false, desk, layout, b
 
   return (
     <>
-      <button ref={btnRef} type="button" className={`sc-btn ${desk ? "d" : "m"}${open ? " on" : ""}`} style={{ visibility: "hidden" }}
-        data-chat-btn data-social-phase={phase} aria-expanded={open} onClick={() => setChatLogOpen(!open)}>
-        <ChatIcon size={desk ? 16 : 14} />聊天
+      <button ref={btnRef} type="button" className={`${layout.button ? "sc-btn" : "chat-fab"} ${desk ? "d" : "m"}${open ? " on" : ""}`} style={{ visibility: "hidden" }}
+        data-chat-btn data-social-phase={phase} aria-expanded={open} aria-label="聊天" onClick={() => setChatLogOpen(!open)}>
+        <ChatIcon size={layout.button ? (desk ? 16 : 14) : desk ? 22 : 20} />{layout.button ? "聊天" : null}
       </button>
       {[...groups].map(([seat, list]) => (
         <div key={seat} ref={(el) => { if (el) stackRefs.current.set(seat, el); else stackRefs.current.delete(seat); }}
@@ -196,7 +197,7 @@ function ChatStatus({ desk }: { desk: boolean }) {
   }, [show, desk, text]);
   if (!show) return null;
   return (
-    <div ref={ref} className={`mjc-status ${desk ? "d" : "m"}${st.failed ? " fail" : ""}`} style={{ visibility: "hidden" }} data-chat-status>
+    <div ref={ref} className={`mjc-status chat-fab-status ${desk ? "d" : "m"}${st.failed ? " fail" : ""}`} style={{ visibility: "hidden" }} data-chat-status>
       {st.sending ? (
         <span data-chat-sending>正在傳送…<i className="dots" aria-hidden><b /><b /><b /></i></span>
       ) : st.failed ? (

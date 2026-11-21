@@ -232,29 +232,26 @@ ok(P.noteUnderPlate(box(4, 166, 88, 38), null).top === 210, "P6 沒有泡泡：�
 
 // ---------- L 十三支三個階段的位置（手機 844×390，倍率 1） ----------
 const M = (o: Partial<import("../components/thirteen/ThSocial").Measured>) => ({ vw: VW, vh: VH, menu: box(8, 8, 34, 34), me: null, side: null, stage: null, submit: null, hand: null, frame: null, ok: null, s2: 1, ...o });
-const BTN = { w: 70, h: 32 };
-const tb = L.phaseButton("table", M({ me: box(8, 306, 88, 38) }), BTN)!;
-ok(tb.left === 104 && tb.top === 309, `L1 牌桌：聊天鈕在自己名牌右緣 +8、垂直置中 → (104, 309)（${tb.left}, ${tb.top}）`);
-const td = L.phaseDock("table", M({ me: box(8, 306, 88, 38) }), box(104, 309, 70, 32), 250)!;
-ok(td.left === 8 && td.top === 50 && td.bottom - td.top === 250, "L2 牌桌聊天室：左緣貼自己名牌、≡ 鈕下面 +8 → (8, 50) 250×250");
-const ab = L.phaseButton("arrange", M({ side: box(680, 20, 150, 300), stage: box(0, 0, 844, 390) }), BTN)!;
-ok(ab.left === 680 && ab.top === 326, "L3 理牌：聊天鈕在右欄最下面 → (680, 326)");
-const ad = L.phaseDock("arrange", M({ side: box(680, 20, 150, 300) }), box(680, 326, 70, 32), 250)!;
-ok(ad.left === 580 && ad.top === 50 && ad.bottom - ad.top === 270, "L4 理牌聊天室：右緣貼右欄 → (580, 50) 250×270（13 張手牌到不了右欄）");
-const ad16 = L.phaseDock("arrange", M({ side: box(680, 20, 150, 300), hand: box(66, 244, 594, 76) }), box(680, 326, 70, 32), 250)!;
+// 聊天鈕改成三款共用的右下圓鈕（iPhone UI 規格 P2、A3），位置是 CSS，不再由 phaseButton 算；844×390 時在 (745–789, 317–361)
+const FAB = box(745, 317, 44, 44);
+const td = L.phaseDock("table", M({ right: box(655, 120, 182, 130) }), FAB, 250)!;
+ok(td.left === 397 && td.top === 50 && td.bottom === 309, `L1 牌桌聊天室：右緣貼右家牌列左緣 −8、下緣在聊天鈕上面 8 → (397, 50)～309（${td.left}, ${td.top}, ${td.bottom}）`);
+const td0 = L.phaseDock("table", M({}), FAB, 250)!;
+ok(td0.left === 789 - 8 - 250, "L2 量不到右家（還沒畫好）：先貼聊天鈕右緣 −8");
+const ad = L.phaseDock("arrange", M({ side: box(680, 20, 150, 300) }), FAB, 250)!;
+ok(ad.left === 580 && ad.top === 50 && ad.bottom === 311, "L4 理牌聊天室：右緣貼右欄、下緣在聊天鈕上面 6 → (580, 50)～311");
+const ad16 = L.phaseDock("arrange", M({ side: box(680, 20, 150, 300), hand: box(66, 244, 594, 76) }), FAB, 250)!;
 ok(ad16.bottom === 238, "L4b 16 張手牌伸到聊天室下方：聊天室停在手牌上緣 −6（不蓋手牌）");
-const rb = L.phaseButton("result", M({ frame: box(0, 0, 844, 390), ok: box(700, 311, 120, 32) }), BTN)!;
-ok(rb.left === 14 && rb.top === 311, "L5 結算：聊天鈕在外框左欄左緣、和確認同一列 → (14, 311)");
-const rd = L.phaseDock("result", M({ frame: box(0, 0, 844, 390) }), box(14, 311, 70, 32), 250)!;
-ok(rd.left === 14 && rd.top === 56 && rd.bottom - rd.top === 249, "L6 結算聊天室：外框上緣 +56 → (14, 56) 250×249");
-const big = L.phaseButton("arrange", M({ side: box(1547, 0, 340, 700), stage: box(0, 0, 1920, 887.2) }), { w: 80, h: 36 })!;
-ok(big.left === 1547 && Math.round(big.top) === 742, "L7 桌機理牌：舞台 y 326 跟著倍率放大");
+const rd = L.phaseDock("result", M({ frame: box(0, 0, 844, 390) }), FAB, 250)!;
+ok(rd.left === 539 && rd.top === 56 && rd.bottom === 309, "L6 結算聊天室：右緣對齊聊天鈕右緣、外框上緣 +56 → (539, 56)～309");
+// 審伯 iPhone UI 初審 R1：結算按「查看牌桌」（外框收起）時聊天鈕還在右下，按下去要開得出看得到的聊天室——照牌桌的位置（右緣貼右家牌列左緣 −8）
+const pk = L.phaseDock("result", M({ frame: null, right: box(655, 120, 182, 130) }), FAB, 250);
+ok(!!pk && pk.left === 397 && pk.top === 50 && pk.bottom === 309, `L12 結算「查看牌桌」時：聊天室照牌桌位置開 → (397, 50)～309（${JSON.stringify(pk)}）`);
 ok(L.plateKey(2, 0) === "t" && L.plateKey(3, 0) === "l" && L.plateKey(1, 0) === "r" && L.plateKey(0, 2) === "t" && L.plateKey(1, 2) === "l", "L8 座位 → 名牌鍵（相對自己：右家 r、對家 t、左家 l）");
 const sl = L.tableStack("l", box(4, 166, 88, 38), VW, VH), sr = L.tableStack("r", box(752, 166, 88, 38), VW, VH), st2 = L.tableStack("t", box(214, 8, 88, 38), VW, VH);
 ok(sl.pos.left === 4 && sl.pos.bottom === VH - 159 && sl.dir === "up", "L9 左家泡泡：名牌上方 7、左對齊、往上疊");
 ok(sr.pos.right === 4 && sr.pos.bottom === VH - 159 && sr.align === "end", "L10 右家泡泡：名牌上方、右對齊");
 ok(st2.pos.right === VW - 207 && st2.pos.top === 8 && st2.dir === "down", "L11 對家泡泡：名牌左側（右緣貼名牌左緣 −7）、上緣對齊、往下疊");
-ok(L.phaseButton("result", M({ frame: null, ok: null }), BTN) === null, "L12 結算「查看牌桌」時（外框收起）：聊天鈕先藏起來");
 
 for (const r of results) console.log(r);
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);

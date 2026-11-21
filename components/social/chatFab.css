@@ -1,0 +1,13 @@
+/* 三款共用的聊天圓鈕（小宜〈三款遊戲 iPhone UI 修正規格 v1〉P2、A3，老闆定案固定右下）：
+   44×44 圓形、只放對話框圖示；right／bottom＝max(8px, 安全區)＋8px，不再用 JS 量名牌位置。桌機 48×48。z 57（泡泡 58、聊天室 59、選單 60） */
+.chat-fab { position: fixed; z-index: 57; box-sizing: border-box; width: 44px; height: 44px; padding: 0; border-radius: 50%;
+  right: calc(max(8px, var(--sa-r)) + 8px); bottom: calc(max(8px, var(--sa-b)) + 8px);
+  left: auto; top: auto; display: inline-flex; align-items: center; justify-content: center; color: #f0d68a; cursor: pointer;
+  background: rgba(8,27,47,.7); border: 1px solid rgba(201,169,110,.55); margin: 0; }
+.chat-fab.d { width: 48px; height: 48px; }
+.chat-fab.on { background: rgba(201,169,110,.22); }
+.chat-fab:active { transform: scale(.97); }
+.chat-fab:focus-visible { outline: 2px solid #F0D68A; outline-offset: 2px; }
+@media (hover: hover) { .chat-fab:hover { background: rgba(201,169,110,.16); } }
+/* 「請等 N 秒再傳」這類提示（P4、A4）：在鈕左邊同一列，最寬到左邊界，不折行 */
+.chat-fab-status { max-width: calc(100vw - 2 * (max(8px, var(--sa-l)) + 8px) - 60px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

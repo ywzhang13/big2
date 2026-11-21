@@ -1,9 +1,10 @@
 "use client";
 // 十三支的聊天與互動（小宜〈十三支共用聊天互動 v1〉§2～5）：用三款共用的 SocialChatDock、SocialFxMenu，這裡只交十三支的錨點和規則。
 //   phase：
-//   ・table（等其他人、亮牌）：聊天鈕在自己名牌右邊 +8；聊天室左緣貼自己名牌、往上到 ≡ 鈕下方；泡泡貼四家名牌（§3）；點名牌丟道具，還在理牌的人只出「理牌中」
-//   ・arrange（理牌）：聊天鈕在右欄最下面（舞台 y 326）；聊天室右緣貼右欄；泡泡疊在聊天鈕上方、帶頭像字；不能丟、不播收到的特效
-//   ・result（本局結算）：聊天鈕在結算外框左欄左緣、和「確認」同一列；聊天室蓋左欄；不顯示泡泡、不能丟、特效層清空
+//   聊天鈕：三款共用的右下圓鈕（components/social/chatFab.css；小宜〈三款遊戲 iPhone UI 修正規格 v1〉P2、A3），三個階段同一個位置，這裡不再量
+//   ・table（等其他人、亮牌）：聊天室右緣貼右家牌列左緣 −8、下緣在聊天鈕上面 8、往上到 ≡ 鈕下方（規格 P3，不再蓋左家）；泡泡貼四家名牌（§3）；點名牌丟道具，還在理牌的人只出「理牌中」
+//   ・arrange（理牌）：聊天室右緣貼右欄；泡泡疊在聊天鈕上方、帶頭像字；不能丟、不播收到的特效
+//   ・result（本局結算）：聊天室右緣對齊聊天鈕右緣；按「查看牌桌」時照牌桌的位置；不顯示泡泡、不能丟、特效層清空
 //   hold：牌型大字、打槍、全壘打播放中，收到的互動先排著，播完再播
 // 即時事件：伺服器把 mj_chat、mj_effect 送到自己的座位頻道（join.channel，useThirteenRoom 已經訂閱那個頻道收 th_ 事件）。
 //   這裡不改 useThirteenRoom：同一個頻道物件上另外掛 mj_chat、mj_effect 兩個監聽（Supabase 同名頻道回傳同一個物件）；
@@ -48,15 +49,12 @@ export type Measured = {
   /** 自己的名牌（牌桌） */ me: Box | null;
   /** 理牌：右欄、844×390 舞台、送出鈕、手牌（16 張時會伸到右欄下方） */ side: Box | null; stage: Box | null; submit: Box | null; hand: Box | null;
   /** 結算：外框、確認鈕、倍率 --th-s2 */ frame: Box | null; ok: Box | null; s2: number;
+  /** 牌桌：右家的牌列加名牌（聊天室右緣貼它的左緣） */ right?: Box | null;
 };
-export function phaseButton(phase: ThSocialPhase, m: Measured, size: { w: number; h: number }): { left: number; top: number } | null {
-  if (phase === "table") return m.me ? { left: m.me.right + 8, top: (m.me.top + m.me.bottom) / 2 - size.h / 2 } : null;
-  if (phase === "arrange") return m.side && m.stage ? { left: m.side.left, top: m.stage.top + 326 * ((m.stage.bottom - m.stage.top) / 390) } : null;
-  return m.frame && m.ok ? { left: m.frame.left + 14 * m.s2, top: (m.ok.top + m.ok.bottom) / 2 - size.h / 2 } : null;
-}
 export function phaseDock(phase: ThSocialPhase, m: Measured, btn: Box, width: number): { left: number; top: number; bottom: number } | null {
   const top0 = m.menu ? m.menu.bottom + 8 : 8;
-  if (phase === "table") return m.me ? { left: m.me.left, top: top0, bottom: Math.min(btn.top, m.me.top) - 6 } : null;
+  // 牌桌；結算按「查看牌桌」（外框收起，看得到牌桌）時也用這個位置（審伯 iPhone UI 初審 R1：原本回 null，聊天鈕按了沒有聊天室）
+  if (phase === "table" || (phase === "result" && !m.frame)) return { left: (m.right ? m.right.left : btn.right) - 8 - width, top: top0, bottom: btn.top - 8 };
   if (phase === "arrange") {
     if (!m.side) return null;
     const left = m.side.right - width;
@@ -64,7 +62,7 @@ export function phaseDock(phase: ThSocialPhase, m: Measured, btn: Box, width: nu
     const handTop = m.hand && m.hand.right > left ? m.hand.top : Infinity;
     return { left, top: top0, bottom: Math.min(btn.top, handTop) - 6 };
   }
-  return m.frame ? { left: m.frame.left + 14 * m.s2, top: m.frame.top + 56, bottom: btn.top - 6 } : null;
+  return m.frame ? { left: btn.right - width, top: m.frame.top + 56, bottom: btn.top - 8 } : null;
 }
 
 /** 好幾個元素合起來的範圍 */
@@ -78,6 +76,7 @@ function measure(): Measured {
     vw: window.innerWidth, vh: window.innerHeight, menu: rectOf(".th-menu .mjm-menu"), me: rectOf('[data-fx-seat="b"]'),
     side: rectOf(".th-side"), stage: rectOf(".th-arr-stage"), submit: rectOf(".th-btn-submit"), hand: unionOf(".th-hand .th-card"),
     frame: rectOf(".gr:not(.peek) .gr-in"), ok: rectOf(".gr:not(.peek) .gr-btn"), s2,
+    right: unionOf('.th-table [data-th-pos="right"] .th-seat2 img, .th-table [data-th-pos="right"] [data-fx-seat]'),
   };
 }
 
@@ -161,7 +160,6 @@ export default function ThSocial({ phase, join, account, guest, players, hand, r
   useSocialChatFeed({ account, roomId: join.roomId, me: join.playerId, historyUrl: historyUrl(join.roomId) });
 
   const layout: SocialDockLayout = {
-    button: (size) => phaseButton(phase, measure(), size),
     dock: (btn, width) => phaseDock(phase, measure(), btn, width),
     stack: (seat, btn) => {
       if (phase === "result") return null;

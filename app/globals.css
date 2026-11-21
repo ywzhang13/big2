@@ -2,6 +2,10 @@
 @import "tailwindcss";
 
 :root {
+  /* 安全區（iPhone 瀏海、底部橫條）：聊天圓鈕、十三支名牌內縮、結算底列都讀這三個（iPhone UI 規格 P1）；自動化瀏覽器沒有安全區，驗收時覆寫這三個變數模擬 */
+  --sa-l: env(safe-area-inset-left, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
   /* 偏好設定的顏色（lib/mahjong/prefs.ts 會覆寫）：牌背、桌布、外圈（牌面固定白色，不在這裡） */
   --mj-back-1: #4a8a5a; --mj-back-2: #2a6038; --mj-back-3: #1a4828;
   --mj-felt-1: #1e4a2e; --mj-felt-2: #153a22; --mj-felt-3: #0f2a1a;
@@ -26,7 +30,7 @@
 .mjm-app {
   --gold: #C9A96E;
   --gold-l: #f0d68a;
-  --tile-hand-w: clamp(30px, calc((100dvw - env(safe-area-inset-left) - env(safe-area-inset-right) - 64px) / 18), 38px);
+  --tile-hand-w: clamp(30px, calc((100dvw - var(--sa-l) - var(--sa-r) - 96px) / 18), 38px); /* 96（原 64）：右下讓出聊天圓鈕（iPhone UI 規格 P2）。規格寫 76，實量 17 張＋間距 30＋摸牌分隔 21 在 SE 會超出 4px，所以再多留 20 */
   --tile-hand-h: calc(var(--tile-hand-w) * 1.36);
   --row-top: 46px; /* 左右家版面 2026-10-17：44→38、動作列 46→40；2026-11-21 換共用名牌（小宜 v1 §2-1）：38→46，對家名牌右上角的旗往上凸 8 */
   --col-side: 88px; /* 2026-11-21：72→88（共用名牌 88 寬） */
@@ -215,6 +219,8 @@
 .mjm-me-r { justify-content: flex-end; }
 .mjm-me-info .cnt { font-size: 10px; color: rgba(255,255,255,.35); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .mjm-hand { display: flex; align-items: flex-end; justify-content: center; padding: 8px 8px 6px; }
+/* iPhone UI 規格 P2、A3：右邊讓出右下的聊天圓鈕（手牌右緣 ≤ 圓鈕左緣 −8；852×393 時 733） */
+.mjm-hand { padding-right: calc(max(8px, var(--sa-r)) - var(--sa-r) + 60px); }
 .mjm-hand .main { display: flex; gap: 2px; }
 .mjm-hand .drawn { margin-left: 10px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.12); }
 

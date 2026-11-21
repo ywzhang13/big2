@@ -43,6 +43,8 @@
 .gr-next { height: 15px; font-size: 11px; font-weight: 700; line-height: 15px; color: #f0d68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gr-err { font-size: 11px; font-weight: 700; line-height: 14px; color: #ff9b92; text-align: right; }
 .gr-foot { display: flex; align-items: center; gap: 10px; min-height: 38px; }
+/* iPhone UI 規格 P6、A7：右邊讓出聊天圓鈕（右緣＝圓鈕左緣−12；852×393 時 729），也避開瀏海 */
+.gr-foot { padding-right: max(0px, calc(402px - (50vw - max(8px, var(--sa-r)) - 64px) / var(--gr-z, 1))); }
 .gr-ready { display: flex; align-items: center; gap: 4px; margin-right: auto; min-width: 0; overflow: hidden; }
 .gr-ready .cnt { flex: none; font-size: 10px; font-weight: 700; color: rgba(255,255,255,.55); white-space: nowrap; margin-right: 2px; }
 .gr-chip { box-sizing: border-box; display: inline-flex; align-items: center; gap: 3px; max-width: 92px; height: 22px; padding: 0 7px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; }
@@ -55,6 +57,9 @@
 .gr .gr-btn:disabled { filter: grayscale(.4) brightness(.8); cursor: default; }
 .gr .gr-back { position: absolute; right: 14px; bottom: 10px; height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(15,42,26,.92); color: #f0d68a;
   border: 1.5px solid rgba(201,169,110,.8); font-weight: 800; font-size: 14px; pointer-events: auto; zoom: var(--gr-z, 1); }
+/* 審伯 iPhone UI 初審 R1：「回到結算」讓出右下的聊天圓鈕（右緣＝圓鈕左緣 −12、下緣和圓鈕對齊），也避開瀏海和底部橫條；
+   這顆鈕跟著 --gr-z 縮放，所以畫面上的距離要除回 --gr-z */
+.gr .gr-back { right: calc((max(8px, var(--sa-r)) + 64px) / var(--gr-z, 1)); bottom: calc((max(8px, var(--sa-b)) + 8px) / var(--gr-z, 1)); }
 /* 總結算的列：名次圓點（和麻將同色）、名字、統計（各寬 74）、總分 */
 .gr-rank { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; color: #1a1408; background: #6b7280; }
 .gr-rank.r0 { background: #FFD700; } .gr-rank.r1 { background: #C0C0C0; } .gr-rank.r2 { background: #CD7F32; } .gr-rank.r3 { color: #fff; }
