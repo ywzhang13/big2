@@ -41,7 +41,8 @@ function Seat({ rows, pos, played, holes, lucky }: { rows: RowView[]; pos: Pos; 
   // 彈孔角度用 --hr 放進 transform（直接用 rotate 屬性會繞著還沒置中的框轉，彈孔被甩出原位；老闆 2026-11-18 截圖三槍跑出畫面）
   // 扇形（小宜 v13）：每張牌各自算中心和角度（fanLayout.cardPose），座位座標原點＝頭墩中間那張牌，整組轉到那一家的方向。
   // 牌背（v14.2）：還沒出的組永遠在牌背區正中間；出牌時剩下的組 0.2 秒滑過去（CSS transition，重新整理時直接畫在最後位置）。
-  // 出牌飛行（v13 §5）：每張從那一墩出牌前牌背的中心、直的、0.65 倍、透明度 20% 飛到扇形位置，0.29 秒、依序晚 0.015 秒
+  // 出牌飛行（v13 §5）：每張從那一墩出牌前牌背的中心、直的、0.65 倍、透明度 20% 飛到扇形位置，0.29 秒、依序晚 0.015 秒。
+  // 起點的 y 給 --dy0（沒內縮的牌背位置）；左右家牌背避開瀏海往內縮時，thRoom.css 再減掉同樣的量（--dy），起點才會和看得到的牌背對齊
   const g = SEAT_GEO[pos];
   const gone = played.filter(Boolean).length;
   const bx = backGroupX(g, gone), by = backY(g);
@@ -65,7 +66,7 @@ function Seat({ rows, pos, played, holes, lucky }: { rows: RowView[]; pos: Pos; 
                 return (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img key={c.id} className={`th-fan-card${isGold(c, lucky) ? " is-gold" : ""}`} src={cardSrc(c, lucky)} alt="" draggable={false} data-th-card={`${r}-${i}`}
-                    style={{ left: p.x, top: p.y, "--a": `${p.deg}deg`, "--dx": `${fromX - p.x}px`, "--dy": `${by - p.y}px`, "--d": `${i * FAN_STAGGER_MS}ms` } as React.CSSProperties} />
+                    style={{ left: p.x, top: p.y, "--a": `${p.deg}deg`, "--dx": `${fromX - p.x}px`, "--dy0": `${by - p.y}px`, "--d": `${i * FAN_STAGGER_MS}ms` } as React.CSSProperties} />
                 );
               })}
             </div>

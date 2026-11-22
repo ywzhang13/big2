@@ -115,7 +115,16 @@
 .th-gp-bottom { left: 8px; top: 306px; } .th-gp-top { left: 214px; top: 8px; } .th-gp-left { left: 4px; top: 166px; } .th-gp-right { left: 752px; top: 166px; }
 /* iPhone UI 規格 A2：瀏海機左右家「名牌＋牌列」整組往內縮 Δ（牌桌座標，所以除以 --th-s），上家、自己的牌列不動、自己的名牌一起內縮；沒有安全區時 Δ＝0（min 那一項：安全區 0 就是 0） */
 .th-table { --th-dl: max(0px, min(calc(var(--sa-l) * 1000), calc((var(--sa-l) + 8px) / var(--th-s, 1) - 4px))); --th-dr: max(0px, min(calc(var(--sa-r) * 1000), calc((var(--sa-r) + 8px) / var(--th-s, 1) - 4px))); }
-.th-bg > .th-table .th-seatbox.th-at-left { margin-left: var(--th-dl); }
-.th-bg > .th-table .th-seatbox.th-at-right { margin-left: calc(-1 * var(--th-dr)); }
+/* 老馬 2026-11-22（老闆：亮牌時左右家的牌擋到中央看板）：原本整組（.th-seatbox）往內縮，亮牌的扇形（.th-blk，中心本來就緊貼看板左右緣）也跟著擠進看板。
+   改成只縮「名牌」和「手上的牌背（.th-hand-strip）」，亮牌扇形留在原位（打槍、大字也是照原位算的）。
+   左右家的座位容器轉了 ±90°（fanLayout SEAT_GEO），容器裡往畫面內側＝容器座標的 −y，所以牌背用 margin-top 負值 */
+.th-bg > .th-table .th-seatbox.th-at-left .th-gp-left { margin-left: var(--th-dl); }
+.th-bg > .th-table .th-seatbox.th-at-right .th-gp-right { margin-left: calc(-1 * var(--th-dr)); }
+.th-bg > .th-table .th-seatbox.th-at-left .th-hand-strip { margin-top: calc(-1 * var(--th-dl)); }
+.th-bg > .th-table .th-seatbox.th-at-right .th-hand-strip { margin-top: calc(-1 * var(--th-dr)); }
+/* 出牌飛行的起點（--dy，見下面 th-fan-fly）跟著牌背一起內縮：起點＝看得到的牌背中心，不會從沒內縮的位置跳一下（審伯建議） */
+.th-seat2 .th-blk-row .th-fan-card { --dy: var(--dy0, 0px); }
+.th-bg > .th-table .th-seatbox.th-at-left .th-fan-card { --dy: calc(var(--dy0, 0px) - var(--th-dl)); }
+.th-bg > .th-table .th-seatbox.th-at-right .th-fan-card { --dy: calc(var(--dy0, 0px) - var(--th-dr)); }
 .th-bg > .th-table .th-seatbox.th-at-bottom .th-gp-bottom { margin-left: var(--th-dl); }
 .th-arr .th-menu { zoom: var(--th-s2, 1); } /* v8-A 殘項：理牌畫面的 ⚙ 跟著版面放大（牌桌上的 ⚙ 在放大的牌桌裡，本來就跟著放大） */
