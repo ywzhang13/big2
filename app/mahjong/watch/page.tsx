@@ -230,7 +230,7 @@ export default function MahjongWatchPage() {
     evs.forEach((e) => document.addEventListener(e, unlock, true));
     return () => evs.forEach((e) => document.removeEventListener(e, unlock, true));
   }, []);
-  useGameAudioSession(!!room); // iPhone：觀戰中也用遊戲播放模式（同打牌頁，lib/gameAudioSession.ts）
+  useGameAudioSession(!!room); // iPhone：觀戰中也用 ambient 模式，跟背景音樂混音、靜音開關打開時沒聲音（同打牌頁，lib/gameAudioSession.ts）
   const skew = room ? clockSkew(room.serverNow) : 0;
   // 本場聊天、互動：開始觀戰才讀歷史、訂閱觀戰頻道；離開觀戰清空
   const account = auth.status === "in" ? auth.user?.id ?? "" : "";

@@ -58,7 +58,7 @@ export function useTableSounds({ roomId, hand, focusDiscard, needsDiscard, statu
   }, [on, hand, roomId, reminder]);
   useEffect(() => () => reminder.set(false), [reminder]);
 
-  // iPhone：在房間裡用遊戲播放模式，靜音開關打開、加到主畫面也從喇叭出聲（大廳不改；lib/gameAudioSession.ts）
+  // iPhone：在房間裡用 ambient 模式，跟背景音樂混音（不暫停音樂）；靜音開關打開時沒聲音；錄完語音回喇叭（大廳不改；lib/gameAudioSession.ts）
   useGameAudioSession(!!roomId);
 
   // 手機要在使用者點擊時解鎖音效：牌桌上任何一次點擊都解鎖（只有出牌聲、提醒聲的人也聽得到）。

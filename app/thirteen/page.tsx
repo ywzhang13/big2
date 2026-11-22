@@ -68,7 +68,7 @@ function ThirteenScreens() {
   const router = useRouter();
   const auth = useMjAuth();
   const [join, setJoin] = useState<ThJoin | null>(null);
-  // iPhone：在房間裡用遊戲播放模式，靜音開關打開、加到主畫面也從喇叭出聲（大廳不改；lib/gameAudioSession.ts）
+  // iPhone：在房間裡用 ambient 模式，跟背景音樂混音（不暫停音樂）；靜音開關打開時沒聲音；錄完語音回喇叭（大廳不改；lib/gameAudioSession.ts）
   useGameAudioSession(!!join);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
