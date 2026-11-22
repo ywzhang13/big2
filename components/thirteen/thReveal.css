@@ -23,22 +23,28 @@
 .th-fx { display: block; position: absolute; max-width: none; animation-fill-mode: both; animation-timing-function: linear; }
 
 /* 開始比牌 1.2 秒：0～0.2 由 1.6 倍縮到 1 倍並淡入、停 0.7 秒、0.9～1.2 放大到 1.1 倍並淡出（v5 §1）；畫面正中央 */
-.th-fx-start-at { left: 50%; top: 50%; }
+/* 老馬 2026-11-22 修「大字偏到下半部」：不再用 translate(-50%,-50%) 置中（iPhone Safari 在動畫開始那一刻把 -50% 換成固定像素，
+   圖還沒載完、或大小還在變，就會偏；給長寬比也不保證準）。改成外層鋪滿畫面、flex 置中，動畫只縮放——位置跟圖載完沒有關係 */
+.th-fx-start-at { left: 0; top: 0; right: 0; bottom: 0; width: auto; height: auto; display: flex; align-items: center; justify-content: center; }
+.th-fx-start-at .th-fx-start { position: relative; }
 .th-fx-start { width: calc(467px * var(--th-s, 1)); animation-name: th-start; animation-duration: .9s; filter: drop-shadow(0 4px 10px rgba(0,0,0,.55)); }
 @keyframes th-start {
-  0% { transform: translate(-50%,-50%) scale(1.6); opacity: 0; }
-  16.7% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
-  75% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
-  100% { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
+  0% { transform: scale(1.6); opacity: 0; }
+  16.7% { transform: scale(1); opacity: 1; }
+  75% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.1); opacity: 0; }
 }
 /* 衝三／鐵支／同花順／五龍 0.9 秒（v7 §2，動作同 v5）：在那一家那副牌的正上面（寬度由程式照座位給）；0.3 倍 → 1.08 倍（0.15 秒）→ 1 倍（0.22 秒）→ 停 → 0.67～0.9 淡出 */
+/* 牌型大字：外層（那一家那副牌的中心，0×0）flex 置中，大字以那一點為中心往兩邊長；動畫只縮放（同開始比牌的修法） */
+.th-fx-pat-at { display: flex; align-items: center; justify-content: center; }
+.th-fx-pat-at .th-fx-pat { position: relative; }
 .th-fx-pat { animation-name: th-pat; animation-duration: 1.5s; filter: drop-shadow(0 3px 6px rgba(0,0,0,.55)); }
 @keyframes th-pat {
-  0% { transform: translate(-50%,-50%) scale(.3); opacity: 0; }
-  16.7% { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
-  24.4% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
-  74.4% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
-  100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+  0% { transform: scale(.3); opacity: 0; }
+  16.7% { transform: scale(1.08); opacity: 1; }
+  24.4% { transform: scale(1); opacity: 1; }
+  74.4% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
 }
 
 /* 打槍 1.0 秒（v4 §4）：手槍淡入放大 → 0.18 後座、槍口上揚 6° → 0.6～0.8 淡出 */
@@ -54,7 +60,7 @@
   80%, 100% { transform: translate(-50%,-50%) scaleY(var(--flip)) scale(1); opacity: 0; }
 }
 /* 槍口火光：噴口（素材 19.3%, 55.4%）對準槍口；0.18～0.34 由 0.5 倍放大到 1 倍再淡出 */
-.th-fx-muzzle-img { width: calc(112px * var(--th-s, 1)); left: 0; top: 0; transform-origin: 19.3% 55.4%; animation-name: th-muzzle; animation-duration: .8s; }
+.th-fx-muzzle-img { width: calc(112px * var(--th-s, 1)); height: calc(112px * var(--th-s, 1) * 232 / 336); /* 高照素材 336:232 寫明：圖沒載完時 translate(-19.3%,-55.4%) 也照對的大小算 */ left: 0; top: 0; transform-origin: 19.3% 55.4%; animation-name: th-muzzle; animation-duration: .8s; }
 @keyframes th-muzzle {
   0%, 18% { transform: translate(-19.3%,-55.4%) scale(.5); opacity: 0; }
   19% { opacity: 1; }
@@ -81,7 +87,7 @@
 /* 集氣（老闆 2026-11-18 第 10 輪：打擊者準備姿勢取代只有球棒的圖）。左右鏡射在外層 .th-fx-at（固定不動）。
    老闆：準備姿勢不要左右搖——只留淡入、放大、淡出，位置固定（沒有旋轉、沒有水平位移）：
    0～0.15 淡入並由 0.9 倍放大到 1 倍 → 0.15～0.55 慢慢放大到 1.1 倍（集氣）→ 0.55 換景亮光蓋住、0.65 前淡掉。百分比＝秒數 ÷ 3.2 */
-.th-fx-ready { left: 0; top: 0; width: auto; animation-name: th-ready; animation-duration: 3.2s; }
+.th-fx-ready { left: 0; top: 0; /* 寬高由程式照素材比例寫明（ThRevealFx） */ animation-name: th-ready; animation-duration: 3.2s; }
 @keyframes th-ready {
   0% { transform: translate(-50%,-50%) scale(.9); opacity: 0; }
   4.7% { transform: translate(-50%,-50%) scale(1); opacity: 1; animation-timing-function: ease-out; }
@@ -89,7 +95,7 @@
   20.3% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; }
   20.32%, 100% { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
 }
-.th-fx-charge { left: 0; top: 0; width: calc(420px * var(--th-s, 1)); animation-name: th-charge; animation-duration: 3.2s; }
+.th-fx-charge { left: 0; top: 0; width: calc(420px * var(--th-s, 1)); height: calc(420px * var(--th-s, 1) * 893 / 1600); /* 高照素材 1600:893 寫明 */ animation-name: th-charge; animation-duration: 3.2s; }
 @keyframes th-charge {
   0% { transform: translate(-50%,-50%) scale(.2); opacity: 0; }
   12% { transform: translate(-50%,-50%) scale(.45); opacity: 1; }
@@ -107,21 +113,22 @@
 .th-hr9-flash { position: absolute; inset: 0; background: #FFF3C4; animation-name: th-hr9-flash; }
 @keyframes th-hr9-flash { 0%, 17.1875% { opacity: 0; } 20.3125% { opacity: 1; } 25%, 100% { opacity: 0; } }
 /* A 背景：蓋滿畫面、中心對中心；0.65～1.25 由 1.10 倍縮到 1 倍（先快後慢） */
-.th-hr9-field { left: 50%; top: 50%; width: max(100vw, 179.17vh); height: auto; animation-name: th-hr9-field; }
+/* 老馬 2026-11-22：改成鋪滿畫面＋object-fit: cover（和原本「寬 max(100vw, 179.17vh)、等比、中心對中心」同一個結果），不靠 translate(-50%) 置中，圖沒載完也不會偏 */
+.th-hr9 .th-hr9-field { left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; animation-name: th-hr9-field; }
 @keyframes th-hr9-field {
-  0%, 20.3% { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
-  20.3125% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
-  39.0625%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  0%, 20.3% { transform: scale(1.1); opacity: 0; }
+  20.3125% { transform: scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
+  39.0625%, 100% { transform: scale(1); opacity: 1; }
 }
 /* 壓暗 1.35～1.50：黑色 0 → 55% */
 .th-hr9-dim { position: absolute; inset: 0; background: #000; animation-name: th-hr9-dim; }
 @keyframes th-hr9-dim { 0%, 42.1875% { opacity: 0; } 46.875%, 100% { opacity: .55; } }
 /* 煙火（黑底、screen）：1.70 淡入 0.2 秒，1 倍慢慢放大到 1.08 倍到 2.80 */
-.th-hr9-fw { left: 50%; top: 50%; width: max(100vw, 179.2vh); mix-blend-mode: screen; animation-name: th-hr9-fw; }
+.th-hr9 .th-hr9-fw { left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; animation-name: th-hr9-fw; } /* 同背景的修法 */
 @keyframes th-hr9-fw {
-  0%, 53.125% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
-  59.375% { transform: translate(-50%,-50%) scale(1.02); opacity: 1; }
-  87.5%, 100% { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+  0%, 53.125% { transform: scale(1); opacity: 0; }
+  59.375% { transform: scale(1.02); opacity: 1; }
+  87.5%, 100% { transform: scale(1.08); opacity: 1; }
 }
 /* B 打擊者：高＝min(0.92H, 0.44W)，寬照素材比例；左緣 0.07W、下緣在畫面底往下 0.02H。0.65～0.90 從左 0.02W、下 0.03H 滑進定位、1.12 倍 → 1 倍（以腳底中央縮放） */
 .th-hr9-batter { left: 7vw; bottom: -2vh; height: min(92vh, 44vw); width: auto; transform-origin: 50% 100%; animation-name: th-hr9-batter; }
@@ -154,17 +161,17 @@
   87.5%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
 }
 /* 「全壘打」大字：寬 0.48W、中心 (0.72W, 0.50H)；1.50 由 2.2 倍砸到 0.95 倍（0.12 秒）、回 1 倍（0.08 秒），1.70～2.80 每 0.6 秒放大縮小 2% */
-.th-hr9-title { position: absolute; left: 72vw; top: 50vh; width: 0; height: 0; }
-.th-hr9 .th-hr9-word { left: 0; top: 0; width: 48vw; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); animation-name: th-hr9-word; }
+.th-hr9-title { position: absolute; left: 72vw; top: 50vh; width: 0; height: 0; display: flex; align-items: center; justify-content: center; } /* 大字以這一點為中心（flex 置中，不靠 translate(-50%)） */
+.th-hr9 .th-hr9-word { position: relative; left: 0; top: 0; width: 48vw; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); animation-name: th-hr9-word; }
 @keyframes th-hr9-word {
-  0%, 46.8% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
-  46.875% { transform: translate(-50%,-50%) scale(2.2); opacity: 1; animation-timing-function: cubic-bezier(.55,0,1,.45); }
-  50.625% { transform: translate(-50%,-50%) scale(.95); opacity: 1; }
-  53.125% { transform: translate(-50%,-50%) scale(1); opacity: 1; animation-timing-function: ease-in-out; }
-  62.5% { transform: translate(-50%,-50%) scale(1.02); }
-  71.875% { transform: translate(-50%,-50%) scale(1); }
-  81.25% { transform: translate(-50%,-50%) scale(1.02); }
-  87.5%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  0%, 46.8% { transform: scale(2.2); opacity: 0; }
+  46.875% { transform: scale(2.2); opacity: 1; animation-timing-function: cubic-bezier(.55,0,1,.45); }
+  50.625% { transform: scale(.95); opacity: 1; }
+  53.125% { transform: scale(1); opacity: 1; animation-timing-function: ease-in-out; }
+  62.5% { transform: scale(1.02); }
+  71.875% { transform: scale(1); }
+  81.25% { transform: scale(1.02); }
+  87.5%, 100% { transform: scale(1); opacity: 1; }
 }
 /* 名牌：照麻將自摸大字下的名字（components/mahjong/zimoTitle.css .zz-name）——系統字型粗體、字距 .12em、黑色字影，手機 22px、桌機 28px；
    大字出現後 0.2 秒（1.70）往上淡入 0.26 秒（同 zz-name-up）。放在大字正下方、中線對齊大字 */

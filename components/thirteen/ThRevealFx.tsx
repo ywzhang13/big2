@@ -100,7 +100,7 @@ function PatternFxView({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step
   });
   if (!at) return null;
   return (
-    <div className="th-fx-at" style={{ left: at.x, top: at.y }} data-th-fx={step.fx} data-th-fx-seat={step.seat} data-th-fx-pos={pos}>
+    <div className="th-fx-at th-fx-pat-at" style={{ left: at.x, top: at.y }} data-th-fx={step.fx} data-th-fx-seat={step.seat} data-th-fx-pos={pos}>
       <Pic name={step.fx} className="th-fx th-fx-pat" style={{ animationDelay: `${-elapsed}ms`, width: at.w }} />
     </div>
   );
@@ -120,7 +120,7 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
     const muzzleY = -0.29 * gunH * flip;
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
     const len = Math.max(20, dist - muzzle);
-    return { a, deg: (ang * 180) / Math.PI, flip, push, gunW, muzzle, muzzleY, len, beamH: Math.max(40 * s, len / 3) };
+    return { a, deg: (ang * 180) / Math.PI, flip, push, gunW, gunH, muzzle, muzzleY, len, beamH: Math.max(40 * s, len / 3) };
   });
   if (!g) return null;
   const delay = { animationDelay: `${-elapsed}ms` };
@@ -130,7 +130,8 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
       {/* 三層各自一個轉向的容器：黑底的 screen 要掛在最外層（容器有 transform 會自成一組，掛在裡面的圖只會跟透明的容器疊，黑底就露出來） */}
       <div className="th-fx-rot" style={rot} data-th-gun={`${step.from}-${step.to}`}>
         <div className="th-fx-gunbox" style={{ left: g.push }}>
-          <Pic name="gun" className="th-fx th-fx-gun" style={{ ...delay, width: g.gunW, ["--flip" as string]: g.flip }} />
+          {/* 寬高都寫明（高照素材 256:131）：圖還沒載完時 translate(-50%,-50%) 也照對的大小算（老馬 2026-11-22，同大字偏下的原因） */}
+          <Pic name="gun" className="th-fx th-fx-gun" style={{ ...delay, width: g.gunW, height: g.gunH, ["--flip" as string]: g.flip }} />
         </div>
       </div>
       <div className="th-fx-rot is-blend" style={rot}>
@@ -173,7 +174,7 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
       {/* 打擊者準備姿勢：中心對齊那一家整組牌的中心（上下超出畫面才往內收） */}
       {/* 鏡射放在外層、固定不動（老闆第 10 輪：準備姿勢要定住）；動畫只做放大和透明度，沒有旋轉和水平位移 */}
       <div className="th-fx-at" style={{ left: h.a.x, top: h.readyY, transform: h.face < 0 ? "scaleX(-1)" : undefined }} data-th-hr-ready={pos}>
-        <Pic name="hrready" className="th-fx th-fx-ready" style={{ ...delay, height: h.readyH }} />
+        <Pic name="hrready" className="th-fx th-fx-ready" style={{ ...delay, height: h.readyH, width: (h.readyH * FX_AR.hrready[0]) / FX_AR.hrready[1] }} />{/* 寬也寫明（照素材比例），圖沒載完也不偏 */}
       </div>
       {/* 打擊者畫面（v9 §3 圖層由下到上）：背景、壓暗、煙火（screen）、打擊者、球、星星、大字、名牌、換景亮光 */}
       {/* 右家、對家的集氣人物朝左 → 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
