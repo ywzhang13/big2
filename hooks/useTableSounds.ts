@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { fxAudioState, playTableSound, unlockAudio } from "@/lib/mahjong/fx/engine";
 import { createDiscardWatcher, createTurnReminder, discardKey, remindActive } from "@/lib/mahjong/tableSound";
 import { shakeHandForRemind } from "@/lib/mahjong/remindShake";
+import { useGameAudioSession } from "@/lib/gameAudioSession";
 
 // 預覽站：每一聲（哪一種、什麼時候、有沒有真的出聲、當下音訊狀態）和提醒計時的開始、停止都記下來，
 // 自動驗收讀 window.__mjTableSnd；也送一份到預覽站伺服器的紀錄（/preview/clientlog），真機試玩後查得到發生了什麼
@@ -56,6 +57,9 @@ export function useTableSounds({ roomId, hand, focusDiscard, needsDiscard, statu
     reminder.set(on);
   }, [on, hand, roomId, reminder]);
   useEffect(() => () => reminder.set(false), [reminder]);
+
+  // iPhone：在房間裡用遊戲播放模式，靜音開關打開、加到主畫面也從喇叭出聲（大廳不改；lib/gameAudioSession.ts）
+  useGameAudioSession(!!roomId);
 
   // 手機要在使用者點擊時解鎖音效：牌桌上任何一次點擊都解鎖（只有出牌聲、提醒聲的人也聽得到）。
   // iPhone Safari 只有 touchend、click（和按鍵）算「使用者操作」，pointerdown／touchstart 叫不醒音訊，所以幾種都聽

@@ -16,6 +16,7 @@ import {
   setChatOpen, startRecording, toggleVoice, useChatState, type Bubble, type MicError,
 } from "@/lib/mahjong/chatClient";
 import { createChatMic } from "@/lib/mahjong/chatMic";
+import { withCaptureSession } from "@/lib/gameAudioSession";
 import { SpeakerIcon } from "./MjIcons";
 import { mjDockLeft, toggleMjChatBox } from "./MjChatLog";
 import { useChatLog } from "@/components/social/chatLog";
@@ -120,7 +121,7 @@ export default function MjChat({
   const [mic, setMic] = useState<MicError | null>(null);
   const [rec, setRec] = useState<{ t0: number; cancelArm: boolean } | null>(null);
   const [recNow, setRecNow] = useState(0);
-  const [micCtl] = useState(() => createChatMic(startRecording, (blob, ms) => void sendVoice(blob, ms)));
+  const [micCtl] = useState(() => createChatMic(withCaptureSession(startRecording), (blob, ms) => void sendVoice(blob, ms)));
   const startYRef = useRef(0);
 
   // 換場（帳號、房間、玩家、座位）或不能再發送：輸入、錄音畫面、錯誤、焦點全部清掉（審伯 2026-10-21 退回①）

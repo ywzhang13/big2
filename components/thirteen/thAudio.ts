@@ -7,6 +7,7 @@
 //   100（1.43 倍）或很多聲音疊在一起時不會爆音。
 // 檔案先 fetch＋decode 成 AudioBuffer 快取；音訊還沒解鎖（手機要點過畫面）時，第一次點擊就叫醒
 import { fxGain, getPrefs, onPrefsChange } from "@/lib/mahjong/prefs";
+import { registerAudioContext } from "@/lib/gameAudioSession";
 
 /** 軟限幅的起點（振幅）：以下原樣通過 */
 export const LIMIT_KNEE = 0.9;
@@ -56,6 +57,7 @@ function ensureCtx(): AudioContext | null {
   if (ctx) return ctx;
   if (typeof window === "undefined") return null;
   try { ctx = env.makeCtx(); } catch { return null; }
+  registerAudioContext(ctx); // 切背景、鎖屏回來時叫醒（lib/gameAudioSession.ts）
   chain = buildChain(ctx, fxGain(getPrefs()));
   onPrefsChange(() => { if (ctx && chain) chain.master.gain.setTargetAtTime(fxGain(getPrefs()), ctx.currentTime, 0.02); });
   if (!unlockBound && typeof document !== "undefined") {

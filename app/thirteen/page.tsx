@@ -27,6 +27,7 @@ import { toServerArrangeSec } from "@/components/thirteen/arrangeTime";
 import { apiJson, useThirteenRoom, type ThGameView, type ThJoin } from "@/components/thirteen/useThirteenRoom";
 import { cardSrc, deckSrcs } from "@/components/thirteen/cardArt";
 import { warmImages } from "@/lib/perf/tableFirst";
+import { useGameAudioSession } from "@/lib/gameAudioSession";
 import "@/components/thirteen/thRoom.css";
 import BlockedDialog from "@/components/roomCard/BlockedDialog";
 import { blockedFrom, type Blocked } from "@/components/roomCard/client";
@@ -67,6 +68,8 @@ function ThirteenScreens() {
   const router = useRouter();
   const auth = useMjAuth();
   const [join, setJoin] = useState<ThJoin | null>(null);
+  // iPhone：在房間裡用遊戲播放模式，靜音開關打開、加到主畫面也從喇叭出聲（大廳不改；lib/gameAudioSession.ts）
+  useGameAudioSession(!!join);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // 開房、加入、開局被伺服器擋下（房卡 v1.2 2-4 帳號已暫停、2-5 不能開局）

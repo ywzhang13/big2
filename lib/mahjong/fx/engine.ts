@@ -7,6 +7,7 @@
 //   5. 音效只在預載完成、圖片已經放上畫面之後才播
 //   6. 分頁切到背景：正在播的立刻收掉、排隊的丟掉，回來時畫面是乾淨的
 import { whenScreenImagesLoaded } from "@/lib/perf/tableFirst";
+import { registerAudioContext } from "@/lib/gameAudioSession";
 
 export type FxKind = "love" | "cash" | "egg" | "water" | "punch" | "clap";
 export type FxView = "sender" | "victim" | "bystander";
@@ -119,6 +120,7 @@ async function loadClap() {
 async function loadSounds() {
   try {
     AC ??= new AudioContext();
+    registerAudioContext(AC); // 切背景、鎖屏回來時叫醒（lib/gameAudioSession.ts）
     if (!MIX) {
       const c = AC.createDynamicsCompressor();
       c.threshold.value = -14; c.knee.value = 8; c.ratio.value = 8; c.attack.value = 0.003; c.release.value = 0.25;
