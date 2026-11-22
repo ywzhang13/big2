@@ -72,7 +72,7 @@ const plate = (seat: number) => { const i = h.indexOf(`data-fx-seat="${seat}"`);
 // ---- L 手機格線 ----
 {
   const css = readFileSync("app/globals.css", "utf8");
-  ok(/--row-top: 54px;/.test(css) && /--col-side: 88px;/.test(css), "L1 手機上列 54（B1 名牌加高 6，對家的旗不被切）、左右欄 88（小宜 v1 §2-1）");
+  ok(/--row-top: 57px;/.test(css) && /--col-side: 88px;/.test(css), "L1 手機上列 57（B1 名牌加高 6、對家的旗不被切；名牌離金框描邊 2px）、左右欄 88（小宜 v1 §2-1）");
   ok(/\.mj-cb \{[^}]*width: 104px; height: 92px;/.test(css) && /\.mj-cb \.w \{[^}]*width: 16px; height: 16px;[^}]*display: flex; align-items: center; justify-content: center;/.test(css) && /\.mj-cb\.d \{ --cb-s: 1\.5; \}/.test(css),
     "L2 看板 104×92、風位格 16×16 字上下左右置中；桌機 1.5 倍");
 }

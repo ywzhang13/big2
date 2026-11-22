@@ -24,7 +24,7 @@ import { artUsable, isCanvasFx, isChatUiEvent, type ZimoFxNew } from "@/lib/mahj
 import { playZimoFxSound, preloadZimoFxSound } from "@/lib/mahjong/fx/engine";
 import { runSakura, SAKURA_TL, type SakuraGeo } from "@/lib/mahjong/fx/canvasFx";
 import { RULAI_ART, RULAI_FACES, RULAI_TL, rulaiProject, runRulai, type RulaiArt } from "@/lib/mahjong/fx/rulaiFx";
-import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
+import { holdStageForSegment, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import ZimoTitle, { ZIMO_TITLE_AR, ZIMO_TITLE_EM } from "./ZimoTitle";
 import { cellPos, disposeAnim, isTouchDevice, prefetchArt, runParts, type Part, type Pose } from "./fxParts";
 import "./zimoFx.css";
@@ -439,6 +439,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
   const artFailRef = useRef(onArtFail);
   useLayoutEffect(() => { doneRef.current = onDone; artFailRef.current = onArtFail; });
   const ended = useRef(false);
+  const segRef = useRef<ReturnType<typeof holdStageForSegment> | null>(null); // 牌桌根節點的 will-change：播完就放掉（審伯 R1）
   const stopRef = useRef(() => {});
   const cvRef = useRef<HTMLCanvasElement>(null);
   /** 櫻花畫布的時間零點（聲音對齊用） */
@@ -530,7 +531,8 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       anims.push(el.animate(kf, { duration: total, fill: "both" }));
     });
     const stage = warm || embedded ? null : document.querySelector<HTMLElement>("[data-mt-stage]");
-    const release = stage ? holdStage(stage, STAGE_SHADOW) : null;
+    const seg = holdStageForSegment(stage, STAGE_SHADOW);
+    segRef.current = seg;
     // 風暴 v5：主擊那一下畫面順著風被推一下（0 → 6px → -4px → 0，120ms，不旋轉）；其他照原本的震動（櫻花不震）
     const wd = stormWind(rel);
     if (stage && fx === "storm") anims.push(stage.animate([{ transform: "none" }, { transform: `translate(${(wd.x * 6).toFixed(1)}px, ${(wd.y * 6).toFixed(1)}px)` },
@@ -539,7 +541,7 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
     // 黑洞：主擊前整個牌桌被往落點吸過去（縮到 0.94）
     if (stage && fx === "blackhole") stage.style.transformOrigin = `${Math.round(px)}px ${Math.round(py)}px`;
     if (stage && fx === "blackhole") anims.push(stage.animate([{ transform: "none" }, { transform: "scale(0.94)", offset: 0.9 }, { transform: "none" }], { duration: HIT, easing: "ease-in" }));
-    return () => { anims.forEach(disposeAnim); release?.(); };
+    return () => { anims.forEach(disposeAnim); seg.dispose(); if (segRef.current === seg) segRef.current = null; };
   }, [fx, mobile, rm, warm, embedded, seat, rel]);
 
   // 跳過：點畫面任一處、Enter、Space（同隕石：0.5 秒內補上的 click 吃掉，不會按到結算浮層的按鈕）
@@ -583,7 +585,8 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       else if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
       else go(null);
     }
-    ts.push(setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? OWN_RM : zfxTotal(fx)));
+    // 播完：先放掉牌桌根節點的 will-change，後面接的自摸浮層（fixed）才蓋得滿整個螢幕（審伯 R1）
+    ts.push(setTimeout(() => { if (!ended.current) { ended.current = true; segRef.current?.end(); doneRef.current(false); } }, rm ? OWN_RM : zfxTotal(fx)));
     if (!rm && fx !== "sakura") ts.push(setTimeout(() => { gameVibrate([110, 50, 40]); }, boomOf(fx)));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
   }, [fx, rm, warm, sound]);

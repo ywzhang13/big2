@@ -30,7 +30,7 @@ import { playBigWin8Sound, preloadBigWin8Sound } from "@/lib/mahjong/fx/engine";
 import { BIG_WIN16_FONT_RANGE, BIG_WIN_LIGU_FONT_RANGE, BIG_WIN8, BIG_WIN8_DIR, bigWin8Files, type BigWin8Theme } from "@/lib/mahjong/bigWin";
 import type { Tile, TileSuit } from "@/lib/mahjong/tiles";
 import { isChatUiEvent } from "@/lib/mahjong/winShow";
-import { holdStage, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
+import { holdStageForSegment, stepPlay, warmImg, type WarmMode } from "./fxWarmUp";
 import "./bigWin8.css";
 
 const ART = BIG_WIN8_DIR;
@@ -685,7 +685,9 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
       return () => { alive = false; anims.forEach(disposeAnim); };
     }
     let t: ReturnType<typeof setTimeout> | undefined;
-    const finish = () => { if (!ended.current) { ended.current = true; root.classList.add("done"); doneRef.current(false); } };
+    let seg: ReturnType<typeof holdStageForSegment> | null = null;
+    // 播完：先放掉牌桌根節點的 will-change，後面接的胡／自摸浮層（fixed）才蓋得滿整個螢幕（審伯 R1）
+    const finish = () => { if (!ended.current) { ended.current = true; seg?.end(); root.classList.add("done"); doneRef.current(false); } };
     if (rm) {
       // 減少動態：全部停在定格那一格（不動、不閃、不震），整段淡入，同樣長度後結束；聲音從頭放
       anims.forEach((a) => { a.pause(); a.currentTime = spec.freeze; });
@@ -696,7 +698,7 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
     }
     const stage = document.querySelector<HTMLElement>("[data-mt-stage]");
     // 牌桌外露那一圈的補色＋升成獨立合成層：一掛上就做，重擊震動那一刻不用整張牌桌重畫（components/mahjong/fxWarmUp.tsx 的 holdStage）
-    const release = stage ? holdStage(stage, BIG8_STAGE_SHADOW) : null;
+    seg = holdStageForSegment(stage, BIG8_STAGE_SHADOW);
     const shakes = stage ? spec.shakes.flatMap((s) => shakeStage(stage, s)) : [];
     // 聲音：對準大牌段開頭（動畫真正開始那一刻），重擊點照音效檔
     const clock = anims[0];
@@ -706,7 +708,7 @@ export default function BigWin8Fx({ theme, title, fan, seat, mobile, winTile, ha
       clearTimeout(t);
       anims.forEach(disposeAnim);
       shakes.forEach(disposeAnim);
-      release?.();
+      seg?.dispose();
       stopRef.current();
     };
     // 一次播放只排一次時間軸（finish 透過 ref 呼叫最新的 onDone）

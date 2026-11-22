@@ -7,9 +7,11 @@ export default function WinCelebration({ mode: celebrationMode, flowerWinName, n
   mode: "zimo" | "ron"; flowerWinName?: string; name: string; totalFan: number;
 }) {
   return (
+    // fixed（老馬 2026-11-22，老闆：胡、自摸的黑底有矩形感）：原本 absolute 只鋪到牌桌頁的根容器，iPhone 的 body 留了瀏海和底部橫條的內距，
+    // 但牌桌（.mjm-app）是 fixed 鋪滿整個螢幕，左右瀏海和底部那幾條牌桌就露在黑底外面；改成和隕石、大牌特效一樣 fixed 蓋滿整個螢幕
     <div
       data-win-cele
-      className="absolute inset-0 z-[65] flex items-center justify-center overflow-hidden pointer-events-none"
+      className="fixed inset-0 z-[65] flex items-center justify-center overflow-hidden pointer-events-none"
       style={{
         background:
           celebrationMode === "zimo"

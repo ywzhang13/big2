@@ -115,6 +115,14 @@ function boardBusy(): boolean {
  * 牌桌沒動的時候陰影整圈都在畫面外，看不到）。特效一掛上就做，重擊、撞擊開始震動那一刻就不用整張牌桌重畫，只是移動已經畫好的圖層。
  * 回傳還原函式（還原成原本的樣子）；同時有兩段特效（大牌段墊在隕石底下）時，最後一個還原的才真的還原
  */
+/** 特效段落用的 holdStage（老馬 2026-11-22，審伯 R1）：大牌、自摸特效播完自己那一段後還會掛著（只留暗幕）等後面的胡／自摸浮層播完，
+ *  如果一直保留 will-change: transform，牌桌根節點會變成 fixed 子孫的包含塊，浮層的黑底就只鋪到根節點（iPhone 瀏海兩側、底部露出牌桌）。
+ *  end()＝自己的段落播完就放掉（震動已經結束，不用再升成合成層）；dispose()＝卸載時放掉（沒播完就被跳過、收掉的情況）。兩個都可以重複呼叫 */
+export function holdStageForSegment(stage: HTMLElement | null, shadow: string): { end: () => void; dispose: () => void } {
+  const release = stage ? holdStage(stage, shadow) : null;
+  return { end: () => release?.(), dispose: () => release?.() };
+}
+
 const holds = new WeakMap<HTMLElement, { n: number; willChange: string; boxShadow: string }>();
 export function holdStage(stage: HTMLElement, shadow: string): () => void {
   const h = holds.get(stage) ?? { n: 0, willChange: stage.style.willChange, boxShadow: stage.style.boxShadow };
