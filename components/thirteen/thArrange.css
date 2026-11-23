@@ -89,9 +89,9 @@
 /* 預覽頁：送出後印出排法（測試用，畫面下緣一行小字） */
 .th-preview-sent { position: fixed; left: 8px; bottom: 2px; z-index: 60; font-size: 10px; color: rgba(255, 255, 255, .55); pointer-events: none; }
 
-/* 三墩排滿後手牌剩下的 3 張＝不用的牌：只調暗，不變灰、不加字（老闆 2026-11-18；2026-11-22 起不再變灰，變灰會讓紅心看起來像黑桃） */
+/* 三墩排滿後手牌剩下的 3 張＝不用的牌：不變灰、不調暗、不加字，跟一般手牌同色（老闆 2026-11-18 只調暗；2026-11-22 不變灰；2026-11-23 調暗也拿掉：紅心、方塊看起來太黑）。
+   ThArrange.tsx 還會加 is-unused，但沒有樣式了 */
 .th-card-hand { position: relative; }
-.th-card-hand.is-unused img { filter: brightness(.6); }
 
 /* v8-A §1：理牌畫面 844×390 一塊，整塊等比放大（--th-s2，上限 2.4）放正中央；拖曳中的牌（.th-ghost）在外面、跟著放大 */
 .th-arr-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform: translate(-50%, -50%) scale(var(--th-s2, 1));
