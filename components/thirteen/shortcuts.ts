@@ -3,9 +3,10 @@
 // 唯一例外是「對子」：兩張同點數（見下面 pair 那段的理由）。
 import { CAT, compareValue, evalFive, evalThree, type Card, type HandRule, type HandValue } from "@/lib/thirteen";
 
-export type ShortcutKind = "straightFlush" | "fourKind" | "fullHouse" | "flush" | "straight" | "threeKind" | "pair";
+export type ShortcutKind = "fiveKind" | "straightFlush" | "fourKind" | "fullHouse" | "flush" | "straight" | "threeKind" | "pair";
 
 export const SHORTCUTS: { kind: ShortcutKind; label: string }[] = [
+  { kind: "fiveKind", label: "五龍" }, // 老闆 2026-11-23：按鈕沒有做五龍的
   { kind: "straightFlush", label: "同花順" },
   { kind: "fourKind", label: "鐵支" },
   { kind: "fullHouse", label: "葫蘆" },
@@ -17,6 +18,7 @@ export const SHORTCUTS: { kind: ShortcutKind; label: string }[] = [
 
 /** 五張牌型對應的引擎等級。同花包含同花一對、同花兩對（都是五張同花色）；v4 的黑桃同花順、彩金鐵支、彩金葫蘆歸在同一顆鈕 */
 const FIVE_CATS: Partial<Record<ShortcutKind, number[]>> = {
+  fiveKind: [CAT.FIVE_KIND],
   straightFlush: [CAT.STRAIGHT_FLUSH, CAT.SPADE_STRAIGHT_FLUSH],
   fourKind: [CAT.FOUR_KIND, CAT.LUCKY_FOUR],
   fullHouse: [CAT.FULL_HOUSE, CAT.LUCKY_FULL_HOUSE],
