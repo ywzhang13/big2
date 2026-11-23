@@ -35,10 +35,10 @@ export const CAT_NAME: Record<number, string> = {
 };
 
 /**
- * 牌型大小（v4）：五龍 > 彩金鐵支 > 非黑桃同花順 > 鐵支 > 黑桃同花順 > 彩金葫蘆 > 葫蘆 > … > 彩金三條 > 三條 > …
+ * 牌型大小（v4）：五龍 > 彩金鐵支 > 非黑桃同花順 > 黑桃同花順 > 鐵支 > 彩金葫蘆 > 葫蘆 > … > 彩金三條 > 三條 > …
  * 表上沒有的照代號；同一種牌型裡彩金最大（彩金 5 的三條贏 6 的三條）
  */
-export const CAT_RANK: Record<number, number> = { 15: 10.5, 12: 8.5, 14: 8.2, 13: 3.5 };
+export const CAT_RANK: Record<number, number> = { 15: 10.5, 12: 9.5, 14: 8.2, 13: 3.5 };
 const rankOf = (cat: number) => CAT_RANK[cat] ?? cat;
 
 /** 牌型判斷規則：{ lucky }＝v4 的房（lucky＝彩金點數，沒有＝null）；"legacy"＝上線前開的房（v1、jia） */

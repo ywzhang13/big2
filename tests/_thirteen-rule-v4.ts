@@ -1,7 +1,7 @@
 // 十三支 v4 規則（老闆 2026-11-19 定案；取代沒上線的 v3）：
 //   ・彩金牌＝65 張發完剩下的 1 張；點數跟它一樣的牌叫彩金點數。彩金衝三（頭墩三張）、彩金葫蘆（三張那組）、彩金鐵支（四張）
 //   ・黑桃同花順＝五張全是黑桃的同花順；其他花色是非黑桃同花順
-//   ・大小：五龍 > 彩金鐵支 > 非黑桃同花順 > 鐵支 > 黑桃同花順 > 彩金葫蘆 > 葫蘆 > …；同一種牌型裡彩金最大
+//   ・大小：五龍 > 彩金鐵支 > 非黑桃同花順 > 黑桃同花順 > 鐵支 > 彩金葫蘆 > 葫蘆 > …；同一種牌型裡彩金最大（黑桃同花順大於鐵支：老闆 2026-11-23）
 //   ・計分：一道的輸贏本身不算分；特殊牌型加分只向「那一道被你贏過的人」收；打槍 1；全壘打再向每家收 2
 //   V1 牌型判斷（v4 有彩金點數／沒有彩金牌、舊規則）
 //   V2 大小排序
@@ -49,13 +49,13 @@ const pair01 = (p0: H, p1: H, rule: ScoreRule, lucky: number | null = null) =>
 // V2
 {
   const v = (s: string) => evalFive(cards(s), L5);
-  const order = [v("CK DK HK SK SK"), v("C5 D5 H5 S5 C2"), v("H2 H3 H4 H5 H6"), v("CA DA HA SA C3"), v("S9 ST SJ SQ SK"), v("C5 D5 H5 C2 D2"), v("CA DA HA CK DK")];
-  const names = ["五龍", "彩金鐵支", "非黑桃同花順", "鐵支", "黑桃同花順", "彩金葫蘆", "葫蘆"];
+  const order = [v("CK DK HK SK SK"), v("C5 D5 H5 S5 C2"), v("H2 H3 H4 H5 H6"), v("S9 ST SJ SQ SK"), v("CA DA HA SA C3"), v("C5 D5 H5 C2 D2"), v("CA DA HA CK DK")];
+  const names = ["五龍", "彩金鐵支", "非黑桃同花順", "黑桃同花順", "鐵支", "彩金葫蘆", "葫蘆"];
   const desc = order.slice(1).map((x, i) => compareValue(order[i], x) > 0);
   const t = (s: string) => evalThree(cards(s), { lucky: 2 });
   eq([order.map((x) => x.cat), desc, compareValue(t("C2 D2 H2"), t("CA DA HA")) > 0, compareValue(evalFive(cards("C2 D2 H2 S7 D9"), { lucky: 2 }), evalFive(cards("CA DA HA S7 D9"), { lucky: 2 })) > 0],
-    [[11, 15, 10, 9, 12, 14, 8], [true, true, true, true, true, true], true, true],
-    `V2 大小：${names.join(" > ")}（最小的彩金鐵支贏 A 的鐵支、最小的彩金葫蘆贏 A 的葫蘆、彩金葫蘆輸給黑桃同花順）；彩金 2 的三條贏 A 的三條`);
+    [[11, 15, 10, 12, 9, 14, 8], [true, true, true, true, true, true], true, true],
+    `V2 大小：${names.join(" > ")}（最小的彩金鐵支贏 A 的鐵支、K 的黑桃同花順贏 A 的鐵支、最小的彩金葫蘆贏 A 的葫蘆）；彩金 2 的三條贏 A 的三條`);
 }
 // V3
 const LOW_FRONT = "C2 D3 H7", MID = "C4 D5 H6 S7 C8", BACK = "C9 DT HJ SQ CK", FIVE_A = "CA DA HA SA SA";
@@ -124,8 +124,8 @@ const LOW_FRONT = "C2 D3 H7", MID = "C4 D5 H6 S7 C8", BACK = "C9 DT HJ SQ CK", F
   const d = hand("C2 D2 H2", "C6 D6 H6 S9 DT", "CA DA HA SA C3");     // 頭彩金 2 三條、中 6 三條
   const L2: HandRule = { lucky: 2 };
   eq([r(checkArrangement(a, NOL)), r(checkArrangement(a, "legacy")), r(checkArrangement(b, L2)), r(checkArrangement(b, "legacy")), r(checkArrangement(d, L2)), r(checkArrangement(d, "legacy"))],
-    ["ok", "foul_middle_back", "ok", "foul_middle_back", "foul_front_middle", "ok"],
-    "V8 倒水：中黑桃同花順＋尾鐵支 v4 合法、舊規則倒水；中 A 葫蘆＋尾彩金葫蘆 v4 合法、舊規則倒水；頭彩金三條比中墩一般三條大 → v4 倒水");
+    ["foul_middle_back", "foul_middle_back", "ok", "foul_middle_back", "foul_front_middle", "ok"],
+    "V8 倒水：中黑桃同花順＋尾鐵支 v4、舊規則都倒水（黑桃同花順大於鐵支）；中 A 葫蘆＋尾彩金葫蘆 v4 合法、舊規則倒水；頭彩金三條比中墩一般三條大 → v4 倒水");
 }
 // V9
 {
