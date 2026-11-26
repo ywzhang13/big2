@@ -15,6 +15,7 @@ export function mjConfirmNote(last: MjLastStartConfirm | null, confirming: boole
   if (!last || confirming) return null;
   if (last.reason === "host") return "房主取消了開局";
   if (last.reason === "seats_changed") return "有人離開了，這次開局取消";
+  if (last.reason === "cancelled") return `${last.by === myId ? "你" : (players.find((p) => p.id === last.by)?.name ?? "有人")} 取消了對戰`; // v3c：誰按了取消對戰（倒數中、倒數後一樣）
   if (last.reason === "suspended") return "有人帳號已暫停，不能開局";
   const names = last.missingIds.map((id) => (id === myId ? "你" : players.find((p) => p.id === id)?.name)).filter((n): n is string => !!n);
   const who = names.length ? names.join("、") : "有人";

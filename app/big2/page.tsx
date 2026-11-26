@@ -617,8 +617,8 @@ function Big2StartConfirm({ players, myId, isHost, canCancel, readyIds, info, on
     <>
       {note && <div className="stc-note" role="status" data-big2-start-note={info.lastStartConfirm?.reason}>{note}</div>}
       {sc && (
-        // 「取消」只有拿得到入座憑證的房主才有（localStorage，重新整理也在）；沒有就等 10 秒自己作廢
-        <StartConfirm seats={big2ConfirmSeats(players, ready, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost && canCancel} busy={busy} error={err}
+        // 「取消對戰」倒數結束後才出現，四家都有，但要拿得到自己的入座憑證（localStorage，重新整理也在；v3 2026-11-26）
+        <StartConfirm seats={big2ConfirmSeats(players, ready, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} canCancel={canCancel} busy={busy} error={err}
           onAgree={() => void run(onAgree)} onCancel={() => void run(onCancel)} />
       )}
     </>

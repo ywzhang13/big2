@@ -1,21 +1,22 @@
 // 麻將開局確認（老柯 2026-11-20；規則同十三支、大老二，判斷用共用的 lib/lobby/startConfirm.ts）：
 //   房主按開始 → 發起確認（房間還是 waiting，房主自己算同意），倒數 10 秒；四家都同意才發牌開局（lib/mahjong/startGame.ts，存檔成功後才扣房卡）；
-//   倒數到了還有人沒按 → 不開局，回到等人，房主要再按一次開始；房主可以取消；確認期間有人退出、被暫停 → 作廢。
+//   2026-11-26 v3：倒數中誰都不能取消；倒數到了還有人沒按 → 繼續等，之後到齊就開局；這時四家任一人可以「取消對戰」→ 回到等人；
+//   確認期間有人退出、被暫停 → 作廢。
 //   確認狀態存在等人階段的 game_state.startConfirm；沒開成的原因、誰沒按記在 game_state.lastStartConfirm（房主重新按開始、開局時清掉）。
 // 比照十三支、大老二修好的審伯 R1～R3：
 //   R1 每一輪有自己的編號，同意、取消都要帶；對不上＝舊一輪晚到或重送，不能動這一輪（存檔衝突後重讀也一樣）
 //   R2 寫入都是等人階段的條件寫入（版本 +1），開局存檔要版本對得上：中間有人取消、重新開始、退出，舊請求就開不了局
 //   R3 同意用「受理時刻」判斷有沒有逾時，先確認還有效才加入；到期作廢一直撞到衝突 → retryOnConflict 用完回 409，不往下做
-// 麻將有登入：同意、取消都驗座位本人（取消還要是房主），不用另外的憑證。
+// 麻將有登入：同意、取消都驗座位本人，不用另外的憑證。
 // 寫入衝突一律丟 StateConflictError，呼叫端用 retryOnConflict 重讀整個重做。
-import { addStartReady, beginStartConfirm, isCurrentConfirm, startConfirmStatus, type StartConfirm } from "@/lib/lobby/startConfirm";
+import { addStartReady, beginStartConfirm, isCurrentConfirm, START_CANCEL_ERRORS, startCancelBlock, startConfirmStatus, type StartConfirm } from "@/lib/lobby/startConfirm";
 import { claimLobbyForLeave, type MjPlayer, type MjRoom } from "@/lib/mahjong/db";
 import { mjBroadcast } from "@/lib/mahjong/broadcast";
 import { startBlockedError } from "@/lib/roomCard/guard";
 import { startMahjongGame } from "@/lib/mahjong/startGame";
 
-export type MjCancelReason = "host" | "timeout" | "seats_changed" | "suspended";
-export interface MjLastStartConfirm { reason: MjCancelReason; missingIds: string[]; at: number }
+export type MjCancelReason = "host" | "timeout" | "seats_changed" | "suspended" | "cancelled"; // "cancelled"＝有人按取消對戰（v3c，by＝誰）；"host"、"timeout" 是舊資料
+export interface MjLastStartConfirm { reason: MjCancelReason; missingIds: string[]; at: number; by?: string }
 type Lobby = Record<string, unknown> & { stateVersion?: number; startConfirm?: StartConfirm | null; lastStartConfirm?: MjLastStartConfirm | null };
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -33,13 +34,13 @@ async function cancelConfirm(room: MjRoom, lobby: Lobby, reason: MjCancelReason,
   const c = lobby.startConfirm;
   const missingIds = c ? c.seatIds.filter((id) => !c.readyIds.includes(id)) : [];
   lobby.startConfirm = null;
-  lobby.lastStartConfirm = { reason, missingIds, at: now };
+  lobby.lastStartConfirm = { reason, missingIds, at: now, ...(typeof extra.by === "string" ? { by: extra.by } : {}) };
   await saveLobby(room.id, lobby);
   await mjBroadcast(room.code, "mj_start_cancelled", { reason, missingIds, ...extra });
 }
 
 /**
- * 確認在 now（受理時刻）已經時間到、或座位變了就作廢。回傳處理後的等人狀態。
+ * 確認在 now（受理時刻）座位變了就作廢（倒數結束還沒到齊不作廢，v3）。回傳處理後的等人狀態。
  * 寫入衝突丟 StateConflictError（呼叫端重讀再判斷，不能把沒處理掉的過期確認往下用）。
  */
 export async function settleMjConfirm(room: MjRoom, players: Pick<MjPlayer, "player_id" | "seat">[], now: number): Promise<Lobby> {
@@ -47,7 +48,7 @@ export async function settleMjConfirm(room: MjRoom, players: Pick<MjPlayer, "pla
   const c = lobby.startConfirm;
   if (room.status !== "waiting" || !c) return lobby;
   const st = startConfirmStatus(c, seatIdsOf(players), now);
-  if (st === "expired" || st === "seats_changed") await cancelConfirm(room, lobby, st === "expired" ? "timeout" : "seats_changed", now);
+  if (st === "seats_changed") await cancelConfirm(room, lobby, "seats_changed", now);
   return lobby;
 }
 
@@ -96,8 +97,11 @@ export async function agreeMj(room: MjRoom, players: MjPlayer[], playerId: strin
   return json({ ok: true, started: true });
 }
 
-/** 房主取消（房主本人已在路由驗過） */
-export async function cancelMj(room: MjRoom, players: MjPlayer[], confirmId: unknown): Promise<Response> {
+/**
+ * 取消對戰（座位本人已在路由驗過；v3b）：倒數中、倒數後，這次確認座位裡任何一家都可以；
+ * 不在座位裡 403 not_in_confirm。取消後 lastStartConfirm 記 "cancelled"＋by（提示「X 取消了對戰」，v3c）
+ */
+export async function cancelMj(room: MjRoom, players: MjPlayer[], playerId: string, confirmId: unknown): Promise<Response> {
   if (room.status !== "waiting") return json({ error: "started", message: "已經開局了" }, 400);
   const now = Date.now();
   const lobby = await settleMjConfirm(room, players, now);
@@ -105,6 +109,8 @@ export async function cancelMj(room: MjRoom, players: MjPlayer[], confirmId: unk
   if (!c) return json({ ok: true, cancelled: false });
   if (typeof confirmId !== "string" || !confirmId) return json({ error: "confirm_id_required", message: "請重新整理後再按" }, 400);
   if (!isCurrentConfirm(c, confirmId)) return json({ error: "stale_confirm", message: "這是上一次的開始，請看目前的確認" }, 409);
-  await cancelConfirm(room, lobby, "host", now);
+  const block = startCancelBlock(c, playerId);
+  if (block) { const e = START_CANCEL_ERRORS[block]; return json({ error: e.error, message: e.message }, e.status); }
+  await cancelConfirm(room, lobby, "cancelled", now, { by: playerId });
   return json({ ok: true, cancelled: true });
 }
