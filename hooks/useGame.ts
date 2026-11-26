@@ -44,8 +44,8 @@ function getMyId(): string {
   return id;
 }
 
-async function api<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>): Promise<T> {
-  const opts: RequestInit = { method, headers: { "Content-Type": "application/json" } };
+async function api<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>, headers?: Record<string, string>): Promise<T> {
+  const opts: RequestInit = { method, headers: { "Content-Type": "application/json", ...headers } };
   if (body && method === "POST") opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   if (!res.ok) {
@@ -55,6 +55,12 @@ async function api<T>(method: "GET" | "POST", path: string, body?: Record<string
     throw err;
   }
   return res.json();
+}
+
+/** 讀狀態時帶入座憑證（header，不放網址）：伺服器只把手牌給座位本人（2026-11-27） */
+function seatKeyHeader(roomId: string | null | undefined): Record<string, string> | undefined {
+  const k = loadSeatKey(roomId);
+  return k ? { "x-big2-seat-key": k } : undefined;
 }
 
 export function useGame(roomCode: string, playerName: string) {
@@ -123,7 +129,7 @@ export function useGame(roomCode: string, playerName: string) {
         readyPlayers?: string[];
         startConfirm?: Big2StartConfirm | null;
         lastStartConfirm?: Big2LastStartConfirm | null;
-      }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`);
+      }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`, undefined, seatKeyHeader(rid)); // 手牌只給帶入座憑證的本人
       const recvAt = Date.now();
       const verdict = stateGateRef.current.settle(reqId, NO_HOLD.gen, NO_HOLD);
       if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
@@ -301,15 +307,10 @@ export function useGame(roomCode: string, playerName: string) {
         finishedHands: undefined,
         winner: undefined,
         roundScores: undefined,
+        myHand: [], // 上一場的牌先清掉，新的手牌下面讀狀態拿
       }));
-    });
-
-    onEvent("deal_hand", ({ payload }) => {
-      const { playerId, hand } = payload as { playerId: string; hand: Card[] };
-      if (playerId !== myId) return;
-      const sorted = [...hand];
-      sorted.sort(compareCardsDisplay);
-      setState((prev) => ({ ...prev, myHand: sorted }));
+      // 手牌不再走公開頻道（2026-11-27，lib/deal-and-start.ts）：開局後馬上讀一次狀態，帶入座憑證拿自己的 13 張
+      refetch();
     });
 
     onEvent("play_cards", ({ payload }) => {
@@ -542,6 +543,7 @@ export function useGame(roomCode: string, playerName: string) {
     api<{ success: boolean; error?: string; gameOver?: boolean }>("POST", "/api/game/play", {
       roomId: roomIdRef.current,
       playerId: myId,
+      seatKey: loadSeatKey(roomIdRef.current), // 座位本人才能出牌（2026-11-27）
       cards: selectedCards,
     }).then((data) => {
       if (!data.success) {
@@ -576,6 +578,7 @@ export function useGame(roomCode: string, playerName: string) {
       const data = await api<{ success: boolean; error?: string }>("POST", "/api/game/pass", {
         roomId: roomIdRef.current,
         playerId: myId,
+        seatKey: loadSeatKey(roomIdRef.current), // 座位本人才能過（2026-11-27）
       });
       if (!data.success) {
         console.error("[big2] pass rejected:", data.error);
