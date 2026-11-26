@@ -4,6 +4,7 @@
 // 兩副黑桃（id 結尾 1／2）共用同一張圖。
 import { buildDeck, type Card } from "@/lib/thirteen";
 import { warmImages } from "@/lib/perf/tableFirst";
+import type { FeltKey } from "./feltTheme";
 
 const SUIT_NAME = { S: "spade", H: "heart", D: "diamond", C: "club" } as const;
 const DIR = "/tiles/thirteen";
@@ -25,7 +26,13 @@ export function cardSrc(card: Card, lucky: number | null = null): string {
 }
 export const isGold = (card: Card, lucky: number | null) => lucky !== null && card.rank === lucky;
 
-const backSrc = () => `${DIR}/card-back.v2${sz()}.webp`;
+// 牌背跟著桌布換（老闆 2026-11-26 四神獸）：青龍綠、朱雀紅、白虎灰、玄武藍，各一張 v1（500×700＋手機 240×336 .m）。
+// 開頁先用原本的 card-back.v2 頂著（第一把不多載）；等牌面載完（feltTheme.ts 掛桌布圖那一刻）才換成神獸牌背：
+// 新圖先在背景載好才換網址，畫面上的牌背不會有空白一下
+const BEAST_BACK: Record<FeltKey, string> = { green: "dragon", wine: "phoenix", gray: "tiger", blue: "tortoise" };
+let backFelt: FeltKey | null = null; // null＝還沒換（用原本的牌背）
+const beastBack = (k: FeltKey) => `${DIR}/card-back-${BEAST_BACK[k]}.v1${sz()}.webp`;
+const backSrc = () => (backFelt ? beastBack(backFelt) : `${DIR}/card-back.v2${sz()}.webp`);
 /** 牌背：export let＝即時綁定，跨過桌機斷點時下面會換成目前尺寸（審伯 R1：原本在載入時就固定，手機開頁再放大到桌機，牌背還是小圖） */
 export let CARD_BACK_SRC = backSrc();
 
@@ -36,7 +43,7 @@ export const deckSrcs = (deck: readonly Card[]): string[] => [...deck.map((c) =>
 //   ・牌背換成目前尺寸；之後畫的牌面、金卡由 cardSrc 每次讀目前尺寸
 //   ・畫面上已經畫好的十三支牌圖（牌面、金卡、牌背）直接換網址，不等下一個遊戲事件才重畫；React 之後重畫給的也是同一個網址
 //   ・用目前尺寸重新背景預載整副（預載來源和畫面一致；金卡等知道彩金點數時由頁面照常預載）
-const CARD_IMG = /^(.*\/tiles\/thirteen\/card-(?:front-[a-z]+-[0-9akqj]+\.(?:v4|v5|gold\.v1|gold\.v2)|back\.v2))(?:\.m)?\.webp$/; // v5／gold.v2＝J／Q／K 加角落裝飾
+const CARD_IMG = /^(.*\/tiles\/thirteen\/card-(?:front-[a-z]+-[0-9akqj]+\.(?:v4|v5|gold\.v1|gold\.v2)|back\.v2|back-[a-z]+\.v1))(?:\.m)?\.webp$/; // v5／gold.v2＝J／Q／K 加角落裝飾；back-*.v1＝神獸牌背
 /** 十三支牌圖網址換成指定尺寸（不是牌圖就原樣回傳） */
 export function sizedCardUrl(url: string, desktop: boolean): string {
   const m = CARD_IMG.exec(url);
@@ -44,9 +51,11 @@ export function sizedCardUrl(url: string, desktop: boolean): string {
 }
 function onSizeChange() {
   const desktop = !!desktopMq?.matches;
-  CARD_BACK_SRC = backSrc();
+  // 神獸牌背（審伯〈亮版浮雕v4與牌背-初審〉R2）：新尺寸的圖先在背景載好才換，載好前畫面維持原本那張；原本的 card-back.v2 照舊直接換
+  const beast = backFelt !== null;
+  if (beast) loadBack(wantBack ?? backFelt!); else CARD_BACK_SRC = backSrc();
   if (typeof document === "undefined") return;
-  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="/tiles/thirteen/card-"]'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(beast ? 'img[src*="/tiles/thirteen/card-front"]' : 'img[src*="/tiles/thirteen/card-"]'))) {
     const cur = img.getAttribute("src") ?? "";
     const next = sizedCardUrl(cur, desktop);
     if (next !== cur) img.setAttribute("src", next);
@@ -57,3 +66,40 @@ if (desktopMq) {
   if (typeof desktopMq.addEventListener === "function") desktopMq.addEventListener("change", onSizeChange);
   else desktopMq.addListener?.(onSizeChange); // 舊版 Safari
 }
+
+/** 畫面上已經畫好的牌背全部換成目前的牌背網址（React 之後重畫讀 CARD_BACK_SRC，也是同一個） */
+function swapBacks() {
+  if (typeof document === "undefined") return;
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="/tiles/thirteen/card-back"]'))) {
+    if (img.getAttribute("src") !== CARD_BACK_SRC) img.setAttribute("src", CARD_BACK_SRC);
+  }
+}
+let wantBack: FeltKey | null = null;
+let backReq = 0; // 每次發新的牌背下載就 +1；舊的回呼看到編號不同就不動作
+/** 在背景載這款神獸牌背（目前尺寸），載好才換成「載好的那個網址」（審伯 R2）：
+ *  ・載好時尺寸已變（跨過桌機斷點）→ 改載目前尺寸，載好再換，不會換上還沒載好的圖
+ *  ・載失敗 → 維持現在的牌背
+ *  ・之後又切換款式或尺寸 → 這次的回呼作廢，只採用最後一次 */
+function loadBack(k: FeltKey): void {
+  const url = beastBack(k);
+  const id = ++backReq;
+  const done = () => {
+    if (id !== backReq) return;
+    if (url !== beastBack(k)) { loadBack(k); return; }
+    backFelt = k;
+    CARD_BACK_SRC = url;
+    swapBacks();
+  };
+  if (typeof Image !== "function") { done(); return; }
+  const img = new Image();
+  img.onload = done;
+  img.src = url;
+}
+/** 牌背換成這款桌布的神獸牌背：先在背景載好新圖，載好才換（載失敗就維持現在的牌背）；連續切換只採用最後一次 */
+export function setBackFelt(k: FeltKey): void {
+  wantBack = k;
+  if (backFelt === k && CARD_BACK_SRC === beastBack(k)) { backReq++; return; } // 已經是這款、尺寸也對：取消還在載的其他款
+  loadBack(k);
+}
+/** 測試用 */
+export const __backFelt = () => backFelt;

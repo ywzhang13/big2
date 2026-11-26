@@ -1,7 +1,7 @@
 /* 十三支牌桌（小宜 v3 牌桌、v4 置中；大廳和等人改用麻將的 .mjl／.mjw 樣式，見 ThLobby、ThWaiting）。手機 844×390 為基準，桌機（寬 ≥1100 且高 ≥700）放大。
    深綠底＋金框、金色膠囊按鈕，沿用麻將的配色；全部一個畫面放得下，不捲動 */
 /* v8-A §1：.th-bg 是鋪滿畫面的桌布；.th-table 是 844×390 的牌桌，整塊等比放大（--th-s）放在正中央 */
-.th-bg { position: fixed; inset: 0; overflow: hidden; background: var(--th-felt-bg); }
+.th-bg { position: fixed; inset: 0; overflow: hidden; background: var(--th-mat-out, #01321F); } /* 牌桌／亮牌：舞台外是桌墊最外圈的暗底（四神獸桌墊，見下面 --th-mat-*） */
 .th-bg > .th-table { position: absolute; inset: auto; left: 50%; top: 50%; width: 844px; height: 390px; overflow: visible; background: none;
   transform: translate(-50%, -50%) scale(var(--th-s, 1)); }
 .th-room, .th-table {
@@ -10,17 +10,44 @@
   background: var(--th-felt-bg, radial-gradient(ellipse 80% 90% at 50% 46%, #1F6B45 0%, #0F3D28 60%, #06180F 100%)); /* 桌面花紋四款，見 thRoom.css 的 --th-felt-bg */
   font-family: "PingFang TC", "Noto Sans TC", sans-serif;
 }
-/* 簡約牌桌四款（小宜 v7 §1）：中心、中段、邊緣三色的橢圓放射漸層，沒有金色；選的款式記在本機（feltTheme.ts），掛在 <html data-th-felt> */
-:root { --th-c1: #1F6B45; --th-c2: #0F3D28; --th-c3: #06180F; --th-hl1: rgba(45,107,69,.40); --th-hl2: rgba(45,107,69,.30); }
-:root[data-th-felt="blue"] { --th-c1: #24507F; --th-c2: #12294A; --th-c3: #070F1E; --th-hl1: rgba(60,110,170,.38); --th-hl2: rgba(60,110,170,.28); }
-:root[data-th-felt="wine"] { --th-c1: #7A2A3A; --th-c2: #431520; --th-c3: #190709; --th-hl1: rgba(150,60,80,.36); --th-hl2: rgba(150,60,80,.26); }
-:root[data-th-felt="gray"] { --th-c1: #4A4E55; --th-c2: #26282D; --th-c3: #0E0F11; --th-hl1: rgba(120,126,136,.30); --th-hl2: rgba(120,126,136,.22); }
-/* 桌面（小宜 v8-A §2＋老闆 2026-11-18）：亮斑兩個＋白色撲克花色底紋（老闆的四花色縮小、照大老二十字交錯排；120 一格、7% 白，鋪滿不放大）＋橢圓放射底色 */
-:root { --th-felt-bg:
-  radial-gradient(ellipse at 30% 20%, var(--th-hl1), transparent 60%),
-  radial-gradient(ellipse at 70% 80%, var(--th-hl2), transparent 60%),
-  url("/tiles/thirteen/th-felt-suits.v1.webp") 0 0 / 120px 120px repeat,
-  radial-gradient(ellipse 80% 90% at 50% 46%, var(--th-c1, #1F6B45) 0%, var(--th-c2, #0F3D28) 60%, var(--th-c3, #06180F) 100%); }
+/* 四神獸桌布（老闆 2026-11-26 定案，取代 v7 簡約四款＋v8-A 花色底紋）：深綠→青龍、酒紅→朱雀、石墨灰→白虎、午夜藍→玄武。
+   選的款式記在本機（feltTheme.ts），掛在 <html data-th-felt>；key 沿用舊的，玩家原本選的款式不用重選。
+   --th-c1～c3＝從各張圖取的中心／中段／邊緣色：圖載好之前先顯示同色系的放射漸層，不會閃白。
+   圖在牌面之後才載入：feltTheme.ts 等畫面上的牌面載完才在 <html> 加 data-th-felt-img，這時才把圖放上去（CSS 背景圖沒套用就不會下載）。
+   手機用 960 寬的 .m 版，桌機（寬 ≥1100 且高 ≥700）用 1672 寬原圖。
+   v2（老闆 2026-11-26 重生，照小宜禁區圖）：神獸頭在上緣中間偏右（x 約 58～76%、y 0～22%），對齊 center top：畫面比圖寬（手機橫拿）時只裁下緣、頭的橫向位置不變 */
+:root { --th-c1: #3BAD5C; --th-c2: #07602F; --th-c3: #034D26; --th-felt-img: url("/tiles/thirteen/th-felt-dragon.v2.m.webp"); }
+:root[data-th-felt="wine"] { --th-c1: #D5262D; --th-c2: #800A17; --th-c3: #640410; --th-felt-img: url("/tiles/thirteen/th-felt-phoenix.v2.m.webp"); }
+:root[data-th-felt="gray"] { --th-c1: #646464; --th-c2: #39383B; --th-c3: #2E2E2F; --th-felt-img: url("/tiles/thirteen/th-felt-tiger.v3.m.webp");
+  --th-felt-pos: right top; } /* 白虎理牌 v3（老闆 2026-11-26 換圖，1844×853＝2.16:1）：16:9 畫面會裁左右，靠右對齊讓虎頭落在倒數左邊（置中時 667、1920 寬倒數會壓到虎臉） */
+:root[data-th-felt="blue"] { --th-c1: #1980A0; --th-c2: #024260; --th-c3: #012F4A; --th-felt-img: url("/tiles/thirteen/th-felt-tortoise.v2.m.webp"); }
+@media (min-width: 1100px) and (min-height: 700px) {
+  :root { --th-felt-img: url("/tiles/thirteen/th-felt-dragon.v2.webp"); }
+  :root[data-th-felt="wine"] { --th-felt-img: url("/tiles/thirteen/th-felt-phoenix.v2.webp"); }
+  :root[data-th-felt="gray"] { --th-felt-img: url("/tiles/thirteen/th-felt-tiger.v3.webp"); }
+  :root[data-th-felt="blue"] { --th-felt-img: url("/tiles/thirteen/th-felt-tortoise.v2.webp"); }
+}
+:root { --th-felt-bg: radial-gradient(ellipse 80% 90% at 50% 46%, var(--th-c1) 0%, var(--th-c2) 60%, var(--th-c3) 100%); }
+:root[data-th-felt-img] { --th-felt-bg: var(--th-felt-img) var(--th-felt-pos, center top) / cover no-repeat,
+  radial-gradient(ellipse 80% 90% at 50% 46%, var(--th-c1) 0%, var(--th-c2) 60%, var(--th-c3) 100%); }
+/* 四神獸桌墊（老闆 2026-11-26：打牌、亮牌畫面「框住周圍變成牌桌牌底」；小宜〈桌墊舞台座標框位規格〉§3）：
+   桌墊圖 1844×853 貼在 844×390 的舞台（.th-table）上、拉滿 100%×100%，跟著 --th-s 一起縮放 → 每種尺寸金線框和名牌、牌的相對位置都一樣。
+   舞台外用桌墊最外圈取的暗底（--th-mat-out）補滿。圖在牌面載完才掛（同 data-th-felt-img），之前是同色系放射漸層（--th-m1～m3），不閃白。
+   手機 1690×780 .m、桌機 1844 原圖。v4＝老闆 2026-11-26 20:05 定案的亮版浮雕桌面（四周素面、中央神獸浮雕，不再有金框；v1～v3 檔留著），外圍色從新圖最外 6px 取。理牌畫面（.th-arr）不受影響，照舊用上面的 --th-felt-bg 全版桌布 */
+:root { --th-mat-out: #01321F; --th-m1: #049061; --th-m2: #11653E; --th-m3: #01321F; --th-mat-img: url("/tiles/thirteen/th-mat-dragon.v4.m.webp"); }
+:root[data-th-felt="wine"] { --th-mat-out: #3D0107; --th-m1: #A8071C; --th-m2: #790E13; --th-m3: #3D0107; --th-mat-img: url("/tiles/thirteen/th-mat-phoenix.v4.m.webp"); }
+:root[data-th-felt="gray"] { --th-mat-out: #26282D; --th-m1: #7B7D84; --th-m2: #78716E; --th-m3: #26282D; --th-mat-img: url("/tiles/thirteen/th-mat-tiger.v4.m.webp"); }
+:root[data-th-felt="blue"] { --th-mat-out: #00173B; --th-m1: #0166B0; --th-m2: #193D65; --th-m3: #00173B; --th-mat-img: url("/tiles/thirteen/th-mat-tortoise.v4.m.webp"); }
+@media (min-width: 1100px) and (min-height: 700px) {
+  :root { --th-mat-img: url("/tiles/thirteen/th-mat-dragon.v4.webp"); }
+  :root[data-th-felt="wine"] { --th-mat-img: url("/tiles/thirteen/th-mat-phoenix.v4.webp"); }
+  :root[data-th-felt="gray"] { --th-mat-img: url("/tiles/thirteen/th-mat-tiger.v4.webp"); }
+  :root[data-th-felt="blue"] { --th-mat-img: url("/tiles/thirteen/th-mat-tortoise.v4.webp"); }
+}
+:root { --th-mat-bg: radial-gradient(ellipse 70% 75% at 50% 50%, var(--th-m1) 0%, var(--th-m2) 70%, var(--th-m3) 100%); }
+:root[data-th-felt-img] { --th-mat-bg: var(--th-mat-img) center / 100% 100% no-repeat,
+  radial-gradient(ellipse 70% 75% at 50% 50%, var(--th-m1) 0%, var(--th-m2) 70%, var(--th-m3) 100%); }
+.th-bg > .th-table::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: 28px; background: var(--th-mat-bg); }
 .th-room { display: flex; align-items: center; justify-content: center; }
 .th-loading { color: var(--gold-l); font-weight: 700; }
 .th-avatar { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #2e6a46; border: 1.5px solid var(--gold); color: var(--gold-l); font-weight: 800; font-size: 14px; }
