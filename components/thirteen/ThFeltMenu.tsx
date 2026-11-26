@@ -9,10 +9,15 @@ import { CARD_BACK_SRC, cardSrc } from "./cardArt";
 import { makeCard } from "@/lib/thirteen";
 import "./thRoom.css"; // .th-menu 位置（理牌預覽頁沒有載牌桌樣式）
 
-/** 桌布色塊：和牌桌同一組中心色→邊緣色（thRoom.css 的 --th-c*） */
+/** 桌布色塊：和牌桌同一組中心色→邊緣色（thRoom.css 的 --th-c*，從四神獸圖取的） */
 const FELT_SW: Record<FeltKey, [string, string, string]> = {
-  green: ["#1F6B45", "#0F3D28", "#06180F"], blue: ["#24507F", "#12294A", "#070F1E"],
-  wine: ["#7A2A3A", "#431520", "#190709"], gray: ["#4A4E55", "#26282D", "#0E0F11"],
+  green: ["#3BAD5C", "#07602F", "#034D26"], wine: ["#D5262D", "#800A17", "#640410"],
+  gray: ["#646464", "#39383B", "#2E2E2F"], blue: ["#1980A0", "#024260", "#012F4A"],
+};
+/** 預覽框用手機版小圖（牌桌上已經載過，不多下載） */
+const FELT_IMG: Record<FeltKey, string> = {
+  green: "/tiles/thirteen/th-felt-dragon.v2.m.webp", wine: "/tiles/thirteen/th-felt-phoenix.v2.m.webp",
+  gray: "/tiles/thirteen/th-felt-tiger.v3.m.webp", blue: "/tiles/thirteen/th-felt-tortoise.v2.m.webp",
 };
 const PREVIEW = [makeCard("S", 14, 1), makeCard("H", 13, 1)];
 
@@ -24,7 +29,7 @@ export default function ThFeltMenu() {
     sections: [{ kind: "swatch", title: "桌布", value: felt, onChange: pick,
       options: FELTS.map((f) => ({ id: f.key, name: f.name, bg: `linear-gradient(145deg, ${FELT_SW[f.key].join(",")})` })) }],
     preview: (
-      <div className="felt" style={{ background: `radial-gradient(ellipse at 50% 46%, ${FELT_SW[felt][0]}, ${FELT_SW[felt][1]} 60%, ${FELT_SW[felt][2]})` }}>
+      <div className="felt" style={{ background: `url("${FELT_IMG[felt]}") center top / cover no-repeat, radial-gradient(ellipse at 50% 46%, ${FELT_SW[felt][0]}, ${FELT_SW[felt][1]} 60%, ${FELT_SW[felt][2]})` }}>
         <div className="row">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={CARD_BACK_SRC} alt="" width={36} height={50} />
