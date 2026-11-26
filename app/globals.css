@@ -1632,6 +1632,9 @@ body:has(.zf-l, .mt, .b8L, [data-win-cele]) .mjc-panel { z-index: 66; } /* 胡�
 /* ===== 麻將換共用名牌＋中央看板（小宜〈麻將換共用元件 v1〉§2、§3，2026-11-21） ===== */
 /* 名牌位置：對家下緣貼這一列底（y 8，右上角的旗往上凸 8 不被切）；自己的名牌下緣在資訊列下緣上面 6、往上凸 20 進動作列 */
 .mjm-top .gp { align-self: flex-end; margin-bottom: 3px; } /* 老闆：對家名牌下緣壓到海底金框——金框 .mjm-table 外面還有一圈往外 3px 的描邊（box-shadow），名牌要離它 2px */
+/* 老闆 2026-11-27：對家名牌右下角的觀戰人數（👁，往下凸 11）被這一列切掉下半、又被後面畫的海底蓋住。
+   左右照舊裁（牌背太多時不撐破），上下改成不裁；整列疊在海底前面，👁 整顆露在金框上。不支援 clip 的舊瀏覽器維持原本的 hidden */
+.mjm-top { overflow: clip visible; position: relative; z-index: 1; }
 /* B1：桌機對家名牌往下讓 10（×1.5），右上角的旗（top −10）才不會超出畫面頂端；手機由 --row-top 處理 */
 .gp.in-flow[data-seat=t] { margin-top: 10px; }
 .mjm-top .gp.in-flow[data-seat=t] { margin-top: 0; }
