@@ -14,7 +14,7 @@ import { useRevealSfx } from "./sfx";
 /** 本局結算確認鈕的倒數（v5 §5） */
 export const CONFIRM_MS = 30_000; // 老柯 4b25124：結算面板出現後 30 秒（＝nextHandAt）沒人按也開下一局
 
-export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy, confirmed, sending = false, error = null, onConfirm, confirmLabel, social }: {
+export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy, confirmed, sending = false, error = null, onConfirm, confirmLabel, onSocial }: {
   view: ThGameView;
   rv: Reveal;
   startAt: number;
@@ -29,8 +29,9 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
   error?: string | null;
   onConfirm: () => void;
   confirmLabel?: string;
-  /** 聊天與互動（ThSocial）：亮牌中是牌桌（牌型大字播放中 hold），結算面板出現後是 result */
-  social?: (s: { phase: "table" | "result"; hold: boolean }) => React.ReactNode;
+  /** 聊天與互動（ThSocial）要用的階段：亮牌中是牌桌（牌型大字播放中 hold），結算面板出現後是 result。
+   *  只往上報、不在這裡掛：互動元件掛在頁面固定的位置，換畫面不重裝（阿妍〈十三支丟道具沒反應〉2026-11-27） */
+  onSocial?: (s: { phase: "table" | "result"; hold: boolean }) => void;
 }) {
   const tl = useMemo(() => buildTimeline(rv), [rv]);
   const [now, setNow] = useState(() => Date.now());
@@ -52,6 +53,12 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
     if (showPanel && shouldAutoConfirm({ now, autoAt, confirmed, sending, lastAutoAt: lastAuto.current })) { lastAuto.current = now; onConfirm(); }
   }, [showPanel, confirmed, sending, now, autoAt, onConfirm]);
 
+  const socialPhase = showPanel ? "result" : "table";
+  const socialHold = !showPanel && t >= 0 && frame.active.length > 0;
+  const onSocialRef = useRef(onSocial);
+  useEffect(() => { onSocialRef.current = onSocial; }, [onSocial]);
+  useEffect(() => { onSocialRef.current?.({ phase: socialPhase, hold: socialHold }); }, [socialPhase, socialHold]); // 只在變了的時候報
+
   const names = [0, 1, 2, 3].map((s) => view.players.find((p) => p.seat === s)?.name ?? "");
   // 誰按了確認（老闆 2026-11-19：跟麻將一樣顯示誰在等誰）：伺服器的 nextReady（按了確認的玩家 id）；自己按了以伺服器收下為準（confirmed）
   const meSeat = view.me?.seat ?? null;
@@ -69,7 +76,6 @@ export default function ThReveal({ view, rv, startAt, settleAt = null, confirmBy
         <ThRoundResult rv={rv} names={names} mySeat={view.me?.seat ?? 0} secondsLeft={secondsLeft} confirmed={confirmed} sending={sending} error={error}
           onConfirm={onConfirm} confirmLabel={confirmLabel} ready={ready} />
       )}
-      {social?.({ phase: showPanel ? "result" : "table", hold: !showPanel && t >= 0 && frame.active.length > 0 })}
     </>
   );
 }
