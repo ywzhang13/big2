@@ -62,6 +62,8 @@ const noteOf = async (r: { id: string; ps: string[] }, p: string) => {
   return big2ConfirmNote(b.lastStartConfirm, !!b.startConfirm, b.players, p, p === r.ps[0]);
 };
 const status = (id: string) => rs.big2Rooms[id].room.status;
+/** 發到牌的人數（每人存了 13 張）；手牌不再廣播 deal_hand（2026-11-27），改看存檔 */
+const dealt = (id: string) => rs.big2Rooms[id].players.filter((p) => (p.hand as unknown[]).length === 13).length;
 
 let n = 0;
 async function seated(): Promise<{ id: string; code: string; ps: string[] }> {
@@ -87,7 +89,7 @@ async function seated(): Promise<{ id: string; code: string; ps: string[] }> {
   eq([s.status, s.body.confirm?.deadline - NOW, s.body.confirm?.readyIds, st.body.status, st.body.startConfirm?.readyIds, st.body.startConfirm?.deadline - NOW, dealtEarly],
     [200, 10_000, [r.ps[0]], "ready_check", [r.ps[0]], 10_000, "沒發牌"],
     "B1 房主按開始：不發牌；房主自己算同意、倒數 10 秒；狀態（別人看）帶確認：誰已同意、截止時間");
-  eq([a1.body.allReady, a2.body.allReady, mid, a3.status, a3.body.allReady, status(r.id), events("game_start").length, events("deal_hand").length],
+  eq([a1.body.allReady, a2.body.allReady, mid, a3.status, a3.body.allReady, status(r.id), events("game_start").length, dealt(r.id)],
     [false, false, "ready_check", 200, true, "playing", 1, 4], "B1 三家依序同意：前兩家還在等，第四家同意才發牌（只開一次、每人一份手牌）");
   const r2 = await seated();
   sent.length = 0;
@@ -164,7 +166,7 @@ async function seated(): Promise<{ id: string; code: string; ps: string[] }> {
   sent.length = 0;
   const id5 = cid(r.id);
   const all = await Promise.all([1, 2, 3].map((i) => agreeWith(r.id, r.ps[i], id5)));
-  eq([all.map((x) => x.status), all.filter((x) => x.body.allReady).length >= 1, status(r.id), events("game_start").length, events("deal_hand").length],
+  eq([all.map((x) => x.status), all.filter((x) => x.body.allReady).length >= 1, status(r.id), events("game_start").length, dealt(r.id)],
     [[200, 200, 200], true, "playing", 1, 4], "B5 三家同時按同意：都記到、發牌，而且只發一次");
 }
 // B6
@@ -340,7 +342,7 @@ for (let round = 0; round < 4; round++) {
   const out = await Promise.all((round % 2 ? [...reqs].reverse() : reqs).map((f) => f()));  // 單雙輪換誰先送
   const [ag, cn] = round % 2 ? [out[1], out[0]] : out;
   const started = status(r.id) === "playing";
-  eq([started ? [events("game_start").length, events("deal_hand").length, cn.body.cancelled === true] : [status(r.id), events("game_start").length, events("deal_hand").length, ag.body.allReady === true],
+  eq([started ? [events("game_start").length, dealt(r.id), cn.body.cancelled === true] : [status(r.id), events("game_start").length, events("deal_hand").length, ag.body.allReady === true],
     ag.status < 500 && cn.status < 500],
     [started ? [1, 4, false] : ["waiting", 0, 0, false], true],
     `B14 第 ${round + 1} 次：倒數中取消和最後一家同意同時送出 → ${started ? "發牌（只發一次、取消沒生效）" : "取消（回等人、不發牌、同意沒開局）"}，沒有 5xx`);
@@ -363,15 +365,14 @@ for (const first of ["cancel", "agree", "cancel", "agree"] as const) {
   const [ag, cn] = await Promise.all([agreeWith(r.id, r.ps[3], id), cancelWith(r.id, r.ps[1], { confirmId: id, seatKey: seatKeys[r.ps[1]] })]);
   confirmHooks.beforeUpdate = undefined;
   const st = await getState(r.id, r.ps[0]);
-  const dealtTo = events("deal_hand").map((e) => (e as { payload?: { playerId?: string } }).payload?.playerId ?? "?");
   if (first === "cancel") {
     eq([cn.status, cn.body.cancelled, ag.status < 500, ag.body.allReady === true, status(r.id), st.body.lastStartConfirm?.reason, events("game_start").length, events("deal_hand").length],
       [200, true, true, false, "waiting", "cancelled", 0, 0],
       "B15 取消先寫入：取消成功、同意沒開局（沒有 5xx）、回到等人、原因 cancelled、沒有開局也沒發牌（大老二不扣房卡）");
   } else {
-    eq([ag.status, ag.body.allReady, cn.status < 500, cn.body.cancelled === true, status(r.id), events("game_start").length, events("deal_hand").length, new Set(dealtTo).size],
-      [200, true, true, false, "playing", 1, 4, 4],
-      "B15 同意先寫入：開局只一次（game_start 1）、四家各發一次牌（deal_hand 4、4 個不同的人）、取消沒生效（沒有 5xx）");
+    eq([ag.status, ag.body.allReady, cn.status < 500, cn.body.cancelled === true, status(r.id), events("game_start").length, dealt(r.id), events("deal_hand").length],
+      [200, true, true, false, "playing", 1, 4, 0],
+      "B15 同意先寫入：開局只一次（game_start 1）、四家各發到 13 張（存檔 4 人、沒有公開的 deal_hand）、取消沒生效（沒有 5xx）");
   }
 }
 

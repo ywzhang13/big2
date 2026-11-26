@@ -1,6 +1,5 @@
 import { broadcast } from "@/lib/broadcast";
 import { deal } from "./deck";
-import type { Card } from "./constants";
 import { loadRoomForDeal, loadSeatedPlayers, saveHand, startRoomIfUnchanged } from "@/lib/big2/dealStore";
 
 /**
@@ -83,15 +82,7 @@ export async function dealAndStart(
     ...(existingScores !== undefined ? { scores: existingScores } : {}),
   });
 
-  // Send each player their hand individually via a private channel event
-  for (let i = 0; i < 4; i++) {
-    const player = players[i];
-    const hand: Card[] = hands[player.seat];
-
-    await broadcast(roomCode, "deal_hand", {
-      playerId: player.player_id,
-      hand,
-    });
-  }
+  // 手牌不廣播（2026-11-27）：big2-<房號> 是公開頻道，知道房號的人都收得到。
+  // 前端收到 game_start 後自己讀 /api/game/state，帶入座憑證才拿得到「自己」的手牌
   return true;
 }

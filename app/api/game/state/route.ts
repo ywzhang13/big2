@@ -3,6 +3,7 @@ import { loadRoomPlayers, loadRoomState } from "@/lib/big2/roomStore";
 import { endedResponse } from "@/lib/records/close";
 import { confirmView, settleBig2Confirm } from "@/lib/big2/startConfirm";
 import type { Card } from "@/lib/constants";
+import { isSeatInPerson } from "@/lib/big2/startConfirm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +40,10 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: "你不在這個房間" }, { status: 403 });
     }
 
+    // 手牌只給座位本人（2026-11-27）：要帶入座憑證（header x-big2-seat-key，不放網址、不進請求紀錄）。
+    // 玩家 id 會在 game_start 公開，只靠 id 就能讀別人的手牌；憑證不對照樣回牌桌狀態，只是 myHand 是空的
+    const seatOk = await isSeatInPerson(roomId, playerId, request.headers.get("x-big2-seat-key"));
+
     // Build response: only include the requesting player's hand
     const players = allPlayers.map((p) => ({
       id: p.player_id,
@@ -63,7 +68,7 @@ export async function GET(request: NextRequest) {
       startConfirm: room.status === "ready_check" ? confirmView(room.start_confirm, Date.now()) : null, // 開局確認：誰已同意、截止時間
       lastStartConfirm: room.status === "waiting" ? (room.last_start_confirm ?? null) : null,         // 上一次為什麼沒開成、誰沒按
       players,
-      myHand: me.hand as Card[],
+      myHand: seatOk ? (me.hand as Card[]) : [],
       mySeat: me.seat,
     });
   } catch {

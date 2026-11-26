@@ -26,8 +26,9 @@ const confirmIdRequired = () => res({ error: "confirm_id_required", message: "�
 export const newSeatKey = () => randomBytes(24).toString("base64url");
 export const hashSeatKey = (k: string) => createHash("sha256").update(k).digest("hex");
 const notHost = (verb: string) => res({ error: "not_host", message: `只有房主可以${verb}` }, 403);
-/** 是不是這個座位本人：帶的憑證對得上 playerId 的座位（沒有憑證、上線前入座沒有雜湊的都不算） */
-async function isSeatInPerson(roomId: string, playerId: string, seatKey: unknown): Promise<boolean> {
+/** 是不是這個座位本人：帶的憑證對得上 playerId 的座位（沒有憑證、上線前入座沒有雜湊的都不算）。
+ *  讀狀態拿手牌、出牌、過也用這個（2026-11-27 手牌不外流：只知道房號、玩家 id 的人拿不到也動不了別人的牌） */
+export async function isSeatInPerson(roomId: string, playerId: string, seatKey: unknown): Promise<boolean> {
   if (typeof seatKey !== "string" || !seatKey) return false;
   const h = await loadSeatKeyHash(roomId, playerId);
   return !!h && h === hashSeatKey(seatKey);

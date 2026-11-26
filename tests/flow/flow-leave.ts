@@ -213,7 +213,7 @@ const pids = (id: string) => rs.big2Rooms[id]?.players.map((p) => p.player_id);
   sent.length = 0;
   const ok1 = await dealAndStart(r.id, r.code);
   const hands = rs.big2Rooms[r.id].players.map((p) => p.hand.length);
-  const ev1 = [rs.big2Rooms[r.id].room.status, sent.filter((e) => e.event === "game_start").length, sent.filter((e) => e.event === "deal_hand").length];
+  const ev1 = [rs.big2Rooms[r.id].room.status, sent.filter((e) => e.event === "game_start").length, sent.filter((e) => e.event === "deal_hand").length]; // 手牌不廣播（2026-11-27）
   rs.big2Rooms[r.id].room.status = "finished";
   sent.length = 0;
   const ok2 = await dealAndStart(r.id, r.code, { u0: 10, u1: -10, u2: 0, u3: 0 }, ["finished"]);
@@ -222,8 +222,8 @@ const pids = (id: string) => rs.big2Rooms[id]?.players.map((p) => p.player_id);
   sent.length = 0;
   const ok3 = await dealAndStart(w.id, w.code);
   eq([ok1, hands, ev1, ok2, st2, ok3, rs.big2Rooms[w.id].room.status, sent.length],
-    [true, [13, 13, 13, 13], ["playing", 1, 4], true, ["playing", { u0: 10, u1: -10, u2: 0, u3: 0 }, 1], false, "playing", 0],
-    "B8 大老二正常發牌：開局（每人 13 張、game_start 1 次、deal_hand 4 次）；下一場從 finished 照常開局、帶分數；已在 playing 時再發牌不開局、不廣播");
+    [true, [13, 13, 13, 13], ["playing", 1, 0], true, ["playing", { u0: 10, u1: -10, u2: 0, u3: 0 }, 1], false, "playing", 0],
+    "B8 大老二正常發牌：開局（每人存 13 張、game_start 1 次、手牌不廣播 deal_hand 0 次）；下一場從 finished 照常開局、帶分數；已在 playing 時再發牌不開局、不廣播");
 }
 
 console.log(results.join("\n"));
