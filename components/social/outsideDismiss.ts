@@ -7,6 +7,8 @@
 //   ・同一個 pointer 被取消（pointercancel，例如變成捲動）：馬上結束，之後的點擊一律照常
 //   ・放開後 CLICK_GAP 內沒等到 click（例如拖曳不會產生 click）：結束，之後的點擊照常
 //   ・click 帶了別的 pointerId（不是同一個手勢）：不吃
+//   ・又有新的按下（pointerdown）：上一個手勢一定已經結束了——結束它、不吃新的這一下（阿妍 2026-11-27：按到一半畫面換掉、
+//     手指下的元素被拆，iPhone 的放開送不到 window，原本要等 MAX_HOLD_MS 30 秒，這段時間聊天輸入框的 mousedown 都被吃掉、點不進去）
 // 聊天室關掉後元件會拆監聽，但「那一下」還沒結束：吃事件的監聽留到手勢結束才拆；放開一直沒來的保底 MAX_HOLD_MS 後拆。
 
 type Target = Pick<Window, "addEventListener" | "removeEventListener">;
@@ -26,9 +28,9 @@ export interface OutsideDismissOptions {
 export const CLICK_GAP_MS = 600;
 /** 按下後一直沒放開（例如手指移出視窗）：保底這麼久後拆掉監聽 */
 export const MAX_HOLD_MS = 30000;
-const FOLLOW = ["pointerup", "pointercancel", "mousedown", "mouseup", "click"] as const;
+const FOLLOW = ["pointerdown", "pointerup", "pointercancel", "mousedown", "mouseup", "click"] as const;
 
-type Gesture = { id: number | null; up: number | null };
+type Gesture = { id: number | null; up: number | null; down: Event };
 const pidOf = (e: Event): number | null => {
   const id = (e as PointerEvent).pointerId;
   return typeof id === "number" && id >= 0 ? id : null;
@@ -62,6 +64,7 @@ export function attachOutsideDismiss(target: Target, opts: OutsideDismissOptions
   }
   function follow(e: Event) {
     if (!g) return;
+    if (e.type === "pointerdown") { if (e !== g.down) end(); return; } // 開這個手勢的那一下（同一個事件）不算
     const pid = pidOf(e);
     const samePointer = g.id == null || pid == null || pid === g.id;
     if (e.type === "pointercancel") { if (samePointer) end(); return; }
@@ -81,7 +84,7 @@ export function attachOutsideDismiss(target: Target, opts: OutsideDismissOptions
   const down = (e: Event) => {
     if (opts.ignore?.() || opts.isInside(e.target)) return;
     kill(e);
-    g = { id: pidOf(e), up: null };
+    g = { id: pidOf(e), up: null, down: e };
     arm(MAX_HOLD_MS);
     startFollow();
     opts.onClose();

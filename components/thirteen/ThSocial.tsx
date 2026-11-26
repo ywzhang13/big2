@@ -185,8 +185,9 @@ export default function ThSocial({ phase, join, account, guest, players, hand, r
     <>
       <SocialChatDock canSend={!guest} guest={guest} desk={desk} layout={layout} bubbles={phase !== "result"} oneStack={phase === "arrange"}
         initials={initials} mySeat={mySeat} phase={phase} />
-      {phase === "table" && (
-        <SocialFxMenu players={players} mySeat={mySeat} enabled={!guest} desk={desk} hand={String(hand)} roomId={join.roomId} effectUrl={EFFECT_URL}
+      {/* 結算也掛著、只是不能丟（enabled＝false）：亮牌中正在播的、排隊的特效照常播完（阿妍〈十三支丟道具沒反應〉2026-11-27） */}
+      {(phase === "table" || phase === "result") && (
+        <SocialFxMenu players={players} mySeat={mySeat} enabled={!guest && phase === "table"} desk={desk} hand={String(hand)} roomId={join.roomId} effectUrl={EFFECT_URL}
           keyOf={keyOf} placement={placement} blockedReason={arranging} noteBelow={thinkBelow} hold={hold} />
       )}
     </>

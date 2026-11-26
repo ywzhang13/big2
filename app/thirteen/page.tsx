@@ -202,6 +202,8 @@ function ThirteenScreens() {
   const [showState, setShow] = useState<RevealShow<Reveal> | null>(null);
   const [confirmedKey, setConfirmedKey] = useState<string | null>(null); // 末局「看總結算」（本機）
   const [confirmSt, setConfirmSt] = useState<ConfirmState>(null);        // 一般局「確認」：照伺服器回應（審伯必修 1）
+  /** 亮牌畫面回報給互動元件的階段（哪一局的亮牌、牌桌或結算、牌型大字播放中） */
+  const [revealSocial, setRevealSocial] = useState<{ key: string; phase: "table" | "result"; hold: boolean } | null>(null);
   const closedRec = room.closed?.record ?? null;
   const finalHand = closedRec?.endReason === "completed" ? closedRec.finalHand : null;
   const liveReveal = view && view.status !== "waiting" && view.phase === "revealed" ? view.reveal : null;
@@ -255,9 +257,11 @@ function ThirteenScreens() {
     );
   }
 
-  /** 聊天與互動（小宜〈十三支共用聊天互動 v1〉）：理牌、牌桌、本局結算三個階段都掛，位置由 ThSocial 照階段量 */
+  /** 聊天與互動（小宜〈十三支共用聊天互動 v1〉）：理牌、牌桌、本局結算三個階段都掛，位置由 ThSocial 照階段量。
+   *  key 固定（阿妍〈十三支丟道具沒反應〉2026-11-27）：理牌、牌桌、亮牌、結算各畫面都回傳「<>畫面 + 這一個</>」，React 靠 key 認出是同一個，
+   *  換畫面不重裝——原本重裝會清掉正在播的特效、收起打開的選單、丟掉亮牌中排隊的特效 */
   const social = (phase: ThSocialPhase, hold = false) => (join && view && view.status !== "waiting" && auth.user ? (
-    <ThSocial phase={phase} hold={hold} join={join} account={auth.user.id} guest={!!auth.user.isGuest} players={view.players} hand={view.handNo}
+    <ThSocial key="th-social" phase={phase} hold={hold} join={join} account={auth.user.id} guest={!!auth.user.isGuest} players={view.players} hand={view.handNo}
       revealed={view.phase === "revealed"} />
   ) : null);
 
@@ -283,17 +287,20 @@ function ThirteenScreens() {
     // 起點、結算面板都照伺服器時間（revealedAt、settleAt）＋時差換算；410 才拿到的末局一樣（審伯必修 2）
     const { startAt } = revealClock({ revealedAt: rv.revealedAt ?? null, settleAt: rv.settleAt ?? null }, room.clockSkew, Date.now(), show.startAt);
     const cv = confirmView(confirmSt, show.key, view && view.status !== "waiting" ? view.nextReady : undefined, join.playerId);
-    return (
+    // 亮牌中是牌桌（牌型大字播放中 hold），結算面板出現後是 result：由 ThReveal 往上報，互動元件掛在這一層（不在 ThReveal 裡面），換畫面不重裝
+    const rs = revealSocial?.key === show.key ? revealSocial : { phase: "table" as const, hold: false };
+    return (<>
       <ThReveal key={show.key} view={tableView} rv={rv} startAt={startAt} settleAt={rv.settleAt != null ? rv.settleAt - room.clockSkew : null}
         confirmBy={!show.final && nextHandAt !== null ? nextHandAt - room.clockSkew : null}
         confirmed={!show.final && cv.confirmed} sending={!show.final && cv.sending} error={show.final ? null : cv.error}
         confirmLabel={show.final ? "看總結算" : "確認"}
-        social={show.final ? undefined : (s) => social(s.phase, s.hold)}
+        onSocial={show.final ? undefined : (s) => setRevealSocial((p) => (p?.key === show.key && p.phase === s.phase && p.hold === s.hold ? p : { key: show.key, ...s }))}
         onConfirm={() => {
           if (show.final) { setConfirmedKey(show.key); markFinalSeen(tabStore(), join.roomId); return; }
           void sendConfirm(room.next, show.key, setConfirmSt);
         }} />
-    );
+      {show.final ? null : social(rs.phase, rs.hold)}
+    </>);
   }
 
   // 整場結束（例如中途解散）：伺服器有紀錄就直接給總結算，沒有就一行字＋回大廳
