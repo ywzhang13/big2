@@ -13,6 +13,7 @@ import { useMyCards } from "@/components/roomCard/useMyCards";
 import { cardSrc } from "./cardArt";
 import { ARRANGE_DEFAULT, ARRANGE_MAX, ARRANGE_MIN, ARRANGE_STEP, normalizeArrangeSec } from "./arrangeTime";
 import { useAutoUpdate } from "@/lib/autoUpdate";
+import { LobbyBg, LobbyHero } from "@/components/gameLobby/LobbyHero";
 
 export const HAND_OPTIONS = [8, 16, 32]; // 老闆 2026-11-18：開房局數只能選 8／16／32（伺服器其他值回 400）
 /** 底分（老闆 2026-11-19）：每局分數＝墩數 × 底分；伺服器乘好再回傳，前端只顯示。預設四顆，更大或其他數字用「自訂」（10～100000 的整數） */
@@ -72,12 +73,14 @@ export default function ThLobby({ user, onSignOut, busy, error, resume, nameInit
   if (screen === "join") {
     return <JoinByCode className="mjl" brand={<ThBrand />} top={top} initialName={nameInit} busy={busy} error={error} onJoin={onJoin} onBack={() => setScreen("home")} />;
   }
+  // 大廳首頁 v2（明亮娛樂城風，小宜〈大廳素材v2〉）：背景、LOGO 底牌、遊戲名稱、圖片按鈕；建立／加入房間畫面照舊用 ThBrand
   return (
-    <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]" data-th-lobby="home">
+    <div className="mjl lv2-page" data-lv2="thirteen" data-th-lobby="home">
+      <LobbyBg kind="thirteen" />
       {top}
-      <ThBrand />
-      <div className="mjl-col">
-        <div className="mjl-col fade-in">
+      <LobbyHero name="十三支" />
+      <div className="lv2-col">
+        <div className="lv2-col fade-in" style={{ marginTop: 0 }}>
           {resume && (
             <button onClick={() => onResume(resume.code)} disabled={busy} className="mjl-btn resume">
               {resume.status === "waiting" ? "你在房間等開局，" : "你有一局還沒打完，"}
@@ -85,10 +88,12 @@ export default function ThLobby({ user, onSignOut, busy, error, resume, nameInit
             </button>
           )}
           {sus && <div className="rc-ban" role="status" data-rc-suspended-ban>帳號已暫停</div>}
-          <button onClick={() => setScreen("create")} disabled={sus} className={`mjl-btn primary${sus ? " rc-lock" : ""}`}>建立房間</button>
-          <button onClick={() => setScreen("join")} disabled={sus} className={`mjl-btn second${sus ? " rc-lock" : ""}`}>加入房間</button>
-          <a href="/records?game=thirteen" className="mjl-btn ghost text-center" data-th-records>歷史紀錄</a>
-          <button onClick={onHome} className="mjl-foot">返回首頁</button>
+          <button onClick={() => setScreen("create")} disabled={sus} className={`lv2-btn primary${sus ? " rc-lock" : ""}`}>建立房間</button>
+          <button onClick={() => setScreen("join")} disabled={sus} className={`lv2-btn second${sus ? " rc-lock" : ""}`}>加入房間</button>
+          <div className="lv2-ghosts">
+            <a href="/records?game=thirteen" className="lv2-btn ghost" data-th-records>歷史紀錄</a>
+          </div>
+          <button onClick={onHome} className="lv2-foot">返回首頁</button>
         </div>
         {error && <p className="text-red-400 text-sm text-center fade-in">{error}</p>}
       </div>

@@ -19,6 +19,7 @@ import { calculateScore } from "@/lib/scoring";
 import GameMenu from "@/components/gamePrefs/GameMenu";
 import { useGamePrefsAccount, useSessionAuth } from "@/components/gamePrefs/accountBinding";
 import { gameVibrate } from "@/components/gamePrefs/vibrate";
+import { LobbyBg, LobbyHero } from "@/components/gameLobby/LobbyHero";
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -143,7 +144,23 @@ export default function Home() {
     window.location.href = "/";
   }
 
-  // ─── Home / Create / Join screens ───
+  // ─── Home（大廳首頁 v2 明亮娛樂城風，小宜〈大廳素材v2〉：背景、LOGO 底牌、遊戲名稱、圖片按鈕）───
+  if (screen === "home") {
+    return (
+      <div className="mjl lv2-page" data-lv2="big2">
+        <LobbyBg kind="big2" />
+        <LobbyHero name="大老二" />
+        <div className="lv2-col fade-in">
+          <button onClick={() => { setScreen("create"); setError(""); }} className="lv2-btn primary">建立房間</button>
+          <button onClick={() => { setScreen("join"); setError(""); }} className="lv2-btn second">加入房間</button>
+          {/* 回到總大廳（跟十三支大廳一樣放在最下面）；以前退出房間回到這裡後沒有出口 */}
+          <button onClick={goHome} className="lv2-foot" data-big2-home>返回首頁</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Create / Join screens ───
   if (screen !== "room") {
     return (
       <div className="flex flex-col flex-1 items-center justify-center px-6">
@@ -159,24 +176,7 @@ export default function Home() {
             <p className="text-white/50 mt-2 text-sm">Big Two &mdash; 4 Players</p>
           </div>
 
-          {screen === "home" ? (
-            <div className="flex flex-col gap-4 w-full fade-in">
-              <button onClick={() => { setScreen("create"); setError(""); }}
-                className="w-full py-4 rounded-2xl bg-gold text-felt font-bold text-lg
-                           cursor-pointer active:scale-95 transition-all duration-150
-                           hover:brightness-110">
-                建立房間
-              </button>
-              <button onClick={() => { setScreen("join"); setError(""); }}
-                className="w-full py-4 rounded-2xl border-2 border-gold/60 text-gold-light font-bold text-lg
-                           cursor-pointer active:scale-95 transition-all duration-150
-                           hover:border-gold hover:bg-gold/5">
-                加入房間
-              </button>
-              {/* 回到總大廳（跟十三支大廳一樣放在最下面）；以前退出房間回到這裡後沒有出口 */}
-              <button onClick={goHome} className="mjl-foot" data-big2-home>返回首頁</button>
-            </div>
-          ) : screen === "create" ? (
+          {screen === "create" ? (
             <div className="flex flex-col gap-4 w-full fade-in">
               <input type="text" maxLength={8} placeholder="你的暱稱" value={name}
                 onChange={(e) => setName(e.target.value)}

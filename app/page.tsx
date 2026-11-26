@@ -1,52 +1,35 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import "./home-games.css";
 import HomeAccount from "@/components/roomCard/HomeAccount";
+import { LobbyBg, LobbyHero } from "@/components/gameLobby/LobbyHero";
 import { useAutoUpdate } from "@/lib/autoUpdate";
 
-// 首頁（綠金華麗風，小宜 2026-10-24 設計、老闆確認）：深綠牌桌底、老闆的「阿瑋 CASINO」徽章、兩張金框遊戲卡。
-// 素材在 public/home/（由原始 PNG 裁掉透明留白、縮成網頁用寬度的 WebP）；排版在 globals.css 的 .home-*
+// 首頁（大廳 v2 明亮娛樂城風，小宜〈大廳素材v2-驗收與四大廳排版規格〉2026-11-27）：背景、LOGO 底牌＋「阿瑋娛樂城」、三張遊戲卡。
+// 只留 LOGO、遊戲名稱（老闆：字要少；「多人線上桌遊平台」「選擇遊戲開始遊玩 · 支援多人即時對戰」拿掉）。樣式在 app/lobby-v2.css
 const GAMES = [
-  { key: "big2", href: "/big2", name: "大老二", art: "/home/home-big2.webp", artAlt: "黑桃、紅心、方塊、梅花四張 2", w: 400, h: 235 },
-  { key: "mj", href: "/mahjong", name: "台灣麻將", art: "/home/home-mahjong.webp", artAlt: "中、發、白皮三張麻將牌", w: 400, h: 227 },
-  // 十三支（小宜〈十三支-畫面設計說明〉①a）：第三張卡，上線初期右上角掛 NEW
-  { key: "th", href: "/thirteen", name: "十三支", art: "/home/home-thirteen.webp", artAlt: "兩張黑桃 A、紅心 K、方塊 Q", w: 400, h: 235, badge: "NEW" },
-];
+  { key: "thirteen", href: "/thirteen", name: "十三支" },
+  { key: "mahjong", href: "/mahjong", name: "台灣麻將" },
+  { key: "big2", href: "/big2", name: "大老二" },
+] as const;
 
 export default function Lobby() {
   const router = useRouter();
   useAutoUpdate(true); // 自動換新版（lib/autoUpdate.ts）：總大廳隨時都是安全時機
 
   return (
-    <div className="home has-3">
+    <div className="lv2-home" data-lv2="home">
+      <LobbyBg kind="home" />
       {/* 右上角：房卡張數、頭像選單（房卡後台／歷史紀錄／登出）、設定（房卡 v1.2 2-2）；沒登入不放 */}
       <HomeAccount />
-      <header className="home-brand">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="home-badge" src="/home/home-badge.webp" alt="阿瑋 CASINO" width={640} height={452} />
-        <div className="home-brand-text">
-          <h1 className="home-title">阿瑋娛樂城</h1>
-          <p className="home-sub">多人線上桌遊平台</p>
-        </div>
-      </header>
-
-      <nav className="home-cards" aria-label="選擇遊戲">
+      <LobbyHero />
+      <nav className="lv2-cards" aria-label="選擇遊戲">
         {GAMES.map((g) => (
-          <button key={g.key} type="button" onClick={() => router.push(g.href)} className={`home-card ${g.key}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="home-art" src={g.art} alt={g.artAlt} width={g.w} height={g.h} />
-            <span className="home-card-text">
-              {/* 老闆 2026-11-18：卡片只留遊戲名稱，拿掉副標（「4 人撲克競技 · Big Two」等） */}
-              <span className="home-name">{g.name}</span>
-            </span>
-            <span className="home-go" aria-hidden="true">›</span>
-            {"badge" in g && <span className="home-new">{g.badge}</span>}
+          <button key={g.key} type="button" onClick={() => router.push(g.href)} className="lv2-card" data-lv2-card={g.key}>
+            <span>{g.name}</span>
           </button>
         ))}
       </nav>
-
-      <p className="home-foot">選擇遊戲開始遊玩 · 支援多人即時對戰</p>
     </div>
   );
 }
