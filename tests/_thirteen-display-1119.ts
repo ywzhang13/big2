@@ -67,8 +67,8 @@ const GamePlate = (await import("../components/GamePlate")).default;
   const { cardSrc } = await import("../components/thirteen/cardArt");
   const { buildDeck } = await import("../lib/thirteen");
   const srcs = buildDeck().map(cardSrc);
-  ok(srcs.every((x) => x.endsWith(".v4.webp") && existsSync(`public${x}`)) && new Set(srcs).size === 52,
-    `W1 52 種牌面都用 v4（純白底）的圖、檔案都在（兩副黑桃共用同一張，${new Set(srcs).size} 個檔）`);
+  ok(srcs.every((x) => (/-[jqk]\.v\d/.test(x) ? x.endsWith(".v5.webp") : x.endsWith(".v4.webp")) && existsSync(`public${x}`)) && new Set(srcs).size === 52,
+    `W1 52 種牌面都用純白底的圖（A～10 v4；J／Q／K v5＝加角落裝飾，2026-11-26）、檔案都在（兩副黑桃共用同一張，${new Set(srcs).size} 個檔）`);
 }
 
 console.log(results.join("\n"));

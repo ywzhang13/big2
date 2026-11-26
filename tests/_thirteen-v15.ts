@@ -7,7 +7,7 @@ import type { ThGameView } from "../components/thirteen/useThirteenRoom";
 const results: string[] = [];
 const ok = (cond: boolean, msg: string) => results.push(`${cond ? "✅" : "❌"} ${msg}`);
 const { parseCards, buildDeck, CAT } = await import("../lib/thirteen");
-const { cardSrc, isGold } = await import("../components/thirteen/cardArt");
+const { cardSrc, isGold, sizedCardUrl } = await import("../components/thirteen/cardArt");
 const T = await import("../components/thirteen/revealTimeline");
 const ThTable = (await import("../components/thirteen/ThTable")).default;
 const ThArrange = (await import("../components/thirteen/ThArrange")).default;
@@ -18,9 +18,14 @@ const clean = (h: string) => h.replace(/<!-- -->/g, "");
 // ---- G 金卡 ----
 {
   const [n9, h9, k] = parseCards("9S 9H KS");
-  ok(cardSrc(n9, 9).endsWith("card-front-spade-9.gold.v1.webp") && cardSrc(h9, 9).includes(".gold.v1.") && cardSrc(k, 9).endsWith(".v4.webp") && cardSrc(n9, null).endsWith(".v4.webp") && isGold(h9, 9) && !isGold(k, 9),
-    "G1 點數和彩金牌一樣的牌用金卡圖（只看點數不看花色）；沒有彩金牌照舊白牌");
+  ok(cardSrc(n9, 9).endsWith("card-front-spade-9.gold.v1.webp") && cardSrc(h9, 9).includes(".gold.v1.") && cardSrc(k, 9).endsWith(".v5.webp") && cardSrc(n9, null).endsWith(".v4.webp") && isGold(h9, 9) && !isGold(k, 9)
+    && cardSrc(k, 13).endsWith("card-front-spade-k.gold.v2.webp"),
+    "G1 點數和彩金牌一樣的牌用金卡圖（只看點數不看花色）；沒有彩金牌照舊白牌；J／Q／K 用加角落裝飾的 v5、金卡 gold.v2（小宜 2026-11-26）");
   ok(buildDeck().every((c) => existsSync(`public${cardSrc(c, c.rank)}`)), "G2 52 種金卡圖都在");
+  const u = (f: string) => `/tiles/thirteen/card-front-${f}`;
+  ok(sizedCardUrl(u("spade-k.v5.m.webp"), true) === u("spade-k.v5.webp") && sizedCardUrl(u("heart-q.v5.webp"), false) === u("heart-q.v5.m.webp")
+    && sizedCardUrl(u("club-j.gold.v2.m.webp"), true) === u("club-j.gold.v2.webp") && sizedCardUrl(u("diamond-k.gold.v2.webp"), false) === u("diamond-k.gold.v2.m.webp"),
+    "G3 手機⇄桌機切換：J／Q／K 新圖（v5、金卡 gold.v2）也會換尺寸（審伯 R1 那條正規式）");
 }
 
 // ---- A 理牌：三墩左邊的彩金牌、手牌金卡 ----

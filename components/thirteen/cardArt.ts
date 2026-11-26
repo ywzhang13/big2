@@ -1,4 +1,5 @@
 // 十三支牌面圖：v4＝純白底（老闆 2026-11-19；A～10 從 v2、J／Q／K 從 v3 用同一支程式重產，只把底版米白換成白，其他不變），牌背 v2。
+// J／Q／K v5／gold.v2＝加角落雲紋竹葉（小宜 2026-11-26 乙案，從黑桃 A 取出、縮 60%；老闆：風格統一），A～10 照舊 v4／gold.v1。
 // 放在 public/tiles/thirteen/（tiles 是長期快取目錄，換圖一律換檔名，見 lib/staticCache.ts）。
 // 兩副黑桃（id 結尾 1／2）共用同一張圖。
 import { buildDeck, type Card } from "@/lib/thirteen";
@@ -14,10 +15,13 @@ const DESKTOP = "(min-width: 1100px) and (min-height: 700px)";
 const desktopMq = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(DESKTOP) : null;
 const sz = () => (desktopMq && !desktopMq.matches ? ".m" : "");
 
-/** lucky＝這一局彩金牌的點數：點數一樣的牌用金卡圖（小宜 v15 §1：整張變金，不是疊框；金卡 v1 由 v4 白底照 §8 算出來） */
+/** lucky＝這一局彩金牌的點數：點數一樣的牌用金卡圖（小宜 v15 §1：整張變金，不是疊框；金卡 v1 由 v4 白底照 §8 算出來）。
+ *  J／Q／K 用加角落裝飾的 v5／gold.v2（小宜 2026-11-26） */
 export function cardSrc(card: Card, lucky: number | null = null): string {
   const face = card.rank === 14 ? "a" : card.rank === 13 ? "k" : card.rank === 12 ? "q" : card.rank === 11 ? "j" : String(card.rank);
-  return `${DIR}/card-front-${SUIT_NAME[card.suit]}-${face}.${isGold(card, lucky) ? "gold.v1" : "v4"}${sz()}.webp`;
+  const faceCard = card.rank >= 11 && card.rank <= 13;
+  const ver = isGold(card, lucky) ? (faceCard ? "gold.v2" : "gold.v1") : (faceCard ? "v5" : "v4");
+  return `${DIR}/card-front-${SUIT_NAME[card.suit]}-${face}.${ver}${sz()}.webp`;
 }
 export const isGold = (card: Card, lucky: number | null) => lucky !== null && card.rank === lucky;
 
@@ -32,7 +36,7 @@ export const deckSrcs = (deck: readonly Card[]): string[] => [...deck.map((c) =>
 //   ・牌背換成目前尺寸；之後畫的牌面、金卡由 cardSrc 每次讀目前尺寸
 //   ・畫面上已經畫好的十三支牌圖（牌面、金卡、牌背）直接換網址，不等下一個遊戲事件才重畫；React 之後重畫給的也是同一個網址
 //   ・用目前尺寸重新背景預載整副（預載來源和畫面一致；金卡等知道彩金點數時由頁面照常預載）
-const CARD_IMG = /^(.*\/tiles\/thirteen\/card-(?:front-[a-z]+-[0-9akqj]+\.(?:v4|gold\.v1)|back\.v2))(?:\.m)?\.webp$/;
+const CARD_IMG = /^(.*\/tiles\/thirteen\/card-(?:front-[a-z]+-[0-9akqj]+\.(?:v4|v5|gold\.v1|gold\.v2)|back\.v2))(?:\.m)?\.webp$/; // v5／gold.v2＝J／Q／K 加角落裝飾
 /** 十三支牌圖網址換成指定尺寸（不是牌圖就原樣回傳） */
 export function sizedCardUrl(url: string, desktop: boolean): string {
   const m = CARD_IMG.exec(url);
