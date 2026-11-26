@@ -6,6 +6,7 @@
 //   4. 播完一定清乾淨：取消殘留動畫、清空特效層、拿掉名牌上的發光和抖動
 //   5. 音效只在預載完成、圖片已經放上畫面之後才播
 //   6. 分頁切到背景：正在播的立刻收掉、排隊的丟掉，回來時畫面是乾淨的
+import { ALL_VOICE_KEYS, voiceUrl, type VoiceKey, type VoicePlayback } from "@/lib/mahjong/tableVoice";
 import { whenScreenImagesLoaded } from "@/lib/perf/tableFirst";
 import { registerAudioContext } from "@/lib/gameAudioSession";
 
@@ -117,7 +118,8 @@ async function loadClap() {
   URL.revokeObjectURL(u);
 }
 
-async function loadSounds() {
+/** 建 AudioContext 和總出口（總音量 → 壓縮器 → 喇叭）；特效音效和配音共用。建不起來回 false */
+function ensureAudio(): boolean {
   try {
     AC ??= new AudioContext();
     registerAudioContext(AC); // 切背景、鎖屏回來時叫醒（lib/gameAudioSession.ts）
@@ -130,7 +132,12 @@ async function loadSounds() {
       FX_GAIN.connect(c);
       MIX = FX_GAIN;
     }
-  } catch { return; }
+    return true;
+  } catch { return false; }
+}
+
+async function loadSounds() {
+  if (!ensureAudio()) return;
   await Promise.all(SOUNDS.map(async (n) => {
     try {
       const ab = await fetch(`${BASE}s/${n}.mp3`).then((r) => r.arrayBuffer());
@@ -172,6 +179,71 @@ export async function playTableSound(kind: "tile" | "remind"): Promise<TableSoun
     s.start();
     return { played: true, ac: AC.state };
   } catch { return { played: false, ac: AC.state }; }
+}
+
+// ---------------- 牌桌配音：打牌唸牌名、吃碰槓胡自摸唸動作（老闆 2026-11-26；什麼時候唸見 lib/mahjong/tableVoice.ts） ----------------
+// 和特效走同一條路（互動音效的音量、靜音、壓縮器）。39 個小檔（共約 350KB）等畫面上的牌面、名牌載完才下載（審伯 R3，跟特效同一道關卡）。
+const VBUF: Partial<Record<VoiceKey, AudioBuffer>> = {};
+let voicePreload: Promise<void> | null = null;
+/** 預載全部配音：先等牌面優先關卡（whenScreenImagesLoaded，最多等 8 秒），再下載解碼。
+ *  牌桌一打開就叫；重複叫共用同一筆，載失敗的那幾個下次叫再試 */
+export function preloadVoice(): Promise<void> {
+  voicePreload ??= (async () => {
+    await whenScreenImagesLoaded();
+    if (!ensureAudio()) { voicePreload = null; return; }
+    await Promise.all(ALL_VOICE_KEYS.map(async (k) => {
+      if (VBUF[k]) return;
+      try { VBUF[k] = await AC!.decodeAudioData(await fetch(voiceUrl(k)).then((r) => r.arrayBuffer())); } catch { /* 載不到這句就不唸 */ }
+    }));
+    if (ALL_VOICE_KEYS.some((k) => !VBUF[k])) voicePreload = null;
+  })();
+  return voicePreload;
+}
+/**
+ * 唸一句。done＝這句真的結束（播完、被 stop、沒播出來）才 resolve，值是播了幾毫秒（0＝沒出聲：靜音、還沒載好、音訊叫不醒、被取消）。
+ * stop＝馬上停；還在等音訊叫醒就不會開始播。
+ * 保險（審伯 R5）：onended 萬一沒來，看的是音訊時鐘（AudioContext.currentTime）不是牆鐘——鎖屏、音訊被中斷時時鐘停住，
+ * 不會在聲音還沒播完時就放下一句；真的超過才先 stop 這句再結算。onended、stop、保險三條路只會結算一次。
+ */
+export function playVoice(k: VoiceKey): VoicePlayback {
+  let cancelled = false;
+  let src: AudioBufferSourceNode | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let settle: (ms: number) => void = () => {};
+  const done = new Promise<number>((res) => {
+    let settled = false;
+    settle = (ms) => { if (settled) return; settled = true; if (timer) clearTimeout(timer); res(ms); };
+  });
+  const stop = () => {
+    cancelled = true;
+    try { src?.stop(); } catch { /* 還沒 start 或已經停了 */ }
+    settle(0);
+  };
+  void (async () => {
+    const buf = VBUF[k];
+    if (!AC || !buf || masterGain === 0) return settle(0);
+    if (AC.state !== "running") {
+      await Promise.race([AC.resume().catch(() => {}), new Promise((r) => setTimeout(r, 300))]);
+      if (cancelled || (AC.state as AudioContextState) !== "running") return settle(0);
+    }
+    if (cancelled) return settle(0);
+    try {
+      const ac = AC, s = ac.createBufferSource();
+      s.buffer = buf;
+      s.connect(MIX ?? ac.destination);
+      src = s;
+      const ms = Math.round(buf.duration * 1000);
+      s.onended = () => settle(ms);
+      const endAt = ac.currentTime + buf.duration + 0.3;
+      const guard = () => {
+        if (ac.currentTime >= endAt) { try { s.stop(); } catch { /* 已經停了 */ } settle(ms); }
+        else timer = setTimeout(guard, 250);
+      };
+      s.start();
+      timer = setTimeout(guard, ms + 300);
+    } catch { settle(0); }
+  })();
+  return { done, stop };
 }
 
 // ---------------- 大牌胡牌特效的音效（老闆 2026-10-23 定案金鈴組；畫面在 components/mahjong/BigWinFx.tsx） ----------------

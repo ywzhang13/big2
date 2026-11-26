@@ -21,6 +21,8 @@ import MjResultMobile from "@/components/mahjong/MjResultMobile";
 import { useWinShow, WinShowLayer } from "@/hooks/useWinShow";
 import { preloadFx, unlockAudio } from "@/lib/mahjong/fx/engine";
 import { useGameAudioSession } from "@/lib/gameAudioSession";
+import { useTableVoice } from "@/hooks/useTableSounds";
+import { voiceSnapshotOf } from "@/lib/mahjong/tableVoice";
 import MjTableMenu from "@/components/mahjong/MjTableMenu";
 import MjSeatSwitch from "@/components/mahjong/spectate/MjSeatSwitch";
 import { SpxAvatar, SpxToast, useTick } from "@/components/mahjong/spectate/SpectateHost";
@@ -231,6 +233,8 @@ export default function MahjongWatchPage() {
     return () => evs.forEach((e) => document.removeEventListener(e, unlock, true));
   }, []);
   useGameAudioSession(!!room); // iPhone：觀戰中也用 ambient 模式，跟背景音樂混音、靜音開關打開時沒聲音（同打牌頁，lib/gameAudioSession.ts）
+  // 牌桌配音：觀戰者也聽得到打牌的牌名和吃、碰、槓、胡、自摸（老闆 2026-11-26；同打牌頁）
+  useTableVoice({ roomId: room?.roomId ?? "", hand: `${view?.roundInfo?.currentRound}-${view?.roundInfo?.currentGame}-${view?.roundInfo?.dealerConsecutive}`, snap: voiceSnapshotOf(view) });
   const skew = room ? clockSkew(room.serverNow) : 0;
   // 本場聊天、互動：開始觀戰才讀歷史、訂閱觀戰頻道；離開觀戰清空
   const account = auth.status === "in" ? auth.user?.id ?? "" : "";

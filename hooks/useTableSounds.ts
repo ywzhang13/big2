@@ -3,7 +3,8 @@
 // 牌桌音效（出牌聲、輪到自己 6 秒沒打的提醒聲＋手牌輕抖）接到牌桌狀態上。判斷規則在 lib/mahjong/tableSound.ts，出聲在 fx/engine.ts。
 // 訪客、觀戰者也聽得到出牌聲；提醒聲只有輪到的那個人自己會響（其他人的畫面上 needsDiscard 不會是 true）。
 import { useEffect, useRef, useState } from "react";
-import { fxAudioState, playTableSound, unlockAudio } from "@/lib/mahjong/fx/engine";
+import { fxAudioState, playTableSound, playVoice, preloadVoice, unlockAudio } from "@/lib/mahjong/fx/engine";
+import { createVoiceQueue, createVoiceTracker, type VoiceSnapshot } from "@/lib/mahjong/tableVoice";
 import { createDiscardWatcher, createTurnReminder, discardKey, remindActive } from "@/lib/mahjong/tableSound";
 import { shakeHandForRemind } from "@/lib/mahjong/remindShake";
 import { useGameAudioSession } from "@/lib/gameAudioSession";
@@ -69,4 +70,25 @@ export function useTableSounds({ roomId, hand, focusDiscard, needsDiscard, statu
     evs.forEach((e) => document.addEventListener(e, unlock, true));
     return () => evs.forEach((e) => document.removeEventListener(e, unlock, true));
   }, []);
+}
+
+/**
+ * 牌桌配音（老闆 2026-11-26）：打出一張牌唸牌名；吃、碰、槓、胡、自摸唸動作。玩家（app/mahjong/page.tsx）和觀戰者（app/mahjong/watch/page.tsx）都接。
+ * 該唸什麼在 lib/mahjong/tableVoice.ts（voiceEvents）；一次唸一句、排著的最多 1 句，新的取代排著的（createVoiceQueue）。
+ * 換房、換局：先清掉，第一眼看到的狀態只記不唸（剛進房、重新整理不會把桌上的牌唸一遍）。
+ * 音量、靜音跟互動音效同一個設定（fx/engine.ts 的 setFxVolume；0＝不唸）。
+ */
+export function useTableVoice({ roomId, hand, snap }: { roomId: string; hand: string; snap: VoiceSnapshot | null }) {
+  const [queue] = useState(() => createVoiceQueue(playVoice));
+  const track = useRef<{ scope: string; tracker: ReturnType<typeof createVoiceTracker> }>({ scope: "", tracker: createVoiceTracker() });
+  useEffect(() => { if (roomId) void preloadVoice(); }, [roomId]);
+  const scope = roomId ? `${roomId}|${hand}` : "";
+  useEffect(() => {
+    // 換房、換局、離開（scope 變空）：停掉舊的那句、丟掉排著的，從新的一局重新記（審伯 R4）
+    if (track.current.scope !== scope) { queue.reset(); track.current = { scope, tracker: createVoiceTracker() }; }
+    if (!scope || !snap) return;
+    queue.push(track.current.tracker.next(snap));
+  }, [scope, snap, queue]);
+  // 離開牌桌（玩家頁、觀戰頁卸載）：停掉正在播的、丟掉排著的，不會跨頁跟新的牌桌疊音（審伯 R4）
+  useEffect(() => () => queue.reset(), [queue]);
 }
