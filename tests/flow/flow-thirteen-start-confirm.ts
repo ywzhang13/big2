@@ -1,12 +1,14 @@
 // 十三支開局確認（老柯 2026-11-20，老闆定案：房主按開始倒數 10 秒、四家都同意才開局、沒按完就不開、房主要重新按開始），走真的路由；
 // 十三支和房卡帳都是記憶體 PostgreSQL 跑真的 migration。
 //   S1 房主按開始：不發牌、不扣卡；房主自己算同意，倒數 10 秒；等人畫面（state）帶確認狀態；四家都同意 → 開局、每人扣 1 張（房主也扣，老闆帳號才不扣）
-//   S2 房主取消：回到等人、不發牌、不扣卡；之後再按同意 409 no_confirm；不是房主不能取消
-//   S3 時間到還有人沒按：不開局（不是自動同意），讀狀態／tick 時作廢、廣播 th_start_cancelled timeout；晚到的同意 409；
-//      房主重新按開始 → 新的 10 秒；這次四家都按 → 開局
+//   S2（v3b 2026-11-27）倒數中（剩 6 秒）非房主按「取消對戰」→ 回到等人、不發牌、不扣卡、廣播 th_start_cancelled（timeout、by）、
+//      lastStartConfirm 記誰沒按；之後再按同意 409 no_confirm；房主倒數中也能取消；房主重新按開始、四家同意 → 開局
+//   S3（v3）時間到還有人沒按：不作廢、繼續等（讀狀態／tick 都不取消、沒有 th_start_cancelled）；倒數後最後一人按同意 → 開局、每人扣 1 張
 //   S4 三家同時按同意：都有記到、只開一次局（第 1 局）、每人只扣 1 張
 //   S5 暫停：有人被暫停時房主按開始 403 player_suspended（不進入確認）；確認期間才被暫停 → 最後一家同意時 403、這次確認作廢、不發牌不扣卡
 //   S6 確認期間有人離開 → 這次確認作廢，等人畫面沒有確認狀態；別人再按同意 409
+//   S10（v3b）倒數中取消和最後一家同意同時送出：要嘛開局（每人扣 1 張、只開一次），要嘛取消（回等人、0 張），不會開出半局
+//   S11（v3c 補測）沒入座的帳號直接送取消：403，確認還在、同意名單和截止時間不變、沒有取消廣播
 //   S7 重複按：房主倒數中再按開始不會重新計時；同一個人重複按同意只記一次；不是本人座位 403；倒數中不能偷開（沒同意的人不能讓牌局開始）
 import { setupThirteenDb } from "../support/thirteen-pg";
 import { tokens } from "../support/stub-auth";
@@ -22,6 +24,8 @@ import { POST as tickRoute } from "../../app/api/thirteen/tick/route";
 import { GET as stateRoute } from "../../app/api/thirteen/state/route";
 import { clock } from "../../lib/thirteen/flow";
 import { START_CONFIRM_MS } from "../../lib/lobby/startConfirm";
+import { lastConfirmNote } from "../../components/thirteen/ThWaiting";
+import type { ThWaitingView } from "../../components/thirteen/useThirteenRoom";
 
 const results: string[] = [];
 function eq(a: unknown, e: unknown, msg: string) {
@@ -54,6 +58,8 @@ async function seated(keys: string[]) {
 const status = async (roomId: string) => (await th.query<{ status: string; hand: number }>(`select status, (game_state->>'handNo')::int hand from th_rooms where id = $1`, [roomId])).rows[0];
 const charges = async (roomId: string) => Number((await cards.query<{ n: number }>(`select count(*)::int n from room_card_ledger where kind = 'charge' and room_id = $1`, [roomId])).rows[0].n);
 const events = (name: string) => sent.filter((e) => e.event === name);
+/** 某一家（座位 i）在等人畫面看到的提示（照伺服器狀態算，跟畫面同一個函式；v3c） */
+const noteOf = async (r: { roomId: string; pids: string[]; keys: string[] }, i: number) => lastConfirmNote((await state(r.roomId, r.keys[i], r.pids[i])).body as ThWaitingView, r.pids[i]);
 /** 這間房目前這一輪確認的編號（前端從開始的回應、廣播或狀態拿到；沒有確認＝undefined） */
 const cid = async (roomId: string): Promise<string | undefined> =>
   (await th.query<{ id: string | null }>(`select game_state->'startConfirm'->>'id' id from th_rooms where id = $1`, [roomId])).rows[0]?.id ?? undefined;
@@ -74,44 +80,80 @@ const cid = async (roomId: string): Promise<string | undefined> =>
   eq([a1.body.confirm?.readyIds.length, a2.body.confirm?.readyIds.length, mid.status, a3.status, a3.body.started, s1.status, s1.hand, await charges(r.roomId)],
     [2, 3, "waiting", 200, true, "playing", 1, 4], "S1 三家依序同意：前兩家還在等，第四家同意 → 開局（第 1 局），四人各扣 1 張");
 }
-// S2
+// S2（v3b）
 {
   const r = await seated(["a", "b", "c", "d"]);
   await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
   await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: await cid(r.roomId) }, "b");
-  const notHost = await post(cancelRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: await cid(r.roomId) }, "b");
+  NOW += 4_000;                                                                                           // 還剩 6 秒
   sent.length = 0;
-  const cc = await post(cancelRoute, { roomId: r.roomId, playerId: r.pids[0], confirmId: await cid(r.roomId) }, "a");
-  const late = await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[2], confirmId: await cid(r.roomId) }, "c");
-  const w = await state(r.roomId, "a", r.pids[0]);
-  eq([notHost.status, notHost.body.error, cc.body.cancelled, events("th_start_cancelled").map((e) => e.payload.reason), late.status, late.body.error, w.body.status, w.body.startConfirm, await charges(r.roomId)],
-    [403, "not_host", true, ["host"], 409, "no_confirm", "waiting", null, 0], "S2 房主取消：回到等人、廣播取消（host）、不扣卡；之後的同意 409 no_confirm；不是房主不能取消");
+  const cc = await post(cancelRoute, { roomId: r.roomId, playerId: r.pids[2], confirmId: await cid(r.roomId) }, "c");   // 非房主、自己也沒按
+  const late = await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[3], confirmId: await cid(r.roomId) }, "d");
+  const w = await state(r.roomId, "b", r.pids[1]);
+  eq([cc.status, cc.body.cancelled, events("th_start_cancelled").map((e) => [e.payload.reason, e.payload.by]), late.status, late.body.error,
+    w.body.status, w.body.startConfirm, w.body.lastStartConfirm?.reason, w.body.lastStartConfirm?.missingIds, (await status(r.roomId)).status, await charges(r.roomId)],
+    [200, true, [["cancelled", r.pids[2]]], 409, "no_confirm",
+      "waiting", null, "cancelled", [r.pids[2], r.pids[3]], "waiting", 0],
+    "S2 倒數中（剩 6 秒）非房主取消對戰 → 回到等人、廣播 cancelled＋誰按的、記下誰沒按、不扣卡；之後同意 409 no_confirm");
+  eq([await noteOf(r, 0), await noteOf(r, 1), await noteOf(r, 3), await noteOf(r, 2)], ["玩家c 取消了對戰", "玩家c 取消了對戰", "玩家c 取消了對戰", "你 取消了對戰"],
+    "S2 提示（v3c）：倒數中取消，其他三家看到「玩家c 取消了對戰」，按的人自己看到「你 取消了對戰」");
+  await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
+  NOW += 1_000;
+  const hc = await post(cancelRoute, { roomId: r.roomId, playerId: r.pids[0], confirmId: await cid(r.roomId) }, "a");
+  eq([hc.status, hc.body.cancelled, (await state(r.roomId, "a", r.pids[0])).body.startConfirm, await charges(r.roomId)], [200, true, null, 0], "S2 房主倒數中也能取消對戰");
+  eq([await noteOf(r, 1), await noteOf(r, 2), await noteOf(r, 3)], ["玩家a 取消了對戰", "玩家a 取消了對戰", "玩家a 取消了對戰"], "S2 提示（v3c）：房主取消，其他三家看到「玩家a 取消了對戰」");
+  const again = await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
+  for (const i of [1, 2, 3]) await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[i], confirmId: await cid(r.roomId) }, r.keys[i]);
+  eq([again.body.confirm?.deadline - NOW, (await state(r.roomId, "b", r.pids[1])).body.lastStartConfirm ?? null, (await status(r.roomId)).status, await charges(r.roomId)], [10_000, null, "playing", 4],
+    "S2 取消對戰後房主重新按開始：重新倒數 10 秒、上一次紀錄清掉；四家同意 → 開局、每人扣 1 張");
 }
-// S3
+// S10（v3b）
+for (let round = 0; round < 5; round++) {
+  const r = await seated(["a", "b", "c", "d"]);
+  await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
+  for (const i of [1, 2]) await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[i], confirmId: await cid(r.roomId) }, r.keys[i]);
+  NOW += 2_000;
+  sent.length = 0;
+  const id8 = await cid(r.roomId);
+  const reqs = [() => post(confirmRoute, { roomId: r.roomId, playerId: r.pids[3], confirmId: id8 }, "d"), () => post(cancelRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: id8 }, "b")];
+  const out = await Promise.all((round % 2 ? [...reqs].reverse() : reqs).map((f) => f()));  // 單雙輪換誰先送
+  const [ag, cn] = round % 2 ? [out[1], out[0]] : out;
+  const s = await status(r.roomId);
+  const started = s.status === "playing";
+  eq([started ? [s.hand, events("th_hand_start").length, await charges(r.roomId), cn.body.cancelled === true] : [s.status, events("th_hand_start").length, await charges(r.roomId), ag.body.started === true],
+    ag.status < 500 && cn.status < 500],
+    [started ? [1, 1, 4, false] : ["waiting", 0, 0, false], true],
+    `S10 第 ${round + 1} 次：倒數中取消和最後一家同意同時送出 → ${started ? "開局（只開一次、每人扣 1 張、取消沒生效）" : "取消（回等人、不發牌、0 張、同意沒開局）"}，沒有 5xx`);
+}
+// S2b（v3c）倒數結束後還沒到齊，非房主取消對戰 → 其他三家看到「名字 取消了對戰」
+{
+  const r = await seated(["a", "b", "c", "d"]);
+  await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
+  await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: await cid(r.roomId) }, "b");
+  NOW += 15_000;                                                                                          // 倒數已結束 5 秒
+  const cc = await post(cancelRoute, { roomId: r.roomId, playerId: r.pids[3], confirmId: await cid(r.roomId) }, "d");
+  eq([cc.status, cc.body.cancelled, await noteOf(r, 0), await noteOf(r, 1), await noteOf(r, 2), await noteOf(r, 3), await charges(r.roomId)],
+    [200, true, "玩家d 取消了對戰", "玩家d 取消了對戰", "玩家d 取消了對戰", "你 取消了對戰", 0],
+    "S2b 倒數結束後非房主取消對戰：其他三家看到「玩家d 取消了對戰」、按的人看到「你 取消了對戰」、不扣卡（v3c）");
+}
+// S3（v3）
 {
   const r = await seated(["a", "b", "c", "d"]);
   await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
   await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: await cid(r.roomId) }, "b");
   await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[2], confirmId: await cid(r.roomId) }, "c"); // d 沒按
-  NOW += 9_999;
-  const before = await state(r.roomId, "a", r.pids[0]);
-  NOW += 1;
+  NOW += 10_000;
   sent.length = 0;
   const tick = await post(tickRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
-  const after = await state(r.roomId, "a", r.pids[0]);
-  const late = await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[3], confirmId: await cid(r.roomId) }, "d");
-  eq([before.body.startConfirm?.readyIds.length, tick.body.startConfirm, events("th_start_cancelled").map((e) => e.payload.reason), after.body.status, after.body.startConfirm, late.status, (await status(r.roomId)).status, await charges(r.roomId)],
-    [3, false, ["timeout"], "waiting", null, 409, "waiting", 0], "S3 10 秒到還有人沒按：不開局、作廢（timeout），回到等人；晚到的同意 409；沒扣卡");
-  // 狀態裡看得到「上一次為什麼沒開成、誰沒按」（漏收廣播、重新整理的人也看得到）；廣播也帶沒按的人
-  const seen = await state(r.roomId, "b", r.pids[1]);
-  eq([seen.body.lastStartConfirm, events("th_start_cancelled")[0]?.payload.missingIds],
-    [{ at: NOW, reason: "timeout", missingIds: [r.pids[3]] }, [r.pids[3]]], "S3 時間到作廢後：等人狀態 lastStartConfirm＝{ reason timeout、沒按的人、時間 }，th_start_cancelled 也帶 missingIds");
-  const again = await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
-  const fresh = await state(r.roomId, "b", r.pids[1]);
-  eq(fresh.body.lastStartConfirm, null, "S3 房主重新按開始後，上一次失敗的紀錄清掉（lastStartConfirm null）");
-  for (const i of [1, 2, 3]) await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[i], confirmId: await cid(r.roomId) }, r.keys[i]);
-  eq([again.body.confirm?.deadline - NOW, again.body.confirm?.readyIds, (await status(r.roomId)).status, await charges(r.roomId)], [10_000, [r.pids[0]], "playing", 4],
-    "S3 房主重新按開始：重新倒數 10 秒；這次四家都同意 → 開局、每人扣 1 張");
+  const after = await state(r.roomId, "d", r.pids[3]);
+  NOW += 30_000;                                                                                          // 倒數結束後又過了 30 秒
+  const after2 = await state(r.roomId, "a", r.pids[0]);
+  const mid = [(await status(r.roomId)).status, await charges(r.roomId)];
+  const last = await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[3], confirmId: await cid(r.roomId) }, "d");
+  eq([tick.status, events("th_start_cancelled").length, after.body.startConfirm?.readyIds?.length, after2.body.startConfirm?.readyIds?.length, after2.body.lastStartConfirm ?? null, mid,
+    last.status, last.body.started, (await status(r.roomId)).status, await charges(r.roomId)],
+    [200, 0, 3, 3, null, ["waiting", 0], 200, true, "playing", 4],
+    "S3 10 秒到還有人沒按：不作廢、繼續等（tick、讀狀態都不取消，沒有取消廣播，40 秒後還在）；最後一人在倒數後按同意 → 開局、每人扣 1 張");
 }
 // S4
 {
@@ -152,6 +194,7 @@ const cid = async (roomId: string): Promise<string | undefined> =>
   const late = await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: await cid(r.roomId) }, "b");
   eq([lv.status, events("th_start_cancelled").map((e) => e.payload.reason), w.body.startConfirm, w.body.seats.length, late.status, (await status(r.roomId)).status], [200, ["seats_changed"], null, 3, 409, "waiting"],
     "S6 確認期間有人離開：這次確認作廢（seats_changed），等人畫面沒有確認狀態；別人再按同意 409");
+  eq([await noteOf(r, 0), await noteOf(r, 1)], ["有人離開了，這次開局取消", "有人離開了，這次開局取消"], "S6 提示不變（v3c）：有人離開 →「有人離開了，這次開局取消」");
 }
 // S7
 {
@@ -175,6 +218,7 @@ const cid = async (roomId: string): Promise<string | undefined> =>
   const oldAgree = { roomId: r.roomId, playerId: r.pids[1], confirmId: id1 };
   const oldCancel = { roomId: r.roomId, playerId: r.pids[0], confirmId: id1 };
   await post(confirmRoute, oldAgree, "b");
+  NOW += 10_000; // v3：倒數結束後才能取消
   await post(cancelRoute, oldCancel, "a");
   const s2 = await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
   const id2 = s2.body.confirm?.id as string;
@@ -213,6 +257,23 @@ const cid = async (roomId: string): Promise<string | undefined> =>
   const st = await state(r.roomId, "a", r.pids[0]);
   eq([injected, res.status, res.body.error, st.body.startConfirm?.id, st.body.startConfirm?.readyIds, (await status(r.roomId)).status, await charges(r.roomId)],
     [true, 409, "stale_confirm", "round-2", [r.pids[0]], "waiting", 0], "S9 存檔衝突後重讀到新一輪：舊一輪的同意回 409 stale_confirm，沒有加進新一輪、沒開局、沒扣卡");
+}
+
+// S11（v3c 補測：小測標準２）
+{
+  const r = await seated(["a", "b", "c", "d"]);                                                         // e 沒入座
+  await post(startRoute, { roomId: r.roomId, playerId: r.pids[0] }, "a");
+  await post(confirmRoute, { roomId: r.roomId, playerId: r.pids[1], confirmId: await cid(r.roomId) }, "b");
+  NOW += 3_000;
+  const snap = async () => { const c = (await state(r.roomId, "a", r.pids[0])).body.startConfirm; return c && [c.id, c.readyIds, c.seatIds, c.deadline]; };
+  const before = await snap();
+  sent.length = 0;
+  const own = await post(cancelRoute, { roomId: r.roomId, playerId: "x-e", confirmId: await cid(r.roomId) }, "e");       // 填自己（不存在的座位）
+  const fake = await post(cancelRoute, { roomId: r.roomId, playerId: r.pids[2], confirmId: await cid(r.roomId) }, "e");  // 填別人的座位
+  const after = await snap();
+  eq([own.status, fake.status, before !== null, JSON.stringify(after) === JSON.stringify(before), events("th_start_cancelled").length, (await status(r.roomId)).status, await charges(r.roomId)],
+    [403, 403, true, true, 0, "waiting", 0],
+    "S11 沒入座的帳號送取消（填自己、填別人的座位）都 403；確認還在、編號／同意名單／截止時間都不變、沒有取消廣播、不扣卡");
 }
 
 console.log(results.join("\n"));

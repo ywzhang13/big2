@@ -1,19 +1,20 @@
 // 大老二開局確認（老柯 2026-11-20；規則同十三支，判斷用共用的 lib/lobby/startConfirm.ts）：
 //   房主按開始 → 發起確認（房間狀態 ready_check，房主自己算同意），倒數 10 秒；四家都同意才發牌（lib/deal-and-start.ts）；
-//   倒數到了還有人沒按 → 不開局，回到等人（waiting），房主要再按一次開始；房主可以取消；確認期間有人退出 → 作廢。
+//   2026-11-26 v3：倒數中誰都不能取消；倒數到了還有人沒按 → 繼續等（狀態維持 ready_check），之後到齊就開局；
+//   這時四家任一人可以「取消對戰」→ 回到等人（waiting）；確認期間有人退出 → 作廢。
 //   沒開成的原因、誰沒按記在 last_start_confirm，等人狀態看得到；房主重新按開始、開局時清掉。
-// 大老二沒有 tick：到期由讀狀態（保底輪詢、前端倒數到 0 時讀一次）和任何一次同意、發起觸發。
+// 大老二沒有 tick：座位變了由讀狀態（保底輪詢、前端倒數到 0 時讀一次）和任何一次同意、發起觸發作廢。
 // 寫入都帶 row_version 條件，輸的重讀再做：同時按同意不會漏人、同時到期不會重複作廢。大老二不扣房卡。
 // 審伯 2026-11-20 初審四項必修：
 //   R1 每一輪確認有自己的編號（id），同意、取消都要帶；對不上＝舊一輪晚到或重送，不能動這一輪（存檔衝突後重讀也一樣）
 //   R2 發牌綁定「四家都同意那次寫入之後的版本」，中間有人取消、重新開始、退出，就不開
-//   R3 時間一律看「受理時刻」（請求進來那一刻）；過了截止就不收同意。到期作廢一直撞到衝突 → 回 409 busy，不往下做
-//   R4 發起、取消都要房主本人的入座憑證（seatKey：入座時只回給本人，資料庫只存 sha256；審伯複審：發起也要驗），
-//      只知道公開的房主 id、或用別人的憑證，都不能發起或取消。房主退出換人時，新房主用自己入座時的憑證
+//   R3 時間一律看「受理時刻」（請求進來那一刻）。v3 起倒數結束後的同意也收；作廢一直撞到衝突 → 回 409 busy，不往下做
+//   R4 發起要房主本人、取消要按的那一家本人的入座憑證（seatKey：入座時只回給本人，資料庫只存 sha256），
+//      只知道公開的玩家 id、或用別人的憑證，都不能發起或取消。房主退出換人時，新房主用自己入座時的憑證
 import { createHash, randomBytes } from "node:crypto";
 import { broadcast } from "@/lib/broadcast";
 import { dealAndStart } from "@/lib/deal-and-start";
-import { addStartReady, beginStartConfirm, isCurrentConfirm, startConfirmStatus, type StartConfirm } from "@/lib/lobby/startConfirm";
+import { addStartReady, beginStartConfirm, isCurrentConfirm, START_CANCEL_ERRORS, startCancelBlock, startConfirmStatus, type StartConfirm } from "@/lib/lobby/startConfirm";
 import { loadConfirmRoom, loadSeatIds, loadSeatKeyHash, updateRoomIf, type Big2CancelReason, type Big2ConfirmRoom, type Big2StartConfirm } from "@/lib/big2/startConfirmStore";
 
 const MAX_ATTEMPTS = 8;
@@ -25,24 +26,27 @@ const confirmIdRequired = () => res({ error: "confirm_id_required", message: "�
 export const newSeatKey = () => randomBytes(24).toString("base64url");
 export const hashSeatKey = (k: string) => createHash("sha256").update(k).digest("hex");
 const notHost = (verb: string) => res({ error: "not_host", message: `只有房主可以${verb}` }, 403);
-/** 是不是房主本人：playerId 是房主、而且帶的憑證對得上這個座位（沒有憑證、上線前入座沒有雜湊的都不算） */
-async function isHostInPerson(roomId: string, hostId: string | null, playerId: string, seatKey: unknown): Promise<boolean> {
-  if (!hostId || hostId !== playerId || typeof seatKey !== "string" || !seatKey) return false;
+/** 是不是這個座位本人：帶的憑證對得上 playerId 的座位（沒有憑證、上線前入座沒有雜湊的都不算） */
+async function isSeatInPerson(roomId: string, playerId: string, seatKey: unknown): Promise<boolean> {
+  if (typeof seatKey !== "string" || !seatKey) return false;
   const h = await loadSeatKeyHash(roomId, playerId);
   return !!h && h === hashSeatKey(seatKey);
 }
+/** 是不是房主本人：playerId 是房主、而且是這個座位本人 */
+const isHostInPerson = async (roomId: string, hostId: string | null, playerId: string, seatKey: unknown) =>
+  !!hostId && hostId === playerId && (await isSeatInPerson(roomId, playerId, seatKey));
 
 /** 給前端的確認狀態（沒有確認＝null；不含取消憑證的雜湊） */
 export const confirmView = (c: StartConfirm | null | undefined, now: number) =>
   c ? { id: c.id, startedBy: c.startedBy, readyIds: c.readyIds, seatIds: c.seatIds, deadline: c.deadline, serverNow: now } : null;
 
-const cancelPatch = (c: StartConfirm | null, reason: Big2CancelReason, now: number) => ({
+const cancelPatch = (c: StartConfirm | null, reason: Big2CancelReason, now: number, by?: string) => ({
   status: "waiting", ready_players: [], start_confirm: null,
-  last_start_confirm: { reason, missingIds: c ? c.seatIds.filter((id) => !c.readyIds.includes(id)) : [], at: now },
+  last_start_confirm: { reason, missingIds: c ? c.seatIds.filter((id) => !c.readyIds.includes(id)) : [], at: now, ...(by ? { by } : {}) },
 });
 
 /**
- * 確認在 now（受理時刻）已經時間到、或座位變了就作廢（回到等人、廣播 ready_check_cancelled）。
+ * 確認在 now（受理時刻）座位變了就作廢（回到等人、廣播 ready_check_cancelled）；倒數結束還沒到齊不作廢（v3）。
  * 回傳處理後的房間；房間不見了回 null；作廢一直撞到別人的寫入、重試用完回 "busy"（呼叫端不能把沒處理掉的過期確認往下用）。
  */
 export async function settleBig2Confirm(roomId: string, now: number = Date.now()): Promise<Big2ConfirmRoom | null | "busy"> {
@@ -51,8 +55,8 @@ export async function settleBig2Confirm(roomId: string, now: number = Date.now()
     const c = room?.start_confirm;
     if (!room || room.status !== "ready_check" || !c) return room;
     const st = startConfirmStatus(c, await loadSeatIds(roomId), now);
-    if (st !== "expired" && st !== "seats_changed") return room;
-    const reason: Big2CancelReason = st === "expired" ? "timeout" : "seats_changed";
+    if (st !== "seats_changed") return room;
+    const reason: Big2CancelReason = "seats_changed";
     const patch = cancelPatch(c, reason, now);
     const rv = await updateRoomIf(roomId, room.row_version, ["ready_check"], patch);
     if (rv === null) continue; // 別人先動了：重讀
@@ -101,8 +105,8 @@ export async function agreeBig2(roomId: string, playerId: string, confirmId: unk
     }
     if (typeof confirmId !== "string" || !confirmId) return confirmIdRequired();
     if (!isCurrentConfirm(c, confirmId)) return staleConfirm(); // 舊一輪的同意（含存檔衝突後重讀到新一輪）
-    // 先用受理時刻確認這一輪還有效，才加入同意（不能靠「加入後全員到齊」繞過截止時間）
-    if (startConfirmStatus(c, seats, acceptedAt) !== "waiting" && startConfirmStatus(c, seats, acceptedAt) !== "go") continue; // 下一圈 settle 會作廢
+    // 先用受理時刻確認座位沒變，才加入同意（倒數結束後的同意也收，v3）
+    if (startConfirmStatus(c, seats, acceptedAt) === "seats_changed") continue; // 下一圈 settle 會作廢
     const next = addStartReady(c, playerId);
     let boundVersion = room.row_version;
     if (next !== c) {
@@ -121,20 +125,25 @@ export async function agreeBig2(roomId: string, playerId: string, confirmId: unk
   return busy();
 }
 
-/** 房主取消：要這一輪的編號和房主本人的入座憑證 */
+/**
+ * 取消對戰（v3b）：要這一輪的編號和按的那一家本人的入座憑證；倒數中、倒數後，這次確認座位裡任何一家都可以。
+ * 不在座位裡 403 not_in_confirm、憑證不對 403 not_your_seat。取消後 last_start_confirm 記 "cancelled"＋by（提示「X 取消了對戰」，v3c）
+ */
 export async function cancelBig2Confirm(roomId: string, playerId: string, confirmId: unknown, seatKey: unknown): Promise<Response> {
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     const now = Date.now();
     const room = await settleBig2Confirm(roomId, now);
     if (room === "busy") return busy();
     if (!room) return res({ error: "找不到房間" }, 404);
-    if (!(await isHostInPerson(roomId, room.host_id, playerId, seatKey))) return notHost("取消");
+    if (!(await isSeatInPerson(roomId, playerId, seatKey))) return res({ error: "not_your_seat", message: "請重新整理後再按" }, 403);
     const c = room.start_confirm;
     if (room.status !== "ready_check" || !c) return res({ ok: true, cancelled: false });
     if (!isCurrentConfirm(c, confirmId)) return staleConfirm(); // 編號對不上＝舊一輪的取消（R1）
-    const patch = cancelPatch(c, "host", now);
+    const block = startCancelBlock(c, playerId);
+    if (block) { const e = START_CANCEL_ERRORS[block]; return res({ error: e.error, message: e.message }, e.status); }
+    const patch = cancelPatch(c, "cancelled", now, playerId);
     if ((await updateRoomIf(roomId, room.row_version, ["ready_check"], patch)) === null) continue;
-    await broadcast(room.code, "ready_check_cancelled", { reason: "host", missingIds: patch.last_start_confirm.missingIds });
+    await broadcast(room.code, "ready_check_cancelled", { reason: "cancelled", by: playerId, missingIds: patch.last_start_confirm.missingIds });
     return res({ ok: true, cancelled: true });
   }
   return busy();

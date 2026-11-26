@@ -8,8 +8,8 @@ import type { StartConfirm } from "@/lib/lobby/startConfirm";
 
 /** 存在資料庫的確認（和十三支、麻將同一個格式） */
 export type Big2StartConfirm = StartConfirm;
-export type Big2CancelReason = "host" | "timeout" | "seats_changed";
-export interface Big2LastStartConfirm { reason: Big2CancelReason; missingIds: string[]; at: number }
+export type Big2CancelReason = "host" | "timeout" | "seats_changed" | "cancelled"; // "cancelled"＝有人按取消對戰（v3c，by＝誰）
+export interface Big2LastStartConfirm { reason: Big2CancelReason; missingIds: string[]; at: number; by?: string }
 export interface Big2ConfirmRoom {
   id: string;
   code: string;

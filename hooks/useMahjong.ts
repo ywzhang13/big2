@@ -229,7 +229,7 @@ export { getMjId };
 /** 開局確認（老柯〈麻將開局確認 API〉2026-11-20）：房主按開始後 10 秒內四家都同意才發牌；id＝這一輪的編號（同意、取消都要帶）；deadline、serverNow 是伺服器毫秒 */
 export interface MjStartConfirm { id: string; startedBy: string; readyIds: string[]; seatIds: string[]; deadline: number; serverNow: number }
 /** 上一次開局確認為什麼沒開成（timeout＝有人沒按、host＝房主取消、seats_changed＝有人退出、suspended＝有人被暫停）；房主重按或開局後＝null */
-export interface MjLastStartConfirm { reason: "timeout" | "host" | "seats_changed" | "suspended"; missingIds: string[]; at: number }
+export interface MjLastStartConfirm { reason: "timeout" | "host" | "seats_changed" | "suspended" | "cancelled"; missingIds: string[]; at: number; by?: string }
 export interface MjConfirmInfo { startConfirm: MjStartConfirm | null; lastStartConfirm: MjLastStartConfirm | null; clockSkew: number }
 
 export interface MjJoinInfo {
@@ -1758,7 +1758,7 @@ export function useMahjong(
     } finally { fetchStateRef.current?.(rid); }
   }, [call]);
 
-  /** 開局確認：房主取消（帶這一輪的編號；上一輪的 409 stale_confirm＝重讀狀態就好） */
+  /** 開局確認：取消對戰（v3：倒數結束後四家都能按；帶這一輪的編號；上一輪的 409 stale_confirm＝重讀狀態就好） */
   const cancelStart = useCallback(async (): Promise<{ ok: boolean; message?: string }> => {
     const rid = roomIdRef.current;
     const confirmId = startCfmRef.current.startConfirm?.id;

@@ -28,7 +28,7 @@ export function saveSeatKey(join: { roomId?: string; seatKey?: string } | null |
 /** 沒有入座憑證（例如上線前就坐在房裡）或伺服器說不是房主：請他退出再入座 */
 export const NO_SEAT_KEY_MSG = "這個座位沒有開局權限，請退出房間再重新入座";
 /** 上一次開局確認為什麼沒開成：timeout＝有人沒按、host＝房主取消、seats_changed＝有人退出；房主重按或開局後＝null */
-export interface Big2LastStartConfirm { reason: "timeout" | "host" | "seats_changed"; missingIds: string[]; at: number }
+export interface Big2LastStartConfirm { reason: "timeout" | "host" | "seats_changed" | "cancelled"; missingIds: string[]; at: number; by?: string }
 export interface Big2ConfirmInfo { startConfirm: Big2StartConfirm | null; lastStartConfirm: Big2LastStartConfirm | null; clockSkew: number }
 
 /** 大老二沒有慢慢摸牌的排隊：給 StateRequestGate 一個永遠沒在排隊的狀態 */

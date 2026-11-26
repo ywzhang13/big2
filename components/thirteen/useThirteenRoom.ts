@@ -27,7 +27,7 @@ export interface ThWaitingView {
   /** 開局確認（老柯 2026-11-20〈十三支開局確認 API〉）：房主按了開始、還在等四家同意；沒有＝null。deadline、serverNow 是伺服器時間（毫秒） */
   startConfirm?: StartConfirmState | null;
   /** 上一次開局確認為什麼沒開成（timeout＝有人沒按、host＝房主取消、seats_changed＝有人離開、suspended＝有人被暫停）；房主重按或開局後＝null */
-  lastStartConfirm?: { at: number; reason: "timeout" | "host" | "seats_changed" | "suspended"; missingIds: string[] } | null;
+  lastStartConfirm?: { at: number; reason: "timeout" | "host" | "seats_changed" | "suspended" | "cancelled"; missingIds: string[]; by?: string } | null;
 }
 /** id：這一輪確認的編號（老柯 R1 修正）；同意、取消都要帶，舊一輪晚到的請求伺服器回 409 stale_confirm */
 export interface StartConfirmState { id: string; startedBy: string; readyIds: string[]; seatIds: string[]; deadline: number; serverNow: number }
@@ -213,7 +213,7 @@ export function useThirteenRoom(join: ThJoin | null) {
     } finally { kick(); }
   }, [kick]);
 
-  /** 開局確認：房主取消（帶這一輪的 confirmId；上一輪的 409 stale_confirm＝重讀狀態、不顯示錯誤） */
+  /** 開局確認：取消對戰（v3：倒數結束後四家都能按；帶這一輪的 confirmId；上一輪的 409 stale_confirm＝重讀狀態、不顯示錯誤） */
   const cancelStart = useCallback(async (confirmId: string) => {
     const j = joinRef.current;
     if (!j) return { ok: false, message: "還沒入座" };

@@ -30,6 +30,7 @@ export function lastConfirmNote(view: ThWaitingView, myPlayerId: string): string
   if (!last || view.startConfirm) return null;
   if (last.reason === "host") return "房主取消了開局";
   if (last.reason === "seats_changed") return "有人離開了，這次開局取消";
+  if (last.reason === "cancelled") return `${last.by === myPlayerId ? "你" : (view.seats.find((s) => s.playerId === last.by)?.name ?? "有人")} 取消了對戰`; // v3c：誰按了取消對戰（倒數中、倒數後一樣）
   if (last.reason === "suspended") return "有人帳號已暫停，不能開局";
   const names = last.missingIds.map((id) => (id === myPlayerId ? "你" : view.seats.find((s) => s.playerId === id)?.name)).filter((n): n is string => !!n);
   const who = names.length ? names.join("、") : "有人";
@@ -82,7 +83,7 @@ export default function ThWaiting({ view, myPlayerId, clockSkew = 0, onStart, on
         seats={view.seats.map((s) => ({ seat: s.seat, name: s.name, avatarUrl: s.avatarUrl ?? null, me: s.playerId === myPlayerId, host: s.playerId === view.hostId }))} />
       {note && <div className="stc-note" role="status" data-th-start-note={view.lastStartConfirm?.reason}>{note}</div>}
       {sc && (
-        <StartConfirm seats={confirmSeats(view, myPlayerId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} isHost={isHost} busy={busy} error={err}
+        <StartConfirm seats={confirmSeats(view, myPlayerId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} busy={busy} error={err}
           onAgree={() => void run(() => onAgree(sc.id))} onCancel={() => void run(() => onCancel(sc.id))} />
       )}
     </>
