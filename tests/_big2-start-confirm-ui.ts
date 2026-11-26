@@ -53,5 +53,15 @@ const P = [{ id: "pc", name: "阿明", seat: 2 }, { id: "pa", name: "阿華", se
   ok(mem.has("big2_seat_key:r1") && NO_SEAT_KEY_MSG.includes("退出") && NO_SEAT_KEY_MSG.length <= 24, "K5 存在 big2_seat_key:<房間 id>；沒有憑證的提示是一句短話（請他退出再入座）");
 }
 
+{ // P 等人畫面的提示條（老闆 2026-11-27：取消後的提示條蓋到「等待玩家加入」和房號）：大老二改成排在標題上面、跟著版面走，不再固定在畫面頂端
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync("app/big2/page.tsx", "utf8");
+  const wait = page.slice(page.indexOf('if (state.status === "waiting")'), page.indexOf("// Start button (only when NOT in ready check)"));
+  const iNote = wait.indexOf("data-big2-start-note"), iTitle = wait.indexOf("等待玩家加入</h2>");
+  ok(iNote > 0 && iNote < iTitle, "P1 提示條在等人畫面裡、排在「等待玩家加入」標題前面");
+  ok(/WAIT_NOTE_STYLE: CSSProperties = \{ position: "static", transform: "none"/.test(page) && /style=\{WAIT_NOTE_STYLE\}[^>]*data-big2-start-note/.test(page), "P2 提示條不固定在畫面頂端（position static，蓋過共用的 fixed）");
+  ok((page.match(/data-big2-start-note/g) ?? []).length === 1, "P3 只畫一條提示（開局確認視窗那邊不再另外畫）");
+}
+
 for (const r of results) console.log(r);
 if (results.some((r) => r.startsWith("❌"))) process.exit(1);
