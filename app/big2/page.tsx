@@ -153,6 +153,8 @@ export default function Home() {
         <div className="lv2-col fade-in">
           <button onClick={() => { setScreen("create"); setError(""); }} className="lv2-btn primary">建立房間</button>
           <button onClick={() => { setScreen("join"); setError(""); }} className="lv2-btn second">加入房間</button>
+          {/* 被擋在已開局房間外（onJoinBlocked）回到這裡時，照舊顯示原因 */}
+          {error && <p className="lv2-err fade-in" role="alert">{error}</p>}
           {/* 回到總大廳（跟十三支大廳一樣放在最下面）；以前退出房間回到這裡後沒有出口 */}
           <button onClick={goHome} className="lv2-foot" data-big2-home>返回首頁</button>
         </div>

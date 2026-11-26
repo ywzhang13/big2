@@ -61,8 +61,27 @@ ok(/data-th-records>歷史紀錄/.test(readFileSync("components/thirteen/ThLobby
 // 4. 樣式：手機用 .m 小圖、桌機用原圖；觸控至少 44；圖沒到時有底色
 const css = readFileSync("app/lobby-v2.css", "utf8");
 ok(/url\("\/home\/lobby-bg-home\.v1\.m\.webp"\)/.test(css) && /@media \(min-width: 1100px\) and \(min-height: 700px\) \{[\s\S]*url\("\/home\/lobby-bg-home\.v1\.webp"\)/.test(css), "C1 背景：手機 .m、桌機原圖");
-ok(/\.lv2-btn \{[^}]*min-height: 44px/.test(css) && /\.lv2-foot::after \{ content: ""; position: absolute; inset: -3px; \}/.test(css), "C2 按鈕最少 44 高；手機的「返回首頁」看起來 38、點擊範圍 44");
+ok(/\.lv2-btn \{[^}]*min-height: 44px/.test(css), "C2 按鈕最少 44 高");
 ok(/\.lv2-bg \{[^}]*background: #D0B5B4/.test(css) && /\.lv2-bg\[data-lv2-bg="big2"\][^}]*background: #E2B491/.test(css), "C3 背景圖還沒載好時先顯示同色系的底（不會白一下）");
+
+// 5. 審伯 R1／R2、小測 ③④（2026-11-27 複修）
+// R1：大老二被擋在已開局房間外、回到大廳首頁時，照舊顯示原因（onJoinBlocked → setError）
+const big2 = readFileSync("app/big2/page.tsx", "utf8");
+const big2Home = big2.slice(big2.indexOf('if (screen === "home")'), big2.indexOf("// ─── Create / Join screens"));
+ok(/\{error && <p[^>]*role="alert"[^>]*>\{error\}<\/p>\}/.test(big2Home), "R1 大老二大廳首頁顯示錯誤原因（被拒絕進入已開局房間後看得到）");
+ok(/onJoinBlocked\(data\.message \|\| "房間已開始遊戲，無法加入"\)/.test(big2) && /setError\(msg\)/.test(big2), "R1 伺服器 message 優先、沒有時用原本的「房間已開始遊戲，無法加入」");
+ok((big2Home.match(/setError\(""\)/g) ?? []).length >= 2, "R1 點建立／加入照舊清掉錯誤");
+// R2：卡片跟著可用寬度縮（不再固定寬度不可縮），最寬不超過三張原尺寸；名稱跟著卡片寬度縮
+const cardRule = css.match(/\.lv2-card \{[^}]*\}/)?.[0] ?? "";
+ok(!/flex: 0 0 auto/.test(cardRule) && /flex: 1 1 0/.test(cardRule) && /min-width: 0/.test(cardRule) && /aspect-ratio: 620 \/ 357/.test(cardRule), "R2 卡片可縮（flex 1 1 0、min-width 0、照圖的比例）");
+ok(/\.lv2-cards \{[^}]*width: 100%[^}]*max-width: calc\(var\(--lv2-card-w\) \* 3 \+ var\(--lv2-card-gap\) \* 2\)/.test(css), "R2 卡片列最寬＝三張原尺寸＋間距，比畫面窄就一起縮");
+ok(!/\.lv2-home > \.lv2-cards \{ max-width: 1560px/.test(css) && !/\.lv2-home > \.lv2-cards/.test(css), "R2 拿掉比三張卡還窄的 1560px 上限");
+ok(/container-type: inline-size/.test(cardRule) && /\.lv2-card span \{[^}]*font-size: calc\(min\(var\(--lv2-card-fs\), 9\.6cqw\)/.test(css), "R2 卡片名稱字級跟著卡片寬度縮");
+// ③ 名稱不碰左邊的圖（實量：牌／緞帶右緣 十三支 48%、麻將 48.3%、大老二 47.8%；標題帶右緣 88.5%／86%／88.5%）
+ok(/data-lv2-card="mahjong"\] \{ --lv2-card-x: 67%; --lv2-name-k: \.8; \}/.test(css), "③ 台灣麻將：放在麻將牌右邊空白帶中間、字縮 80%");
+// ④ 觸控：大老二手機的返回首頁實際高 44；LINE 登入鈕手機上 44（--line-x 22）
+ok(/\.lv2-foot \{\s*position: fixed;[^}]*height: 44px/.test(css), "④ 大老二手機「返回首頁」高 44px");
+ok(/@media \(orientation: landscape\) and \(max-height: 500px\) \{\s*\.mjl \{[^}]*--line-x: 22px/.test(readFileSync("app/globals.css", "utf8")), "④ LINE 登入鈕手機上高 44px（--line-x 22）");
 
 console.log(results.join("\n"));
 const failed = results.filter((r) => r.startsWith("❌")).length;

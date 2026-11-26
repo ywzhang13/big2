@@ -81,32 +81,35 @@
 @media not ((min-width: 1100px) and (min-height: 700px)) {
   .lv2-foot {
     position: fixed; z-index: 30; left: calc(14px + env(safe-area-inset-left, 0px)); top: calc(12px + env(safe-area-inset-top, 0px));
-    min-width: 44px; height: 38px; min-height: 0; padding: 0 14px; border-radius: 999px;
+    min-width: 44px; height: 44px; min-height: 0; padding: 0 14px; border-radius: 999px;
     background: rgba(255, 248, 221, .82); border: 1px solid rgba(117, 64, 10, .45); -webkit-text-stroke: 0; font-size: 13px;
   }
-  .lv2-foot::after { content: ""; position: absolute; inset: -3px; } /* 看起來 38 高、點擊範圍 44 */
 }
+/* 錯誤原因（例：大老二被擋在已開局房間外回到大廳）：明亮背景上用深紅膠囊、白字 */
+.lv2-err { max-width: var(--lv2-btn-w); margin: 0; padding: 6px 14px; border-radius: 12px; background: rgba(140, 24, 24, .88); color: #FFF4E8; font-size: 14px; font-weight: 700; line-height: 1.4; text-align: center; }
 .lv2-col .mjl-btn.resume, .lv2-col .rc-ban { width: var(--lv2-btn-w); }
 /* 右上角帳號列的「登出」原本是深綠底上的淡字，明亮背景上看不清楚：只在大廳 v2 加一塊深色膠囊底 */
 .lv2-page .mjl-authbar .mjl-txtbtn { background: rgba(15, 42, 26, .72); border-radius: 999px; color: #f0d68a; }
 
 /* 總大廳：三張遊戲卡（卡片底圖＋HTML 遊戲名稱，名稱放在卡片右邊的標題帶中央，高度在卡頂＋57%） */
-.lv2-cards { display: flex; gap: var(--lv2-card-gap); justify-content: center; margin-top: var(--lv2-card-top); }
+/* 卡片列最寬＝三張原尺寸＋間距；畫面比這窄（例 721、1100～1440 寬）就三張一起等比縮，不會超出畫面（審伯 R2） */
+.lv2-cards { display: flex; gap: var(--lv2-card-gap); justify-content: center; margin-top: var(--lv2-card-top); width: 100%; max-width: calc(var(--lv2-card-w) * 3 + var(--lv2-card-gap) * 2); }
 .lv2-card {
-  position: relative; width: var(--lv2-card-w); height: var(--lv2-card-h); flex: 0 0 auto; cursor: pointer; border: 0; padding: 0;
+  position: relative; flex: 1 1 0; min-width: 0; max-width: var(--lv2-card-w); aspect-ratio: 620 / 357; container-type: inline-size; cursor: pointer; border: 0; padding: 0;
   background: center / 100% 100% no-repeat; transition: transform 240ms;
 }
 .lv2-card:active { transform: scale(.98); transition-duration: 120ms; }
 .lv2-card[data-lv2-card="thirteen"] { background-image: url("/home/lobby-card-thirteen.v1.m.webp"); }
 .lv2-card[data-lv2-card="mahjong"] { background-image: url("/home/lobby-card-mahjong.v1.m.webp"); }
 .lv2-card[data-lv2-card="big2"] { background-image: url("/home/lobby-card-big2.v1.m.webp"); }
-/* 名稱放在各卡標題帶的正中間（實量標題帶：十三支 41～90%、麻將 38～89%、大老二 42～91%）；規格的 57% 會壓到左邊的牌 */
-.lv2-card[data-lv2-card="thirteen"] { --lv2-card-x: 65.5%; }
-.lv2-card[data-lv2-card="mahjong"] { --lv2-card-x: 65%; }
-.lv2-card[data-lv2-card="big2"] { --lv2-card-x: 66.5%; }
+/* 名稱放在「左邊牌／緞帶右緣」到「標題帶右緣」的中間（實量：十三支 48～88.5%、麻將 48.3～86%、大老二 47.8～88.5%）；
+   「台灣麻將」四個字原字級比空白帶寬，縮 80%（小測：852 寬時碰到白板） */
+.lv2-card[data-lv2-card="thirteen"] { --lv2-card-x: 68.5%; }
+.lv2-card[data-lv2-card="mahjong"] { --lv2-card-x: 67%; --lv2-name-k: .8; }
+.lv2-card[data-lv2-card="big2"] { --lv2-card-x: 68.5%; }
 .lv2-card span {
   position: absolute; left: var(--lv2-card-x, 66%); top: 57%; transform: translate(-50%, -50%); white-space: nowrap;
-  font-size: var(--lv2-card-fs); font-weight: 700; line-height: 1; letter-spacing: .04em;
+  font-size: calc(min(var(--lv2-card-fs), 9.6cqw) * var(--lv2-name-k, 1)); font-weight: 700; line-height: 1; letter-spacing: .04em;
   color: #5A2A14; -webkit-text-stroke: 1px #FFF8DD; paint-order: stroke fill; text-shadow: 0 1px 2px rgba(255, 255, 255, .8);
 }
 
@@ -122,7 +125,8 @@
 }
 /* 直拿的窄手機：卡片放不下三張並排，改成直排 */
 @media (max-width: 640px) {
-  .lv2-cards { flex-direction: column; align-items: center; gap: 12px; --lv2-card-top: 40px; }
+  .lv2-cards { flex-direction: column; align-items: center; gap: 12px; --lv2-card-top: 40px; max-width: var(--lv2-card-w); }
+  .lv2-card { flex: 0 0 auto; width: 100%; }
 }
 /* 桌機（1920×1080 那組）：背景放大 104%、桌機原圖 */
 @media (min-width: 1100px) and (min-height: 700px) {
@@ -134,7 +138,7 @@
     --lv2-card-w: 500px; --lv2-card-h: 288px; --lv2-card-gap: 40px; --lv2-card-fs: 48px;
   }
   .lv2-home { --lv2-logo-w: 520px; --lv2-logo-h: 154px; --lv2-card-top: 308px; }
-  .lv2-page > .lv2-col, .lv2-home > .lv2-cards { max-width: 1560px; }
+  .lv2-page > .lv2-col { max-width: 1560px; }
   .lv2-bg[data-lv2-bg="home"] { --lv2-bg-img: url("/home/lobby-bg-home.v1.webp"); }
   .lv2-bg[data-lv2-bg="mahjong"] { --lv2-bg-img: url("/home/lobby-bg-mahjong.v1.webp"); }
   .lv2-bg[data-lv2-bg="thirteen"] { --lv2-bg-img: url("/home/lobby-bg-thirteen.v1.webp"); }
