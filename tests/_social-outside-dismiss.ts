@@ -199,6 +199,36 @@ const closeOnDown = (s: ReturnType<typeof setup>) => s.detach();
   check(s.closed() === 1, "其他按鍵不關");
   s.detach();
 }
+// 13. 放開遺失（阿妍 2026-11-27：按到一半畫面換掉、手指下的元素被拆，iPhone 的 pointerup 送不到 window）：
+//     下一次按下就代表上一個手勢結束了，不能再吃 30 秒（原本聊天輸入框的 mousedown 被吃掉、點不進去打不了字）
+{
+  discards = 0; timers.clear();
+  const s = setup();
+  fire(s.win, "pointerdown", tile, 7); // 聊天室開著、手指按在牌桌上 → 關聊天室；之後 pointerup 永遠不來
+  closeOnDown(s);
+  advance(1000);
+  // 1 秒後重新打開聊天室（新的一組監聽掛在同一個 window），滑鼠點輸入框
+  let closed2 = 0;
+  const detach2 = attachOutsideDismiss(s.win, {
+    isInside: (x) => insideAny(x as EventTarget, INSIDE), onClose: () => { closed2++; }, now: () => t,
+    setTimer: (f, ms) => { const id = ++tid; timers.set(id, { at: t + ms, f }); return id; }, clearTimer: (id) => { timers.delete(id as number); },
+  });
+  const r = mouseTap(s.win, panel);
+  check(r.every(Boolean) && closed2 === 0, "放開遺失後 1 秒點聊天輸入框：按下、mousedown、click 全部照常（輸入框拿得到焦點），不用等 30 秒");
+  // 再用手指點牌桌：照常關聊天室、吃掉那一下（新手勢的規則不受影響）
+  const r2 = touchTap(s.win, tile, 9);
+  check(!r2.some(Boolean) && closed2 === 1 && discards === 0, "之後手指點牌桌：聊天室照常關、那一下照常吃掉");
+  detach2(); advance(CLICK_GAP_MS + 10);
+  check(s.win.ls.length === 0 && timers.size === 0, "兩組都結束後，監聽和計時器拆乾淨");
+  // 沒有聊天室時：放開遺失後下一下直接點牌，牌桌照常收到
+  discards = 0;
+  const s3 = setup();
+  fire(s3.win, "pointerdown", tile, 7);
+  closeOnDown(s3);
+  advance(500);
+  const r3 = touchTap(s3.win, tile, 11);
+  check(r3.every(Boolean) && discards === 1, "放開遺失後聊天室已關，下一次點牌照常打出（不被舊手勢吃掉）");
+}
 check(insideAny(panel as unknown as EventTarget, INSIDE) && !insideAny(tile as unknown as EventTarget, INSIDE) && !insideAny(null, INSIDE), "insideAny：聊天室元件算裡面、牌不算、沒有目標不算");
 
 console.log(failed ? `❌ 失敗 ${failed} 項` : "全部通過");
