@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import "./home-games.css";
 import HomeAccount from "@/components/roomCard/HomeAccount";
+import { useAutoUpdate } from "@/lib/autoUpdate";
 
 // 首頁（綠金華麗風，小宜 2026-10-24 設計、老闆確認）：深綠牌桌底、老闆的「阿瑋 CASINO」徽章、兩張金框遊戲卡。
 // 素材在 public/home/（由原始 PNG 裁掉透明留白、縮成網頁用寬度的 WebP）；排版在 globals.css 的 .home-*
@@ -15,6 +16,7 @@ const GAMES = [
 
 export default function Lobby() {
   const router = useRouter();
+  useAutoUpdate(true); // 自動換新版（lib/autoUpdate.ts）：總大廳隨時都是安全時機
 
   return (
     <div className="home has-3">

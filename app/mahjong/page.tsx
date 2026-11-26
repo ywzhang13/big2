@@ -9,6 +9,7 @@ import { MJ_SECTIONS } from "@/components/mahjong/mjLobbySections";
 import { initialName, inviteNeedsName, loadGameName, saveGameName } from "@/components/gameLobby/name";
 import { mjConfirmNote, mjConfirmSeats } from "@/components/mahjong/mjStartConfirmView";
 import { START_CONFIRM_MS } from "@/lib/lobby/startConfirm";
+import { mjRoomSafe, useAutoUpdate } from "@/lib/autoUpdate";
 import { useMjAuth } from "@/hooks/useMjAuth";
 import { isGuestTab, mjFetch, mjStorage, ROOM_CODE_RE } from "@/lib/mahjong/clientAuth";
 import { AuthBar, GuestGate, LoginGate, PairedNotice, PortraitHint } from "@/components/mahjong/MjLobbyAuth";
@@ -124,6 +125,8 @@ export default function MahjongPage() {
   const [blocked, setBlocked] = useState<Blocked | null>(null);
   // 被暫停（房卡 v1.2 2-4，房卡第二批）：大廳按鈕上面紅條、建立／加入變灰不能按；歷史紀錄、排行榜、回到房間照常
   const suspended = !!useMyCards(auth.status === "in" ? auth.user : null)?.suspended;
+  // 自動換新版（lib/autoUpdate.ts）：大廳首頁才算安全；建立、加入的表單填到一半不動；進房間後由 RoomView 判斷
+  useAutoUpdate(screen === "room" ? null : screen === "home" && !isSubmitting);
   // 總大廳頭像選單的「歷史紀錄」（/mahjong?records=1）：直接打開歷史紀錄，網址拿掉參數
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -586,6 +589,7 @@ function RoomView({
     needsDiscard,
     startGame,
     startConfirm,
+    stateLoaded,
     confirmStart,
     cancelStart,
     refreshState,
@@ -690,6 +694,10 @@ function RoomView({
   // 房間已關閉：整場打完的最終結算畫面本身就有「回大廳」，其他情況（解散、重新整理、
   // 用房號加入已刪的房）顯示「這場已結束」
   const finalOverlayShown = state.status === "finished" && !!state.winner && !!state.gameOver;
+  // 自動換新版（lib/autoUpdate.ts mjRoomSafe）：確定等人（拿到過伺服器的房間快照、名單有自己、沒有開局確認；join 回應湊的名單不算）、總結算看得到、「這場已結束」才重新整理；
+  // 打牌中、每局結算、末局演出還在播（winShowHoldResult）都不動
+  useAutoUpdate(mjRoomSafe({ nameReady, inRoom: stateLoaded && state.players.some((p) => p.id === state.myId), status: state.status,
+    confirming: !!startConfirm.startConfirm, finalOverlayShown, holdResult: winShowHoldResult, closedReason: closed ? closed.endReason ?? "other" : null }));
   if (closed && !(closed.endReason === "completed" && finalOverlayShown)) {
     return (
       <>

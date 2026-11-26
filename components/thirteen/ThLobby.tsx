@@ -12,6 +12,7 @@ import { AuthBar } from "@/components/mahjong/MjLobbyAuth";
 import { useMyCards } from "@/components/roomCard/useMyCards";
 import { cardSrc } from "./cardArt";
 import { ARRANGE_DEFAULT, ARRANGE_MAX, ARRANGE_MIN, ARRANGE_STEP, normalizeArrangeSec } from "./arrangeTime";
+import { useAutoUpdate } from "@/lib/autoUpdate";
 
 export const HAND_OPTIONS = [8, 16, 32]; // 老闆 2026-11-18：開房局數只能選 8／16／32（伺服器其他值回 400）
 /** 底分（老闆 2026-11-19）：每局分數＝墩數 × 底分；伺服器乘好再回傳，前端只顯示。預設四顆，更大或其他數字用「自訂」（10～100000 的整數） */
@@ -60,6 +61,8 @@ export default function ThLobby({ user, onSignOut, busy, error, resume, nameInit
   onHome: () => void;
 }) {
   const [screen, setScreen] = useState<"home" | "create" | "join">("home");
+  // 自動換新版（lib/autoUpdate.ts，審伯 R1）：建立、加入房間的表單開著時不能重新整理（會清掉填到一半的暱稱、房號、開房設定）
+  useAutoUpdate(screen === "home" ? null : false);
   const top = <AuthBar user={user} onSignOut={onSignOut} />;
   const sus = !!useMyCards(user)?.suspended;
   if (screen === "create") {

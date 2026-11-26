@@ -255,6 +255,8 @@ export function useMahjong(
 
   // 開局確認：一律照 GET state 的 startConfirm、lastStartConfirm（廣播只當「該重抓了」），重新整理也一樣；clockSkew＝伺服器 − 本機
   const [startCfm, setStartCfm] = useState<MjConfirmInfo>({ startConfirm: null, lastStartConfirm: null, clockSkew: 0 });
+  // 拿到過一次伺服器的房間快照（GET state）：在這之前 state 只是預設值或 join 回應湊的，開局確認也還不知道（自動換新版用，lib/autoUpdate.ts）
+  const [stateLoaded, setStateLoaded] = useState(false);
   const startCfmRef = useRef(startCfm);
   startCfmRef.current = startCfm;
 
@@ -589,6 +591,7 @@ export function useMahjong(
         const top = data as { startConfirm?: MjStartConfirm | null; lastStartConfirm?: MjLastStartConfirm | null };
         const sc = data.gameState ? null : top.startConfirm ?? null;
         setStartCfm((prev) => ({ startConfirm: sc, lastStartConfirm: data.gameState ? null : top.lastStartConfirm ?? null, clockSkew: sc ? sc.serverNow - recvAt : prev.clockSkew }));
+        setStateLoaded(true);
       }
       if (!data.gameState) {
         // Room exists but no game state yet — still in lobby
@@ -2060,6 +2063,7 @@ export function useMahjong(
     needsDiscard,
     startGame,
     startConfirm: startCfm,
+    stateLoaded,
     confirmStart,
     cancelStart,
     refreshState,

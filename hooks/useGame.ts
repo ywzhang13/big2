@@ -82,6 +82,8 @@ export function useGame(roomCode: string, playerName: string) {
   // 開局確認：一律照 GET state 的 startConfirm、lastStartConfirm（廣播只當「該重抓了」），重新整理也一樣；clockSkew＝伺服器 − 本機
   const [confirm, setConfirm] = useState<Big2ConfirmInfo>({ startConfirm: null, lastStartConfirm: null, clockSkew: 0 });
   const confirmRef = useRef(confirm);
+  // 拿到過一次伺服器的房間快照（GET state）：在這之前 state 是預設值、開局確認也還不知道（自動換新版用，lib/autoUpdate.ts）
+  const [stateLoaded, setStateLoaded] = useState(false);
   confirmRef.current = confirm; // 同意、取消送出時用「畫面上這一輪」的編號
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -165,6 +167,7 @@ export function useGame(roomCode: string, playerName: string) {
         startConfirm: sc, lastStartConfirm: data.lastStartConfirm ?? null,
         clockSkew: sc ? sc.serverNow - recvAt : prev.clockSkew, // 只有確認中才有伺服器時間；回應剛收到時的本機時間當基準（輕微高估延遲，倒數寧可早一點到 0）
       }));
+      setStateLoaded(true);
     } catch (err) {
       // 房間已刪：410 附總結算；404 表示房間不在了但沒有紀錄
       const status = (err as { status?: number }).status;
@@ -614,6 +617,7 @@ export function useGame(roomCode: string, playerName: string) {
 
   return {
     state,
+    stateLoaded,
     isHost,
     startGame,
     confirmReady,

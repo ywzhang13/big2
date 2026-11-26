@@ -28,6 +28,7 @@ import { apiJson, useThirteenRoom, type ThGameView, type ThJoin } from "@/compon
 import { cardSrc, deckSrcs } from "@/components/thirteen/cardArt";
 import { warmImages } from "@/lib/perf/tableFirst";
 import { useGameAudioSession } from "@/lib/gameAudioSession";
+import { useAutoUpdate } from "@/lib/autoUpdate";
 import "@/components/thirteen/thRoom.css";
 import BlockedDialog from "@/components/roomCard/BlockedDialog";
 import { blockedFrom, type Blocked } from "@/components/roomCard/client";
@@ -217,6 +218,14 @@ function ThirteenScreens() {
   /** 整場累計（伺服器）：關房後用 410 紀錄的，還在打用讀狀態的 */
   const matchStats: MatchStat[] | null = (closedRec?.stats ?? (view && view.status !== "waiting" ? view.stats : null)) ?? null;
 
+  // 亮牌、本局結算、整場總結算（下一局開始發牌了就回理牌畫面）
+  const newHandStarted = !!show && !!view && view.status !== "waiting" && view.phase === "arranging" && view.handNo > show.rv.handNo;
+  // 非末局亮牌、本局結算確認前或確認後收到解散關房：不再播亮牌、等下一局，直接進下面的關房總結算（審伯必修 2）
+  const screen = revealScreen({ hasShow: !!show, showFinal: !!show?.final, confirmed: !!show && confirmedKey === show.key, newHandStarted, closed: !!room.closed });
+  // 自動換新版（lib/autoUpdate.ts）：大廳（邀請取名、送出中不算；建立／加入表單由 ThLobby 回報不安全）、等人（還沒有開局確認）、整場總結算、房間已關才重新整理；理牌、亮牌、本局結算都不動
+  useAutoUpdate(!loggedIn || (!join && !busy && !invite) || (!!view && view.status === "waiting" && !view.startConfirm) || screen === "final"
+    || (!!room.closed && screen !== "reveal"));
+
   const goHome = () => router.push("/");
   /** 回十三支大廳：清掉網址的房號、離開這間房（useThirteenRoom 的關閉訊息跟著房間 id，離開後就不再顯示結束畫面） */
   const backToLobby = () => {
@@ -252,10 +261,6 @@ function ThirteenScreens() {
       revealed={view.phase === "revealed"} />
   ) : null);
 
-  // 亮牌、本局結算、整場總結算（下一局開始發牌了就回理牌畫面）
-  const newHandStarted = !!show && !!view && view.status !== "waiting" && view.phase === "arranging" && view.handNo > show.rv.handNo;
-  // 非末局亮牌、本局結算確認前或確認後收到解散關房：不再播亮牌、等下一局，直接進下面的關房總結算（審伯必修 2）
-  const screen = revealScreen({ hasShow: !!show, showFinal: !!show?.final, confirmed: !!show && confirmedKey === show.key, newHandStarted, closed: !!room.closed });
   if (show && join && (screen === "reveal" || screen === "final")) {
     const rv = show.rv;
     const names = [0, 1, 2, 3].map((seat) => (view && view.status !== "waiting" ? view.players.find((p) => p.seat === seat)?.name : undefined)

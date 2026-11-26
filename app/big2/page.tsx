@@ -5,6 +5,7 @@ import { saveSeatKey, useGame, type Big2ConfirmInfo } from "@/hooks/useGame";
 import StartConfirm, { secondsLeftOf } from "@/components/gameLobby/StartConfirm";
 import { big2ConfirmNote, big2ConfirmSeats } from "@/hooks/big2StartConfirmView";
 import { START_CONFIRM_MS } from "@/lib/lobby/startConfirm";
+import { big2RoomSafe, useAutoUpdate } from "@/lib/autoUpdate";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
 import Hand from "@/components/Hand";
@@ -48,6 +49,8 @@ export default function Home() {
   const [nameReady, setNameReady] = useState(false);
   const [error, setError] = useState("");
   const [createdRoomId, setCreatedRoomId] = useState("");
+  // 自動換新版（lib/autoUpdate.ts）：大廳首頁才算安全；建立、加入的表單填到一半不動；進房間後由 RoomView 判斷
+  useAutoUpdate(screen === "room" ? null : screen === "home");
 
   // Check hash on load
   useEffect(() => {
@@ -234,7 +237,7 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [playError, setPlayError] = useState("");
 
-  const { state, isHost, startGame, confirmReady, cancelReady, refreshState, confirm, hasSeatKey, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed, leaveWaiting } = useGame(
+  const { state, stateLoaded, isHost, startGame, confirmReady, cancelReady, refreshState, confirm, hasSeatKey, dealAndStart, continueGame, playCards, pass, isMyTurn, canPass, setRoomId, closed, markClosed, leaveWaiting } = useGame(
     code, nameReady ? playerName : ""
   );
 
@@ -334,6 +337,10 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
     const seat = (state.mySeat + offset) % 4;
     return state.players.find((p) => p.seat === seat);
   };
+
+  // 自動換新版（lib/autoUpdate.ts big2RoomSafe）：確定等人（拿到房間資料、沒有開局確認）、這局結束、房間已關才重新整理；取名中、出牌中不動
+  useAutoUpdate(big2RoomSafe({ nameReady, inRoom: stateLoaded && state.players.some((p) => p.id === state.myId), status: state.status,
+    confirming: !!confirm.startConfirm, closed: !!closed }));
 
   if (closed) return <RoomClosed info={closed} onGoHome={onGoHome} />;
 
