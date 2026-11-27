@@ -1,3 +1,4 @@
+import { sendBroadcast } from "../broadcast";
 import { getSupabaseServer } from "../supabase-server";
 import { routeEvents, withVersion } from "./access";
 
@@ -37,7 +38,7 @@ export async function mjBroadcastBatch(
       channel = supabase.channel(name);
       channels.set(name, channel);
     }
-    await channel.send({ type: "broadcast", event, payload });
+    await sendBroadcast(channel, event, payload);
   }
   for (const channel of channels.values()) supabase.removeChannel(channel);
 }
