@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { saveSeatKey, useGame, type Big2ConfirmInfo } from "@/hooks/useGame";
 import StartConfirm, { secondsLeftOf } from "@/components/gameLobby/StartConfirm";
 import { big2ConfirmNote, big2ConfirmSeats } from "@/hooks/big2StartConfirmView";
@@ -19,6 +19,10 @@ import { calculateScore } from "@/lib/scoring";
 import GameMenu from "@/components/gamePrefs/GameMenu";
 import { useGamePrefsAccount, useSessionAuth } from "@/components/gamePrefs/accountBinding";
 import { gameVibrate } from "@/components/gamePrefs/vibrate";
+
+// 等人畫面上「某某 取消了對戰」那條提示：共用的 .stc-note 固定在畫面頂端，大老二的等人畫面在手機上標題就在最上面，會被蓋住；
+// 這裡改成排在標題上面、跟著版面走（只改大老二，十三支、麻將照舊）
+const WAIT_NOTE_STYLE: CSSProperties = { position: "static", transform: "none", maxWidth: "100%" };
 
 // Read room code from URL hash: #room=XXXX
 function getRoomFromHash(): string | null {
@@ -368,10 +372,12 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
     const isFull = state.players.length >= 4;
     const isInRoom = state.players.some((p) => p.id === state.myId);
     const roomFull = isFull && !isInRoom;
+    const waitNote = big2ConfirmNote(confirm.lastStartConfirm, !!confirm.startConfirm, state.players, state.myId, isHost);
 
     return (
       <div className="flex flex-col flex-1 items-center justify-center px-6">
         <div className="flex flex-col items-center gap-6 w-full max-w-sm">
+          {waitNote && <div className="stc-note" style={WAIT_NOTE_STYLE} role="status" data-big2-start-note={confirm.lastStartConfirm?.reason}>{waitNote}</div>}
           <h2 className="text-xl font-bold text-gold-light font-heading">等待玩家加入</h2>
 
           {roomFull && (
@@ -433,7 +439,7 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
 
           {/* 開局確認（老闆 2026-11-20）：房主按開始後蓋共用的 StartConfirm（四家小牌子、10 秒倒數、同意／房主取消）；
               四家都同意伺服器就發牌（畫面跟著狀態換成牌桌）；時間到沒到齊就回等人，上面一條提示誰沒按 */}
-          <Big2StartConfirm players={state.players} myId={state.myId} isHost={isHost} canCancel={hasSeatKey} readyIds={state.readyPlayers}
+          <Big2StartConfirm players={state.players} myId={state.myId} canCancel={hasSeatKey} readyIds={state.readyPlayers}
             info={confirm} onAgree={confirmReady} onCancel={cancelReady} onTimeUp={refreshState} />
 
           {/* Start button (only when NOT in ready check) */}
@@ -575,9 +581,9 @@ function RoomView({ code, playerName, nameReady, initialRoomId, onSetName, onGoH
 }
 
 // ─── 開局確認（共用 StartConfirm；倒數照伺服器截止時間，到 0 讀一次狀態讓伺服器判斷） ───
-function Big2StartConfirm({ players, myId, isHost, canCancel, readyIds, info, onAgree, onCancel, onTimeUp }: {
+function Big2StartConfirm({ players, myId, canCancel, readyIds, info, onAgree, onCancel, onTimeUp }: {
   /** canCancel：這個分頁有入座憑證（seatKey）才有「取消」 */
-  players: { id: string; name: string; seat: number }[]; myId: string; isHost: boolean; canCancel: boolean; readyIds: Set<string>; info: Big2ConfirmInfo;
+  players: { id: string; name: string; seat: number }[]; myId: string; canCancel: boolean; readyIds: Set<string>; info: Big2ConfirmInfo;
   onAgree: () => Promise<{ ok: boolean; message?: string }>; onCancel: () => Promise<{ ok: boolean; message?: string }>; onTimeUp: () => void;
 }) {
   const sc = info.startConfirm;
@@ -610,12 +616,10 @@ function Big2StartConfirm({ players, myId, isHost, canCancel, readyIds, info, on
     setBusy(false);
     if (!r.ok) setErr({ deadline, msg: r.message ?? "送出失敗，請再按一次" });
   };
-  const note = big2ConfirmNote(info.lastStartConfirm, !!sc, players, myId, isHost);
   // 確認中的勾：伺服器的 readyIds（state 和廣播都會更新 readyPlayers）
   const ready = sc ? new Set([...sc.readyIds, ...readyIds]) : readyIds;
   return (
     <>
-      {note && <div className="stc-note" role="status" data-big2-start-note={info.lastStartConfirm?.reason}>{note}</div>}
       {sc && (
         // 「取消對戰」倒數結束後才出現，四家都有，但要拿得到自己的入座憑證（localStorage，重新整理也在；v3 2026-11-26）
         <StartConfirm seats={big2ConfirmSeats(players, ready, myId)} secondsLeft={secs} totalSeconds={START_CONFIRM_MS / 1000} canCancel={canCancel} busy={busy} error={err}
