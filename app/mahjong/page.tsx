@@ -43,7 +43,6 @@ import { bindPrefsAccount } from "@/lib/mahjong/prefs";
 import BlockedDialog from "@/components/roomCard/BlockedDialog";
 import { blockedFrom, type Blocked } from "@/components/roomCard/client";
 import { refreshMyCards, useMyCards } from "@/components/roomCard/useMyCards";
-import { LobbyBg, LobbyHero } from "@/components/gameLobby/LobbyHero";
 
 // 手機橫向（小宜規格）：高度 ≤ 500px 的橫向畫面改用手機版牌桌
 const MOBILE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px)";
@@ -410,20 +409,19 @@ export default function MahjongPage() {
     );
   }
 
-  // --- Home screen ---（大廳首頁 v2 明亮娛樂城風，小宜〈大廳素材v2〉：背景、LOGO 底牌、遊戲名稱、圖片按鈕；建立／加入、登入閘門照舊）
+  // --- Home screen ---
   if (screen !== "room") {
     return (
-      <div className="mjl lv2-page" data-lv2="mahjong">
-        <LobbyBg kind="mahjong" />
+      <div className="mjl mjl-lobby flex-1 bg-[#0f2a1a]">
         <PortraitHint label="返回首頁" onClick={goHome} />
         <AuthBar user={auth.user} onSignOut={auth.signOut} />
         <MjPrefsPanel />
         <BlockedDialog blocked={blocked} onClose={() => setBlocked(null)} />
         {auth.pairedAs !== null && <PairedNotice name={auth.pairedAs} onOk={auth.dismissPairedAs} onNotMe={auth.signOut} />}
-        <LobbyHero name="台灣麻將" />
-        <div className="lv2-col">
+        <Brand />
+        <div className="mjl-col">
           {screen === "home" ? (
-            <div className="lv2-col fade-in" style={{ marginTop: 0 }}>
+            <div className="mjl-col fade-in">
               {myRoom && (
                 <button onClick={() => handleResume(myRoom.code)} disabled={isSubmitting} className="mjl-btn resume">
                   {myRoom.status === "waiting" ? "你在房間等開局，" : "你有一局還沒打完，"}
@@ -437,7 +435,7 @@ export default function MahjongPage() {
                   setError("");
                 }}
                 disabled={suspended}
-                className={`lv2-btn primary${suspended ? " rc-lock" : ""}`}
+                className={`mjl-btn primary${suspended ? " rc-lock" : ""}`}
               >
                 建立房間
               </button>
@@ -447,24 +445,24 @@ export default function MahjongPage() {
                   setError("");
                 }}
                 disabled={suspended}
-                className={`lv2-btn second${suspended ? " rc-lock" : ""}`}
+                className={`mjl-btn second${suspended ? " rc-lock" : ""}`}
               >
                 加入房間
               </button>
-              {/* 歷史紀錄、排行榜（公開）並排；斗內後台入口拿掉（2026-11-20 斗內下架） */}
-              <div className="lv2-ghosts">
-                <button
-                  onClick={() => {
-                    setShowRecords(true);
-                    setError("");
-                  }}
-                  className="lv2-btn ghost"
-                >
-                  歷史紀錄
-                </button>
-                <a href="/mahjong/ranks" className="lv2-btn ghost" data-lobby-board>排行榜</a>
+              <button
+                onClick={() => {
+                  setShowRecords(true);
+                  setError("");
+                }}
+                className="mjl-btn ghost"
+              >
+                歷史紀錄
+              </button>
+              {/* 排行榜（公開）；斗內後台入口拿掉（2026-11-20 斗內下架） */}
+              <div className="flex gap-3">
+                <a href="/mahjong/ranks" className="mjl-btn ghost text-center flex-1" data-lobby-board>排行榜</a>
               </div>
-              <button onClick={goHome} className="lv2-foot">
+              <button onClick={goHome} className="mjl-foot">
                 返回首頁
               </button>
             </div>
