@@ -3,6 +3,7 @@
 //   S2 麻將 mjBroadcastBatch：公開、座位頻道照原本規則，同一個頻道內照順序送
 //   S3 不再印「falling back to REST … deprecated」警告
 //   S4 送出失敗（伺服器回 500、網路錯誤）不丟錯，跟舊的 send() 一樣；批次裡失敗一則，後面照送
+export {}; // 讓 tsc 把這支當成模組（檔案裡有頂層 await）
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://stub.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-stub";
 
