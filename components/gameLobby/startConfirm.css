@@ -1,6 +1,6 @@
 /* 開局確認視窗（三款共用；樣式比照十三支下一局的確認小牌子 .gr-chip、等人畫面按鈕 .gl-btn） */
 .stc-mask { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(3,12,7,.7); backdrop-filter: blur(3px); }
-.stc-card { width: min(380px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 18px 18px 16px; border-radius: 20px;
+.stc-card { width: min(520px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 18px 18px 16px; border-radius: 20px;
   background: linear-gradient(160deg, #153a25, #0b2115); border: 1px solid rgba(240,214,138,.5); box-shadow: 0 20px 60px rgba(0,0,0,.6); color: #fff; }
 .stc-hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .stc-hd b { font-size: 20px; font-weight: 800; color: #f0d68a; letter-spacing: .06em; }
@@ -8,10 +8,13 @@
   color: #0f2a1a; background: #C9A96E; }
 .stc-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; }
 .stc-bar i { display: block; height: 100%; background: #C9A96E; transition: width .25s linear; }
-.stc-seats { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.stc-seats .cnt { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.55); margin-right: 2px; white-space: nowrap; }
-.stc-chip { box-sizing: border-box; display: inline-flex; align-items: center; gap: 4px; max-width: 110px; height: 28px; padding: 0 9px; border-radius: 8px; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; }
-.stc-chip span { overflow: hidden; text-overflow: ellipsis; } .stc-chip i { font-style: normal; flex: none; }
+/* 四家排在同一行（老闆 2026-11-27：第四位會換到第二行）：不換行；放不下時小牌子一起縮，名字太長用「…」截斷 */
+.stc-seats { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; min-width: 0; }
+.stc-seats .cnt { flex: none; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.55); margin-right: 2px; white-space: nowrap; }
+.stc-chip { box-sizing: border-box; display: inline-flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; max-width: 110px; height: 28px; padding: 0 7px; border-radius: 8px; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.stc-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; } .stc-chip i { font-style: normal; flex: none; }
+/* 桌機空間夠：視窗放寬，6 個字的名字也能完整顯示（手機維持 520，更窄的直拿手機放不下就截斷） */
+@media (min-width: 1000px) { .stc-card { width: min(560px, 100%); } .stc-chip { max-width: 124px; } }
 .stc-chip.ok { background: rgba(201,169,110,.85); color: #0f2a1a; border: 1px solid #f0d68a; }
 .stc-chip.wait { color: rgba(255,255,255,.55); border: 1px dashed rgba(255,255,255,.35); }
 .stc-err { margin: 0; font-size: 13px; color: #fca5a5; }
