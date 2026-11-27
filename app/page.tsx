@@ -25,10 +25,8 @@ export default function Lobby() {
       <header className="home-brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="home-badge" src="/home/home-badge.webp" alt="阿瑋 CASINO" width={640} height={452} />
-        <div className="home-brand-text">
-          <h1 className="home-title">阿瑋娛樂城</h1>
-          <p className="home-sub">多人線上桌遊平台</p>
-        </div>
+        {/* 老闆 2026-11-27：畫面上不放文字，h1 只留給讀屏軟體和搜尋引擎（樣式在 home-games.css） */}
+        <h1 className="home-title">阿瑋娛樂城</h1>
       </header>
 
       <nav className="home-cards" aria-label="選擇遊戲">
@@ -45,8 +43,6 @@ export default function Lobby() {
           </button>
         ))}
       </nav>
-
-      <p className="home-foot">選擇遊戲開始遊玩 · 支援多人即時對戰</p>
     </div>
   );
 }
