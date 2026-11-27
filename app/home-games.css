@@ -19,3 +19,19 @@
   .home.has-3 .home-art { width: 118px; }
   .home.has-3 .home-name { font-size: 32px; }
 }
+/* 老闆 2026-11-27「把字拿掉」：標題只給讀屏軟體看；副標和頁尾已刪，徽章和卡片在畫面中垂直置中，手機橫向徽章改置中 */
+.home.has-3 { justify-content: center; }
+.home.has-3 .home-title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (orientation: landscape) and (max-height: 500px) {
+  .home.has-3 .home-brand { justify-content: center; }
+}
+/* 卡名不壓 › 圓鈕（667 寬時「台灣麻將」會碰到鈕）：手機橫向卡名字級跟著文字欄寬縮，四個字一定放得下 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .home.has-3 .home-card-text { container-type: inline-size; }
+  .home.has-3 .home-name { font-size: min(clamp(18px, 2.7vw, 24px), 23cqi); }
+}
+/* 更窄的手機橫向（667 等）：圖和內距收一點，把空間讓給卡名，字才不會縮太小 */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 760px) {
+  .home.has-3 .home-card { padding: 0 8px; column-gap: 6px; }
+  .home.has-3 .home-art { width: 52px; }
+}
