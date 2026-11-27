@@ -17,22 +17,23 @@ const toParam = (v: unknown) => (v !== null && typeof v === "object" ? JSON.stri
 
 export interface PostgrestLog { method: string; path: string }
 
-/** 把 baseUrl 開頭的 fetch 導到 PGlite；回傳請求紀錄（測試可以看實際送了什麼） */
-export function installPostgrest(db: PGlite, baseUrl: string): PostgrestLog[] {
+/** 把 baseUrl 開頭的 fetch 導到 PGlite；回傳請求紀錄（測試可以看實際送了什麼）。
+ *  anonKey：帶這把 apikey 的請求改用 anon 身分執行（模擬有人拿網站公開金鑰直接查資料庫；大老二鎖權限測試用，2026-11-27） */
+export function installPostgrest(db: PGlite, baseUrl: string, opts: { anonKey?: string } = {}): PostgrestLog[] {
   const log: PostgrestLog[] = [];
   const realFetch = globalThis.fetch;
   let queue: Promise<unknown> = Promise.resolve();
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     if (!url.href.startsWith(baseUrl)) return realFetch(input, init);
-    const run = queue.then(() => handle(db, url, init ?? {}, log));
+    const run = queue.then(() => handle(db, url, init ?? {}, log, opts.anonKey));
     queue = run.catch(() => {});
     return run;
   }) as typeof fetch;
   return log;
 }
 
-async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog[]): Promise<Response> {
+async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog[], anonKey?: string): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   const path = url.pathname.replace(/^\/rest\/v1\//, "");
@@ -41,7 +42,7 @@ async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog
   const params: unknown[] = [];
   const p = (v: unknown) => (params.push(toParam(v)), `$${params.length}`);
   try {
-    await db.exec("set role service_role");
+    await db.exec(anonKey && headers.get("apikey") === anonKey ? "set role anon" : "set role service_role");
     let sql: string;
     if (path.startsWith("rpc/")) {
       const fn = path.slice(4);
@@ -55,12 +56,13 @@ async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog
     }
     if (!IDENT.test(path)) throw new Error(`假 PostgREST：不支援的路徑 ${path}`);
     const table = `public."${path}"`;
-    let select = "*", order = "", limit = "";
+    let select = "*", order = "", limit = "", onConflict: string[] | null = null;
     const where: string[] = [];
     for (const [k, v] of url.searchParams) {
       if (k === "select") select = v.split(",").map((c) => col(c.trim())).join(", ");
       else if (k === "order") order = " order by " + v.split(",").map((o) => { const [c, dir] = o.split("."); return `${col(c)} ${dir === "desc" ? "desc" : "asc"}`; }).join(", ");
       else if (k === "columns") continue;
+      else if (k === "on_conflict") onConflict = v.split(",").map((c) => col(c.trim())); // upsert（大老二入座憑證用）
       else if (k === "limit") { if (!/^\d+$/.test(v)) throw new Error(`假 PostgREST：limit ${v}`); limit = ` limit ${v}`; }
       else {
         const m = v.match(/^(eq|neq|lt|is|in)\.([\s\S]*)$/);
@@ -84,7 +86,10 @@ async function handle(db: PGlite, url: URL, init: RequestInit, log: PostgrestLog
       const cols = Object.keys(rows[0]);
       if (!cols.every((c) => IDENT.test(c))) throw new Error("假 PostgREST：欄位名不合法");
       const values = rows.map((r) => `(${cols.map((c) => p(r[c])).join(", ")})`).join(", ");
-      sql = `insert into ${table} (${cols.map((c) => `"${c}"`).join(", ")}) values ${values}${wantRows ? ` returning ${select}` : ""}`;
+      const upsert = onConflict
+        ? ` on conflict (${onConflict.join(", ")}) do update set ${cols.filter((c) => !onConflict!.includes(`"${c}"`)).map((c) => `"${c}" = excluded."${c}"`).join(", ")}`
+        : "";
+      sql = `insert into ${table} (${cols.map((c) => `"${c}"`).join(", ")}) values ${values}${upsert}${wantRows ? ` returning ${select}` : ""}`;
     } else if (method === "PATCH") {
       const sets = Object.entries(body).map(([c, v]) => { if (!IDENT.test(c)) throw new Error("欄位名"); return `"${c}" = ${p(v)}`; });
       sql = `update ${table} set ${sets.join(", ")}${cond}${wantRows ? ` returning ${select}` : ""}`;

@@ -1,5 +1,5 @@
 // 大老二開局後重新整理（或用 #room= 連結）回到牌桌：POST /api/game/join 先認原座位、再看房間狀態（2026-10-25）
-//   R1 playing 中 4 個原玩家重新加入：回原座位和 roomId（rejoined），/api/game/state 拿到的手牌和存檔一致；不廣播 player_joined、不多坐人
+//   R1 playing 中 4 個原玩家重新加入：回原座位和 roomId（rejoined），/api/game/state 帶自己的入座憑證（重新整理後還在 localStorage）拿到的手牌和存檔一致；不廣播 player_joined、不多坐人
 //   R2 開局後（playing、ready_check）陌生人加入：409 game_in_progress（附可讀的 message），座位不動、不廣播
 //   R3 等人時退出後用房號再進來＝新加入（照舊）；退出後牌局開打，同一個人再加入：409 game_in_progress
 //   R4 finished（打完一場、等繼續）原玩家重新加入：回原座位，state 是 finished、手牌一致；陌生人照樣擋
@@ -21,10 +21,13 @@ const post = (fn: (r: Request) => Promise<Response>, url: string, body: unknown)
   fn(new Request(`http://x${url}`, { method: "POST", body: JSON.stringify(body) })).then(async (r) => ({ status: r.status, body: await r.json() }));
 const doJoin = (code: string, playerId: string) => post(join, "/api/game/join", { code, playerId, name: "N" + playerId });
 const doLeave = (roomId: string, playerId: string) => post(leave, "/api/game/leave", { roomId, playerId });
+/** 第一次入座拿到的入座憑證（前端存在 localStorage，重新整理、重新加入都還在）；讀狀態拿手牌要帶（2026-11-27） */
+const seatKeys: Record<string, string> = {};
 const getState = async (roomId: string, playerId: string) => {
   const url = `http://x/api/game/state?roomId=${roomId}&playerId=${playerId}`;
+  const k = seatKeys[playerId];
   // 測試裡 next/server 換成了替身：路由只用到 nextUrl，自己補上
-  const r = await state(Object.assign(new Request(url), { nextUrl: new URL(url) }) as unknown as Parameters<typeof state>[0]);
+  const r = await state(Object.assign(new Request(url, { headers: k ? { "x-big2-seat-key": k } : {} }), { nextUrl: new URL(url) }) as unknown as Parameters<typeof state>[0]);
   return { status: r.status, body: await r.json() };
 };
 const pids = (id: string) => rs.big2Rooms[id]?.players.map((p) => p.player_id);
@@ -40,7 +43,7 @@ function emptyRoom(host: string) {
 /** 4 個人用房號加入、發牌開打（和正式流程一樣走 join → dealAndStart） */
 async function playingRoom(ps: string[]) {
   const r = emptyRoom(ps[0]);
-  for (const p of ps) await doJoin(r.code, p);
+  for (const p of ps) seatKeys[p] = (await doJoin(r.code, p)).body.seatKey;
   rs.big2Rooms[r.id].room.status = "ready_check";
   await dealAndStart(r.id, r.code);
   return r;

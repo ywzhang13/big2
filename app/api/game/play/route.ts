@@ -1,9 +1,10 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { broadcast } from "@/lib/broadcast";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
 import type { Card } from "@/lib/constants";
 import type { Combo } from "@/lib/combo";
+import { isSeatInPerson } from "@/lib/big2/startConfirm";
 
 interface RoomRow {
   id: string;
@@ -34,10 +35,11 @@ interface PlayerRow {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { roomId, playerId, cards } = body as {
+    const { roomId, playerId, cards, seatKey } = body as {
       roomId?: string;
       playerId?: string;
       cards?: string[];
+      seatKey?: unknown;
     };
 
     if (!roomId || !playerId || !cards || !Array.isArray(cards)) {
@@ -48,7 +50,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "必須選擇至少一張牌" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServer();
+    // 座位本人才能出牌（2026-11-27）：先驗再讀牌桌，冒名的人拿不到「沒有這張牌」這種回應來試探別人的手牌
+    if (!(await isSeatInPerson(roomId, playerId, seatKey))) {
+      return Response.json({ error: "not_your_seat", message: "請重新整理後再出牌" }, { status: 403 });
+    }
+
+    const supabase = getSupabaseAdmin();
 
     // Get room
     const { data: room, error: roomError } = await supabase

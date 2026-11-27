@@ -1,5 +1,6 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { broadcast } from "@/lib/broadcast";
+import { isSeatInPerson } from "@/lib/big2/startConfirm";
 
 interface RoomRow {
   id: string;
@@ -19,16 +20,22 @@ interface RoomRow {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { roomId, playerId } = body as {
+    const { roomId, playerId, seatKey } = body as {
       roomId?: string;
       playerId?: string;
+      seatKey?: unknown;
     };
 
     if (!roomId || !playerId) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServer();
+    // 座位本人才能過（2026-11-27，同出牌）
+    if (!(await isSeatInPerson(roomId, playerId, seatKey))) {
+      return Response.json({ error: "not_your_seat", message: "請重新整理後再操作" }, { status: 403 });
+    }
+
+    const supabase = getSupabaseAdmin();
 
     // Get room
     const { data: room, error: roomError } = await supabase

@@ -9,6 +9,7 @@ import type { Combo } from "@/lib/combo";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { StateRequestGate } from "@/lib/mahjong/stateSync";
+import { BIG2_CLIENT_PROTO } from "@/lib/big2/clientProto";
 
 /** 開局確認（老柯〈大老二開局確認 API〉2026-11-20）：房主按開始後 10 秒內四家都同意才發牌；deadline、serverNow 是伺服器毫秒 */
 /** id：這一輪確認的編號（老柯 R1 修正）；同意、取消都要帶，舊一輪晚到的請求伺服器回 409 stale_confirm */
@@ -44,8 +45,8 @@ function getMyId(): string {
   return id;
 }
 
-async function api<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>): Promise<T> {
-  const opts: RequestInit = { method, headers: { "Content-Type": "application/json" } };
+async function api<T>(method: "GET" | "POST", path: string, body?: Record<string, unknown>, headers?: Record<string, string>): Promise<T> {
+  const opts: RequestInit = { method, headers: { "Content-Type": "application/json", ...headers } };
   if (body && method === "POST") opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   if (!res.ok) {
@@ -55,6 +56,12 @@ async function api<T>(method: "GET" | "POST", path: string, body?: Record<string
     throw err;
   }
   return res.json();
+}
+
+/** 讀狀態時帶入座憑證（header，不放網址）：伺服器只把手牌給座位本人（2026-11-27） */
+function seatKeyHeader(roomId: string | null | undefined): Record<string, string> | undefined {
+  const k = loadSeatKey(roomId);
+  return k ? { "x-big2-seat-key": k } : undefined;
 }
 
 export function useGame(roomCode: string, playerName: string) {
@@ -123,7 +130,7 @@ export function useGame(roomCode: string, playerName: string) {
         readyPlayers?: string[];
         startConfirm?: Big2StartConfirm | null;
         lastStartConfirm?: Big2LastStartConfirm | null;
-      }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`);
+      }>("GET", `/api/game/state?roomId=${rid}&playerId=${myId}`, undefined, seatKeyHeader(rid)); // 手牌只給帶入座憑證的本人
       const recvAt = Date.now();
       const verdict = stateGateRef.current.settle(reqId, NO_HOLD.gen, NO_HOLD);
       if (verdict === "refetchNow") { fetchStateRef.current?.(rid); return; }
@@ -301,15 +308,10 @@ export function useGame(roomCode: string, playerName: string) {
         finishedHands: undefined,
         winner: undefined,
         roundScores: undefined,
+        myHand: [], // 上一場的牌先清掉，新的手牌下面讀狀態拿
       }));
-    });
-
-    onEvent("deal_hand", ({ payload }) => {
-      const { playerId, hand } = payload as { playerId: string; hand: Card[] };
-      if (playerId !== myId) return;
-      const sorted = [...hand];
-      sorted.sort(compareCardsDisplay);
-      setState((prev) => ({ ...prev, myHand: sorted }));
+      // 手牌不再走公開頻道（2026-11-27，lib/deal-and-start.ts）：開局後馬上讀一次狀態，帶入座憑證拿自己的 13 張
+      refetch();
     });
 
     onEvent("play_cards", ({ payload }) => {
@@ -434,7 +436,8 @@ export function useGame(roomCode: string, playerName: string) {
       const rid = roomIdRef.current;
       if (!rid || closedRef.current || document.hidden) return; // 分頁在背景時不抓（省量 2026-11-01）
       // During gameplay, poll if it's NOT our turn (we might have missed a broadcast)
-      if (s.status === "playing" && s.currentTurn !== s.mySeat) {
+      // 輪到自己但手上沒牌（開局拿牌的請求失敗了）也要補讀，不然大家都在等他出牌（審伯 R1，2026-11-27）
+      if (s.status === "playing" && (s.currentTurn !== s.mySeat || s.myHand.length === 0)) {
         fetchState(rid);
       }
       // During lobby, poll to keep player list updated
@@ -467,7 +470,7 @@ export function useGame(roomCode: string, playerName: string) {
     try {
       const seatKey = loadSeatKey(roomIdRef.current);
       if (!seatKey) return { ok: false, message: NO_SEAT_KEY_MSG };
-      await api("POST", "/api/game/ready-check", { roomId: roomIdRef.current, playerId: myId, seatKey });
+      await api("POST", "/api/game/ready-check", { roomId: roomIdRef.current, playerId: myId, seatKey, proto: BIG2_CLIENT_PROTO }); // proto：伺服器擋舊版前端開局（lib/big2/clientProto.ts）
       return { ok: true };
     } catch (err) {
       if ((err as { status?: number }).status === 403) return { ok: false, message: NO_SEAT_KEY_MSG }; // 憑證不對或不是房主
@@ -481,7 +484,7 @@ export function useGame(roomCode: string, playerName: string) {
     try {
       const confirmId = confirmRef.current.startConfirm?.id;
       if (!confirmId) return { ok: false, message: "這次開局已經取消" };
-      await api<{ allReady: boolean }>("POST", "/api/game/ready", { roomId: roomIdRef.current, playerId: myId, confirmId });
+      await api<{ allReady: boolean }>("POST", "/api/game/ready", { roomId: roomIdRef.current, playerId: myId, confirmId, proto: BIG2_CLIENT_PROTO });
       return { ok: true };
     } catch (err) {
       const m = (err as Error).message;
@@ -520,6 +523,7 @@ export function useGame(roomCode: string, playerName: string) {
       await api("POST", "/api/game/continue", {
         roomId: roomIdRef.current,
         playerId: myId,
+        seatKey: loadSeatKey(roomIdRef.current), // 座位本人才能按繼續（2026-11-27）
       });
     } catch (err) {
       console.error("[big2] continue failed:", err);
@@ -542,6 +546,7 @@ export function useGame(roomCode: string, playerName: string) {
     api<{ success: boolean; error?: string; gameOver?: boolean }>("POST", "/api/game/play", {
       roomId: roomIdRef.current,
       playerId: myId,
+      seatKey: loadSeatKey(roomIdRef.current), // 座位本人才能出牌（2026-11-27）
       cards: selectedCards,
     }).then((data) => {
       if (!data.success) {
@@ -576,6 +581,7 @@ export function useGame(roomCode: string, playerName: string) {
       const data = await api<{ success: boolean; error?: string }>("POST", "/api/game/pass", {
         roomId: roomIdRef.current,
         playerId: myId,
+        seatKey: loadSeatKey(roomIdRef.current), // 座位本人才能過（2026-11-27）
       });
       if (!data.success) {
         console.error("[big2] pass rejected:", data.error);
