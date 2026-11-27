@@ -25,3 +25,13 @@
 @media (orientation: landscape) and (max-height: 500px) {
   .home.has-3 .home-brand { justify-content: center; }
 }
+/* 卡名不壓 › 圓鈕（667 寬時「台灣麻將」會碰到鈕）：手機橫向卡名字級跟著文字欄寬縮，四個字一定放得下 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .home.has-3 .home-card-text { container-type: inline-size; }
+  .home.has-3 .home-name { font-size: min(clamp(18px, 2.7vw, 24px), 23cqi); }
+}
+/* 更窄的手機橫向（667 等）：圖和內距收一點，把空間讓給卡名，字才不會縮太小 */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 760px) {
+  .home.has-3 .home-card { padding: 0 8px; column-gap: 6px; }
+  .home.has-3 .home-art { width: 52px; }
+}
