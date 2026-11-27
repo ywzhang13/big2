@@ -7,6 +7,7 @@ import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealT
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
 import { BIG_SFX, IHR_SFX, loadBigSfx, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type IhrSfxKey, type SfxVariant } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
+import { loadBuffer } from "./thAudio";
 import "./thRoom.css";
 import "./thReveal.css";
 
@@ -44,6 +45,8 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
     setBig(loadBigSfx()); setIhr(loadIhrSfx());
+    // 場內全壘打的候選全部先載好：試聽第一次按就有聲音（播放時檔案還沒載完會被當成太晚、直接略過，手機走外部網址最明顯）
+    for (const x of IHR_SFX) for (const o of x.options) void loadBuffer(sfxSrc(x.key, o.v));
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();
     setFelt(f); applyFelt(f, isFelt(initial.felt));
     // 特效圖都載好才播（第一次打開圖還在下載）；網址有 fx 就自動播一次

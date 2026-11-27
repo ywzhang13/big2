@@ -44,10 +44,10 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   ok(gtl.end === 22400 && gtl.steps.filter((s) => s.kind === "gun").every((s) => s.dur === 1500), `R4 有一槍：22.4 秒（實際 ${gtl.end / 1000}）`);
   const hr = must("homerun"), htl = T.buildTimeline(hr);
   const guns = htl.steps.filter((s) => s.kind === "gun"), home = htl.steps.find((s) => s.kind === "homerun")!;
-  const ihr = htl.steps.find((s) => s.kind === "insidehr"); // 這副預覽牌另外有一家被三家打槍：全壘打後面接場內全壘打 3.2 秒（老闆 2026-11-28）
+  const ihr = htl.steps.find((s) => s.kind === "insidehr"); // 這副預覽牌另外有一家被三家打槍：全壘打後面接場內全壘打 5.0 秒（老闆 2026-11-28）
   ok(home.kind === "homerun" && home.seat === 0 && home.t0 === guns[guns.length - 1].t0 + 1500 && (!ihr || ihr.t0 === home.t0 + 3200)
-    && htl.end === home.t0 + 3200 + (ihr ? 3200 : 0) + 1200,
-    `R5 全壘打接在所有打槍之後、3.2 秒${ihr ? "，接著場內全壘打 3.2 秒" : ""}，再停 1.2 秒出結算`);
+    && htl.end === home.t0 + 3200 + (ihr ? 5000 : 0) + 1200,
+    `R5 全壘打接在所有打槍之後、3.2 秒${ihr ? "，接著場內全壘打 5.0 秒" : ""}，再停 1.2 秒出結算`);
   const f0 = T.frameAt(tl, 100), fMid = T.frameAt(tl, 1800);
   ok(f0.active.some((s) => s.kind === "start") && f0.open.every((o) => !o.front && !o.middle && !o.back) && !f0.board.show
     && fMid.open.filter((o) => o.front).length === 1 && fMid.glow.length === 1 && fMid.board.show,

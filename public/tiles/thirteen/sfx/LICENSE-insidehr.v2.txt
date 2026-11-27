@@ -1,7 +1,8 @@
 十三支場內全壘打音效來源（另開一個檔：LICENSE.txt 已登記長期快取，同檔名不能改內容；其他音效的來源仍在 LICENSE.txt）
 
-場內全壘打音效候選（老馬 2026-11-28 剪輯；老闆「要配聲音」）：檔名 th-sfx-ihr<名稱>-a／b（／r2-1＝C）.v1.mp3，0 秒＝聲音開始。
-0.55 秒換景悶雷、1.25 秒大字落地「咚」、1.6 秒走音慢版小號（約 1.5 秒，3.2 秒前收尾）。components/thirteen/sfx.ts 的 SFX_PICK 預設 A；
+場內全壘打音效候選（老馬 2026-11-28 剪輯；老闆「要配聲音」）：檔名 th-sfx-ihr<名稱>-a／b（／r2-1＝C）.v1.mp3（小號是 .v2），0 秒＝聲音開始。
+動畫 5.0 秒版（老闆「可以久一點」）：0.55 秒換景悶雷、1.85 秒大字落地「咚」、2.3 秒走音慢版小號（約 2.1 秒，4.5 秒前收尾；v1 壓成 1.5 秒的版本已移除）。
+components/thirteen/sfx.ts 的 SFX_PICK 預設 A；
 特效測試頁 /thirteen/preview/fx「場內全壘打音效」那一列可以試聽、切換（記在本機 localStorage th_sfx_ihr）。Freesound 的都標為 CC0（Creative Commons 0），
 用的是網站公開的試聽檔（-hq.mp3），裁切、降調、時間壓縮（音高不變）、音量拉齊、尾巴淡出由老馬處理（剪輯程式在老馬的 .tmp/ihrsfx/make_sfx.sh）。
 
@@ -9,6 +10,6 @@
 - th-sfx-ihrthunder-b.v1.mp3（悶雷 B）：Freesound #234736「thunder rumble 1.wav」｜FenrirFangs｜https://freesound.org/people/FenrirFangs/sounds/234736/，CC0
 - th-sfx-ihrthud-a.v1.mp3（咚 A）：專案內 public/mahjong-fx/s/thud.mp3（Kenney Impact Sounds，CC0），降調 0.7 倍加重
 - th-sfx-ihrthud-b.v1.mp3（咚 B）：Freesound #879272「Low Thud」｜Qvantor｜https://freesound.org/people/Qvantor/sounds/879272/，CC0
-- th-sfx-ihrtrumpet-a.v1.mp3（小號 A）：Freesound #175409「wah wah sad trombone.wav」｜kirbydx｜https://freesound.org/people/kirbydx/sounds/175409/，CC0（取後兩個音，壓成 1.5 秒）
-- th-sfx-ihrtrumpet-b.v1.mp3（小號 B）：Freesound #362206「horn_fail_wahwah_1.wav」｜TaranP｜https://freesound.org/people/TaranP/sounds/362206/，CC0（整段壓成 1.5 秒）
-- th-sfx-ihrtrumpet-r2-1.v1.mp3（小號 C）：Freesound #181354「Fail Jingle (layer 1)」｜unfa｜https://freesound.org/people/unfa/sounds/181354/，CC0（取後兩句，壓成 1.5 秒）
+- th-sfx-ihrtrumpet-a.v2.mp3（小號 A）：Freesound #175409「wah wah sad trombone.wav」｜kirbydx｜https://freesound.org/people/kirbydx/sounds/175409/，CC0（取後兩個音，稍微加快到約 2.0 秒）
+- th-sfx-ihrtrumpet-b.v2.mp3（小號 B）：Freesound #362206「horn_fail_wahwah_1.wav」｜TaranP｜https://freesound.org/people/TaranP/sounds/362206/，CC0（整段稍微加快到約 2.1 秒）
+- th-sfx-ihrtrumpet-r2-1.v2.mp3（小號 C）：Freesound #181354「Fail Jingle (layer 1)」｜unfa｜https://freesound.org/people/unfa/sounds/181354/，CC0（取後兩句，稍微加快到約 2.1 秒）

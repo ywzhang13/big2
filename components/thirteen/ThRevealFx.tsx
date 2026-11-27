@@ -196,10 +196,10 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
   );
 }
 
-/** 場內全壘打 3.2 秒（老闆 2026-11-28「被三家打槍＝場內全壘打，悲情版、風格跟全壘打一樣」；阿哲分鏡、時間軸照派工卡）：
- *  0～0.55 被打那一家的牌依序中三個彈孔、整組牌變灰 → 0.55 冷白閃光換景到雨夜球場 → 0.55～1.05 打者站著、快跪下去 →
- *  1.05～1.25 交叉淡入跪姿、往下沉 → 1.25～1.45「場內全壘打」大字從上方重重落下（不彈跳）→ 1.6 遠處一盞燈熄掉、畫面暗一階，跪姿肩膀微微起伏 →
- *  1.65 被打那一家的名字（灰白）→ 2.8～3.2 淡出。方向照全壘打：右家、對家觸發時整個畫面左右鏡射（人在右、大字在左）。
+/** 場內全壘打 5.0 秒（老闆 2026-11-28「被三家打槍＝場內全壘打，悲情版、風格跟全壘打一樣」；阿哲分鏡；老闆「可以久一點」從 3.2 拉長到 5.0）：
+ *  0～0.55 被打那一家的牌依序中三個彈孔、整組牌變灰 → 0.55 冷白閃光換景到雨夜球場（悶雷）→ 0.55～1.6 打者站著、快跪下去 →
+ *  1.6～1.85 交叉淡入跪姿、往下沉 → 1.85～2.05「場內全壘打」大字從上方重重落下（不彈跳，「咚」）→ 2.3 遠處一盞燈熄掉、畫面暗一階（小號），
+ *  跪姿肩膀一直微微起伏 → 2.25 被打那一家的名字（灰白）→ 停到 4.5 → 4.5～5.0 淡出。方向照全壘打：右家、對家觸發時整個畫面左右鏡射（人在右、大字在左）。
  *  位置、大小都是畫面寬高的比例（thReveal.css .th-ihr），四家看到同一個畫面（只差鏡射，跟全壘打一樣） */
 const IHR_HOLES: [number, number, number][] = [[0.3, 0.42, -18], [0.56, 0.58, 24], [0.78, 0.38, 70]]; // 三個彈孔在那組牌上的位置（寬、高的比例）和角度
 function InsideHrFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "insidehr" }>; elapsed: number; mySeat: number; name: string }) {
@@ -219,8 +219,8 @@ function InsideHrFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<S
   const { box } = h, w = box.r - box.l, ht = box.b - box.t;
   return (
     <>
-      {/* 整組牌變灰：只套在被打那一家的牌上（不畫灰色方塊，牌和牌之間的桌布不變色）；2.8～3.2 跟著淡出變回原色 */}
-      <style>{`.th-table [data-th-pos="${pos}"] [data-th-card]{animation:th-ihr-gray 3.2s linear both;animation-delay:${-elapsed}ms}`}</style>
+      {/* 整組牌變灰：只套在被打那一家的牌上（不畫灰色方塊，牌和牌之間的桌布不變色）；4.5～5.0 跟著淡出變回原色 */}
+      <style>{`.th-table [data-th-pos="${pos}"] [data-th-card]{animation:th-ihr-gray 5s linear both;animation-delay:${-elapsed}ms}`}</style>
       {IHR_HOLES.map(([fx, fy, deg], i) => (
         <div key={i} className="th-fx-at" style={{ left: box.l + w * fx - h.hole / 2, top: box.t + ht * fy - h.hole / 2 }} data-th-ihr-hole={i}>
           {/* 寬高都寫明、不用 translate 置中（圖沒載完也不偏） */}
