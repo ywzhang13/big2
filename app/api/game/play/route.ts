@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { broadcast } from "@/lib/broadcast";
 import { detectCombo } from "@/lib/combo";
 import { beats } from "@/lib/compare";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "not_your_seat", message: "請重新整理後再出牌" }, { status: 403 });
     }
 
-    const supabase = getSupabaseServer();
+    const supabase = getSupabaseAdmin();
 
     // Get room
     const { data: room, error: roomError } = await supabase

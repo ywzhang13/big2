@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { after } from "next/server";
 import { sweepIdleRooms } from "@/lib/records/close";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "缺少 hostId" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServer();
+    const supabase = getSupabaseAdmin();
 
     // Try up to 10 times to generate a unique code
     let code: string = "";

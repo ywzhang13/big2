@@ -1,7 +1,7 @@
-// 大老二「等人階段退出房間」的資料存取（/api/game/leave 用）。和其他大老二路由一樣用公開金鑰
-// （big2_rooms／big2_players 的 RLS 允許公開金鑰讀寫，正式庫 2026-10-24 確認過）。
+// 大老二「等人階段退出房間」的資料存取（/api/game/leave 用）。
+// 大老二資料表只給伺服器讀寫（service role，20261127_big2_rls_enforce.sql；原本用公開金鑰，2026-11-27 改）。
 // 測試時整個檔案換成 tests/support/stub-big2-leave-store.ts 的記憶體版本。
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { StartConfirm } from "@/lib/lobby/startConfirm";
 
 export interface Big2LeaveRoom {
@@ -15,7 +15,7 @@ export interface Big2LeaveRoom {
 }
 
 export async function loadRoom(roomId: string): Promise<Big2LeaveRoom | null> {
-  const { data, error } = await getSupabaseServer()
+  const { data, error } = await getSupabaseAdmin()
     .from("big2_rooms")
     .select("id, code, status, host_id, scores, row_version, start_confirm")
     .eq("id", roomId)
@@ -26,7 +26,7 @@ export async function loadRoom(roomId: string): Promise<Big2LeaveRoom | null> {
 
 /** 房裡的座位，最早加入的在前（房主轉交給最早加入、還在房裡的人） */
 export async function loadPlayers(roomId: string): Promise<{ player_id: string; seat: number; name: string; created_at: string }[]> {
-  const { data, error } = await getSupabaseServer()
+  const { data, error } = await getSupabaseAdmin()
     .from("big2_players")
     .select("player_id, seat, name, created_at")
     .eq("room_id", roomId)
@@ -41,7 +41,7 @@ export async function loadPlayers(roomId: string): Promise<{ player_id: string; 
  * 寫入後 trigger 會把 row_version +1。回傳新的 row_version；條件不成立回 null（呼叫端重讀再做）。
  */
 export async function claimRoom(roomId: string, rowVersion: number, patch: Record<string, unknown>): Promise<number | null> {
-  const { data, error } = await getSupabaseServer()
+  const { data, error } = await getSupabaseAdmin()
     .from("big2_rooms")
     .update(patch)
     .eq("id", roomId)
@@ -54,7 +54,7 @@ export async function claimRoom(roomId: string, rowVersion: number, patch: Recor
 
 /** 離座：刪掉這個玩家的座位，回傳刪了幾筆 */
 export async function deletePlayer(roomId: string, playerId: string): Promise<number> {
-  const { data, error } = await getSupabaseServer().from("big2_players").delete().eq("room_id", roomId).eq("player_id", playerId).select("id");
+  const { data, error } = await getSupabaseAdmin().from("big2_players").delete().eq("room_id", roomId).eq("player_id", playerId).select("id");
   if (error) throw new Error(`退出房間失敗：${error.message}`);
   return data?.length ?? 0;
 }
