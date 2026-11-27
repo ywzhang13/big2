@@ -7,6 +7,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
 import { FlowerAnimGuard } from "@/lib/mahjong/flowerAnimGuard";
 import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
+import { AutoDrawer, classifyDrawError, type DrawOutcome } from "@/lib/mahjong/autoDraw";
 import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
@@ -308,6 +309,7 @@ export function useMahjong(
   // 房間已關閉（整場打完或解散後刪房）：顯示「這場已結束」，不再輪詢
   const [closed, setClosed] = useState<RoomClosedInfo | null>(null);
   const closedRef = useRef(false);
+  const autoDrawKickRef = useRef<() => void>(() => {}); // 自動摸牌（lib/mahjong/autoDraw.ts）：重連時馬上補摸
   const markClosed = useCallback((info: RoomClosedInfo) => {
     closedRef.current = true;
     flowerAnimGuardRef.current.invalidate(); // 房間結束：補花動畫如果還沒播完，剩下的計時器都要失效，不能再寫 state（審伯 2026-11-08 必修②）
@@ -1647,6 +1649,7 @@ export function useMahjong(
         const rid = roomIdRef.current;
         if (rid) {
           fetchState(rid); // 第一次訂閱上、斷線重連後再訂閱上：都補抓一次
+          autoDrawKickRef.current(); // 斷線期間該摸的牌：馬上補
         }
       }
     });
@@ -1775,9 +1778,10 @@ export function useMahjong(
   /** 倒數到 0：麻將沒有 tick，讀一次狀態，伺服器就會判斷要不要作廢 */
   const refreshState = useCallback(() => { const rid = roomIdRef.current; if (rid) fetchStateRef.current?.(rid); }, []);
 
-  const drawTileAction = useCallback(async () => {
+  /** 摸牌：回傳結果給自動摸牌決定要不要重試（lib/mahjong/autoDraw.ts） */
+  const drawTileAction = useCallback(async (): Promise<DrawOutcome> => {
     const rid = roomIdRef.current;
-    if (!rid) return;
+    if (!rid) return "retry";
     const cur = stateRef.current;
     const eye = cur.eyeSeats.includes(cur.mySeat) && !document.hidden;
     const drawToken = eyeDrawRef.current.start(eye);
@@ -1792,7 +1796,7 @@ export function useMahjong(
       // 私人事件還沒到（不同頻道、順序不保證）：用 API 回應的那張先開始翻，打出等翻完＋停 1 秒。
       // 事件已經先處理過這一次摸牌就什麼都不做（不重新計時、不蓋掉新狀態）
       if (eye && tile && eyeDrawRef.current.claimResponse(drawToken, tile.id)) {
-        if (!h.on) return; // 排隊已經結束（等太久保險放行）：打出已套用，不能再把牌加回去
+        if (!h.on) return "ok"; // 排隊已經結束（等太久保險放行）：打出已套用，不能再把牌加回去
         holdFor(SLOW_DRAW_MS + SLOW_DRAW_PAUSE_MS);
         h.slowTile = tile.id;
         setState((prev) => ({
@@ -1808,13 +1812,13 @@ export function useMahjong(
       }
     } catch (err) {
       releaseHold();
-      // Race: auto-draw effect can fire before the mj_action broadcast
-      // flips hasDrawn to true after chi/pong/kong. Server will reject with
-      // "已經摸過牌了" — safe to ignore; the next discard path will proceed.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("已經摸過牌了") || msg.includes("等待其他玩家動作中")) return;
-      console.error("[mj] draw failed:", err);
+      // 「已經摸過牌了」（吃碰後的廣播還沒到、或回應遺失後重送）、「等待其他玩家動作中」都是正常情況：
+      // 交給自動摸牌分類——過時就重抓狀態、等吃碰就晚點再問、網路／伺服器錯誤就退避重試
+      const outcome = classifyDrawError(err);
+      if (outcome === "retry") console.warn("[mj] draw failed, will retry:", err);
+      return outcome;
     }
+    return "ok";
   }, [myId, call, holdFor, releaseHold]);
 
   const discardTile = useCallback(
@@ -2041,19 +2045,38 @@ export function useMahjong(
   // chi/pong/kong/win window on my own discard).
   const justDiscarded =
     state.lastDiscard != null && state.lastDiscard.from === state.mySeat;
+  // 老闆 2026-11-04／11-27：原本條件成立時只送一次，請求失敗後條件沒變就再也不送，牌局卡住。
+  // 改成該摸牌的期間由 AutoDrawer 負責到底：失敗退避重試、過時重抓狀態、回前景和重連馬上補；同時只有一個請求在路上
+  const shouldAutoDraw = needsDraw && state.mySeat >= 0 && state.availableActions.length === 0 && !justDiscarded;
+  const drawFnRef = useRef(drawTileAction);
+  useEffect(() => { drawFnRef.current = drawTileAction; }, [drawTileAction]);
+  const [autoDraw] = useState(() => new AutoDrawer<ReturnType<typeof setTimeout>>({
+    draw: () => drawFnRef.current(),
+    sync: () => { const rid = roomIdRef.current; if (rid && !closedRef.current) void fetchStateRef.current?.(rid); },
+    isHidden: () => document.hidden,
+    now: () => Date.now(),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (t) => clearTimeout(t),
+  }));
   useEffect(() => {
-    if (
-      needsDraw &&
-      state.mySeat >= 0 &&
-      state.availableActions.length === 0 &&
-      !justDiscarded
-    ) {
-      const timer = setTimeout(() => {
-        drawTileAction();
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [needsDraw, state.mySeat, state.availableActions.length, justDiscarded]);
+    if (shouldAutoDraw) autoDraw.start(); else autoDraw.stop();
+  }, [shouldAutoDraw, autoDraw]);
+  useEffect(() => {
+    autoDrawKickRef.current = () => autoDraw.kick();
+    return () => { autoDrawKickRef.current = () => {}; autoDraw.stop(); };
+  }, [autoDraw]);
+  // 回前景、網路恢復：馬上補摸（即時連線重連在上面的 channel.subscribe 也會叫一次）
+  useEffect(() => {
+    const kick = () => autoDraw.kick();
+    document.addEventListener("visibilitychange", kick);
+    window.addEventListener("pageshow", kick);
+    window.addEventListener("online", kick);
+    return () => {
+      document.removeEventListener("visibilitychange", kick);
+      window.removeEventListener("pageshow", kick);
+      window.removeEventListener("online", kick);
+    };
+  }, [autoDraw]);
 
   return {
     state,
