@@ -122,12 +122,44 @@ void (async () => {
   check(classifyDrawError(Object.assign(new Error("Internal Server Error"), { status: 500 })) === "retry", "J9 伺服器 500：退避重試");
 }
 
+{ // C 關房（代審 R1 2026-11-27）：摸牌 404 → 重抓也 404 → markClosed；之後 30 秒（假時鐘）摸牌請求數不再增加
+  const { canAutoDraw } = await import("../lib/mahjong/autoDraw");
+  let now = 0, nid = 1;
+  const timers = new Map<number, { at: number; fn: () => void }>();
+  const ui = { needsDraw: true, mySeat: 1, actionCount: 0, justDiscarded: false, closed: false };
+  let reqs = 0, fetches = 0;
+  const d: AutoDrawer<number> = new AutoDrawer<number>({
+    now: () => now, isHidden: () => false,
+    setTimer: (fn, ms) => { const id = nid++; timers.set(id, { at: now + ms, fn }); return id; },
+    clearTimer: (id) => { timers.delete(id); },
+    draw: () => { reqs++; return Promise.resolve(classifyDrawError(Object.assign(new Error('{"error":"找不到遊戲"}'), { status: 404 }))); },
+    // 跟 useMahjong 一樣：重抓狀態也 404 → markClosed（closed 有值），該摸牌條件重算
+    sync: () => { fetches++; ui.closed = true; apply(); },
+  });
+  const apply = () => { if (canAutoDraw(ui)) d.start(); else d.stop(); };
+  const run = async (until: number) => {
+    for (;;) {
+      await Promise.resolve(); await Promise.resolve();
+      const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > until) { now = until; return; }
+      timers.delete(next[0]); now = next[1].at; next[1].fn();
+    }
+  };
+  apply();
+  await run(1000);
+  const atClose = reqs;
+  await run(31000);
+  check(ui.closed && fetches === 1 && atClose === 1, `C1 摸牌 404 → 重抓也 404 → 關房（請求 ${atClose} 次、重抓 ${fetches} 次）`);
+  check(reqs === atClose && timers.size === 0, `C2 關房後 30 秒摸牌請求不再增加（${atClose} → ${reqs}），也沒有留著的計時器`);
+  check(!canAutoDraw({ ...ui, closed: true }) && canAutoDraw({ ...ui, closed: false }), "C3 canAutoDraw：房間關了不摸、沒關照常摸");
+}
+
 { // W 接線（2026-11-27 接到 6df6949 的 useMahjong）：自動摸牌真的由 AutoDrawer 負責，不是舊的「條件成立送一次」
   const { readFileSync } = await import("node:fs");
   const hook = readFileSync("hooks/useMahjong.ts", "utf8");
   check(/new AutoDrawer</.test(hook) && /if \(shouldAutoDraw\) autoDraw\.start\(\); else autoDraw\.stop\(\);/.test(hook), "W1 該摸牌時 start、不該摸時 stop");
   check(!/setTimeout\(\(\) => \{\s*drawTileAction\(\);\s*\}, 250\)/.test(hook), "W2 舊的只送一次（setTimeout 250 呼叫 drawTileAction）已拿掉");
-  check(/const shouldAutoDraw = needsDraw && state\.mySeat >= 0 && state\.availableActions\.length === 0 && !justDiscarded;/.test(hook), "W3 該摸牌的條件跟原本一樣（有吃碰按鈕、剛打出時不摸）");
+  check(/const shouldAutoDraw = canAutoDraw\(\{ needsDraw, mySeat: state\.mySeat, actionCount: state\.availableActions\.length, justDiscarded, closed: closed !== null \}\);/.test(hook), "W3 該摸牌的條件跟原本一樣（有吃碰按鈕、剛打出時不摸），另外房間關了不摸（canAutoDraw）");
   check(["visibilitychange", "pageshow", "online"].every((e) => new RegExp(`addEventListener\\("${e}", kick\\)`).test(hook)) && /autoDrawKickRef\.current\(\); \/\/ 斷線期間該摸的牌/.test(hook), "W4 回前景、網路恢復、即時連線重連都會馬上補摸");
   check(/classifyDrawError\(err\)/.test(hook) && /return "ok";\n  \}, \[myId, call, holdFor, releaseHold\]\)/.test(hook), "W5 摸牌把結果回報給 AutoDrawer（錯誤分類、成功回 ok）");
 }

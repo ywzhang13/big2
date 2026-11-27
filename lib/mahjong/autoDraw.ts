@@ -22,11 +22,18 @@ export const DRAW_KICK_OVERRIDE_MS = 5000;
 export function classifyDrawError(err: unknown): DrawOutcome {
   const status = (err as { status?: number } | null)?.status;
   if (status === 401 || status === 403) return "fatal";
-  if (status === 404) return "stale"; // 找不到遊戲（房間關了、被刪）：重抓狀態，由關房處理停下，不一直重送
+  // 找不到遊戲（房間關了、被刪）：當成過時、重抓狀態；重抓也 404 時 useMahjong 會 markClosed，
+  // 該摸牌條件（canAutoDraw 的 closed）變 false，AutoDrawer 才停下。這裡本身不會停，靠條件停
+  if (status === 404) return "stale";
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes("等待其他玩家動作中")) return "wait";
   if (msg.includes("已經摸過牌了") || msg.includes("還沒輪到你") || msg.includes("遊戲未在進行中")) return "stale";
   return "retry";
+}
+
+/** 該不該自動摸牌（useMahjong 用）：輪到我且還沒摸、有座位、沒有吃碰按鈕、不是自己剛打出、房間沒關（代審 R1：關房後不再送） */
+export function canAutoDraw(c: { needsDraw: boolean; mySeat: number; actionCount: number; justDiscarded: boolean; closed: boolean }): boolean {
+  return c.needsDraw && c.mySeat >= 0 && c.actionCount === 0 && !c.justDiscarded && !c.closed;
 }
 
 export type AutoDrawDeps<T = unknown> = {

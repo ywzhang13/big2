@@ -7,7 +7,7 @@ import type { Tile } from "@/lib/mahjong/tiles";
 import { FlowerTracker, gameKeyOf } from "@/lib/mahjong/flowerTracker";
 import { FlowerAnimGuard } from "@/lib/mahjong/flowerAnimGuard";
 import { safeHand } from "@/lib/mahjong/handOrder"; // 和觀戰畫面共用同一個手牌排序
-import { AutoDrawer, classifyDrawError, type DrawOutcome } from "@/lib/mahjong/autoDraw";
+import { AutoDrawer, canAutoDraw, classifyDrawError, type DrawOutcome } from "@/lib/mahjong/autoDraw";
 import { EyeDrawGate, StateRequestGate, ownConcealedKongMelds, readyAfterNextGame } from "@/lib/mahjong/stateSync";
 import { POLL_TICK_MS, SyncPolicy } from "@/lib/mahjong/syncPolicy";
 import { EYE_DRAW_MS, FLOWER_FX_MS, FLOWER_STAGGER_MS } from "@/lib/mahjong/pace";
@@ -2047,7 +2047,8 @@ export function useMahjong(
     state.lastDiscard != null && state.lastDiscard.from === state.mySeat;
   // 老闆 2026-11-04／11-27：原本條件成立時只送一次，請求失敗後條件沒變就再也不送，牌局卡住。
   // 改成該摸牌的期間由 AutoDrawer 負責到底：失敗退避重試、過時重抓狀態、回前景和重連馬上補；同時只有一個請求在路上
-  const shouldAutoDraw = needsDraw && state.mySeat >= 0 && state.availableActions.length === 0 && !justDiscarded;
+  // 房間關了（摸牌 404 → 重抓也 404 → markClosed）也要停，不然會一直送摸牌（代審 R1）
+  const shouldAutoDraw = canAutoDraw({ needsDraw, mySeat: state.mySeat, actionCount: state.availableActions.length, justDiscarded, closed: closed !== null });
   const drawFnRef = useRef(drawTileAction);
   useEffect(() => { drawFnRef.current = drawTileAction; }, [drawTileAction]);
   const [autoDraw] = useState(() => new AutoDrawer<ReturnType<typeof setTimeout>>({
