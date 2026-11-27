@@ -46,12 +46,15 @@ const STUBS = {
 
 // scripts/ts-register.mjs 用 { stubs: false } 註冊：只轉 TypeScript、解析路徑，連真的資料庫
 let useStubs = true;
+// realBig2Db：大老二的 store（"@/lib/big2/..."）不換成記憶體版本，走真的 supabase-js（tests/flow/flow-big2-rls.ts 接記憶體 PostgreSQL 用）
+let realBig2Db = false;
 export async function initialize(data) {
   if (data?.stubs === false) useStubs = false;
+  if (data?.realBig2Db === true) realBig2Db = true;
 }
 
 export async function resolve(spec, ctx, next) {
-  if (useStubs && STUBS[spec]) return next(pathToFileURL(path.join(ROOT, STUBS[spec])).href, ctx);
+  if (useStubs && STUBS[spec] && !(realBig2Db && spec.startsWith("@/lib/big2/"))) return next(pathToFileURL(path.join(ROOT, STUBS[spec])).href, ctx);
   if (spec.startsWith("@/")) spec = pathToFileURL(path.join(ROOT, spec.slice(2))).href;
   const isRel = spec.startsWith("./") || spec.startsWith("../");
   if ((isRel || spec.startsWith("file:")) && !path.extname(spec)) {

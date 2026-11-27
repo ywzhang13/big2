@@ -1,5 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase-server";
 import { broadcast } from "@/lib/broadcast";
+import { isSeatInPerson } from "@/lib/big2/startConfirm";
 import { big2RoundScores } from "@/lib/scoring";
 import { dealAndStart } from "@/lib/deal-and-start";
 import type { Card } from "@/lib/constants";
@@ -17,13 +18,19 @@ import type { Card } from "@/lib/constants";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { roomId, playerId } = body as {
+    const { roomId, playerId, seatKey } = body as {
       roomId?: string;
       playerId?: string;
+      seatKey?: unknown;
     };
 
     if (!roomId || !playerId) {
       return Response.json({ error: "缺少必要欄位" }, { status: 400 });
+    }
+
+    // 座位本人才能按繼續（2026-11-27，同出牌、過）：原本只填別人的玩家 id 就能替他按，湊滿四家就開下一局
+    if (!(await isSeatInPerson(roomId, playerId, seatKey))) {
+      return Response.json({ error: "not_your_seat", message: "請重新整理後再操作" }, { status: 403 });
     }
 
     const supabase = getSupabaseServer();

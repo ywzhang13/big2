@@ -9,6 +9,7 @@ import type { Combo } from "@/lib/combo";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { closedFromEvent, closedFromResponse, type RoomClosedInfo } from "./roomClosed";
 import { StateRequestGate } from "@/lib/mahjong/stateSync";
+import { BIG2_CLIENT_PROTO } from "@/lib/big2/clientProto";
 
 /** 開局確認（老柯〈大老二開局確認 API〉2026-11-20）：房主按開始後 10 秒內四家都同意才發牌；deadline、serverNow 是伺服器毫秒 */
 /** id：這一輪確認的編號（老柯 R1 修正）；同意、取消都要帶，舊一輪晚到的請求伺服器回 409 stale_confirm */
@@ -435,7 +436,8 @@ export function useGame(roomCode: string, playerName: string) {
       const rid = roomIdRef.current;
       if (!rid || closedRef.current || document.hidden) return; // 分頁在背景時不抓（省量 2026-11-01）
       // During gameplay, poll if it's NOT our turn (we might have missed a broadcast)
-      if (s.status === "playing" && s.currentTurn !== s.mySeat) {
+      // 輪到自己但手上沒牌（開局拿牌的請求失敗了）也要補讀，不然大家都在等他出牌（審伯 R1，2026-11-27）
+      if (s.status === "playing" && (s.currentTurn !== s.mySeat || s.myHand.length === 0)) {
         fetchState(rid);
       }
       // During lobby, poll to keep player list updated
@@ -468,7 +470,7 @@ export function useGame(roomCode: string, playerName: string) {
     try {
       const seatKey = loadSeatKey(roomIdRef.current);
       if (!seatKey) return { ok: false, message: NO_SEAT_KEY_MSG };
-      await api("POST", "/api/game/ready-check", { roomId: roomIdRef.current, playerId: myId, seatKey });
+      await api("POST", "/api/game/ready-check", { roomId: roomIdRef.current, playerId: myId, seatKey, proto: BIG2_CLIENT_PROTO }); // proto：伺服器擋舊版前端開局（lib/big2/clientProto.ts）
       return { ok: true };
     } catch (err) {
       if ((err as { status?: number }).status === 403) return { ok: false, message: NO_SEAT_KEY_MSG }; // 憑證不對或不是房主
@@ -482,7 +484,7 @@ export function useGame(roomCode: string, playerName: string) {
     try {
       const confirmId = confirmRef.current.startConfirm?.id;
       if (!confirmId) return { ok: false, message: "這次開局已經取消" };
-      await api<{ allReady: boolean }>("POST", "/api/game/ready", { roomId: roomIdRef.current, playerId: myId, confirmId });
+      await api<{ allReady: boolean }>("POST", "/api/game/ready", { roomId: roomIdRef.current, playerId: myId, confirmId, proto: BIG2_CLIENT_PROTO });
       return { ok: true };
     } catch (err) {
       const m = (err as Error).message;
@@ -521,6 +523,7 @@ export function useGame(roomCode: string, playerName: string) {
       await api("POST", "/api/game/continue", {
         roomId: roomIdRef.current,
         playerId: myId,
+        seatKey: loadSeatKey(roomIdRef.current), // 座位本人才能按繼續（2026-11-27）
       });
     } catch (err) {
       console.error("[big2] continue failed:", err);

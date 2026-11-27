@@ -59,8 +59,8 @@ async function startedRoom() {
   const keys: Record<string, string> = {};
   for (const p of ps) keys[p] = (await post(join, "/api/game/join", { code, playerId: p, name: "N" + p })).body.seatKey as string;
   sent.length = 0; // 從開局確認開始收（＝外人訂閱公開頻道收到的全部）
-  await post(readyCheck, "/api/game/ready-check", { roomId: id, playerId: ps[0], seatKey: keys[ps[0]] });
-  for (const p of ps.slice(1)) await post(ready, "/api/game/ready", { roomId: id, playerId: p, confirmId: cid(id) });
+  await post(readyCheck, "/api/game/ready-check", { roomId: id, playerId: ps[0], seatKey: keys[ps[0]], proto: 2 });
+  for (const p of ps.slice(1)) await post(ready, "/api/game/ready", { roomId: id, playerId: p, confirmId: cid(id), proto: 2 });
   return { id, code, ps, keys };
 }
 

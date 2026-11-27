@@ -3,14 +3,16 @@
 //   房主要再按一次（重新倒數 10 秒）。已經有一個還在倒數的就回那一個，不重新計時。規則見 lib/big2/startConfirm.ts。
 //   成功 200 { ok, confirm: { id, startedBy, readyIds, seatIds, deadline, serverNow } }；不是房主本人（沒有、錯的、別人的入座憑證）403 not_host；不滿 4 人 400 not_full；已開打 400 started
 import { beginBig2Confirm } from "@/lib/big2/startConfirm";
+import { isCurrentBig2Client, outdatedBig2Client } from "@/lib/big2/clientProto";
 
-async function readBody(request: Request): Promise<{ roomId?: string; playerId?: string; seatKey?: unknown } | null> {
+async function readBody(request: Request): Promise<{ roomId?: string; playerId?: string; proto?: unknown; seatKey?: unknown } | null> {
   try { const b = await request.json(); return b && typeof b === "object" ? b : null; } catch { return null; }
 }
 
 export async function POST(request: Request) {
   const body = await readBody(request);
   if (!body?.roomId || !body.playerId) return Response.json({ error: "缺少必要欄位" }, { status: 400 });
+  if (!isCurrentBig2Client(body)) return outdatedBig2Client(); // 舊版前端開局會缺牌（手牌改讀狀態拿，2026-11-27）
   try {
     return await beginBig2Confirm(body.roomId, body.playerId, body.seatKey);
   } catch {

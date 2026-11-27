@@ -46,11 +46,11 @@ const getState = async (roomId: string, playerId: string): Promise<Res> => {
 };
 /** 入座時伺服器只回給本人的入座憑證（依玩家 id 記著；發起、取消要帶房主本人的，審伯 R4） */
 const seatKeys: Record<string, string | undefined> = {};
-const startWith = (roomId: string, p: string, seatKey: string | undefined) => post(readyCheck, "/api/game/ready-check", { roomId, playerId: p, seatKey });
+const startWith = (roomId: string, p: string, seatKey: string | undefined) => post(readyCheck, "/api/game/ready-check", { roomId, playerId: p, seatKey, proto: 2 });
 const start = (roomId: string, p: string) => startWith(roomId, p, seatKeys[p]);
 /** 這間房目前這一輪確認的編號（前端從開始的回應、廣播或狀態拿到；審伯 R1） */
 const cid = (roomId: string) => (extra[roomId]?.start_confirm as { id?: string } | null | undefined)?.id;
-const agreeWith = (roomId: string, p: string, confirmId: string | undefined) => post(ready, "/api/game/ready", { roomId, playerId: p, confirmId });
+const agreeWith = (roomId: string, p: string, confirmId: string | undefined) => post(ready, "/api/game/ready", { roomId, playerId: p, confirmId, proto: 2 });
 const agree = (roomId: string, p: string) => agreeWith(roomId, p, cid(roomId));
 const cancelWith = (roomId: string, p: string, body: Record<string, unknown>): Promise<Res> =>
   cancelMod ? post(cancelMod.POST, "/api/game/ready-cancel", { roomId, playerId: p, ...body }) : Promise.resolve({ status: 404, body: { error: "no_route" } });
@@ -93,7 +93,7 @@ async function seated(): Promise<{ id: string; code: string; ps: string[] }> {
     [false, false, "ready_check", 200, true, "playing", 1, 4], "B1 三家依序同意：前兩家還在等，第四家同意才發牌（只開一次、每人一份手牌）");
   const r2 = await seated();
   sent.length = 0;
-  const d = await post(deal, "/api/game/deal", { roomId: r2.id, playerId: r2.ps[0], seatKey: seatKeys[r2.ps[0]] });
+  const d = await post(deal, "/api/game/deal", { roomId: r2.id, playerId: r2.ps[0], proto: 2, seatKey: seatKeys[r2.ps[0]] });
   eq([d.status, status(r2.id), events("game_start").length, d.body.confirm?.deadline - NOW], [200, "ready_check", 0, 10_000],
     "B1 舊的「開始遊戲」（/api/game/deal）也不直接發牌，改成發起確認（倒數 10 秒）");
 }
@@ -307,8 +307,8 @@ for (const [label, offset, wantStart] of [["deadline 前 1 毫秒", -1, true], [
     await startWith(r.id, r.ps[0], "猜的"),                                                     // 錯的憑證
     await startWith(r.id, r.ps[0], seatKeys[r.ps[1]]),                                          // 一般玩家用自己的憑證填房主 id
     await startWith(r.id, r.ps[1], seatKeys[r.ps[1]]),                                          // 一般玩家用自己的身分發起
-    await post(deal, "/api/game/deal", { roomId: r.id, playerId: r.ps[0] }),                    // 舊入口，只填房主 id
-    await post(deal, "/api/game/deal", { roomId: r.id, playerId: r.ps[0], seatKey: "猜的" }),  // 舊入口，錯的憑證
+    await post(deal, "/api/game/deal", { roomId: r.id, playerId: r.ps[0], proto: 2 }),                    // 舊入口，只填房主 id
+    await post(deal, "/api/game/deal", { roomId: r.id, playerId: r.ps[0], proto: 2, seatKey: "猜的" }),  // 舊入口，錯的憑證
   ];
   const leaked = tries.some((t) => t.body.cancelToken !== undefined || t.body.seatKey !== undefined || t.body.confirm !== undefined);
   const before = [status(r.id), events("ready_check").length];
