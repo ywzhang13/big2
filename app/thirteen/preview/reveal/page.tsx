@@ -1,6 +1,6 @@
 // 十三支亮牌與結算預覽（假資料，不接 API、不碰資料庫）：強制觸發開始比牌、衝三、鐵支、同花順、五龍、打槍、全壘打，看完接本局結算。
 // 只在本機開發或設了 THIRTEEN_PREVIEW=1 的預覽站開得到（見 ../gate.ts）
-//   /thirteen/preview/reveal?case=chongsan   case：normal／chongsan／tiezhi／tonghuashun／wulong／gun／homerun／flushpair
+//   /thirteen/preview/reveal?case=chongsan   case：normal／chongsan／tiezhi／tonghuashun／wulong／gun／homerun／flushpair／insidehr（自己被三家打槍）／ihrhr（同局也有全壘打）
 //   &final=1  當成整場最後一局（結算按鈕是「看總結算」，再進總結算）
 //   &unused=1 每家多帶 3 張沒用到的牌（照老柯 v4 的 unusedCards：本局結算最右邊那組）
 //   &lucky=9S 這一局的彩金牌（只看畫面：中央看板、金卡、本局結算；牌型照預覽牌局原本算的）

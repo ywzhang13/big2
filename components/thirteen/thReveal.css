@@ -203,6 +203,87 @@
 .th-hr9.is-flip .th-hr9-star { left: 38vw; }
 .th-hr9.is-flip .th-hr9-title { left: 28vw; }
 
+/* ---- 場內全壘打（老闆 2026-11-28：被三家打槍；悲情版全壘打，風格同 .th-hr9）。全部 3.2 秒、百分比＝秒數 ÷ 3.2；W＝100vw、H＝100vh ----
+   0～0.55 牌上三個彈孔、整組牌變灰 → 0.55 冷白閃光換景 → 0.65 雨夜球場＋站著的打者 → 1.05～1.25 交叉淡入跪姿、往下沉 →
+   1.25～1.45 大字從上方重落（不彈跳）→ 1.60 遠處一盞燈熄掉、畫面暗一階 → 1.65 名字 → 2.80～3.20 淡出 */
+/* 被打那一家的牌變灰（ThRevealFx 的 <style> 只套在那一家的 [data-th-card]）：0.2 秒內變灰，2.8～3.2 變回原色 */
+@keyframes th-ihr-gray { 0% { filter: none; } 6.25%, 87.5% { filter: grayscale(1) brightness(.72); } 100% { filter: none; } }
+/* 三個彈孔 0.08、0.22、0.36 一個一個打上去（1.4 倍縮到 1 倍），換景後就不需要了 */
+.th-ihr-hole { left: 0; top: 0; animation-duration: 3.2s; }
+.th-ihr-hole-0 { animation-name: th-ihr-hole0; } .th-ihr-hole-1 { animation-name: th-ihr-hole1; } .th-ihr-hole-2 { animation-name: th-ihr-hole2; }
+@keyframes th-ihr-hole0 { 0%, 2.49% { transform: rotate(var(--hr)) scale(1.4); opacity: 0; } 2.5% { transform: rotate(var(--hr)) scale(1.4); opacity: 1; } 4%, 20.3% { transform: rotate(var(--hr)) scale(1); opacity: 1; } 20.32%, 100% { transform: rotate(var(--hr)) scale(1); opacity: 0; } }
+@keyframes th-ihr-hole1 { 0%, 6.86% { transform: rotate(var(--hr)) scale(1.4); opacity: 0; } 6.875% { transform: rotate(var(--hr)) scale(1.4); opacity: 1; } 8.4%, 20.3% { transform: rotate(var(--hr)) scale(1); opacity: 1; } 20.32%, 100% { transform: rotate(var(--hr)) scale(1); opacity: 0; } }
+@keyframes th-ihr-hole2 { 0%, 11.24% { transform: rotate(var(--hr)) scale(1.4); opacity: 0; } 11.25% { transform: rotate(var(--hr)) scale(1.4); opacity: 1; } 12.8%, 20.3% { transform: rotate(var(--hr)) scale(1); opacity: 1; } 20.32%, 100% { transform: rotate(var(--hr)) scale(1); opacity: 0; } }
+/* 整個畫面：0.55 閃光開始才看得到；z 35 同全壘打 */
+.th-ihr { position: fixed; inset: 0; z-index: 35; overflow: hidden; pointer-events: none; animation: th-ihr-out 3.2s linear both;
+  --hs: min(84vh, 40vw); --xc: 25vw; }
+@keyframes th-ihr-out { 0%, 17.18% { opacity: 0; } 17.19%, 87.5% { opacity: 1; } 100% { opacity: 0; } }
+.th-ihr img { position: absolute; display: block; max-width: none; }
+.th-ihr > *, .th-ihr picture > img, .th-ihr-name { animation-duration: 3.2s; animation-fill-mode: both; animation-timing-function: linear; }
+/* 冷白閃光 0.55～0.65 亮起、0.65～0.80 退掉（全壘打是暖金色，這裡刻意相反）；後面的畫面在 0.65 最亮時才出現 */
+.th-ihr-flash { position: absolute; inset: 0; background: #E4EEFF; animation-name: th-ihr-flash; }
+@keyframes th-ihr-flash { 0%, 17.1875% { opacity: 0; } 20.3125% { opacity: 1; } 25%, 100% { opacity: 0; } }
+/* 雨夜球場：照 cover 算好寬高（球場圖 1376:768＝1.7917），寬高寫明再置中，燈的位置才能用圖上的百分比；整段由 1.06 倍慢慢推到 1 倍 */
+.th-ihr-stage { position: absolute; left: 50%; top: 50%; width: max(100vw, 179.17vh); height: max(100vh, 55.81vw); animation-name: th-ihr-stage; filter: brightness(.86) saturate(.8); }
+@keyframes th-ihr-stage { 0%, 20.3% { transform: translate(-50%, -50%) scale(1.06); opacity: 0; } 20.3125% { transform: translate(-50%, -50%) scale(1.06); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+.th-ihr .th-ihr-field { left: 0; top: 0; width: 100%; height: 100%; }
+/* 遠處一盞燈熄掉：大字那一側的球場燈（原版在右 94%、對調版在左 6%），1.60 閃一下再全暗 */
+.th-ihr-lamp { position: absolute; left: 83%; top: 10%; width: 22%; height: 36%; animation: th-ihr-lamp 3.2s linear both;
+  background: radial-gradient(ellipse at center, rgba(6,10,22,.95) 0%, rgba(6,10,22,.8) 38%, rgba(6,10,22,0) 70%); }
+.th-ihr.is-flip .th-ihr-lamp { left: -5%; }
+@keyframes th-ihr-lamp { 0%, 49.9% { opacity: 0; } 50.6% { opacity: .9; } 51.4% { opacity: .25; } 52.5%, 100% { opacity: 1; } }
+/* 程式畫的雨（人物圖裡的雨線去背時拿掉了）：一塊 160 見方的雨線磁磚往下斜著掉 */
+.th-ihr-rain { position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg stroke='%23d8e4f5' stroke-width='1.4' stroke-linecap='round'%3E%3Cpath d='M12 6l-5 26M58 40l-5 26M104 14l-5 26M146 52l-5 26M34 92l-5 26M82 110l-5 26M128 98l-5 26M20 140l-4 18M70 70l-4 18M116 150l-4 14'/%3E%3C/g%3E%3C/svg%3E"); background-size: 160px 160px;
+  animation: th-ihr-rain 3.2s linear both, th-ihr-fall .4s linear infinite; }
+@keyframes th-ihr-rain { 0%, 20.3% { opacity: 0; } 20.3125%, 100% { opacity: .5; } }
+@keyframes th-ihr-fall { from { background-position: 0 0; } to { background-position: -30px 160px; } }
+/* 壓暗：換景後 22%，1.60 燈熄掉時暗一階到 42% */
+.th-ihr-dim { position: absolute; inset: 0; background: #02040a; animation-name: th-ihr-dim; }
+@keyframes th-ihr-dim { 0%, 20.3% { opacity: 0; } 20.3125%, 50% { opacity: .22; } 52.5%, 100% { opacity: .42; } }
+/* 打者：站姿高 --hs＝min(0.84H, 0.40W)；跪姿 0.88 倍（照兩張圖的肩寬換算，人一樣大）；兩張的軀幹中心都對齊 x＝0.25W（--xc），腳底在畫面底往下 0.03H。
+   對調版（右家、對家觸發）整組左右鏡射 */
+.th-ihr-figs { position: absolute; inset: 0; }
+.th-ihr.is-flip .th-ihr-figs { transform: scaleX(-1); }
+.th-ihr .th-ihr-stand { bottom: -3vh; height: var(--hs); width: calc(var(--hs) * .7159); left: calc(var(--xc) - var(--hs) * .7159 * .43); transform-origin: 50% 100%; animation-name: th-ihr-stand; }
+@keyframes th-ihr-stand {
+  0%, 20.3% { transform: none; opacity: 0; }
+  20.3125% { transform: none; opacity: 1; }
+  32.8125% { transform: translateY(1vh); opacity: 1; animation-timing-function: ease-in; }
+  39.0625%, 100% { transform: translateY(4vh) scaleY(.94); opacity: 0; }
+}
+/* 跪姿：1.05～1.25 從上方 2H% 淡入、沉到定位；之後肩膀起伏（以腳底為準 1.2% 上下，一次 0.32 秒，像在哭），不左右搖、不旋轉 */
+.th-ihr .th-ihr-kneel { bottom: -3vh; height: calc(var(--hs) * .88); width: calc(var(--hs) * .88 * .8893); left: calc(var(--xc) - var(--hs) * .88 * .8893 * .48);
+  transform-origin: 50% 100%; animation-name: th-ihr-kneel; }
+@keyframes th-ihr-kneel {
+  0%, 32.8125% { transform: translateY(-2.5vh); opacity: 0; }
+  32.82% { transform: translateY(-2.5vh); opacity: 0; animation-timing-function: ease-out; }
+  39.0625% { transform: none; opacity: 1; }
+  45% { transform: none; } 50% { transform: scaleY(.988); } 55% { transform: none; } 60% { transform: scaleY(.988); } 65% { transform: none; }
+  70% { transform: scaleY(.988); } 75% { transform: none; } 80% { transform: scaleY(.988); }
+  87.5%, 100% { transform: none; opacity: 1; }
+}
+/* 「場內全壘打」大字：寬 0.46W、中心 (0.72W, 0.46H)；1.25～1.45 從上方 0.7H 重重落下（加速、不彈跳），之後慢慢往下垂 1.2H% */
+.th-ihr-title { position: absolute; left: 72vw; top: 46vh; width: 0; height: 0; display: flex; align-items: center; justify-content: center; }
+.th-ihr.is-flip .th-ihr-title { left: 28vw; }
+.th-ihr .th-ihr-word { position: relative; left: 0; top: 0; width: 46vw; filter: drop-shadow(0 6px 12px rgba(0,0,0,.7)); animation-name: th-ihr-word; }
+@keyframes th-ihr-word {
+  0%, 39.06% { transform: translateY(-70vh); opacity: 0; }
+  39.0625% { transform: translateY(-70vh); opacity: 1; animation-timing-function: cubic-bezier(.55,0,1,.45); }
+  45.3125% { transform: none; opacity: 1; }
+  100% { transform: translateY(1.2vh); opacity: 1; }
+}
+/* 名字：同全壘打的名牌（字型、字距、字影），顏色改灰白；1.65 往上淡入 0.26 秒 */
+.th-ihr-name { position: absolute; left: 0; top: calc(46vw * .3707 / 2 + 6px); transform: translateX(-50%); margin: 0; padding-left: .12em;
+  max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #D9DEE6;
+  font: 700 22px/1.3 "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; letter-spacing: .12em;
+  text-shadow: 0 2px 0 rgba(0,0,0,.65), 0 0 10px rgba(0,0,0,.6); animation-name: th-ihr-name; }
+@media (min-width: 1100px) and (min-height: 700px) { .th-ihr-name { font-size: 28px; top: calc(46vw * .3707 / 2 + 10px); } }
+@keyframes th-ihr-name {
+  0%, 51.5625% { transform: translate(-50%, 8px); opacity: 0; }
+  51.57% { transform: translate(-50%, 8px); opacity: 0; animation-timing-function: ease-out; }
+  59.6875%, 100% { transform: translate(-50%, 0); opacity: 1; }
+}
+
 
 /* ---- 本局結算／整場總結算：外框是三款共用的 GameResultFrame（components/gameResult），這裡只有十三支自己放進去的牌（小宜 v15 §4-2） ---- */
 .gr { animation: th-fade .3s ease-out both; }

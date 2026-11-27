@@ -1,5 +1,5 @@
 "use client";
-// 十三支亮牌特效層（小宜 v5 §1、§3，v4 §4～5）：開始比牌、衝三／鐵支／同花順／五龍、打槍、全壘打。
+// 十三支亮牌特效層（小宜 v5 §1、§3，v4 §4～5）：開始比牌、衝三／鐵支／同花順／五龍、打槍、全壘打、場內全壘打。
 // 只用老闆的素材（public/tiles/thirteen/fx），程式只做移動、縮放、旋轉、透明度；不做晃動、震動（老闆 2026-11-18）。
 // 小宜 v7（老闆 2026-11-18）：大字（開始比牌、衝三、鐵支、同花順、五龍、全壘打）和棒球改用 v2——素材整理時已去黑底、四邊羽化成實心透明圖，
 //   一般疊加、畫在牌上面（screen 疊在象牙白牌面會被洗掉）；衝三等四種出現在那一家那副牌上；全壘打 2.8 秒全螢幕（爆發、煙火用 screen 鋪滿）
@@ -28,6 +28,7 @@ export const FX_AR: Record<string, [number, number]> = {
   jpchongsan: [1000, 529], jphulu: [1000, 532], jptiezhi: [1000, 490], gun: [256, 131], muzzle: [336, 232], bullet: [1024, 191],
   hole1: [144, 144], hole2: [144, 144], hole3: [144, 144], hole4: [144, 144], hrready: [458, 640], ball: [1200, 450], homerun: [1500, 562],
   burst: [1600, 893], fireworks: [1600, 893], hrfield: [1376, 768], hrbatter: [980, 1080], hrstar: [360, 360],
+  ihrfield: [1376, 768], ihrstand: [640, 894], ihrkneel: [900, 1012], ihrword: [1500, 556],
 };
 /** 手機用 .m、桌機用 .d（同一套 CSS 尺寸，桌機圖比較大）。aspect-ratio 用 auto：圖載完照圖本身的比例，載完前用 FX_AR */
 function Pic({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
@@ -40,7 +41,7 @@ function Pic({ name, className, style }: { name: string; className?: string; sty
   );
 }
 
-export const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "jpchongsan", "jphulu", "jptiezhi", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar"];
+export const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "jpchongsan", "jphulu", "jptiezhi", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar", "ihrfield", "ihrstand", "ihrkneel", "ihrword"];
 let preloaded: Promise<void> | null = null;
 /** 先把特效圖和牌背載好（理牌畫面一打開就呼叫）：第一次播的時候圖才不會還沒下載完、整段看不到。只載這台裝置那一套（手機 .m／桌機 .d） */
 export function preloadRevealFx(): Promise<void> {
@@ -195,6 +196,58 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
   );
 }
 
+/** 場內全壘打 3.2 秒（老闆 2026-11-28「被三家打槍＝場內全壘打，悲情版、風格跟全壘打一樣」；阿哲分鏡、時間軸照派工卡）：
+ *  0～0.55 被打那一家的牌依序中三個彈孔、整組牌變灰 → 0.55 冷白閃光換景到雨夜球場 → 0.55～1.05 打者站著、快跪下去 →
+ *  1.05～1.25 交叉淡入跪姿、往下沉 → 1.25～1.45「場內全壘打」大字從上方重重落下（不彈跳）→ 1.6 遠處一盞燈熄掉、畫面暗一階，跪姿肩膀微微起伏 →
+ *  1.65 被打那一家的名字（灰白）→ 2.8～3.2 淡出。方向照全壘打：右家、對家觸發時整個畫面左右鏡射（人在右、大字在左）。
+ *  位置、大小都是畫面寬高的比例（thReveal.css .th-ihr），四家看到同一個畫面（只差鏡射，跟全壘打一樣） */
+const IHR_HOLES: [number, number, number][] = [[0.3, 0.42, -18], [0.56, 0.58, 24], [0.78, 0.38, 70]]; // 三個彈孔在那組牌上的位置（寬、高的比例）和角度
+function InsideHrFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "insidehr" }>; elapsed: number; mySeat: number; name: string }) {
+  const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
+  const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
+  const h = useMount(() => {
+    const rs = [...document.querySelectorAll(`.th-table [data-th-pos="${pos}"] [data-th-card]`)].map((e) => e.getBoundingClientRect());
+    const c = seatCenter(pos) ?? tableCenter();
+    const box = rs.length
+      ? { l: Math.min(...rs.map((r) => r.left)), t: Math.min(...rs.map((r) => r.top)), r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)) }
+      : { l: c.x - 80, t: c.y - 50, r: c.x + 80, b: c.y + 50 };
+    return { box, hole: Math.max(36, (box.b - box.t) * 0.5), flip: pos === "right" || pos === "top" };
+  });
+  if (!h) return null;
+  const delay = { animationDelay: `${-elapsed}ms` };
+  const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name; // 名字最多 10 個字（同全壘打）
+  const { box } = h, w = box.r - box.l, ht = box.b - box.t;
+  return (
+    <>
+      {/* 整組牌變灰：只套在被打那一家的牌上（不畫灰色方塊，牌和牌之間的桌布不變色）；2.8～3.2 跟著淡出變回原色 */}
+      <style>{`.th-table [data-th-pos="${pos}"] [data-th-card]{animation:th-ihr-gray 3.2s linear both;animation-delay:${-elapsed}ms}`}</style>
+      {IHR_HOLES.map(([fx, fy, deg], i) => (
+        <div key={i} className="th-fx-at" style={{ left: box.l + w * fx - h.hole / 2, top: box.t + ht * fy - h.hole / 2 }} data-th-ihr-hole={i}>
+          {/* 寬高都寫明、不用 translate 置中（圖沒載完也不偏） */}
+          <Pic name={`hole${i + 1}`} className={`th-fx th-ihr-hole th-ihr-hole-${i}`} style={{ ...delay, width: h.hole, height: h.hole, ["--hr" as string]: `${deg}deg` }} />
+        </div>
+      ))}
+      <div className={`th-ihr${h.flip ? " is-flip" : ""}`} data-th-insidehr={step.seat} data-th-ihr-flip={h.flip ? 1 : 0} style={delay}>
+        <div className="th-ihr-stage" style={delay}>
+          <Pic name="ihrfield" className="th-ihr-field" />
+          <div className="th-ihr-lamp" style={delay} />
+        </div>
+        <div className="th-ihr-rain" style={delay} />
+        <div className="th-ihr-dim" style={delay} />
+        <div className="th-ihr-figs">
+          <Pic name="ihrstand" className="th-ihr-stand" style={delay} />
+          <Pic name="ihrkneel" className="th-ihr-kneel" style={delay} />
+        </div>
+        <div className="th-ihr-title">
+          <Pic name="ihrword" className="th-ihr-word" style={delay} />
+          <p className="th-ihr-name" data-th-ihr-name style={delay}>{shown}</p>
+        </div>
+        <div className="th-ihr-flash" style={delay} />
+      </div>
+    </>
+  );
+}
+
 /** names：每個座位的名字（全壘打畫面的名牌用） */
 export default function ThRevealFx({ active, t, mySeat, names = [] }: { active: Step[]; t: number; mySeat: number; names?: string[] }) {
   return (
@@ -206,6 +259,7 @@ export default function ThRevealFx({ active, t, mySeat, names = [] }: { active: 
         if (s.kind === "fx") return <PatternFxView key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
         if (s.kind === "gun") return <GunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
         if (s.kind === "homerun") return <HomeRunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} name={names[s.seat] ?? ""} />;
+        if (s.kind === "insidehr") return <InsideHrFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} name={names[s.seat] ?? ""} />;
         return null;
       })}
     </div>

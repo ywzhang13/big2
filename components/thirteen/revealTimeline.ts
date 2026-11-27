@@ -1,12 +1,12 @@
 // 十三支亮牌時間軸：純函式，畫面照「現在是第幾毫秒」算出要顯示什麼。新節奏（老闆 2026-11-18、小宜 v12 §5）：
 //   開始比牌 1.7 秒（大字 0.9）→ 頭墩、中墩、尾墩：照伺服器給的翻牌順序（最小的先）一家一家出，每家 1.5 秒、換墩不停；
 //   大牌（衝三／鐵支／同花順／五龍）那家多佔 0.3 秒，大字 1.5 秒和下一家重疊；牌型、加分寫在中央看板（BoardFrame）
-//   → 打槍（每槍 1.5 秒）→ 全壘打（3.2 秒）→ 停 1.2 秒 → 本局結算面板
+//   → 打槍（每槍 1.5 秒）→ 全壘打（3.2 秒）→ 場內全壘打（3.2 秒，被三家打槍的那一家；老闆 2026-11-28）→ 停 1.2 秒 → 本局結算面板
 // 長度和伺服器同一套（lib/thirteen/flow.ts REVEAL_TIMING、revealDurationMs）：結算面板出現的時間＝伺服器的 settleAt，四家同步
 // 起點用伺服器的亮牌時間 revealedAt：四家看到的進度一樣，重新整理也接得上（不會從頭再播）
 import { CAT, SCORING, bonusOf, rowPoints, type Card, type Arrangement, type HandValue, type RoundResult, type Row } from "@/lib/thirteen";
 import { rowCatName, rowDisplayOrder } from "./arrangeState";
-import { REVEAL_TIMING, type HandStat, type ScoredStat } from "@/lib/thirteen/flow";
+import { insideHomeRunOf, REVEAL_TIMING, type HandStat, type ScoredStat } from "@/lib/thirteen/flow";
 
 export const ROWS: Row[] = ["front", "middle", "back"];
 export const ROW_NAME: Record<Row, string> = { front: "頭墩", middle: "中墩", back: "尾墩" };
@@ -47,21 +47,23 @@ export type PatternFx = "chongsan" | "tiezhi" | "tonghuashun" | "wulong" | "jpch
  *  fxDelay 大牌那家出牌後多久播大字；fx 大字長度（和下一家出牌重疊）。special＝大牌那家多佔的時間（留給看板顯示紅金牌型名） */
 export const MS = {
   start: REVEAL_TIMING.START_MS, play: REVEAL_TIMING.PLAY_MS, wait: REVEAL_TIMING.ROW_WAIT_MS, special: REVEAL_TIMING.SPECIAL_MS,
-  gun: REVEAL_TIMING.GUN_MS, homerun: REVEAL_TIMING.HOME_RUN_MS, settle: REVEAL_TIMING.SETTLE_PAUSE_MS,
+  gun: REVEAL_TIMING.GUN_MS, homerun: REVEAL_TIMING.HOME_RUN_MS, insidehr: REVEAL_TIMING.INSIDE_HR_MS, settle: REVEAL_TIMING.SETTLE_PAUSE_MS,
   startWord: 900, flip: 350, pop: 300, scoreDelay: 100, fxDelay: 500, fx: 1500,
   /** 一墩最後一個牌型（含大牌紅金名）和加分至少停多久，才換墩或因打槍淡出看板（審伯必修 1：大牌在一墩最後一家時，大字播完名字也要看得到） */
   boardHold: 400,
 } as const;
 /** 結算面板時間公式（和伺服器 lib/thirteen/flow.ts revealDurationMs 同一個公式，測試 S4 逐局比對） */
-export const revealDurationV8 = (specials: number, guns: number, homeRun: boolean) =>
-  MS.start + 3 * (4 * MS.play + MS.wait) + MS.special * specials + MS.gun * guns + (homeRun ? MS.homerun : 0) + MS.settle;
+export const revealDurationV8 = (specials: number, guns: number, homeRun: boolean, insideHr = false) =>
+  MS.start + 3 * (4 * MS.play + MS.wait) + MS.special * specials + MS.gun * guns + (homeRun ? MS.homerun : 0) + (insideHr ? MS.insidehr : 0) + MS.settle;
 
 export type Step =
   | { kind: "start"; t0: number; dur: number }
   | { kind: "flip"; t0: number; dur: number; row: Row; seats: number[]; big: boolean; fx: boolean }  // 一家一家出，seats 只有一位；big＝大牌（多佔 special、紅金牌型名）；fx＝有大字特效
   | { kind: "fx"; t0: number; dur: number; row: Row; seat: number; fx: PatternFx }
   | { kind: "gun"; t0: number; dur: number; from: number; to: number; n: number }
-  | { kind: "homerun"; t0: number; dur: number; seat: number };
+  | { kind: "homerun"; t0: number; dur: number; seat: number }
+  /** 場內全壘打（老闆 2026-11-28）：seat＝被另外三家都打槍的那一家 */
+  | { kind: "insidehr"; t0: number; dur: number; seat: number };
 
 /** 這一墩的牌型播哪個大字（老闆 2026-11-20 新圖：彩金三種各有自己的字，不再借用一般版）：頭墩衝三／彩金衝三；中墩、尾墩的鐵支／彩金鐵支、
  *  同花順（黑桃和非黑桃共用，老闆 2026-11-19）、五龍；中墩彩金葫蘆（尾墩彩金葫蘆不加分、不是大牌，所以沒有大字）。
@@ -123,6 +125,8 @@ export function buildTimeline(rv: Pick<ThReveal, "order" | "result">): { steps: 
   }
   gunsOf(rv.result).forEach((g, n) => { steps.push({ kind: "gun", t0: t, dur: MS.gun, ...g, n }); t += MS.gun; });
   if (rv.result.homeRun !== null) { steps.push({ kind: "homerun", t0: t, dur: MS.homerun, seat: rv.result.homeRun }); t += MS.homerun; }
+  const ihr = insideHomeRunOf(rv.result); // 同一局也有全壘打：先播全壘打、再播場內全壘打（和伺服器 revealDurationMs 一樣加 3.2 秒）
+  if (ihr !== null) { steps.push({ kind: "insidehr", t0: t, dur: MS.insidehr, seat: ihr }); t += MS.insidehr; }
   return { steps, end: t + MS.settle };
 }
 
@@ -174,7 +178,7 @@ export function frameAt(tl: { steps: Step[]; end: number }, t: number): RevealFr
   const ws = scoreWindows(tl);
   // 看板換墩：上一墩的加分視窗結束（下一墩第一家落定，而且上一墩的名字和加分至少停過 boardHold）
   const row: Row = t >= ws[1].to ? "back" : t >= ws[0].to ? "middle" : "front";
-  const guns = tl.steps.some((s) => s.kind === "gun" || s.kind === "homerun");
+  const guns = tl.steps.some((s) => s.kind === "gun" || s.kind === "homerun" || s.kind === "insidehr");
   const hide = t < MS.startWord || (guns && t >= ws[2].to); // 「開始比牌」大字播完看板才淡入；打槍、全壘打時淡出
   for (const s of tl.steps) {
     if (s.t0 > t) continue;
