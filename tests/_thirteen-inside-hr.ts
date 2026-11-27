@@ -4,6 +4,7 @@
 //   I3 揭牌總長：伺服器 revealDurationMs 多 3.2 秒，前端時間軸的結束時間跟伺服器一樣（隨機 3000 局逐局比）；最長等待 NEXT_HAND_MAX_MS 也算進去
 //   I4 計分不變：有沒有場內全壘打，每家的分數都只是兩兩比牌＋打槍＋全壘打（scoreRound 沒有新加分）
 //   I5 畫面：特效層有場內全壘打這一段、四張新圖有長寬比、登記長期快取；測試頁有「場內全壘打」按鈕
+//   I6 音效（老闆「要配聲音」）：0.55 悶雷、1.25 咚、1.6 小號；預設候選 A、可換候選；檔案都在、登記長期快取、來源有寫；原本選好的音效沒動
 import { readFileSync, existsSync } from "node:fs";
 import { autoArrange, deal, revealOrder, scoreRound, type RoundResult } from "../lib/thirteen";
 import { insideHomeRunOf, REVEAL_TIMING, revealDurationMs, NEXT_HAND_MAX_MS, SETTLE_WAIT_MS } from "../lib/thirteen/flow";
@@ -96,6 +97,28 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(/\.th-ihr\.is-flip \.th-ihr-figs \{ transform: scaleX\(-1\); \}/.test(css) && /pos === "right" \|\| pos === "top"/.test(tsx.slice(tsx.indexOf("function InsideHrFx"))), "I5 右家、對家觸發時左右鏡射（同全壘打）");
   ok(/@keyframes th-ihr-out \{.*87\.5% \{ opacity: 1; \} 100% \{ opacity: 0; \} \}/.test(css), "I5 2.8～3.2 秒淡出");
   ok(/key: "insidehr", name: "場內全壘打"/.test(readFileSync("components/thirteen/ThFxLab.tsx", "utf8")), "I5 特效測試頁有「場內全壘打」按鈕");
+}
+
+// ---- I6 音效 ----
+{
+  const S = await import("../components/thirteen/sfx");
+  const reg = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
+  const steps = T.buildTimeline(must("insidehr")).steps, ihr = steps.find((s) => s.kind === "insidehr")!;
+  const ev = S.sfxEvents(steps, 0).filter((e) => e.t >= ihr.t0 && e.t < ihr.t0 + ihr.dur).map((e) => `${e.t - ihr.t0}:${e.k}:${(e.src ?? "").split("/").pop()}`);
+  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1250:ihrthud:th-sfx-ihrthud-a.v1.mp3", "1600:ihrtrumpet:th-sfx-ihrtrumpet-a.v1.mp3"]),
+    `I6 場內全壘打的聲音：0.55 悶雷、1.25 咚、1.6 小號，預設候選 A：${ev.join("、")}`);
+  const ev2 = S.sfxEvents(steps, 2, null, undefined, { ihrtrumpet: 1, ihrthud: "b" }).filter((e) => e.t >= ihr.t0).map((e) => (e.src ?? "").split("/").pop());
+  ok(ev2.includes("th-sfx-ihrthud-b.v1.mp3") && ev2.includes("th-sfx-ihrtrumpet-r2-1.v1.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3"), "I6 換候選（咚 B、小號 C）照選的播，沒選的維持 A；不管自己坐哪都一樣");
+  const files = S.IHR_SFX.flatMap((x) => x.options.map((o) => S.sfxSrc(x.key, o.v)));
+  const lic = readFileSync("public/tiles/thirteen/sfx/LICENSE-insidehr.v1.txt", "utf8");
+  ok(files.length === 7 && files.every((f) => existsSync(`public${f}`) && !!reg[f] && lic.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-insidehr.v1.txt"],
+    `I6 7 個候選音檔都在、登記長期快取、來源寫在 LICENSE-insidehr.v1.txt`);
+  const PICK = S.SFX_PICK as Record<string, unknown>;
+  ok(JSON.stringify(["start", "play", "score", "chongsan", "tiezhi", "tonghuashun", "wulong", "gunshot", "hit", "charge", "bat", "homerun", "fireworks"].map((k) => PICK[k]))
+    === JSON.stringify(["a", "a", "a", "a", "a", "a", "b", 1, 3, "a", "a", "a", "a"]), "I6 原本選好的音效（SFX_PICK）都沒變");
+  const hrEv = S.sfxEvents(T.buildTimeline(must("homerun")).steps, 0, "r3-a").filter((e) => e.k === "bat").length;
+  ok(hrEv === 1, "I6 全壘打的揮棒聲照舊");
+  ok(/data-th-lab-ihr=/.test(readFileSync("components/thirteen/ThFxLab.tsx", "utf8")), "I6 特效測試頁可以試聽、切換場內全壘打的候選");
 }
 
 for (const r of results) console.log(r);

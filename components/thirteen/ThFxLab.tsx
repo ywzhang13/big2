@@ -5,7 +5,7 @@ import ThTable from "./ThTable";
 import ThRevealFx, { preloadRevealFx } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
-import { BIG_SFX, loadBigSfx, playSfx, playSrc, saveBigSfx, useRevealSfx } from "./sfx";
+import { BIG_SFX, IHR_SFX, loadBigSfx, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type IhrSfxKey, type SfxVariant } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
 import "./thRoom.css";
 import "./thReveal.css";
@@ -38,11 +38,12 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [play, setPlay] = useState<{ n: number; at: number; steps: Step[] } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
+  const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
 
   // 自動量測用（只有預覽站的這一頁有）：照正式牌局同一條路（playSrc → Web Audio、跟著互動音效音量）播一個檔
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
-    setBig(loadBigSfx());
+    setBig(loadBigSfx()); setIhr(loadIhrSfx());
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();
     setFelt(f); applyFelt(f, isFelt(initial.felt));
     // 特效圖都載好才播（第一次打開圖還在下載）；網址有 fx 就自動播一次
@@ -64,6 +65,8 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
     setBig(x ? x.id : null); saveBigSfx(x ? x.id : null);
   };
   const batches = [...new Set(BIG_SFX.map((x) => x.batch))];
+  // 場內全壘打音效候選（老闆 2026-11-28）：按了就試聽並選用（記在本機），完整牌局照同一個選擇播
+  const pickIhr = (key: IhrSfxKey, v: SfxVariant) => { playSrc(sfxSrc(key, v), { force: true }); saveIhrSfx(key, v); setIhr(loadIhrSfx()); };
 
   const view: ThGameView = useMemo(() => ({
     status: "playing", code: "0000", sv: 0, phase: "revealed", handNo: 1, settings: { arrangeSec: 60, totalHands: 8 },
@@ -114,6 +117,17 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
               </span>
             ))}
             <button type="button" className={big ? "" : "is-on"} data-th-lab-big="off" onClick={() => pickBig(null)}>不選</button>
+          </div>
+          <div className="th-lab-row" data-th-lab-ihr>
+            <span className="th-lab-sfx">場內全壘打音效</span>
+            {IHR_SFX.map((x) => (
+              <span key={x.key} className="th-lab-sfx">
+                {x.name}
+                {x.options.map((o) => (
+                  <button key={String(o.v)} type="button" title={o.name} className={(ihr[x.key] ?? SFX_PICK[x.key]) === o.v ? "is-on" : ""} data-th-lab-ihr={`${x.key}-${o.v}`} onClick={() => pickIhr(x.key, o.v)}>{o.label}</button>
+                ))}
+              </span>
+            ))}
           </div>
         </div>
       ) : (
