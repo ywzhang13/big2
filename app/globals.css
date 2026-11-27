@@ -555,7 +555,7 @@
 /* 建立房間的設定分組：桌機不影響排版（照舊一欄），手機橫向才變成左右兩欄 */
 .mjl-cset { display: contents; }
 @media (orientation: landscape) and (max-height: 500px) {
-  .mjl { --btn-h: 44px; --line-x: 22px; --rec-row: 52px; --fs-ttl: 30px; } /* LINE 登入鈕高＝2×line-x＝44（小測：40 不夠觸控） */
+  .mjl { --btn-h: 44px; --line-x: 20px; --rec-row: 52px; --fs-ttl: 30px; }
 }
 .mjl-lobby {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
