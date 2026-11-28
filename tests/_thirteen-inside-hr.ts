@@ -96,7 +96,7 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const files = names.flatMap((n) => (["m", "d"] as const).map((z) => fxSrc(n, z)));
   ok(files.every((f) => /\.v1\.[md]\.webp$/.test(f) && existsSync(`public${f}`) && !!reg[f]), `I5 8 個檔名有版本號、檔案存在、登記長期快取：${files.filter((f) => !reg[f]).join("、") || "全部"}`);
   ok(/s\.kind === "insidehr"\) return <InsideHrFx/.test(tsx) && /data-th-insidehr=/.test(tsx), "I5 特效層會畫場內全壘打");
-  ok(/\.th-ihr\.is-flip \.th-ihr-figs \{ transform: scaleX\(-1\); \}/.test(css) && /flip: mirrorFor\(pos\)/.test(tsx.slice(tsx.indexOf("function InsideHrFx"))), "I5 鏡射跟全壘打用同一個判斷（mirrorFor）");
+  ok(/\.th-ihr\.is-flip \.th-ihr-figs \{ transform: scaleX\(-1\); \}/.test(css) && /flip: fxOpts\(pos, trial\)\.flip/.test(tsx.slice(tsx.indexOf("function InsideHrFx"))), "I5 鏡射跟全壘打用同一個判斷（mirrorFor）");
   ok(/@keyframes th-ihr-out \{.*90% \{ opacity: 1; \} 100% \{ opacity: 0; \} \}/.test(css) && /\.th-ihr \{[^}]*animation: th-ihr-out 5s/.test(css), "I5 整段 5 秒、4.5～5.0 秒淡出");
   ok(/key: "insidehr", name: "場內全壘打"/.test(readFileSync("components/thirteen/ThFxLab.tsx", "utf8")), "I5 特效測試頁有「場內全壘打」按鈕");
 }
@@ -123,15 +123,15 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(/data-th-lab-ihr=/.test(readFileSync("components/thirteen/ThFxLab.tsx", "utf8")), "I6 特效測試頁可以試聽、切換場內全壘打的候選");
 }
 
-// ---- I7 試做切換（老闆 2026-11-28：全壘打預備新版、人物大小乙案）：只有特效測試頁會切，正式遊戲維持舊預備＋甲 ----
+// ---- I7 試做切換（老闆 2026-11-28：全壘打預備新／舊、人物大小甲／乙）：只有特效測試頁會切；正式遊戲＝定案（新預備＋甲，審伯 R1） ----
 {
   const tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), css = readFileSync("components/thirteen/thReveal.css", "utf8"), lab = readFileSync("components/thirteen/ThFxLab.tsx", "utf8");
-  const setters = [...readFileSync("components/thirteen/ThFxLab.tsx", "utf8").matchAll(/thTrialReady|thFxsize/g)].length;
-  const others = ["components/thirteen/ThReveal.tsx", "components/thirteen/ThTable.tsx", "app/thirteen/page.tsx"].filter((f) => existsSync(f)).some((f) => /thTrialReady|thFxsize|th_lab_trial/.test(readFileSync(f, "utf8")));
-  ok(setters > 0 && !others && /data-th-lab-ready=/.test(lab) && /data-th-lab-size=/.test(lab), "I7 切換只在特效測試頁（記在 th_lab_trial），正式牌局的頁面不會設");
-  ok(/const ready2 = document\.documentElement\.dataset\.thTrialReady === "new";/.test(tsx) && /\{!h\.ready2 && \(/.test(tsx) && /\{h\.ready2 && <Pic name="hrready" className="th-hr9-ready"/.test(tsx), "I7 預備新版：沒切的時候照舊在牌桌上畫預備姿勢；切了才改畫在球場上");
+  const others = ["components/thirteen/ThReveal.tsx", "components/thirteen/ThTable.tsx", "app/thirteen/page.tsx"].filter((f) => existsSync(f)).some((f) => /th_lab_trial|trial=/.test(readFileSync(f, "utf8")));
+  ok(/<ThRevealFx [^>]*trial=\{trial\}/.test(lab) && /th_lab_trial/.test(lab) && !others && /data-th-lab-ready=/.test(lab) && /data-th-lab-size=/.test(lab), "I7 切換只在特效測試頁（記在 th_lab_trial、用屬性傳給這一頁的特效層），正式牌局不傳");
+  ok(/export const FX_FINAL: FxTrial = \{ ready: "new", size: "a", dir: "mirror" \};/.test(tsx) && /trial = FX_FINAL/.test(tsx) && /\{!h\.ready2 && \(/.test(tsx) && /\{h\.ready2 && <Pic name="hrready" className="th-hr9-ready"/.test(tsx),
+    "I7 正式遊戲（不傳 trial）＝新預備：0.3 換景到球場、預備姿勢加集氣、1.0 揮棒；舊預備（牌桌上）只有測試頁選「舊」才畫");
   ok(/\.th-hr9-batter \{ left: 10vw; bottom: -2vh; height: min\(92vh, 44vw\)/.test(css) && /--hs: min\(62vh, 29\.6vw\)/.test(css), "I7 預設大小（甲）不變：打者 min(92vh, 44vw)（位置靠中間 10vw）、場內 min(62vh, 29.6vw)");
-  ok(/:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-batter \{ left: 2vw; height: min\(117vh, 56vw\); \}/.test(css) && /:root\[data-th-fxsize="b"\] \.th-ihr \{ --hs: min\(84vh, 40vw\); \}/.test(css), "I7 乙案：打者 min(117vh, 56vw)（852 寬人物約 320）、場內回到 min(84vh, 40vw)");
+  ok(/\.th-hr9\.is-size-b \.th-hr9-batter \{ left: 2vw; height: min\(117vh, 56vw\); \}/.test(css) && /\.th-ihr\.is-size-b \{ --hs: min\(84vh, 40vw\); \}/.test(css), "I7 乙案：打者 min(117vh, 56vw)（852 寬人物約 320）、場內回到 min(84vh, 40vw)");
   ok(/\.th-hr9\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2; \}/.test(css) && /\.th-hr9\.is-flip\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2-r; \}/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ready \{[^}]*th-hr9-ready2-r/.test(css), "I7 預備新版的交叉淡入在鏡射版也會鏡射");
 }
 
@@ -156,7 +156,7 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   // 球（老闆第二輪「從打擊者的頭右上方直線飛出去，跟上一版類似」）：起點＝打擊者圖上頭的右上方，跟著打者的位置、大小算；1.25 起飛、直線、1.7 變十字星
   ok(/\.th-hr9-ballpath \{ --hl: 10vw; --hb: min\(92vh, 44vw\); --bx: calc\(var\(--hl\) \+ var\(--hb\) \* \.9071 \* \.7263\); --by: calc\(102vh - var\(--hb\) \* \(1 - \.3059\)\);/.test(css)
     && /left: var\(--bx\); top: var\(--by\);/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ballpath \{ left: calc\(100vw - var\(--bx\)\);/.test(css)
-    && /:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-ballpath \{ --hl: 2vw; --hb: min\(117vh, 56vw\); \}/.test(css),
+    && /\.th-hr9\.is-size-b \.th-hr9-ballpath \{ --hl: 2vw; --hb: min\(117vh, 56vw\); \}/.test(css),
     "I8 球的起點是打者頭的右上方（鏡射版左上方；甲、乙兩種大小都跟著打者走）");
   ok(/0%, 24\.99% \{[^}]*opacity: 0; \}\n  25% \{[^}]*opacity: 1;/.test(kf("th-hr9-ballpath")) && /34%, 100% \{ transform: translate\(calc\(64vw - var\(--bx\)\), calc\(18vh - var\(--by\)\)\) scale\(\.12\);/.test(kf("th-hr9-ballpath"))
     && /34%, 100% \{ transform: translate\(calc\(var\(--bx\) - 64vw\), calc\(18vh - var\(--by\)\)\) scale\(\.12\) scaleX\(-1\);/.test(kf("th-hr9-ballpath-r"))
@@ -182,13 +182,46 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
 // ---- I9 方向（老闆 2026-11-28「對家跟右家的全壘打翻轉怪怪的」）----
 {
   const tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), css = readFileSync("components/thirteen/thReveal.css", "utf8"), lab = readFileSync("components/thirteen/ThFxLab.tsx", "utf8");
-  ok(/const mirrorFor = \(pos: Pos\) => document\.documentElement\.dataset\.thTrialDir !== "none" && \(pos === "right" \|\| pos === "top"\);/.test(tsx) && /const face = mirrorFor\(pos\) \? -1 : 1;/.test(tsx),
+  ok(/const mirrorFor = \(pos: Pos, trial: FxTrial\) => trial\.dir !== "none" && \(pos === "right" \|\| pos === "top"\);/.test(tsx) && /face = o\.flip \? -1 : 1;/.test(tsx),
     "I9 鏡射版右家、對家翻（老闆「繼續用鏡射」，維持原設計）、自己和左家不翻；不翻轉版四家都不翻；全壘打、場內全壘打同一個判斷");
   ok(/\.th-hr9\.is-flip \.th-hr9-field, \.th-hr9\.is-flip \.th-hr9-fw \{ scale: -1 1; \}/.test(css) && /\.th-ihr\.is-flip \.th-ihr-field \{ scale: -1 1; \}/.test(css), "I9 鏡射版的球場背景、煙火跟人一起翻（原本只翻人）");
   ok(/\.th-hr9\.is-flip \.th-hr9-word \{ transform-origin: 0 50%; \}/.test(css), "I9 鏡射版大字從左緣放大：砸下來那一下切掉的是「打」，不是「全」");
-  ok(/data-th-lab-dir=/.test(lab) && /d\.thTrialDir = "none"/.test(lab) && /"鏡射"/.test(lab) && /"不翻轉"/.test(lab), "I9 特效測試頁有「方向：鏡射／不翻轉」");
-  const others = ["components/thirteen/ThReveal.tsx", "components/thirteen/ThTable.tsx", "app/thirteen/page.tsx"].filter((f) => existsSync(f)).some((f) => /thTrialDir/.test(readFileSync(f, "utf8")));
-  ok(!others, "I9 正式牌局不會設 data-th-trial-dir（預設＝鏡射版）");
+  ok(/data-th-lab-dir=/.test(lab) && /dir: r/.test(lab) && /"鏡射"/.test(lab) && /"不翻轉"/.test(lab), "I9 特效測試頁有「方向：鏡射／不翻轉」");
+}
+
+// ---- I10 試做隔離（審伯 2026-11-28 R2：試聽存過候選後，正式牌局播出已取消的歡呼、咚和小號也被換掉）----
+//   重現審伯的步驟：本機先存各種候選（擊球後 A、咚 A、小號 B、th_lab_trial 乙＋不翻轉＋舊預備），<html> 也留著舊版會寫的試做屬性；
+//   正式牌局那條路（revealSfxEvents 不傳 lab、fxOpts 不傳 trial）仍要是定案值。拿掉隔離（改回讀本機／<html>）這一段就會紅
+{
+  const S = await import("../components/thirteen/sfx");
+  const F = await import("../components/thirteen/ThRevealFx");
+  const store: Record<string, string> = {
+    th_sfx_hrafter: JSON.stringify("a"), th_sfx_ihr: JSON.stringify({ ihrthud: "a", ihrtrumpet: "b", ihrthunder: "b" }),
+    th_lab_trial: JSON.stringify({ ready: "old", size: "b", dir: "none" }),
+  };
+  const g = globalThis as unknown as { localStorage?: unknown; document?: unknown; window?: unknown };
+  const saved = { localStorage: g.localStorage, document: g.document };
+  g.localStorage = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; }, removeItem: (k: string) => { delete store[k]; } };
+  g.document = { documentElement: { dataset: { thTrialReady: "old", thFxsize: "b", thTrialDir: "none" } } }; // 舊版測試頁會留在 <html> 的屬性
+  try {
+    ok(S.loadHrAfter() === "a" && S.loadIhrSfx().ihrthud === "a", "I10 前提：本機確實存著試聽候選（擊球後 A、咚 A、小號 B、悶雷 B）");
+    const both = T.buildTimeline(must("ihrhr")).steps, h = both.find((s) => s.kind === "homerun")!, i = both.find((s) => s.kind === "insidehr")!;
+    const ev = S.revealSfxEvents(both, 0).filter((e) => e.t >= i.t0 && e.t < h.t0 + h.dur).map((e) => `${e.t - i.t0}:${e.k}:${(e.src ?? "").split("/").pop()}`);
+    ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3", "2300:ihrtrumpet:th-sfx-ihrtrumpet-r2-1.v2.mp3", "6000:bat:"]), // 揮棒聲走 SFX_PICK（不帶 src）
+      `I10 正式牌局（不傳 lab）：場內全壘打悶雷 A、咚 B、小號 C，全壘打只有 1.0 揮棒聲、沒有擊球後音效：${ev.join("、")}`);
+    const lab = S.revealSfxEvents(both, 0, undefined, { ihr: S.loadIhrSfx(), hrAfter: S.loadHrAfter() }).filter((e) => e.k === "hrafter" || e.k === "ihrthud").map((e) => (e.src ?? "").split("/").pop());
+    ok(lab.includes("th-sfx-hrafter-a.v1.mp3") && lab.includes("th-sfx-ihrthud-a.v1.mp3"), "I10 測試頁（傳 lab）照試聽選擇播：擊球後 A、咚 A");
+    const finals = (["bottom", "right", "top", "left"] as const).map((p) => F.fxOpts(p));
+    ok(JSON.stringify(finals) === JSON.stringify([{ flip: false, ready2: true, sizeB: false }, { flip: true, ready2: true, sizeB: false }, { flip: true, ready2: true, sizeB: false }, { flip: false, ready2: true, sizeB: false }]),
+      `I10 正式牌局（不傳 trial）不受本機 th_lab_trial、<html> 殘留屬性影響：新預備、人物甲、右家和對家鏡射、自己和左家不翻：${JSON.stringify(finals)}`);
+    const t = F.fxOpts("right", { ready: "old", size: "b", dir: "none" });
+    ok(!t.flip && !t.ready2 && t.sizeB, "I10 測試頁（傳 trial）照試做：舊預備、乙、不翻轉");
+  } finally { g.localStorage = saved.localStorage; g.document = saved.document; }
+  const css = readFileSync("components/thirteen/thReveal.css", "utf8"), tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), sfx = readFileSync("components/thirteen/sfx.ts", "utf8");
+  const reveal = readFileSync("components/thirteen/ThReveal.tsx", "utf8");
+  ok(!/:root\[data-th-/.test(css) && !/documentElement\.dataset/.test(tsx) && !/loadIhrSfx\(\)|loadHrAfter\(\)/.test(sfx.slice(sfx.indexOf("export function preloadSfx"), sfx.indexOf("/** 舊的十三支")))
+    && /useRevealSfx\(tl\.steps, t, view\.me\?\.seat \?\? 0, rv\.result\.values\);/.test(reveal) && !/trial=/.test(reveal),
+    "I10 試做樣式只用特效層上的 class（沒有掛在 <html> 的全域選擇器）；正式牌局的 ThReveal 不傳 trial、lab，預載也只載定案音檔");
 }
 
 for (const r of results) console.log(r);

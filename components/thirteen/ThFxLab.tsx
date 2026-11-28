@@ -2,7 +2,7 @@
 // 十三支特效測試頁（app/thirteen/preview/fx）：四家牌全部亮開的牌桌上，按鈕觸發各種特效；元件和正式牌局同一套（ThTable、ThRevealFx）
 import { useEffect, useMemo, useState } from "react";
 import ThTable from "./ThTable";
-import ThRevealFx, { preloadRevealFx } from "./ThRevealFx";
+import ThRevealFx, { FX_FINAL, preloadRevealFx, type FxTrial } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
 import { BIG_SFX, HR_AFTER, HR_AFTER_DEFAULT, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type HrAfterPick, type IhrSfxKey, type SfxVariant } from "./sfx";
@@ -17,7 +17,6 @@ const FX_LIST: { key: LabFx; name: string }[] = [
   { key: "start", name: "開始比牌" }, { key: "chongsan", name: "衝三" }, { key: "tiezhi", name: "鐵支" }, { key: "tonghuashun", name: "同花順" },
   { key: "wulong", name: "五龍" }, { key: "jpchongsan", name: "彩金衝三" }, { key: "jphulu", name: "彩金葫蘆" }, { key: "jptiezhi", name: "彩金鐵支" }, { key: "gun", name: "打槍" }, { key: "gun3", name: "被打三槍" }, { key: "homerun", name: "全壘打" }, { key: "insidehr", name: "場內全壘打" },
 ];
-type Trial = { ready: "old" | "new"; size: "a" | "b"; dir: "mirror" | "none" };
 const SEATS = ["自己", "右家", "對家", "左家"]; // 自己坐 0 號：1 號在右、2 號對家、3 號在左（同 ThTable）
 const isFx = (v: unknown): v is LabFx => FX_LIST.some((f) => f.key === v);
 
@@ -42,23 +41,21 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [big, setBig] = useState<string | null>(null);
   const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
   const [hrAfter, setHrAfter] = useState<HrAfterPick>(HR_AFTER_DEFAULT);
-  // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機，套在 <html> 的 data-th-trial-ready、data-th-fxsize、data-th-trial-dir
-  // （不能叫 data-th-hr-ready：牌桌上的預備姿勢已經用這個名字當標記）（正式遊戲不設＝舊＋甲＋鏡射）
-  const [trial, setTrial] = useState<Trial>({ ready: "old", size: "a", dir: "mirror" });
-  const applyTrial = (t: Trial) => {
+  // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機（th_lab_trial，只有這一頁讀）。
+  // 審伯 R2：只用屬性傳給這一頁的 ThRevealFx，不寫 <html>、正式牌局也不讀，所以客戶端換頁到正式遊戲不會殘留（正式＝FX_FINAL：新預備＋甲＋鏡射）
+  const [trial, setTrial] = useState<FxTrial>(FX_FINAL);
+  const applyTrial = (t: FxTrial) => {
     setTrial(t);
-    const d = document.documentElement.dataset;
-    if (t.ready === "new") d.thTrialReady = "new"; else delete d.thTrialReady;
-    if (t.size === "b") d.thFxsize = "b"; else delete d.thFxsize;
-    if (t.dir === "none") d.thTrialDir = "none"; else delete d.thTrialDir;
     try { localStorage.setItem("th_lab_trial", JSON.stringify(t)); } catch { /* 存不了就只是這次 */ }
   };
+  // 試聽選擇只給這一頁播（審伯 R2：正式牌局不讀）
+  const labSfx = useMemo(() => ({ ihr, hrAfter }), [ihr, hrAfter]);
 
   // 自動量測用（只有預覽站的這一頁有）：照正式牌局同一條路（playSrc → Web Audio、跟著互動音效音量）播一個檔
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
     setBig(loadBigSfx()); setIhr(loadIhrSfx()); setHrAfter(loadHrAfter());
-    try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string; dir?: string }; applyTrial({ ready: t.ready === "new" ? "new" : "old", size: t.size === "b" ? "b" : "a", dir: t.dir === "none" ? "none" : "mirror" }); } catch { /* 沒存過＝舊＋甲＋鏡射 */ }
+    try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string; dir?: string }; applyTrial({ ready: t.ready === "old" ? "old" : "new", size: t.size === "b" ? "b" : "a", dir: t.dir === "none" ? "none" : "mirror" }); } catch { /* 沒存過＝定案：新＋甲＋鏡射 */ }
     // 場內全壘打的候選全部先載好：試聽第一次按就有聲音（播放時檔案還沒載完會被當成太晚、直接略過，手機走外部網址最明顯）
     for (const x of IHR_SFX) for (const o of x.options) void loadBuffer(sfxSrc(x.key, o.v));
     for (const o of HR_AFTER) if (o.v !== "none") void loadBuffer(sfxSrc("hrafter", o.v));
@@ -99,12 +96,12 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   // 彈孔留著（每槍 0.26 秒中彈）；重播或換特效才清掉
   const shot = [0, 1, 2, 3].map((seat) => steps.filter((s) => s.kind === "gun" && s.to === seat && t >= s.t0 + 260).length);
   const frame = { ...allOpen(), shot };
-  useRevealSfx(steps, play ? t : 0, 0);
+  useRevealSfx(steps, play ? t : 0, 0, undefined, labSfx);
 
   return (
     <>
       <ThTable view={view} now={now} clockSkew={0} reveal={{ rv, frame }} menu={false} />
-      {play && <ThRevealFx key={play.n} active={active} t={Math.max(0, t)} mySeat={0} names={NAMES} />}
+      {play && <ThRevealFx key={play.n} active={active} t={Math.max(0, t)} mySeat={0} names={NAMES} trial={trial} />}
       {ui ? (
         <div className="th-lab" data-th-lab>
           <div className="th-lab-row">

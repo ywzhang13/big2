@@ -227,8 +227,8 @@
 }
 .th-hr9.is-flip .th-hr9-star { left: 36vw; }
 .th-hr9.is-flip .th-hr9-title { left: 25vw; }
-/* ---- 試做（老闆 2026-11-28，只有特效測試頁會切換；正式遊戲維持上面的舊預備＋甲大小）----
-   ① 預備新版（:root 沒設、.th-hr9.is-ready2）：預備姿勢不在牌桌上——牌上集氣光亮 0～0.3，0.3 換景到球場，預備姿勢出現在揮棒打者同一個位置（腳底、腰帶中線對齊），
+/* ---- 預備新版（正式遊戲用，審伯 R1）＋人物乙案（只有特效測試頁）。class 由 ThRevealFx 依呼叫端傳入的 trial 加上，正式牌局固定 FX_FINAL＝新預備、甲、鏡射 ----
+   ① 預備新版（.th-hr9.is-ready2；老闆定案、正式遊戲預設）：預備姿勢不在牌桌上——牌上集氣光亮 0～0.3，0.3 換景到球場，預備姿勢出現在揮棒打者同一個位置（腳底、腰帶中線對齊），
    0.3～1.0 背後集氣光（.th-hr9-charge）由小放大、越來越亮，人慢慢放大 3%（蓄力），1.0～1.1 交叉淡入成揮棒那張（打者不再從左下滑進來），1.05 補一下小閃光；後面照上面的 5.0 秒時間。
    預備圖裡人佔圖高 80%（上面是舉起的球棒），揮棒圖 69.6% → 預備圖高＝揮棒圖高 × 0.87；腰帶中線：揮棒圖寬 52%、預備圖寬 49% → left＝10vw＋揮棒圖高 × 0.169（打者靠中間後跟著移） */
 .th-hr9 .th-hr9-ready { --hb: min(92vh, 44vw); left: calc(10vw + var(--hb) * .169); bottom: -2vh; height: calc(var(--hb) * .87); width: calc(var(--hb) * .87 * .7148);
@@ -256,16 +256,16 @@
 .th-hr9.is-flip.is-ready2 .th-hr9-batter { animation-name: th-hr9-batter2-r; }
 @keyframes th-hr9-batter2 { 0%, 20% { transform: none; opacity: 0; } 22%, 100% { transform: none; opacity: 1; } }
 @keyframes th-hr9-batter2-r { 0%, 20% { transform: scaleX(-1); opacity: 0; } 22%, 100% { transform: scaleX(-1); opacity: 1; } }
-/* ② 人物大小乙案（:root[data-th-fxsize="b"]）：全壘打打者放大成跟場內全壘打原本一樣大（852 寬人物約 320），往左移到 2vw 讓出大字；
+/* ② 人物大小乙案（.is-size-b，只有特效測試頁選「乙」才加）：全壘打打者放大成跟場內全壘打原本一樣大（852 寬人物約 320），往左移到 2vw 讓出大字；
    場內全壘打站姿、跪姿回到 b849165 之前的 min(84vh, 40vw)（腳底仍離畫面底 1.5vh） */
-:root[data-th-fxsize="b"] .th-hr9 .th-hr9-batter { left: 2vw; height: min(117vh, 56vw); }
-:root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-batter { left: auto; right: 2vw; }
-:root[data-th-fxsize="b"] .th-hr9 .th-hr9-ballpath { --hl: 2vw; --hb: min(117vh, 56vw); } /* 球的起點跟著放大的打者走（頭的右上方） */
-:root[data-th-fxsize="b"] .th-hr9 .th-hr9-ready { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .169); }
-:root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-ready { left: auto; right: calc(2vw + var(--hb) * .169); }
-:root[data-th-fxsize="b"] .th-hr9 .th-hr9-charge { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .48 - var(--cw) / 2); }
-:root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-charge { left: auto; right: calc(2vw + var(--hb) * .48 - var(--cw) / 2); }
-:root[data-th-fxsize="b"] .th-ihr { --hs: min(84vh, 40vw); }
+.th-hr9.is-size-b .th-hr9-batter { left: 2vw; height: min(117vh, 56vw); }
+.th-hr9.is-size-b.is-flip .th-hr9-batter { left: auto; right: 2vw; }
+.th-hr9.is-size-b .th-hr9-ballpath { --hl: 2vw; --hb: min(117vh, 56vw); } /* 球的起點跟著放大的打者走（頭的右上方） */
+.th-hr9.is-size-b .th-hr9-ready { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .169); }
+.th-hr9.is-size-b.is-flip .th-hr9-ready { left: auto; right: calc(2vw + var(--hb) * .169); }
+.th-hr9.is-size-b .th-hr9-charge { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .48 - var(--cw) / 2); }
+.th-hr9.is-size-b.is-flip .th-hr9-charge { left: auto; right: calc(2vw + var(--hb) * .48 - var(--cw) / 2); }
+.th-ihr.is-size-b { --hs: min(84vh, 40vw); }
 
 /* ---- 場內全壘打（老闆 2026-11-28：被三家打槍；悲情版全壘打，風格同 .th-hr9）。全部 5.0 秒（老闆「可以久一點」，原本 3.2）、百分比＝秒數 ÷ 5；W＝100vw、H＝100vh ----
    0～0.55 牌上三個彈孔、整組牌變灰 → 0.55 冷白閃光換景（悶雷）→ 0.65 雨夜球場＋站著的打者 → 1.6～1.85 交叉淡入跪姿、往下沉 →
