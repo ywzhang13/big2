@@ -65,9 +65,9 @@ function seatCenter(pos: Pos): Pt | null {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 const tableCenter = (): Pt => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-/** 全壘打、場內全壘打要不要左右鏡射（老闆 2026-11-28「對家跟右家翻轉怪怪的」）：鏡射版只有右家翻（對家坐正對面，沒有朝左的理由，改成不翻）；
+/** 全壘打、場內全壘打要不要左右鏡射（老闆 2026-11-28「對家跟右家翻轉怪怪的」）：鏡射版右家、對家翻（老闆 2026-11-28 第三輪「鏡射修好了就繼續用鏡射」＝維持原設計；1514b94 一度改成對家不翻，老闆在預覽站發現「對家改成在左邊打擊」，改回來）；
  *  特效測試頁切成「不翻轉」（<html data-th-trial-dir="none">）時四家都不翻＝打者在左、大字在右，只靠名牌分是誰。正式遊戲不設＝鏡射版 */
-const mirrorFor = (pos: Pos) => document.documentElement.dataset.thTrialDir !== "none" && pos === "right";
+const mirrorFor = (pos: Pos) => document.documentElement.dataset.thTrialDir !== "none" && (pos === "right" || pos === "top");
 const isDesktop = () => window.matchMedia(DESKTOP).matches;
 
 /** 一段特效：掛上去那一刻算好位置和「已播毫秒」 */
@@ -153,7 +153,7 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
 }
 
 /** 全壘打 5.0 秒（小宜 v9；老闆 2026-11-28 預備也要集氣、總長對齊場內全壘打，原本 3.2 秒、0.55 揮棒）：0～1.0 在打者那組牌上集氣（老闆「集氣有點太久」從 1.4 縮短）——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
- * （人一直是正的，只左右鏡射面向球飛的方向：鏡射版只有右家面向左（mirrorFor）；1.0 秒後的打擊者畫面跟著同一個方向）；
+ * （人一直是正的，只左右鏡射面向球飛的方向：鏡射版右家、對家面向左（mirrorFor）；1.0 秒後的打擊者畫面跟著同一個方向）；
  * 1.0 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、1.25 球從球棒甜蜜點飛上天變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 停到 4.5 → 4.5～5.0 一起淡出（時間在 thReveal.css）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
 function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number; name: string }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
@@ -207,7 +207,7 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
 /** 場內全壘打 5.0 秒（老闆 2026-11-28「被三家打槍＝場內全壘打，悲情版、風格跟全壘打一樣」；阿哲分鏡；老闆「可以久一點」從 3.2 拉長到 5.0）：
  *  0～0.55 被打那一家的牌依序中三個彈孔、整組牌變灰 → 0.55 冷白閃光換景到雨夜球場（悶雷）→ 0.55～1.6 打者站著、快跪下去 →
  *  1.6～1.85 交叉淡入跪姿、往下沉 → 1.85～2.05「場內全壘打」大字從上方重重落下（不彈跳，「咚」）→ 2.3 遠處一盞燈熄掉、畫面暗一階（小號 C），
- *  跪姿肩膀一直微微起伏 → 2.25 被打那一家的名字（灰白）→ 停到 4.5 → 4.5～5.0 淡出。方向照全壘打（mirrorFor）：鏡射版右家觸發時整個畫面左右鏡射（人在右、大字在左），不翻轉版四家都人在左。
+ *  跪姿肩膀一直微微起伏 → 2.25 被打那一家的名字（灰白）→ 停到 4.5 → 4.5～5.0 淡出。方向照全壘打（mirrorFor）：鏡射版右家、對家觸發時整個畫面左右鏡射（人在右、大字在左），不翻轉版四家都人在左。
  *  位置、大小都是畫面寬高的比例（thReveal.css .th-ihr），四家看到同一個畫面（只差鏡射，跟全壘打一樣） */
 const IHR_HOLES: [number, number, number][] = [[0.3, 0.42, -18], [0.56, 0.58, 24], [0.78, 0.38, 70]]; // 三個彈孔在那組牌上的位置（寬、高的比例）和角度
 function InsideHrFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "insidehr" }>; elapsed: number; mySeat: number; name: string }) {

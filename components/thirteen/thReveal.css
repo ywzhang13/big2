@@ -205,11 +205,11 @@
   43.01% { transform: translate(-50%, 8px); opacity: 0; animation-timing-function: ease-out; }
   48.2%, 100% { transform: translate(-50%, 0); opacity: 1; }
 }
-/* 鏡射版（.is-flip：方向選「鏡射」時右家觸發，集氣人物朝左）：打擊者在右（素材左右鏡射、從右下滑進）、球往左上飛、星星和大字＋名字在左；
+/* 鏡射版（.is-flip：方向選「鏡射」時右家、對家觸發，集氣人物朝左）：打擊者在右（素材左右鏡射、從右下滑進）、球往左上飛、星星和大字＋名字在左；
    位置都是原版以畫面中線鏡射（x → 100vw − x），間隔和原版一樣不重疊。
    老馬 2026-11-28 修「對家、右家翻轉怪怪的」：①球場背景、煙火原本沒翻，只有人翻 → 光的方向、煙火最亮的那團跟原版相反，人和背景像兩張圖拼的：一起鏡射；
    ②大字砸下來那 0.12 秒放大 2.2 倍超出畫面，原版切到的是最後的「打」，鏡射版切到的是第一個字「全」（讀起來像「壘打」）：鏡射版改從大字左緣放大，
-   切掉的一樣是尾巴；③對家改成不翻（在 ThRevealFx：對家坐正對面，沒有「朝左」的理由） */
+   切掉的一樣是尾巴；③（1514b94 一度改成對家不翻，老闆不要，已改回右家、對家都鏡射，見 ThRevealFx mirrorFor） */
 .th-hr9.is-flip .th-hr9-field, .th-hr9.is-flip .th-hr9-fw { scale: -1 1; }
 .th-hr9.is-flip .th-hr9-word { transform-origin: 0 50%; }
 .th-hr9.is-flip .th-hr9-batter { left: auto; right: 10vw; animation-name: th-hr9-batter-r; }

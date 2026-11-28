@@ -182,8 +182,8 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
 // ---- I9 方向（老闆 2026-11-28「對家跟右家的全壘打翻轉怪怪的」）----
 {
   const tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), css = readFileSync("components/thirteen/thReveal.css", "utf8"), lab = readFileSync("components/thirteen/ThFxLab.tsx", "utf8");
-  ok(/const mirrorFor = \(pos: Pos\) => document\.documentElement\.dataset\.thTrialDir !== "none" && pos === "right";/.test(tsx) && /const face = mirrorFor\(pos\) \? -1 : 1;/.test(tsx) && !/pos === "top"/.test(tsx),
-    "I9 鏡射版只有右家翻（對家不翻）；不翻轉版四家都不翻；全壘打、場內全壘打同一個判斷");
+  ok(/const mirrorFor = \(pos: Pos\) => document\.documentElement\.dataset\.thTrialDir !== "none" && \(pos === "right" \|\| pos === "top"\);/.test(tsx) && /const face = mirrorFor\(pos\) \? -1 : 1;/.test(tsx),
+    "I9 鏡射版右家、對家翻（老闆「繼續用鏡射」，維持原設計）、自己和左家不翻；不翻轉版四家都不翻；全壘打、場內全壘打同一個判斷");
   ok(/\.th-hr9\.is-flip \.th-hr9-field, \.th-hr9\.is-flip \.th-hr9-fw \{ scale: -1 1; \}/.test(css) && /\.th-ihr\.is-flip \.th-ihr-field \{ scale: -1 1; \}/.test(css), "I9 鏡射版的球場背景、煙火跟人一起翻（原本只翻人）");
   ok(/\.th-hr9\.is-flip \.th-hr9-word \{ transform-origin: 0 50%; \}/.test(css), "I9 鏡射版大字從左緣放大：砸下來那一下切掉的是「打」，不是「全」");
   ok(/data-th-lab-dir=/.test(lab) && /d\.thTrialDir = "none"/.test(lab) && /"鏡射"/.test(lab) && /"不翻轉"/.test(lab), "I9 特效測試頁有「方向：鏡射／不翻轉」");
