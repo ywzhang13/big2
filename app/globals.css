@@ -43,7 +43,9 @@
   /* 下方不留安全區（老闆 2026-11-28「下面有空隙」，阿妍量測）：home 條的安全區改放進手牌那一條（.mjm-hand 下內距），我的區深色底才會延伸到畫面最底 */
   /* 老闆 2026-11-28「把畫面由下空隙變成上空隙」：牌底照舊離畫面底 14px，省下的高度（原本牌底下 6＋21＝27，現在 14，差 13）
      改留在最上面，牌桌高度和改之前一樣、整個畫面往下移。沒有 home 條（SE、桌機）時是 0，維持原樣。用 --sa-b，自動測試才能模擬 */
-  padding: max(0px, calc(var(--sa-b) - 8px)) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  /* 老闆 2026-11-28 追加「底部留 2px 就好」：牌底 14→2，省下的 12 也加到上面＝原本牌底下的 27−2＝25（＝安全區＋4）。
+     min(安全區×100, 安全區＋4)：沒有 home 條（安全區 0）時是 0，SE、桌機維持原樣 */
+  padding: min(calc(var(--sa-b) * 100), calc(var(--sa-b) + 4px)) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   overflow: hidden;
   color: #fff;
   background: radial-gradient(ellipse at center, var(--mj-amb-1) 0%, var(--mj-amb-2) 60%, var(--mj-amb-3) 100%);
@@ -222,7 +224,8 @@
 .mjm-me-r { justify-content: flex-end; }
 .mjm-me-info .cnt { font-size: 10px; color: rgba(255,255,255,.35); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 /* 下內距：沒有 home 條（SE、桌機）6px；有 home 條時＝安全區 −7（iPhone 21 → 14），牌底在 home 條上方、牌往下 13px（阿妍方案 B）。用 --sa-b，自動測試才能模擬 */
-.mjm-hand { display: flex; align-items: flex-end; justify-content: center; padding: 8px 8px max(6px, calc(var(--sa-b) - 7px)); }
+/* 老闆 2026-11-28 追加：有 home 條時牌底離畫面底 2px（6−安全區，最小 2）；沒有 home 條（SE、桌機）照舊 6px */
+.mjm-hand { display: flex; align-items: flex-end; justify-content: center; padding: 8px 8px max(2px, calc(6px - var(--sa-b))); }
 /* iPhone UI 規格 P2、A3：右邊讓出右下的聊天圓鈕（手牌右緣 ≤ 圓鈕左緣 −8；852×393 時 733） */
 .mjm-hand { padding-right: calc(max(8px, var(--sa-r)) - var(--sa-r) + 60px); }
 .mjm-hand .main { display: flex; gap: 2px; }
