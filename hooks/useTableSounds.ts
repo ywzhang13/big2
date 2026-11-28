@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fxAudioState, playTableSound, playVoice, preloadVoice, unlockAudio } from "@/lib/mahjong/fx/engine";
 import { createVoiceQueue, createVoiceTracker, type VoiceSnapshot } from "@/lib/mahjong/tableVoice";
+import { zimoVoiceGate } from "@/lib/mahjong/zimoVoiceGate";
 import { createDiscardWatcher, createTurnReminder, discardKey, remindActive } from "@/lib/mahjong/tableSound";
 import { shakeHandForRemind } from "@/lib/mahjong/remindShake";
 import { useGameAudioSession } from "@/lib/gameAudioSession";
@@ -85,10 +86,14 @@ export function useTableVoice({ roomId, hand, snap }: { roomId: string; hand: st
   const scope = roomId ? `${roomId}|${hand}` : "";
   useEffect(() => {
     // 換房、換局、離開（scope 變空）：停掉舊的那句、丟掉排著的，從新的一局重新記（審伯 R4）
-    if (track.current.scope !== scope) { queue.reset(); track.current = { scope, tracker: createVoiceTracker() }; }
+    if (track.current.scope !== scope) { queue.reset(); zimoVoiceGate.drop(); track.current = { scope, tracker: createVoiceTracker() }; }
     if (!scope || !snap) return;
-    queue.push(track.current.tracker.next(snap));
-  }, [scope, snap, queue]);
+    const keys = track.current.tracker.next(snap);
+    // 自摸：這一手有演出「自摸」字（lib/mahjong/zimoVoiceGate.ts）就先扣住，字出現那一刻才唸（老闆 2026-11-28）
+    const zimo = keys.includes("zimo") && zimoVoiceGate.hold(hand, () => queue.push(["zimo"]));
+    queue.push(zimo ? keys.filter((k) => k !== "zimo") : keys);
+  }, [scope, snap, queue, hand]);
   // 離開牌桌（玩家頁、觀戰頁卸載）：停掉正在播的、丟掉排著的，不會跨頁跟新的牌桌疊音（審伯 R4）
   useEffect(() => () => queue.reset(), [queue]);
+  useEffect(() => () => zimoVoiceGate.drop(), []); // 扣著的自摸配音也丟掉
 }

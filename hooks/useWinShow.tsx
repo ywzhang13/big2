@@ -11,6 +11,7 @@ import MeteorFx, { preloadMeteorFx } from "@/components/mahjong/MeteorFx";
 import ZimoFx, { preloadZimoFx, CANVAS_ART_WAIT, zimoFxArtOk } from "@/components/mahjong/ZimoFx";
 import WinCelebration from "@/components/mahjong/WinCelebration";
 import { bigWinKey, bigWinPlayed, markBigWinPlayed, pickBigWin, type BigWinPick } from "@/lib/mahjong/bigWin";
+import { zimoVoiceGate } from "@/lib/mahjong/zimoVoiceGate";
 import { artOkWithin, CELE_MS, isCanvasFx, isChatUiEvent, isZimoFxNew, planWinShow, zfxPlanToCele, type WinShowStage } from "@/lib/mahjong/winShow";
 
 const FLOWER_WIN_NAMES = ["八仙過海", "七搶一"];
@@ -80,6 +81,9 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
     if (!showPlan || !winShowKey || bigWinPlayed(winShowKey) || !showWinner) return;
     const key = winShowKey;
     const show: WinShow = { key, plan: showPlan, i: 0, pick: showPick, seat: showWinner.seat, zimo: isZimoWin, tile: showWinner.winTile, name: showWinner.name, winFx: showWinner.winFx };
+    // 這一手會演出「自摸」字（浮層、自摸特效、隕石）：配音的「自摸」先扣住，字出現那一刻才唸（老闆 2026-11-28，lib/mahjong/zimoVoiceGate.ts）。
+    // 一定要在這裡同步做：頁面裡 useWinShow 排在 useTableVoice 前面，同一次更新會先跑到這裡
+    if (isZimoWin && showPlan.some((st) => st === "cele" || st === "zfx" || st === "meteor")) zimoVoiceGate.arm(handKey);
     // 下一個畫面才掛上；「記下播過」和「掛上特效」放在同一刻，中間不會有一次重繪讓結算浮層先閃出來。
     // 素材還沒載好就先等它載好再播，最多等 1.5 秒，第一次播也不會閃空白：
     //   ・隕石（例如伺服器沒先告訴我們房間裡有這個帳號）
@@ -121,6 +125,7 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
     if (winStage !== "cele" || !winShowLive) return;
     const mode = winShowLive.zimo ? "zimo" : "ron";
     setCelebrationMode(mode);
+    if (mode === "zimo") zimoVoiceGate.cue(handKey); // 金色自摸浮層一出來「自摸」字就在
     const t = setTimeout(nextWinStage, CELE_MS[mode]);
     celeOffRef.current = setTimeout(() => setCelebrationMode((m) => (m === mode ? null : m)), CELE_MS[mode]);
     const skip = (e: Event) => {
@@ -138,10 +143,17 @@ export function useWinShow({ winner, status, roundInfo, roomId, roomOk }: {
     return () => { clearTimeout(t); document.removeEventListener("pointerdown", skip, true); document.removeEventListener("keydown", skip, true); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 每一段只排一次
   }, [winStage, winShowLive?.key]);
+  // 演出結束、跳過、換局、離開：配音還扣著的照樣唸出來（例如字出現前就跳過）
+  useEffect(() => {
+    if (!winShowLive) return;
+    const h = handKey;
+    return () => zimoVoiceGate.release(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只看這一段演出掛上／收掉
+  }, [winShowLive?.key]);
   // 換局、離開房間：浮層的收尾計時器也收掉
   useEffect(() => () => { if (celeOffRef.current) clearTimeout(celeOffRef.current); }, [winShowKey]);
 
-  return { isZimoWin, isRonWin, flowerWinName, celebrationMode, showWinner, winShowKey, winShowLive, winStage, winShowHoldResult, endWinShow, nextWinStage, zfxToCele };
+  return { handKey, isZimoWin, isRonWin, flowerWinName, celebrationMode, showWinner, winShowKey, winShowLive, winStage, winShowHoldResult, endWinShow, nextWinStage, zfxToCele };
 }
 
 export type WinShowState = ReturnType<typeof useWinShow>;
@@ -159,12 +171,12 @@ export function WinShowLayer({ ws, winner, mySeat, mobile }: { ws: WinShowState;
       {/* 帳號專屬「隕石自摸」：取代自摸浮層；接在大牌專屬段後面（或單獨播），播完出結算，點畫面任一處跳過 */}
       {winShowLive && winStage === "meteor" && (
         <MeteorFx key={`mt|${winShowLive.key}`} seat={winShowLive.seat} mySeat={mySeat} mobile={mobile} tile={winShowLive.tile} name={winShowLive.name}
-          onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
+          onTitle={() => zimoVoiceGate.cue(ws.handKey)} onDone={(skipped) => (skipped ? endWinShow() : nextWinStage())} />
       )}
       {/* 自摸特效庫的新特效（雷霆、風暴、冰封、黑洞、櫻花）：播完接自摸浮層；播完不卸下（只留暗幕墊在浮層底下），整串結束才收。點畫面任一處跳過整串 */}
       {winShowLive && isZimoFxNew(winShowLive.winFx) && winShowLive.plan.indexOf("zfx") >= 0 && winShowLive.plan.indexOf("zfx") <= winShowLive.i && (
         <ZimoFx key={`zf|${winShowLive.key}`} fx={winShowLive.winFx} seat={winShowLive.seat} mySeat={mySeat} mobile={mobile} tile={winShowLive.tile} name={winShowLive.name}
-          onArtFail={zfxToCele} onDone={(skipped) => (skipped ? endWinShow() : winStage === "zfx" ? nextWinStage() : undefined)} />
+          onTitle={() => zimoVoiceGate.cue(ws.handKey)} onArtFail={zfxToCele} onDone={(skipped) => (skipped ? endWinShow() : winStage === "zfx" ? nextWinStage() : undefined)} />
       )}
       {/* 大牌胡牌特效：蓋在牌桌上（pointer-events: none），排第一段；播完不卸下（只留暗幕），等後面的浮層／隕石播完一起收。點畫面任一處跳過整串。
           和隕石同時掛著，key 要和隕石分開（同一層兄弟用同一個 key，React 會多掛一個收不掉的隕石） */}

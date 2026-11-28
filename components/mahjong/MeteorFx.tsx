@@ -26,6 +26,8 @@ const ROCK_AT = { x: 0.28, y: 0.74 };
 /** 隕石圖顯示大小＝畫面高度 × 這個數字（整張圖含火尾；燃燒的岩石約佔圖的 45%） */
 const METEOR_H = 1.0;
 export const METEOR_MS = 2850;
+/** 「自摸」大字砸出的時間（時間軸 1.25 秒，見檔頭） */
+export const METEOR_TITLE_AT = 1250;
 const TOTAL_RM = 1600, IMPACT = 750;
 /** 隕石段（飛行＋撞擊）CSS 時間軸的長度：meteorFx.css 的百分比都以 1.8 秒算 */
 const SEG = 1800;
@@ -169,16 +171,19 @@ function shakeStage(stage: HTMLElement, mobile: boolean) {
  * font、sfxUrl：預覽站試按台切換候選用，正式牌局不用給（厚重黑體、A 呼嘯＋C 撞擊）
  * warm：預熱（components/mahjong/fxWarmUp.tsx）：不出聲音、不震動牌桌、不攔點擊，在看不見的狀態把整條時間軸一格一格走一遍，走完 onDone(false)
  */
-export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, font, sfxUrl, warm, embedded = false, sound = true }: {
+export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, font, sfxUrl, warm, embedded = false, sound = true, onTitle }: {
   seat: number; mySeat: number; mobile: boolean; tile: Tile | null | undefined; name: string; onDone: (skipped: boolean) => void;
   font?: string; sfxUrl?: string; warm?: WarmMode; embedded?: boolean; sound?: boolean;
+  /** 「自摸」大字砸出的那一刻（1.25 秒；配音的「自摸」跟著這一刻唸，老闆 2026-11-28） */
+  onTitle?: () => void;
 }) {
   const rm = useReducedMotion();
   // 預熱（warm）時圖換成同尺寸的內嵌占位圖：開局背景預熱不下載任何素材
   const art = (f: string) => (warm ? warmImg(f) : `${ART}/${f}`);
   const ref = useRef<HTMLDivElement>(null);
   const doneRef = useRef(onDone);
-  useLayoutEffect(() => { doneRef.current = onDone; });
+  const titleRef = useRef(onTitle);
+  useLayoutEffect(() => { doneRef.current = onDone; titleRef.current = onTitle; });
   const ended = useRef(false);
   const stopRef = useRef(() => {});
   const rel = (((seat - mySeat) % 4) + 4) % 4; // 0 自己、1 下家、2 對家、3 上家
@@ -312,6 +317,14 @@ export default function MeteorFx({ seat, mySeat, mobile, tile, name, onDone, fon
       else go(null);
     }
     const ts = [setTimeout(() => { if (!ended.current) { ended.current = true; doneRef.current(false); } }, rm ? TOTAL_RM : METEOR_MS)];
+    // 「自摸」大字砸出那一刻：跟音效同一個起點（動畫真正開始＋TITLE_AT）；減少動態時字直接出現
+    const title = (z: number | null) => {
+      if (!alive || ended.current) return;
+      const wait = rm ? 0 : Math.max(0, METEOR_TITLE_AT - (z == null ? 0 : performance.now() - z));
+      ts.push(setTimeout(() => { if (alive && !ended.current) titleRef.current?.(); }, wait));
+    };
+    if (anim && !rm) void anim.ready.then(() => title(typeof anim.startTime === "number" ? anim.startTime : null), () => title(null));
+    else title(null);
     // 手機真的震動：重、停、輕（Android Chrome 等支援的瀏覽器；iPhone Safari 不支援，會直接略過）
     if (!rm && !embedded) ts.push(setTimeout(() => { gameVibrate([150, 60, 50]); }, IMPACT));
     return () => { alive = false; ts.forEach(clearTimeout); stopRef.current(); };
