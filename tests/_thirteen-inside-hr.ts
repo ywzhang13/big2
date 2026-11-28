@@ -1,6 +1,6 @@
 // 十三支「場內全壘打」（老闆 2026-11-28：某一家被另外三家都打槍，播悲情版全壘打 5.0 秒——老闆「可以久一點」從 3.2 拉長；全壘打維持 3.2；只加動畫、不改計分）
 //   I1 誰是場內全壘打：被三家打槍才算；只被兩家打不算；一局最多一家
-//   I2 時間軸：有場內全壘打才有 insidehr 這一段（3.2 秒、座位對）；同一局也有全壘打時先全壘打、再場內全壘打
+//   I2 時間軸：有場內全壘打才有 insidehr 這一段（5.0 秒、座位對）；同一局也有全壘打時先場內全壘打、再全壘打（老闆 2026-11-28）
 //   I3 揭牌總長：伺服器 revealDurationMs 多 5.0 秒，前端時間軸的結束時間跟伺服器一樣（隨機 3000 局逐局比）；最長等待 NEXT_HAND_MAX_MS 也算進去
 //   I4 計分不變：有沒有場內全壘打，每家的分數都只是兩兩比牌＋打槍＋全壘打（scoreRound 沒有新加分）
 //   I5 畫面：特效層有場內全壘打這一段、四張新圖有長寬比、登記長期快取；測試頁有「場內全壘打」按鈕
@@ -41,7 +41,8 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const lastGun = st(ihr).filter((s) => s.kind === "gun").pop()!;
   ok(a[0]?.t0 === lastGun.t0 + lastGun.dur, "I2 場內全壘打接在最後一槍後面");
   const b = st(both), h = b.find((s) => s.kind === "homerun"), i = b.find((s) => s.kind === "insidehr");
-  ok(!!h && !!i && i.t0 === h.t0 + h.dur && b.indexOf(h) < b.indexOf(i), `I2 同局也有全壘打：先全壘打（${h?.t0}）、再場內全壘打（${i?.t0}）`);
+  const lg = b.filter((s) => s.kind === "gun").pop();
+  ok(!!h && !!i && !!lg && i.t0 === lg.t0 + lg.dur && h.t0 === i.t0 + i.dur && h.dur === 3200 && b.indexOf(i) < b.indexOf(h), `I2 同局也有全壘打：最後一槍後先場內全壘打（${i?.t0}）、再全壘打（${h?.t0}，3.2 秒不變）`);
   // 播放中看板淡出（跟打槍、全壘打一樣）
   const tl = T.buildTimeline(ihr);
   const at = (a[0]?.t0 ?? tl.end) + 1000;
@@ -105,10 +106,10 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const reg = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
   const steps = T.buildTimeline(must("insidehr")).steps, ihr = steps.find((s) => s.kind === "insidehr")!;
   const ev = S.sfxEvents(steps, 0).filter((e) => e.t >= ihr.t0 && e.t < ihr.t0 + ihr.dur).map((e) => `${e.t - ihr.t0}:${e.k}:${(e.src ?? "").split("/").pop()}`);
-  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-a.v1.mp3", "2300:ihrtrumpet:th-sfx-ihrtrumpet-a.v2.mp3"]),
-    `I6 場內全壘打的聲音：0.55 悶雷、1.85 咚、2.3 小號，預設候選 A：${ev.join("、")}`);
-  const ev2 = S.sfxEvents(steps, 2, null, undefined, { ihrtrumpet: 1, ihrthud: "b" }).filter((e) => e.t >= ihr.t0).map((e) => (e.src ?? "").split("/").pop());
-  ok(ev2.includes("th-sfx-ihrthud-b.v1.mp3") && ev2.includes("th-sfx-ihrtrumpet-r2-1.v2.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3"), "I6 換候選（咚 B、小號 C）照選的播，沒選的維持 A；不管自己坐哪都一樣");
+  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3", "2300:ihrtrumpet:th-sfx-ihrtrumpet-r2-1.v2.mp3"]),
+    `I6 場內全壘打的聲音：0.55 悶雷、1.85 咚、2.3 小號，預設是老闆選的悶雷 A、咚 B、小號 C：${ev.join("、")}`);
+  const ev2 = S.sfxEvents(steps, 2, null, undefined, { ihrtrumpet: "b", ihrthud: "a" }).filter((e) => e.t >= ihr.t0).map((e) => (e.src ?? "").split("/").pop());
+  ok(ev2.includes("th-sfx-ihrthud-a.v1.mp3") && ev2.includes("th-sfx-ihrtrumpet-b.v2.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3"), "I6 換候選（咚 A、小號 B）照選的播，沒選的維持預設；不管自己坐哪都一樣");
   const files = S.IHR_SFX.flatMap((x) => x.options.map((o) => S.sfxSrc(x.key, o.v)));
   const lic = readFileSync("public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt", "utf8");
   ok(files.length === 7 && files.every((f) => existsSync(`public${f}`) && !!reg[f] && lic.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt"],

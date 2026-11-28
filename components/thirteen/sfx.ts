@@ -23,7 +23,7 @@ export const SFX_LIST: { key: SfxKey; name: string }[] = [
 /** 用哪個候選（老闆試聽後要換就改這裡）；數字＝第二輪候選 r2-1／2／3。老闆 2026-11-18：槍聲選 1、中彈選 3 */
 export const SFX_PICK: Record<SfxKey, SfxVariant> = {
   start: "a", play: "a", score: "a", chongsan: "a", tiezhi: "a", tonghuashun: "a", wulong: "b", gunshot: 1, hit: 3, charge: "a", bat: "a", homerun: "a", fireworks: "a",
-  ihrthunder: "a", ihrthud: "a", ihrtrumpet: "a", // 場內全壘打：預設候選 A；特效測試頁可以換（IHR_SFX，記在本機）
+  ihrthunder: "a", ihrthud: "b", ihrtrumpet: 1, // 場內全壘打：老闆 2026-11-28 試聽選定悶雷 A、咚 B、小號 C；特效測試頁仍可換（IHR_SFX，記在本機）
 };
 /** 老闆 2026-11-18 試聽定案：開始比牌 A、出牌 A、分數 A、五龍 B、揮棒 A、槍聲 r2-1、中彈 r2-3；衝三、鐵支、同花順都不滿意、先靜音等重找（測試頁可試聽第二輪）；
  *  集氣不留；全壘打只要打出去那一聲（揮棒擊球），之後的歡呼、煙火不要。選了大牌音效（BIG_SFX）後，衝三、鐵支、同花順、五龍都改播那一個 */
@@ -46,7 +46,7 @@ export const BIG_SFX: { id: string; batch: string; label: string; name: string; 
   { id: "r3-e", batch: "第三輪", label: "E", name: "拔刀亮音", src: "/tiles/thirteen/sfx/th-sfx-big-r3-e.v1.mp3" },
 ];
 /** 場內全壘打三個聲音的候選（老馬 2026-11-28；來源見 public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt）：at＝從場內全壘打開始算的毫秒（照分鏡）。
- *  特效測試頁按了就試聽並選用，記在本機 th_sfx_ihr，完整牌局照同一個選擇播；沒選＝SFX_PICK（A）。老闆定案後改 SFX_PICK、這裡留著也無妨 */
+ *  特效測試頁按了就試聽並選用，記在本機 th_sfx_ihr，完整牌局照同一個選擇播；沒選＝SFX_PICK（老闆選定：悶雷 A、咚 B、小號 C） */
 export const IHR_SFX: { key: IhrSfxKey; name: string; at: number; options: { v: SfxVariant; label: string; name: string }[] }[] = [
   { key: "ihrthunder", name: "悶雷", at: 550, options: [{ v: "a", label: "A", name: "麻將雷霆自摸的雷聲" }, { v: "b", label: "B", name: "遠方滾雷（Freesound CC0）" }] },
   { key: "ihrthud", name: "咚", at: 1850, options: [{ v: "a", label: "A", name: "麻將 thud 降調加重" }, { v: "b", label: "B", name: "低沉悶響（Freesound CC0）" }] },

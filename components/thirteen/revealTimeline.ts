@@ -1,7 +1,7 @@
 // 十三支亮牌時間軸：純函式，畫面照「現在是第幾毫秒」算出要顯示什麼。新節奏（老闆 2026-11-18、小宜 v12 §5）：
 //   開始比牌 1.7 秒（大字 0.9）→ 頭墩、中墩、尾墩：照伺服器給的翻牌順序（最小的先）一家一家出，每家 1.5 秒、換墩不停；
 //   大牌（衝三／鐵支／同花順／五龍）那家多佔 0.3 秒，大字 1.5 秒和下一家重疊；牌型、加分寫在中央看板（BoardFrame）
-//   → 打槍（每槍 1.5 秒）→ 全壘打（3.2 秒）→ 場內全壘打（5.0 秒，被三家打槍的那一家；老闆 2026-11-28）→ 停 1.2 秒 → 本局結算面板
+//   → 打槍（每槍 1.5 秒）→ 場內全壘打（5.0 秒，被三家打槍的那一家；老闆 2026-11-28）→ 全壘打（3.2 秒）→ 停 1.2 秒 → 本局結算面板
 // 長度和伺服器同一套（lib/thirteen/flow.ts REVEAL_TIMING、revealDurationMs）：結算面板出現的時間＝伺服器的 settleAt，四家同步
 // 起點用伺服器的亮牌時間 revealedAt：四家看到的進度一樣，重新整理也接得上（不會從頭再播）
 import { CAT, SCORING, bonusOf, rowPoints, type Card, type Arrangement, type HandValue, type RoundResult, type Row } from "@/lib/thirteen";
@@ -124,9 +124,9 @@ export function buildTimeline(rv: Pick<ThReveal, "order" | "result">): { steps: 
     t += MS.wait; // 換墩不停（0）
   }
   gunsOf(rv.result).forEach((g, n) => { steps.push({ kind: "gun", t0: t, dur: MS.gun, ...g, n }); t += MS.gun; });
-  if (rv.result.homeRun !== null) { steps.push({ kind: "homerun", t0: t, dur: MS.homerun, seat: rv.result.homeRun }); t += MS.homerun; }
-  const ihr = insideHomeRunOf(rv.result); // 同一局也有全壘打：先播全壘打、再播場內全壘打（和伺服器 revealDurationMs 一樣加 INSIDE_HR_MS）
+  const ihr = insideHomeRunOf(rv.result); // 同一局也有全壘打：先播場內全壘打、再播全壘打（老闆 2026-11-28）；總長和伺服器 revealDurationMs 一樣（兩段相加，順序不影響）
   if (ihr !== null) { steps.push({ kind: "insidehr", t0: t, dur: MS.insidehr, seat: ihr }); t += MS.insidehr; }
+  if (rv.result.homeRun !== null) { steps.push({ kind: "homerun", t0: t, dur: MS.homerun, seat: rv.result.homeRun }); t += MS.homerun; }
   return { steps, end: t + MS.settle };
 }
 

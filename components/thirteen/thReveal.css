@@ -216,7 +216,7 @@
 @keyframes th-ihr-hole2 { 0%, 7.19% { transform: rotate(var(--hr)) scale(1.4); opacity: 0; } 7.2% { transform: rotate(var(--hr)) scale(1.4); opacity: 1; } 8.2%, 13% { transform: rotate(var(--hr)) scale(1); opacity: 1; } 13.01%, 100% { transform: rotate(var(--hr)) scale(1); opacity: 0; } }
 /* 整個畫面：0.55 閃光開始才看得到；z 35 同全壘打 */
 .th-ihr { position: fixed; inset: 0; z-index: 35; overflow: hidden; pointer-events: none; animation: th-ihr-out 5s linear both;
-  --hs: min(84vh, 40vw); --xc: 25vw; }
+  --hs: min(62vh, 29.6vw); --xc: 25vw; }
 @keyframes th-ihr-out { 0%, 10.99% { opacity: 0; } 11%, 90% { opacity: 1; } 100% { opacity: 0; } }
 .th-ihr img { position: absolute; display: block; max-width: none; }
 .th-ihr > *, .th-ihr picture > img, .th-ihr-name { animation-duration: 5s; animation-fill-mode: both; animation-timing-function: linear; }
@@ -240,12 +240,14 @@
 /* 壓暗：換景後 22%，2.30 燈熄掉時暗一階到 42% */
 .th-ihr-dim { position: absolute; inset: 0; background: #02040a; animation-name: th-ihr-dim; }
 @keyframes th-ihr-dim { 0%, 12.99% { opacity: 0; } 13%, 46% { opacity: .22; } 47.6%, 100% { opacity: .42; } }
-/* 打者：站姿高 --hs＝min(0.84H, 0.40W)；跪姿 0.88 倍（照兩張圖的肩寬換算，人一樣大）；兩張的軀幹中心都對齊 x＝0.25W（--xc），腳底在畫面底往下 0.03H。
+/* 打者：站姿高 --hs＝min(0.62H, 0.296W)；跪姿 0.88 倍（照兩張圖的肩寬換算，人一樣大）；兩張的軀幹中心都對齊 x＝0.25W（--xc），腳底離畫面底 0.015H（腳、球棒不被切到）。
+   人物大小對齊全壘打打者（老闆 2026-11-28「人物比全壘打大好多」）：打者圖高 min(0.92H, 0.44W)，人只佔圖高 69.6%（上面是揮棒）；
+   這兩張人佔圖高 98%，所以 --hs＝打者圖高 × 0.696 ÷ 0.982 × 0.95（站姿彎腰比揮棒矮一點）≈ min(0.62H, 0.296W)。
    對調版（右家、對家觸發）整組左右鏡射 */
 .th-ihr-figs { position: absolute; inset: 0; }
 .th-ihr.is-flip .th-ihr-figs { transform: scaleX(-1); }
 /* 站姿 0.65～1.6（雨中站著、慢慢往下垮一點）→ 1.6～1.85 淡出往下沉 */
-.th-ihr .th-ihr-stand { bottom: -3vh; height: var(--hs); width: calc(var(--hs) * .7159); left: calc(var(--xc) - var(--hs) * .7159 * .43); transform-origin: 50% 100%; animation-name: th-ihr-stand; }
+.th-ihr .th-ihr-stand { bottom: 1.5vh; height: var(--hs); width: calc(var(--hs) * .7159); left: calc(var(--xc) - var(--hs) * .7159 * .43); transform-origin: 50% 100%; animation-name: th-ihr-stand; }
 @keyframes th-ihr-stand {
   0%, 12.99% { transform: none; opacity: 0; }
   13% { transform: none; opacity: 1; }
@@ -253,7 +255,7 @@
   37%, 100% { transform: translateY(4vh) scaleY(.94); opacity: 0; }
 }
 /* 跪姿：1.6～1.85 從上方 2.5H% 淡入、沉到定位；之後肩膀起伏（以腳底為準 1.2% 上下，一次 0.4 秒，像在哭），不左右搖、不旋轉 */
-.th-ihr .th-ihr-kneel { bottom: -3vh; height: calc(var(--hs) * .88); width: calc(var(--hs) * .88 * .8893); left: calc(var(--xc) - var(--hs) * .88 * .8893 * .48);
+.th-ihr .th-ihr-kneel { bottom: 1.5vh; height: calc(var(--hs) * .88); width: calc(var(--hs) * .88 * .8893); left: calc(var(--xc) - var(--hs) * .88 * .8893 * .48);
   transform-origin: 50% 100%; animation-name: th-ihr-kneel; }
 @keyframes th-ihr-kneel {
   0%, 31.99% { transform: translateY(-2.5vh); opacity: 0; }
