@@ -4,8 +4,8 @@
 //   I3 揭牌總長：伺服器 revealDurationMs 多 5.0 秒，前端時間軸的結束時間跟伺服器一樣（隨機 3000 局逐局比）；最長等待 NEXT_HAND_MAX_MS 也算進去
 //   I4 計分不變：有沒有場內全壘打，每家的分數都只是兩兩比牌＋打槍＋全壘打（scoreRound 沒有新加分）
 //   I5 畫面：特效層有場內全壘打這一段、四張新圖有長寬比、登記長期快取；測試頁有「場內全壘打」按鈕
-//   I6 音效（老闆「要配聲音」）：0.55 悶雷、1.85 咚、2.3 小號（一度拔掉，老闆改口「小號 C 好了」）；預設悶雷 A、咚 B、小號 C、可換候選；檔案都在、登記長期快取、來源有寫；原本選好的音效沒動
-//   I8 全壘打 5.0 秒：集氣縮短、1.0 揮棒；1.25 球從打者頭的右上方直線飛出去（老闆第二輪：弧線不要、回到直線）；打者靠中間 10vw；擊球後音效預設不播（測試頁可試 A／B／C）
+//   I6 音效（老闆「要配聲音」）：0.55 悶雷、1.85 咚；小號 2026-11-28 老闆最後說「拿掉好了」＝正式不播（測試頁可試聽）；預設悶雷 A、咚 B、可換候選；檔案都在、登記長期快取、來源有寫；原本選好的音效沒動
+//   I8 全壘打 5.0 秒：集氣縮短、1.0 揮棒；1.05 球從打者頭的右上方直線飛出去（老闆「球太慢，提早一點」，原本 1.25）（老闆第二輪：弧線不要、回到直線）；打者靠中間 10vw；擊球後音效預設不播（測試頁可試 A／B／C）
 import { readFileSync, existsSync } from "node:fs";
 import { autoArrange, deal, revealOrder, scoreRound, type RoundResult } from "../lib/thirteen";
 import { insideHomeRunOf, REVEAL_TIMING, revealDurationMs, NEXT_HAND_MAX_MS, SETTLE_WAIT_MS } from "../lib/thirteen/flow";
@@ -107,10 +107,13 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const reg = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
   const steps = T.buildTimeline(must("insidehr")).steps, ihr = steps.find((s) => s.kind === "insidehr")!;
   const ev = S.sfxEvents(steps, 0).filter((e) => e.t >= ihr.t0 && e.t < ihr.t0 + ihr.dur).map((e) => `${e.t - ihr.t0}:${e.k}:${(e.src ?? "").split("/").pop()}`);
-  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3", "2300:ihrtrumpet:th-sfx-ihrtrumpet-r2-1.v2.mp3"]),
-    `I6 場內全壘打的聲音：0.55 悶雷、1.85 咚、2.3 小號，預設是老闆選的悶雷 A、咚 B、小號 C（小號一度拔掉又加回來）：${ev.join("、")}`);
+  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3"]) && S.IHR_DEFAULT.ihrtrumpet === "none",
+    `I6 場內全壘打的聲音：0.55 悶雷 A、1.85 咚 B；小號老闆說拿掉，正式不播：${ev.join("、")}`);
+  const pre = S.preloadList(); // 正式牌局 preloadSfx 載的清單
+  ok(!pre.some((f) => /trumpet|hrafter/.test(f)) && pre.includes("/tiles/thirteen/sfx/th-sfx-ihrthunder-a.v1.mp3") && pre.includes("/tiles/thirteen/sfx/th-sfx-ihrthud-b.v1.mp3"),
+    "I6 正式牌局預載悶雷 A、咚 B，不預載小號和擊球後音檔");
   const ev2 = S.sfxEvents(steps, 2, null, undefined, { ihrtrumpet: "b", ihrthud: "a" }).filter((e) => e.t >= ihr.t0 && e.t < ihr.t0 + ihr.dur).map((e) => (e.src ?? "").split("/").pop());
-  ok(ev2.includes("th-sfx-ihrthud-a.v1.mp3") && ev2.includes("th-sfx-ihrtrumpet-b.v2.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3") && ev2.length === 3, "I6 換候選（咚 A、小號 B）照選的播，沒選的維持預設；不管自己坐哪都一樣");
+  ok(ev2.includes("th-sfx-ihrthud-a.v1.mp3") && ev2.includes("th-sfx-ihrtrumpet-b.v2.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3") && ev2.length === 3, "I6 測試頁換候選（咚 A、小號 B）照選的播，沒選的維持預設；不管自己坐哪都一樣");
   const files = S.IHR_SFX.flatMap((x) => x.options.map((o) => S.sfxSrc(x.key, o.v)));
   const lic = readFileSync("public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt", "utf8");
   ok(files.length === 7 && files.every((f) => existsSync(`public${f}`) && !!reg[f] && lic.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt"],
@@ -153,22 +156,22 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(/\{h\.ready2 && <Pic name="burst" className="th-hr9-charge"/.test(tsx) && /is-quick/.test(tsx) && /9%, 100% \{[^}]*opacity: 0;/.test(kf("th-charge-q"))
     && /20% \{ transform: scale\(1\); opacity: 1; filter: brightness\(1\.6\); \}/.test(kf("th-hr9-charge")) && /mix-blend-mode: screen; animation-name: th-hr9-charge/.test(css),
     "I8 新預備：牌上集氣光只亮 0～0.3，換景後球場上預備姿勢背後有同一張集氣光（0.3～1.0 放大、變亮）");
-  // 球（老闆第二輪「從打擊者的頭右上方直線飛出去，跟上一版類似」）：起點＝打擊者圖上頭的右上方，跟著打者的位置、大小算；1.25 起飛、直線、1.7 變十字星
+  // 球（老闆第二輪「從打擊者的頭右上方直線飛出去，跟上一版類似」）：起點＝打擊者圖上頭的右上方，跟著打者的位置、大小算；1.05 起飛（擊中那一刻）、直線、1.7 變十字星
   ok(/\.th-hr9-ballpath \{ --hl: 10vw; --hb: min\(92vh, 44vw\); --bx: calc\(var\(--hl\) \+ var\(--hb\) \* \.9071 \* \.7263\); --by: calc\(102vh - var\(--hb\) \* \(1 - \.3059\)\);/.test(css)
     && /left: var\(--bx\); top: var\(--by\);/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ballpath \{ left: calc\(100vw - var\(--bx\)\);/.test(css)
     && /\.th-hr9\.is-size-b \.th-hr9-ballpath \{ --hl: 2vw; --hb: min\(117vh, 56vw\); \}/.test(css),
     "I8 球的起點是打者頭的右上方（鏡射版左上方；甲、乙兩種大小都跟著打者走）");
-  ok(/0%, 24\.99% \{[^}]*opacity: 0; \}\n  25% \{[^}]*opacity: 1;/.test(kf("th-hr9-ballpath")) && /34%, 100% \{ transform: translate\(calc\(64vw - var\(--bx\)\), calc\(18vh - var\(--by\)\)\) scale\(\.12\);/.test(kf("th-hr9-ballpath"))
-    && /34%, 100% \{ transform: translate\(calc\(var\(--bx\) - 64vw\), calc\(18vh - var\(--by\)\)\) scale\(\.12\) scaleX\(-1\);/.test(kf("th-hr9-ballpath-r"))
+  ok(/0%, 20\.99% \{[^}]*opacity: 0; \}\n  21% \{[^}]*opacity: 1;/.test(kf("th-hr9-ballpath")) && /30%, 100% \{ transform: translate\(calc\(64vw - var\(--bx\)\), calc\(18vh - var\(--by\)\)\) scale\(\.12\);/.test(kf("th-hr9-ballpath"))
+    && /30%, 100% \{ transform: translate\(calc\(var\(--bx\) - 64vw\), calc\(18vh - var\(--by\)\)\) scale\(\.12\) scaleX\(-1\);/.test(kf("th-hr9-ballpath-r"))
     && kf("th-hr9-ballpath").split("transform:").length === 5 && !/rotate/.test(kf("th-hr9-ballpath") + kf("th-hr9-ballpath-r"))
-    && /0%, 34% \{[^}]*scale\(0\)/.test(kf("th-hr9-star")),
-    "I8 1.25 球直線飛出去（只有起點、終點兩格，沒有弧線中繼點、不轉向）、1.7 落到星星中心變十字星（鏡射版 x 反過來）");
+    && /0%, 30% \{[^}]*scale\(0\)/.test(kf("th-hr9-star")) && /20\.6% \{ opacity: \.3; \} 22%, 100% \{ opacity: 0; \}/.test(kf("th-hr9-flash2") || css.slice(css.indexOf("@keyframes th-hr9-flash2"), css.indexOf("@keyframes th-hr9-flash2") + 200)),
+    "I8 1.05 球直線飛出去（擊中那一刻；只有起點、終點兩格，沒有弧線中繼點、不轉向）、1.5 落到星星中心變十字星（鏡射版 x 反過來）；擊中的小閃光改淡（0.3）、1.1 就退掉，不蓋住球");
   // 擊球後音效（老闆「全壘打也幫忙找一個打出去後的音效」）：球飛出去那一刻播；預設 B；可選 A／B／C／無；4.5 秒前結束
   const reg = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
   const after = (p?: import("../components/thirteen/sfx").HrAfterPick) => S.sfxEvents(steps, 0, null, undefined, {}, p).filter((e) => e.k === "hrafter").map((e) => `${e.t - hr.t0}:${(e.src ?? "").split("/").pop()}`);
-  ok(S.HR_LAUNCH_MS === 1250 && after().length === 0 && S.HR_AFTER_DEFAULT === "none" && JSON.stringify(after("b")) === JSON.stringify(["1250:th-sfx-hrafter-b.v1.mp3"]) && JSON.stringify(after("a")) === JSON.stringify(["1250:th-sfx-hrafter-a.v1.mp3"])
-    && JSON.stringify(after(1)) === JSON.stringify(["1250:th-sfx-hrafter-r2-1.v1.mp3"]) && after("none").length === 0,
-    "I8 擊球後音效預設不播（老闆試聽都不喜歡）；測試頁選了 A／B／C 才在 1.25 秒播");
+  ok(S.HR_LAUNCH_MS === 1050 && after().length === 0 && S.HR_AFTER_DEFAULT === "none" && JSON.stringify(after("b")) === JSON.stringify(["1050:th-sfx-hrafter-b.v1.mp3"]) && JSON.stringify(after("a")) === JSON.stringify(["1050:th-sfx-hrafter-a.v1.mp3"])
+    && JSON.stringify(after(1)) === JSON.stringify(["1050:th-sfx-hrafter-r2-1.v1.mp3"]) && after("none").length === 0,
+    "I8 擊球後音效預設不播（老闆試聽都不喜歡）；測試頁選了 A／B／C 才在 1.05 秒（球飛出去）播");
   const afterFiles = S.HR_AFTER.filter((o) => o.v !== "none").map((o) => S.sfxSrc("hrafter", o.v as import("../components/thirteen/sfx").SfxVariant));
   const lic2 = readFileSync("public/tiles/thirteen/sfx/LICENSE-hrafter.v1.txt", "utf8");
   ok(afterFiles.length === 3 && afterFiles.every((f) => existsSync(`public${f}`) && !!reg[f] && lic2.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-hrafter.v1.txt"] && /CC0/.test(lic2),
@@ -207,8 +210,8 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
     ok(S.loadHrAfter() === "a" && S.loadIhrSfx().ihrthud === "a", "I10 前提：本機確實存著試聽候選（擊球後 A、咚 A、小號 B、悶雷 B）");
     const both = T.buildTimeline(must("ihrhr")).steps, h = both.find((s) => s.kind === "homerun")!, i = both.find((s) => s.kind === "insidehr")!;
     const ev = S.revealSfxEvents(both, 0).filter((e) => e.t >= i.t0 && e.t < h.t0 + h.dur).map((e) => `${e.t - i.t0}:${e.k}:${(e.src ?? "").split("/").pop()}`);
-    ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3", "2300:ihrtrumpet:th-sfx-ihrtrumpet-r2-1.v2.mp3", "6000:bat:"]), // 揮棒聲走 SFX_PICK（不帶 src）
-      `I10 正式牌局（不傳 lab）：場內全壘打悶雷 A、咚 B、小號 C，全壘打只有 1.0 揮棒聲、沒有擊球後音效：${ev.join("、")}`);
+    ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3", "6000:bat:"]), // 揮棒聲走 SFX_PICK（不帶 src）
+      `I10 正式牌局（不傳 lab）：場內全壘打悶雷 A、咚 B、沒有小號（本機存了小號 B 也不播），全壘打只有 1.0 揮棒聲、沒有擊球後音效：${ev.join("、")}`);
     const lab = S.revealSfxEvents(both, 0, undefined, { ihr: S.loadIhrSfx(), hrAfter: S.loadHrAfter() }).filter((e) => e.k === "hrafter" || e.k === "ihrthud").map((e) => (e.src ?? "").split("/").pop());
     ok(lab.includes("th-sfx-hrafter-a.v1.mp3") && lab.includes("th-sfx-ihrthud-a.v1.mp3"), "I10 測試頁（傳 lab）照試聽選擇播：擊球後 A、咚 A");
     const finals = (["bottom", "right", "top", "left"] as const).map((p) => F.fxOpts(p));

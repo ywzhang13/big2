@@ -5,7 +5,7 @@ import ThTable from "./ThTable";
 import ThRevealFx, { FX_FINAL, preloadRevealFx, type FxTrial } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
-import { BIG_SFX, HR_AFTER, HR_AFTER_DEFAULT, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type HrAfterPick, type IhrSfxKey, type SfxVariant } from "./sfx";
+import { BIG_SFX, HR_AFTER, HR_AFTER_DEFAULT, IHR_DEFAULT, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, sfxSrc, useRevealSfx, type HrAfterPick, type IhrPick, type IhrSfxKey } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
 import { loadBuffer } from "./thAudio";
 import "./thRoom.css";
@@ -39,7 +39,7 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [play, setPlay] = useState<{ n: number; at: number; steps: Step[] } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
-  const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
+  const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, IhrPick>>>({});
   const [hrAfter, setHrAfter] = useState<HrAfterPick>(HR_AFTER_DEFAULT);
   // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機（th_lab_trial，只有這一頁讀）。
   // 審伯 R2：只用屬性傳給這一頁的 ThRevealFx，不寫 <html>、正式牌局也不讀，所以客戶端換頁到正式遊戲不會殘留（正式＝FX_FINAL：新預備＋甲＋鏡射）
@@ -81,7 +81,7 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   };
   const batches = [...new Set(BIG_SFX.map((x) => x.batch))];
   // 場內全壘打音效候選（老闆 2026-11-28）：按了就試聽並選用（記在本機），完整牌局照同一個選擇播
-  const pickIhr = (key: IhrSfxKey, v: SfxVariant) => { playSrc(sfxSrc(key, v), { force: true }); saveIhrSfx(key, v); setIhr(loadIhrSfx()); };
+  const pickIhr = (key: IhrSfxKey, v: IhrPick) => { if (v !== "none") playSrc(sfxSrc(key, v), { force: true }); saveIhrSfx(key, v); setIhr(loadIhrSfx()); }; // 「無」＝這一頁不播那個聲音
   // 全壘打擊球後音效候選（老闆 2026-11-28）：同上，「無」＝不播
   const pickHrAfter = (v: HrAfterPick) => { if (v !== "none") playSrc(sfxSrc("hrafter", v), { force: true }); saveHrAfter(v); setHrAfter(v); };
 
@@ -160,8 +160,8 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
             {IHR_SFX.map((x) => (
               <span key={x.key} className="th-lab-sfx">
                 {x.name}
-                {x.options.map((o) => (
-                  <button key={String(o.v)} type="button" title={o.name} className={(ihr[x.key] ?? SFX_PICK[x.key]) === o.v ? "is-on" : ""} data-th-lab-ihr={`${x.key}-${o.v}`} onClick={() => pickIhr(x.key, o.v)}>{o.label}</button>
+                {[...x.options, { v: "none" as const, label: "無", name: "不播" }].map((o) => (
+                  <button key={String(o.v)} type="button" title={o.name} className={(ihr[x.key] ?? IHR_DEFAULT[x.key]) === o.v ? "is-on" : ""} data-th-lab-ihr={`${x.key}-${o.v}`} onClick={() => pickIhr(x.key, o.v)}>{o.label}</button>
                 ))}
               </span>
             ))}

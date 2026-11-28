@@ -161,7 +161,7 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
 
 /** 全壘打 5.0 秒（小宜 v9；老闆 2026-11-28 預備也要集氣、總長對齊場內全壘打，原本 3.2 秒、0.55 揮棒）：0～1.0 在打者那組牌上集氣（老闆「集氣有點太久」從 1.4 縮短）——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
  * （人一直是正的，只左右鏡射面向球飛的方向：鏡射版右家、對家面向左（mirrorFor）；1.0 秒後的打擊者畫面跟著同一個方向）；
- * 1.0 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、1.25 球從球棒甜蜜點飛上天變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 停到 4.5 → 4.5～5.0 一起淡出（時間在 thReveal.css）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
+ * 1.0 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、1.05 球從打者頭的右上方直線飛上天、1.5 變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 停到 4.5 → 4.5～5.0 一起淡出（時間在 thReveal.css）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
 function HomeRunFx({ step, elapsed: elapsed0, mySeat, name, trial }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number; name: string; trial: FxTrial }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
   const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];

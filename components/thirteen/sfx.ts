@@ -12,7 +12,7 @@ import { loadBuffer, playBuffer } from "./thAudio";
 
 export type SfxKey = "start" | "play" | "score" | "chongsan" | "tiezhi" | "tonghuashun" | "wulong" | "gunshot" | "hit" | "charge" | "bat" | "homerun" | "fireworks"
   | "hrafter" | IhrSfxKey;
-/** 場內全壘打的三個聲音（老闆 2026-11-28「要配聲音」）：0.55 換景悶雷、1.85 大字落地「咚」、2.3 走音小號（5 秒版；小號一度拔掉，老闆改口「小號 C 好了」加回來） */
+/** 場內全壘打的三個聲音（老闆 2026-11-28「要配聲音」）：0.55 換景悶雷、1.85 大字落地「咚」、2.3 走音小號（5 秒版；小號一度拔掉又加回來，2026-11-28 老闆再說「小號音效拿掉好了」→ 正式不播，測試頁可試聽，見 IHR_DEFAULT） */
 export type IhrSfxKey = "ihrthunder" | "ihrthud" | "ihrtrumpet";
 export const SFX_LIST: { key: SfxKey; name: string }[] = [
   { key: "start", name: "開始比牌" }, { key: "play", name: "出牌" }, { key: "score", name: "分數出現" }, { key: "chongsan", name: "衝三" },
@@ -25,14 +25,14 @@ export const SFX_LIST: { key: SfxKey; name: string }[] = [
 export const SFX_PICK: Record<SfxKey, SfxVariant> = {
   start: "a", play: "a", score: "a", chongsan: "a", tiezhi: "a", tonghuashun: "a", wulong: "b", gunshot: 1, hit: 3, charge: "a", bat: "a", homerun: "a", fireworks: "a",
   hrafter: "b", // 全壘打擊球後的候選檔名用（預設播不播看 HR_AFTER_DEFAULT）
-  ihrthunder: "a", ihrthud: "b", ihrtrumpet: 1, // 場內全壘打：老闆 2026-11-28 試聽選定悶雷 A、咚 B、小號 C；特效測試頁仍可換（IHR_SFX，記在本機）
+  ihrthunder: "a", ihrthud: "b", ihrtrumpet: 1, // 場內全壘打候選的檔名預設（播不播看 IHR_DEFAULT：小號 2026-11-28 第二次拿掉）；特效測試頁仍可換（IHR_SFX，記在本機）
 };
 /** 老闆 2026-11-18 試聽定案：開始比牌 A、出牌 A、分數 A、五龍 B、揮棒 A、槍聲 r2-1、中彈 r2-3；衝三、鐵支、同花順都不滿意、先靜音等重找（測試頁可試聽第二輪）；
  *  集氣不留；全壘打只要打出去那一聲（揮棒擊球），之後的歡呼、煙火不要。選了大牌音效（BIG_SFX）後，衝三、鐵支、同花順、五龍都改播那一個 */
 /** 全壘打揮棒擊球的時間點（從全壘打開始算）：老闆 2026-11-28 預備也要集氣、總長拉到 5.0 秒；集氣太久再縮短，揮棒 0.55 → 1.4 → 1.0（thReveal.css 同一個時間點） */
 export const HR_SWING_MS = 1000;
-/** 球從球棒飛出去的時間點（換景亮光退掉那一刻，thReveal.css .th-hr9-ballpath 25%）：擊球後音效從這裡開始 */
-export const HR_LAUNCH_MS = 1250;
+/** 球飛出去的時間點（擊中那一刻就出發，thReveal.css .th-hr9-ballpath 21%；老闆 2026-11-28「球有點太慢飛出去，提早一點」，原本 1.25 等換景閃光退掉）：擊球後音效從這裡開始 */
+export const HR_LAUNCH_MS = 1050;
 export const SFX_MUTED: ReadonlySet<SfxKey> = new Set<SfxKey>(["chongsan", "tiezhi", "tonghuashun", "charge", "homerun", "fireworks"]);
 /** 數字＝第二輪候選 r2-1／2／3（目前只有槍聲、中彈用到，已定案） */
 export type SfxR2 = 1 | 2 | 3;
@@ -52,7 +52,11 @@ export const BIG_SFX: { id: string; batch: string; label: string; name: string; 
   { id: "r3-e", batch: "第三輪", label: "E", name: "拔刀亮音", src: "/tiles/thirteen/sfx/th-sfx-big-r3-e.v1.mp3" },
 ];
 /** 場內全壘打三個聲音的候選（老馬 2026-11-28；來源見 public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt）：at＝從場內全壘打開始算的毫秒（照分鏡）。
- *  特效測試頁按了就試聽並選用，記在本機 th_sfx_ihr，只在測試頁播（審伯 R2：正式牌局一律 SFX_PICK）；定案＝SFX_PICK（老闆選定：悶雷 A、咚 B、小號 C） */
+ *  特效測試頁按了就試聽並選用，記在本機 th_sfx_ihr，只在測試頁播（審伯 R2：正式牌局一律 IHR_DEFAULT）；定案＝IHR_DEFAULT（悶雷 A、咚 B、小號不播） */
+/** 場內全壘打每個聲音播哪一個：候選或 "none"（不播） */
+export type IhrPick = SfxVariant | "none";
+/** 正式牌局的場內全壘打聲音（老闆定案）：悶雷 A、咚 B；小號老闆 2026-11-28 說「拿掉好了」＝不播（測試頁還能試聽 A／B／C） */
+export const IHR_DEFAULT: Record<IhrSfxKey, IhrPick> = { ihrthunder: "a", ihrthud: "b", ihrtrumpet: "none" };
 export const IHR_SFX: { key: IhrSfxKey; name: string; at: number; options: { v: SfxVariant; label: string; name: string }[] }[] = [
   { key: "ihrthunder", name: "悶雷", at: 550, options: [{ v: "a", label: "A", name: "麻將雷霆自摸的雷聲" }, { v: "b", label: "B", name: "遠方滾雷（Freesound CC0）" }] },
   { key: "ihrthud", name: "咚", at: 1850, options: [{ v: "a", label: "A", name: "麻將 thud 降調加重" }, { v: "b", label: "B", name: "低沉悶響（Freesound CC0）" }] },
@@ -76,15 +80,15 @@ export function saveHrAfter(v: HrAfterPick): void {
 }
 const IHR_KEY = "th_sfx_ihr";
 /** 本機記住的場內全壘打候選（只給特效測試頁用；不在候選清單裡的不算） */
-export function loadIhrSfx(): Partial<Record<IhrSfxKey, SfxVariant>> {
+export function loadIhrSfx(): Partial<Record<IhrSfxKey, IhrPick>> {
   try {
     const raw = JSON.parse(localStorage.getItem(IHR_KEY) ?? "{}") as Record<string, unknown>;
-    const out: Partial<Record<IhrSfxKey, SfxVariant>> = {};
-    for (const x of IHR_SFX) { const o = x.options.find((o) => o.v === raw[x.key]); if (o) out[x.key] = o.v; }
+    const out: Partial<Record<IhrSfxKey, IhrPick>> = {};
+    for (const x of IHR_SFX) { const o = x.options.find((o) => o.v === raw[x.key]); if (o) out[x.key] = o.v; else if (raw[x.key] === "none") out[x.key] = "none"; }
     return out;
   } catch { return {}; }
 }
-export function saveIhrSfx(key: IhrSfxKey, v: SfxVariant): void {
+export function saveIhrSfx(key: IhrSfxKey, v: IhrPick): void {
   try { localStorage.setItem(IHR_KEY, JSON.stringify({ ...loadIhrSfx(), [key]: v })); } catch { /* 存不了就只是這次 */ }
 }
 
@@ -111,10 +115,14 @@ export function playSrc(src: string, opts: { force?: boolean; volume?: number; d
   void playBuffer(src, opts);
 }
 /** 正式牌局預載：場內全壘打、擊球後都用定案值（審伯 R2：測試頁的候選不預載、也不播；測試頁自己會預載全部候選） */
+export function preloadList(): string[] {
+  const big = bigSrc(loadBigSfx());
+  const pick = (key: SfxKey) => (key === "hrafter" ? HR_AFTER_DEFAULT : key in IHR_DEFAULT ? IHR_DEFAULT[key as IhrSfxKey] : SFX_PICK[key]);
+  return [...SFX_LIST.flatMap(({ key }) => { const v = pick(key); return v === "none" ? [] : [sfxSrc(key, v)]; }), ...(big ? [big] : [])]; // 不播的（小號、擊球後）不載
+}
 export function preloadSfx(): void {
   if (typeof window === "undefined") return;
-  const big = bigSrc(loadBigSfx());
-  for (const src of [...SFX_LIST.map(({ key }) => (key === "hrafter" ? (HR_AFTER_DEFAULT === "none" ? null : sfxSrc(key, HR_AFTER_DEFAULT)) : sfxSrc(key))), ...(big ? [big] : [])]) if (src) void loadBuffer(src);
+  for (const src of preloadList()) void loadBuffer(src);
 }
 
 /** 舊的十三支「音效」開關（localStorage th_sfx，"0"＝關）：第一次載入時轉成共用設定的互動音效靜音，然後刪掉（小宜〈共用設定面板 v1〉§8）。
@@ -194,7 +202,7 @@ const FX_SFX: Record<PatternFx, SfxKey> = { chongsan: "chongsan", tiezhi: "tiezh
 
 /** 一段時間軸裡每個音效的時間點（毫秒，從開始比牌算）；bigId＝選了哪個大牌音效：衝三、鐵支、同花順、五龍都播那個檔（src）。
  *  values＝每家每墩的牌型（伺服器的 result.values）：有給就在每一墩牌落定時唸那一家的牌型；大牌和大字同時開始唸 */
-export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = null, values?: Record<Row, HandValue>[], ihrPick: Partial<Record<IhrSfxKey, SfxVariant>> = {}, hrAfter: HrAfterPick = HR_AFTER_DEFAULT): SfxEvent[] {
+export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = null, values?: Record<Row, HandValue>[], ihrPick: Partial<Record<IhrSfxKey, IhrPick>> = {}, hrAfter: HrAfterPick = HR_AFTER_DEFAULT): SfxEvent[] {
   const out: SfxEvent[] = [];
   for (const s of steps) {
     if (s.kind === "start") out.push({ t: s.t0, k: "start" });
@@ -210,8 +218,8 @@ export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = 
     else if (s.kind === "gun") { out.push({ t: s.t0 + 180, k: "gunshot" }); out.push({ t: s.t0 + 260, k: "hit", volume: s.to === mySeat ? 1 : 0.6 }); } // 被打的人自己聽比較大聲
     else if (s.kind === "homerun") { out.push({ t: s.t0, k: "charge" }, { t: s.t0 + HR_SWING_MS, k: "bat" }, { t: s.t0 + HR_SWING_MS + 600, k: "homerun" }, { t: s.t0 + HR_SWING_MS + 800, k: "fireworks" });
       if (hrAfter !== "none") out.push({ t: s.t0 + HR_LAUNCH_MS, k: "hrafter", src: sfxSrc("hrafter", hrAfter) }); } // 5 秒版：1.0 揮棒、1.25 球飛出去（擊球後音效）
-    // 場內全壘打：0.55 悶雷（換景閃光）、1.85 咚（大字落地）、2.3 小號（燈熄掉）；四家都一樣大聲
-    else if (s.kind === "insidehr") for (const x of IHR_SFX) out.push({ t: s.t0 + x.at, k: x.key, src: sfxSrc(x.key, ihrPick[x.key] ?? SFX_PICK[x.key]) });
+    // 場內全壘打：0.55 悶雷（換景閃光）、1.85 咚（大字落地）；2.3 小號正式不播（IHR_DEFAULT），測試頁選了才播；四家都一樣大聲
+    else if (s.kind === "insidehr") for (const x of IHR_SFX) { const v = ihrPick[x.key] ?? IHR_DEFAULT[x.key]; if (v !== "none") out.push({ t: s.t0 + x.at, k: x.key, src: sfxSrc(x.key, v) }); }
   }
   if (steps.some((x) => x.kind === "flip")) for (const w of scoreWindows({ steps, end: Infinity })) out.push({ t: w.from, k: "score" }); // 四家出完、看板出現加分
   const big = bigSrc(bigId);
@@ -220,14 +228,14 @@ export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = 
 }
 
 /** 特效測試頁的試聽選擇（只有 ThFxLab 傳）：場內全壘打三個聲音的候選、全壘打擊球後音效 */
-export type LabSfx = { ihr: Partial<Record<IhrSfxKey, SfxVariant>>; hrAfter: HrAfterPick };
+export type LabSfx = { ihr: Partial<Record<IhrSfxKey, IhrPick>>; hrAfter: HrAfterPick };
 /** 實際要播的音效清單：場內全壘打、擊球後只看 lab 參數（測試頁才傳），不讀本機存的試聽選擇（審伯 R2，tests/_thirteen-inside-hr I10 鎖住）。
  *  大牌音效（BIG_SFX）照 2026-11-18 的設計仍讀本機選擇（老闆在測試頁選了要用在正式牌局），不在這次範圍 */
 export function revealSfxEvents(steps: Step[], mySeat: number, values?: Record<Row, HandValue>[], lab?: LabSfx): SfxEvent[] {
   return sfxEvents(steps, mySeat, loadBigSfx(), values, lab?.ihr ?? {}, lab?.hrAfter ?? HR_AFTER_DEFAULT);
 }
 /** 跟著時間軸播：每次 t 往前走，播 (上次 t, 這次 t] 之間的音效；重新整理接到中間時，過去超過 0.4 秒的不補播。
- *  lab：只有特效測試頁傳；正式牌局不傳＝定案（場內全壘打悶雷 A、咚 B、小號 C，擊球後無）——審伯 2026-11-28 R2：試聽存在本機的候選不能流進正式牌局 */
+ *  lab：只有特效測試頁傳；正式牌局不傳＝定案（場內全壘打悶雷 A、咚 B、小號不播，擊球後無）——審伯 2026-11-28 R2：試聽存在本機的候選不能流進正式牌局 */
 export function useRevealSfx(steps: Step[], t: number, mySeat: number, values?: Record<Row, HandValue>[], lab?: LabSfx): void {
   const last = useRef<number | null>(null);
   useEffect(() => { preloadSfx(); }, []);
