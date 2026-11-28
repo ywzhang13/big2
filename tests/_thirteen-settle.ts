@@ -1,9 +1,9 @@
 // 十三支亮牌到結算的時間、每局統計（阿哲 2026-11-18 拍板）。純函式，不連資料庫。
 //   U1 亮牌演出長度（從開始比牌到結算面板出現）照小宜 v8-B 第 5 節（出牌放慢，2026-11-18）：
 //      老闆 2026-11-18 定案（照參考影片，阿妍量測）：開始比牌 1.7 秒＋三墩各 6.0 秒（四家各出 1.5 秒、墩後不停）
-//      ＋每個大牌多佔 0.3 秒＋每一槍 1.5 秒＋全壘打 3.2 秒＋結算面板前停 1.2 秒，即 20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打。
-//      案例：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支（不打槍）21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 29.2 秒
-//   U2 隨機 2000 局：長度＝上面的 v8-B 公式（特效牌型、打槍組數、全壘打從結算結果另外數）；都不超過「最長演出」
+//      ＋每個大牌多佔 0.3 秒＋每一槍 1.5 秒＋全壘打 5.0 秒（2026-11-28 前 3.2）＋結算面板前停 1.2 秒，即 20.9＋0.3×大牌＋1.5×槍＋5.0×全壘打。
+//      案例：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支（不打槍）21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 31.0 秒（全壘打 2026-11-28 拉到 5.0 秒前是 29.2）
+//   U2 隨機 2000 局：長度＝上面的 v8-B 公式（特效牌型、打槍組數、全壘打從結算結果另外數；2026-11-28 加場內全壘打 5.0 秒）；都不超過「最長演出」
 //   U3 每局統計（每家）：墩分＋各特殊加分＋打槍分＋全壘打分＝這局總分；打槍、被打槍、全壘打、被全壘打的次數和結算結果一致
 //   U4 特殊加分的項目名稱照 v5 結算明細：衝三、中墩鐵支、尾墩同花順…；拿到的是正、付的是負
 import * as flow from "../lib/thirteen/flow";
@@ -43,10 +43,10 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
   const rs = [ties, oneGun, fxNoGun, big].map((a) => scoreRound(a)); // 不能直接 .map(scoreRound)：第二個參數是計分規則，會被塞進陣列索引
   const specialsOf = (r: RoundResult) => r.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
   eq([rs.map(specialsOf), rs.map((r) => r.pairs.filter((p) => p.gunner !== null).length), rs.map((r) => r.homeRun), rs.map(dur)],
-    [[0, 0, 2, 2], [0, 1, 0, 3], [null, null, null, 0], [20900, 22400, 21500, 29200]],
-    "U1 亮牌演出長度（老闆定案新節奏）：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支 21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 29.2 秒");
-  eq([f.SETTLE_WAIT_MS, f.NEXT_HAND_MAX_MS], [30000, 67900],
-    "U1 結算面板出現後等 30 秒；亮牌到開下一局最長 67.9 秒（動畫起點往後 1.2 秒＋四家三墩都是特效牌型、六槍、全壘打；2026-11-19 前是 66.7）");
+    [[0, 0, 2, 2], [0, 1, 0, 3], [null, null, null, 0], [20900, 22400, 21500, 31000]],
+    "U1 亮牌演出長度（老闆定案新節奏）：一般局 20.9 秒、一槍 22.4 秒、衝三＋尾墩鐵支 21.5 秒、衝三＋尾墩鐵支＋三槍＋全壘打 31.0 秒（全壘打 5.0 秒）");
+  eq([f.SETTLE_WAIT_MS, f.NEXT_HAND_MAX_MS], [30000, 74700],
+    "U1 結算面板出現後等 30 秒；亮牌到開下一局最長 74.7 秒（動畫起點往後 1.2 秒＋四家三墩都是特效牌型、六槍、全壘打 5.0、場內全壘打 5.0；場內全壘打前 67.9、全壘打拉長前 72.9）");
 }
 
 // U2、U3、U4：隨機 2000 局
@@ -60,7 +60,8 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
     const specials = r.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
     const g6 = r.pairs.filter((p) => p.gunner !== null).length;
     guns += g6; if (r.homeRun !== null) homeRuns++;
-    const expect = 20900 + specials * 300 + g6 * 1500 + (r.homeRun !== null ? 3200 : 0); // 老闆定案新節奏
+    const hit = [0, 0, 0, 0]; for (const p of r.pairs) if (p.gunner !== null) hit[p.gunner === p.a ? p.b : p.a]++; // 場內全壘打：有一家被三家打槍（老闆 2026-11-28）
+    const expect = 20900 + specials * 300 + g6 * 1500 + (r.homeRun !== null ? 5000 : 0) + (hit.includes(3) ? 5000 : 0); // 老闆定案新節奏
     if (dur(r) !== expect) durBad++;
     if ((dur(r) ?? 0) + 30000 > (f.NEXT_HAND_MAX_MS ?? 0)) overMax++;
     const st = f.handStats ? f.handStats(r, "jia") : null;
@@ -75,7 +76,7 @@ const arr = (front: string, middle: string, back: string): Arrangement => ({ fro
       for (const b of x.bonuses) { bonusSeen++; if (!NAMES.has(b.name) || b.points === 0) nameBad++; }
     });
   }
-  eq([durBad, overMax], [0, 0], "U2 隨機 2000 局：演出長度都等於新公式 20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打（特效牌型、打槍組數、全壘打另外數），也都不超過最長演出＋30 秒");
+  eq([durBad, overMax], [0, 0], "U2 隨機 2000 局：演出長度都等於新公式 20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打＋5.0×場內全壘打（特效牌型、打槍組數、全壘打、被三家打槍另外數），也都不超過最長演出＋30 秒");
   eq([sumBad, countBad, guns > 100, homeRuns > 0], [0, 0, true, true],
     `U3 隨機 2000 局（打槍 ${guns} 組、全壘打 ${homeRuns} 次）：每家「墩分＋特殊加分＋打槍分＋全壘打分」＝這局總分；打槍、被打槍、全壘打、被全壘打次數都和結算一致`);
   eq([bonusSeen > 0, nameBad], [true, 0], `U4 特殊加分項目（共 ${bonusSeen} 筆）名稱都是 v5 結算明細的名稱（衝三、中墩鐵支、尾墩同花順…），沒有 0 分的空項目`);

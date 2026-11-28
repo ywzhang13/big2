@@ -2,19 +2,20 @@
 // 十三支特效測試頁（app/thirteen/preview/fx）：四家牌全部亮開的牌桌上，按鈕觸發各種特效；元件和正式牌局同一套（ThTable、ThRevealFx）
 import { useEffect, useMemo, useState } from "react";
 import ThTable from "./ThTable";
-import ThRevealFx, { preloadRevealFx } from "./ThRevealFx";
+import ThRevealFx, { FX_FINAL, preloadRevealFx, type FxTrial } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
-import { BIG_SFX, loadBigSfx, playSfx, playSrc, saveBigSfx, useRevealSfx } from "./sfx";
+import { BIG_SFX, HR_AFTER, HR_AFTER_DEFAULT, IHR_DEFAULT, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, sfxSrc, useRevealSfx, type HrAfterPick, type IhrPick, type IhrSfxKey } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
+import { loadBuffer } from "./thAudio";
 import "./thRoom.css";
 import "./thReveal.css";
 
 const NAMES = ["老闆", "小明", "阿明", "小華"];
-export type LabFx = "start" | PatternFx | "gun" | "gun3" | "homerun";
+export type LabFx = "start" | PatternFx | "gun" | "gun3" | "homerun" | "insidehr";
 const FX_LIST: { key: LabFx; name: string }[] = [
   { key: "start", name: "開始比牌" }, { key: "chongsan", name: "衝三" }, { key: "tiezhi", name: "鐵支" }, { key: "tonghuashun", name: "同花順" },
-  { key: "wulong", name: "五龍" }, { key: "jpchongsan", name: "彩金衝三" }, { key: "jphulu", name: "彩金葫蘆" }, { key: "jptiezhi", name: "彩金鐵支" }, { key: "gun", name: "打槍" }, { key: "gun3", name: "被打三槍" }, { key: "homerun", name: "全壘打" },
+  { key: "wulong", name: "五龍" }, { key: "jpchongsan", name: "彩金衝三" }, { key: "jphulu", name: "彩金葫蘆" }, { key: "jptiezhi", name: "彩金鐵支" }, { key: "gun", name: "打槍" }, { key: "gun3", name: "被打三槍" }, { key: "homerun", name: "全壘打" }, { key: "insidehr", name: "場內全壘打" },
 ];
 const SEATS = ["自己", "右家", "對家", "左家"]; // 自己坐 0 號：1 號在右、2 號對家、3 號在左（同 ThTable）
 const isFx = (v: unknown): v is LabFx => FX_LIST.some((f) => f.key === v);
@@ -26,6 +27,7 @@ export function labSteps(fx: LabFx, seat: number): Step[] {
   // 被三家打槍（小宜 v8-B §7）：選的那家是被打的人，另外三家一人一槍，三槍三孔；選「自己」看第一人稱大彈孔
   if (fx === "gun3") return [1, 2, 3].map((k, n) => ({ kind: "gun" as const, t0: n * MS.gun, dur: MS.gun, from: (seat + k) % 4, to: seat, n }));
   if (fx === "homerun") return [{ kind: "homerun", t0: 0, dur: MS.homerun, seat }];
+  if (fx === "insidehr") return [{ kind: "insidehr", t0: 0, dur: MS.insidehr, seat }]; // 選的那家是被三家打槍的人（只播場內全壘打這一段）
   return [{ kind: "fx", t0: 0, dur: MS.fx, row: fx === "chongsan" || fx === "jpchongsan" ? "front" : "middle", seat, fx }];
 }
 
@@ -37,11 +39,26 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [play, setPlay] = useState<{ n: number; at: number; steps: Step[] } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
+  const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, IhrPick>>>({});
+  const [hrAfter, setHrAfter] = useState<HrAfterPick>(HR_AFTER_DEFAULT);
+  // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機（th_lab_trial，只有這一頁讀）。
+  // 審伯 R2：只用屬性傳給這一頁的 ThRevealFx，不寫 <html>、正式牌局也不讀，所以客戶端換頁到正式遊戲不會殘留（正式＝FX_FINAL：新預備＋甲＋鏡射）
+  const [trial, setTrial] = useState<FxTrial>(FX_FINAL);
+  const applyTrial = (t: FxTrial) => {
+    setTrial(t);
+    try { localStorage.setItem("th_lab_trial", JSON.stringify(t)); } catch { /* 存不了就只是這次 */ }
+  };
+  // 試聽選擇只給這一頁播（審伯 R2：正式牌局不讀）
+  const labSfx = useMemo(() => ({ ihr, hrAfter }), [ihr, hrAfter]);
 
   // 自動量測用（只有預覽站的這一頁有）：照正式牌局同一條路（playSrc → Web Audio、跟著互動音效音量）播一個檔
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
-    setBig(loadBigSfx());
+    setBig(loadBigSfx()); setIhr(loadIhrSfx()); setHrAfter(loadHrAfter());
+    try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string; dir?: string }; applyTrial({ ready: t.ready === "old" ? "old" : "new", size: t.size === "b" ? "b" : "a", dir: t.dir === "none" ? "none" : "mirror" }); } catch { /* 沒存過＝定案：新＋甲＋鏡射 */ }
+    // 場內全壘打的候選全部先載好：試聽第一次按就有聲音（播放時檔案還沒載完會被當成太晚、直接略過，手機走外部網址最明顯）
+    for (const x of IHR_SFX) for (const o of x.options) void loadBuffer(sfxSrc(x.key, o.v));
+    for (const o of HR_AFTER) if (o.v !== "none") void loadBuffer(sfxSrc("hrafter", o.v));
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();
     setFelt(f); applyFelt(f, isFelt(initial.felt));
     // 特效圖都載好才播（第一次打開圖還在下載）；網址有 fx 就自動播一次
@@ -63,6 +80,10 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
     setBig(x ? x.id : null); saveBigSfx(x ? x.id : null);
   };
   const batches = [...new Set(BIG_SFX.map((x) => x.batch))];
+  // 場內全壘打音效候選（老闆 2026-11-28）：按了就試聽並選用（記在本機），完整牌局照同一個選擇播
+  const pickIhr = (key: IhrSfxKey, v: IhrPick) => { if (v !== "none") playSrc(sfxSrc(key, v), { force: true }); saveIhrSfx(key, v); setIhr(loadIhrSfx()); }; // 「無」＝這一頁不播那個聲音
+  // 全壘打擊球後音效候選（老闆 2026-11-28）：同上，「無」＝不播
+  const pickHrAfter = (v: HrAfterPick) => { if (v !== "none") playSrc(sfxSrc("hrafter", v), { force: true }); saveHrAfter(v); setHrAfter(v); };
 
   const view: ThGameView = useMemo(() => ({
     status: "playing", code: "0000", sv: 0, phase: "revealed", handNo: 1, settings: { arrangeSec: 60, totalHands: 8 },
@@ -75,12 +96,12 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   // 彈孔留著（每槍 0.26 秒中彈）；重播或換特效才清掉
   const shot = [0, 1, 2, 3].map((seat) => steps.filter((s) => s.kind === "gun" && s.to === seat && t >= s.t0 + 260).length);
   const frame = { ...allOpen(), shot };
-  useRevealSfx(steps, play ? t : 0, 0);
+  useRevealSfx(steps, play ? t : 0, 0, undefined, labSfx);
 
   return (
     <>
       <ThTable view={view} now={now} clockSkew={0} reveal={{ rv, frame }} menu={false} />
-      {play && <ThRevealFx key={play.n} active={active} t={Math.max(0, t)} mySeat={0} names={NAMES} />}
+      {play && <ThRevealFx key={play.n} active={active} t={Math.max(0, t)} mySeat={0} names={NAMES} trial={trial} />}
       {ui ? (
         <div className="th-lab" data-th-lab>
           <div className="th-lab-row">
@@ -113,6 +134,37 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
               </span>
             ))}
             <button type="button" className={big ? "" : "is-on"} data-th-lab-big="off" onClick={() => pickBig(null)}>不選</button>
+          </div>
+          <div className="th-lab-row" data-th-lab-trial>
+            <span className="th-lab-sfx">全壘打預備</span>
+            {(["old", "new"] as const).map((r) => (
+              <button key={r} type="button" className={trial.ready === r ? "is-on" : ""} data-th-lab-ready={r} onClick={() => { applyTrial({ ...trial, ready: r }); go("homerun", seat); }}>{r === "old" ? "舊（牌桌上）" : "新（球場上）"}</button>
+            ))}
+            <span className="th-lab-sfx">人物大小</span>
+            {(["a", "b"] as const).map((z) => (
+              <button key={z} type="button" className={trial.size === z ? "is-on" : ""} data-th-lab-size={z} onClick={() => applyTrial({ ...trial, size: z })}>{z === "a" ? "甲（約 240）" : "乙（約 320）"}</button>
+            ))}
+            <span className="th-lab-sfx">方向</span>{/* 全壘打、場內全壘打都套用；按了直接重播現在選的那一個（不是這兩個就播全壘打） */}
+            {(["mirror", "none"] as const).map((r) => (
+              <button key={r} type="button" className={trial.dir === r ? "is-on" : ""} data-th-lab-dir={r} onClick={() => { applyTrial({ ...trial, dir: r }); go(fx === "insidehr" ? "insidehr" : "homerun", seat); }}>{r === "mirror" ? "鏡射" : "不翻轉"}</button>
+            ))}
+          </div>
+          <div className="th-lab-row" data-th-lab-hrafter>
+            <span className="th-lab-sfx">全壘打擊球後音效</span>
+            {HR_AFTER.map((o) => (
+              <button key={String(o.v)} type="button" title={o.name} className={hrAfter === o.v ? "is-on" : ""} data-th-lab-hrafter={String(o.v)} onClick={() => pickHrAfter(o.v)}>{o.label}</button>
+            ))}
+          </div>
+          <div className="th-lab-row" data-th-lab-ihr>
+            <span className="th-lab-sfx">場內全壘打音效</span>
+            {IHR_SFX.map((x) => (
+              <span key={x.key} className="th-lab-sfx">
+                {x.name}
+                {[...x.options, { v: "none" as const, label: "無", name: "不播" }].map((o) => (
+                  <button key={String(o.v)} type="button" title={o.name} className={(ihr[x.key] ?? IHR_DEFAULT[x.key]) === o.v ? "is-on" : ""} data-th-lab-ihr={`${x.key}-${o.v}`} onClick={() => pickIhr(x.key, o.v)}>{o.label}</button>
+                ))}
+              </span>
+            ))}
           </div>
         </div>
       ) : (

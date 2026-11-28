@@ -1,5 +1,5 @@
 "use client";
-// 十三支亮牌特效層（小宜 v5 §1、§3，v4 §4～5）：開始比牌、衝三／鐵支／同花順／五龍、打槍、全壘打。
+// 十三支亮牌特效層（小宜 v5 §1、§3，v4 §4～5）：開始比牌、衝三／鐵支／同花順／五龍、打槍、全壘打、場內全壘打。
 // 只用老闆的素材（public/tiles/thirteen/fx），程式只做移動、縮放、旋轉、透明度；不做晃動、震動（老闆 2026-11-18）。
 // 小宜 v7（老闆 2026-11-18）：大字（開始比牌、衝三、鐵支、同花順、五龍、全壘打）和棒球改用 v2——素材整理時已去黑底、四邊羽化成實心透明圖，
 //   一般疊加、畫在牌上面（screen 疊在象牙白牌面會被洗掉）；衝三等四種出現在那一家那副牌上；全壘打 2.8 秒全螢幕（爆發、煙火用 screen 鋪滿）
@@ -28,6 +28,7 @@ export const FX_AR: Record<string, [number, number]> = {
   jpchongsan: [1000, 529], jphulu: [1000, 532], jptiezhi: [1000, 490], gun: [256, 131], muzzle: [336, 232], bullet: [1024, 191],
   hole1: [144, 144], hole2: [144, 144], hole3: [144, 144], hole4: [144, 144], hrready: [458, 640], ball: [1200, 450], homerun: [1500, 562],
   burst: [1600, 893], fireworks: [1600, 893], hrfield: [1376, 768], hrbatter: [980, 1080], hrstar: [360, 360],
+  ihrfield: [1376, 768], ihrstand: [640, 894], ihrkneel: [900, 1012], ihrword: [1500, 556],
 };
 /** 手機用 .m、桌機用 .d（同一套 CSS 尺寸，桌機圖比較大）。aspect-ratio 用 auto：圖載完照圖本身的比例，載完前用 FX_AR */
 function Pic({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
@@ -40,7 +41,7 @@ function Pic({ name, className, style }: { name: string; className?: string; sty
   );
 }
 
-export const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "jpchongsan", "jphulu", "jptiezhi", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar"];
+export const FX_NAMES = ["start", "chongsan", "tiezhi", "tonghuashun", "wulong", "jpchongsan", "jphulu", "jptiezhi", "gun", "muzzle", "bullet", "hole1", "hole2", "hole3", "hole4", "hrready", "ball", "homerun", "burst", "fireworks", "hrfield", "hrbatter", "hrstar", "ihrfield", "ihrstand", "ihrkneel", "ihrword"];
 let preloaded: Promise<void> | null = null;
 /** 先把特效圖和牌背載好（理牌畫面一打開就呼叫）：第一次播的時候圖才不會還沒下載完、整段看不到。只載這台裝置那一套（手機 .m／桌機 .d） */
 export function preloadRevealFx(): Promise<void> {
@@ -64,6 +65,16 @@ function seatCenter(pos: Pos): Pt | null {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 const tableCenter = (): Pt => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+/** 全壘打、場內全壘打的試做選項（老闆 2026-11-28）：只有特效測試頁（ThFxLab）會用 trial 屬性傳進來；正式牌局（ThReveal）不傳＝FX_FINAL。
+ *  審伯 2026-11-28 R2：試做選擇不能流進正式牌局 → 不再讀 <html> 屬性或 localStorage，一律從呼叫端明確傳入 */
+export type FxTrial = { ready: "old" | "new"; size: "a" | "b"; dir: "mirror" | "none" };
+/** 老闆定案：預備在球場上（新）、人物甲、鏡射（右家、對家） */
+export const FX_FINAL: FxTrial = { ready: "new", size: "a", dir: "mirror" };
+/** 全壘打、場內全壘打要不要左右鏡射（老闆 2026-11-28「對家跟右家翻轉怪怪的」）：鏡射版右家、對家翻（老闆 2026-11-28 第三輪「鏡射修好了就繼續用鏡射」＝維持原設計；1514b94 一度改成對家不翻，老闆在預覽站發現「對家改成在左邊打擊」，改回來）；
+ *  特效測試頁切成「不翻轉」時四家都不翻＝打者在左、大字在右，只靠名牌分是誰 */
+const mirrorFor = (pos: Pos, trial: FxTrial) => trial.dir !== "none" && (pos === "right" || pos === "top");
+/** 全壘打、場內全壘打這一家要怎麼畫：鏡射、預備在球場上（新）、人物乙案。只看參數，不讀 <html>、localStorage（審伯 R2，tests/_thirteen-inside-hr I10 鎖住） */
+export const fxOpts = (pos: Pos, trial: FxTrial = FX_FINAL) => ({ flip: mirrorFor(pos, trial), ready2: trial.ready === "new", sizeB: trial.size === "b" });
 const isDesktop = () => window.matchMedia(DESKTOP).matches;
 
 /** 一段特效：掛上去那一刻算好位置和「已播毫秒」 */
@@ -148,40 +159,46 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
   );
 }
 
-/** 全壘打 3.2 秒（小宜 v9，取代 v8-B §8 的 0.55 秒以後）：0～0.55 在打者那組牌上集氣——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
- * （人一直是正的，只左右鏡射面向球飛的方向：自己、左家面向右，右家、對家面向左；0.55 秒後的打擊者畫面跟著同一個方向）；
- * 0.55 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、球飛上天變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 2.80～3.20 一起淡出。
- * 0.55 秒以後四家看到的畫面完全相同（不翻面）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
-function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number; name: string }) {
+/** 全壘打 5.0 秒（小宜 v9；老闆 2026-11-28 預備也要集氣、總長對齊場內全壘打，原本 3.2 秒、0.55 揮棒）：0～1.0 在打者那組牌上集氣（老闆「集氣有點太久」從 1.4 縮短）——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
+ * （人一直是正的，只左右鏡射面向球飛的方向：鏡射版右家、對家面向左（mirrorFor）；1.0 秒後的打擊者畫面跟著同一個方向）；
+ * 1.0 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、1.05 球從打者頭的右上方直線飛上天、1.5 變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 停到 4.5 → 4.5～5.0 一起淡出（時間在 thReveal.css）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
+function HomeRunFx({ step, elapsed: elapsed0, mySeat, name, trial }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number; name: string; trial: FxTrial }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
   const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
   const h = useMount(() => {
     const s = stageScale(); // v8-A：特效尺寸跟著牌桌倍數放大
     const a = seatCenter(pos) ?? tableCenter();
-    const face = pos === "right" || pos === "top" ? -1 : 1;
+    const o = fxOpts(pos, trial), face = o.flip ? -1 : 1;
     const readyH = 200 * s, half = readyH * 0.6; // 最大放到 1.12 倍：上下各留 0.6 倍高，對家（牌在上緣）頭頂才不會出畫面
-    return { a, face, readyH, readyY: Math.min(Math.max(a.y, half), window.innerHeight - half) };
+    // 預備新版（老闆 2026-11-28 定案，正式牌局固定用；審伯 R1）：預備姿勢不在牌桌上，0.3 先換景到球場、出現在揮棒打者同一個位置、集氣，1.0 交叉淡入成揮棒。
+    // 舊預備（牌桌上集氣到 1.0）只剩特效測試頁選「舊」才看得到
+    const ready2 = o.ready2;
+    return { a, face, readyH, readyY: Math.min(Math.max(a.y, half), window.innerHeight - half), ready2, sizeB: o.sizeB };
   });
   if (!h) return null;
   const delay = { animationDelay: `${-elapsed}ms` };
   const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name; // 名字最多 10 個字（同麻將自摸）
   return (
     <>
-      {/* 集氣的光（全螢幕爆發圖縮小，0～0.45 秒在打擊者後面由 0.2 倍放大到 0.5 倍） */}
+      {/* 集氣的光（開場的全螢幕爆發圖縮小）：舊預備 0～1.0 在牌上的預備姿勢後面由小放大、越來越亮；新預備只在牌上亮 0～0.3，換景後由球場上的 th-hr9-charge 接手 */}
       <div className="th-fx-at is-blend" style={{ left: h.a.x, top: h.a.y }}>
-        <Pic name="burst" className="th-fx th-fx-charge" style={delay} />
+        <Pic name="burst" className={`th-fx th-fx-charge${h.ready2 ? " is-quick" : ""}`} style={delay} />
       </div>
       {/* 打擊者準備姿勢：中心對齊那一家整組牌的中心（上下超出畫面才往內收） */}
       {/* 鏡射放在外層、固定不動（老闆第 10 輪：準備姿勢要定住）；動畫只做放大和透明度，沒有旋轉和水平位移 */}
+      {!h.ready2 && (
       <div className="th-fx-at" style={{ left: h.a.x, top: h.readyY, transform: h.face < 0 ? "scaleX(-1)" : undefined }} data-th-hr-ready={pos}>
         <Pic name="hrready" className="th-fx th-fx-ready" style={{ ...delay, height: h.readyH, width: (h.readyH * FX_AR.hrready[0]) / FX_AR.hrready[1] }} />{/* 寬也寫明（照素材比例），圖沒載完也不偏 */}
       </div>
+      )}
       {/* 打擊者畫面（v9 §3 圖層由下到上）：背景、壓暗、煙火（screen）、打擊者、球、星星、大字、名牌、換景亮光 */}
-      {/* 右家、對家的集氣人物朝左 → 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
-      <div className={`th-hr9${h.face < 0 ? " is-flip" : ""}`} data-th-homerun={step.seat} data-th-hr-flip={h.face < 0 ? 1 : 0} style={delay}>
+      {/* 集氣人物朝左（鏡射版的右家）→ 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
+      <div className={`th-hr9${h.face < 0 ? " is-flip" : ""}${h.ready2 ? " is-ready2" : ""}${h.sizeB ? " is-size-b" : ""}`} data-th-homerun={step.seat} data-th-hr-flip={h.face < 0 ? 1 : 0} style={delay}>
         <Pic name="hrfield" className="th-hr9-field" style={delay} />
         <div className="th-hr9-dim" style={delay} />
         <Pic name="fireworks" className="th-hr9-fw" style={delay} />
+        {h.ready2 && <Pic name="burst" className="th-hr9-charge" style={delay} />}
+        {h.ready2 && <Pic name="hrready" className="th-hr9-ready" style={delay} />}
         <Pic name="hrbatter" className="th-hr9-batter" style={delay} />
         <div className="th-hr9-ballpath" style={delay}><Pic name="ball" className="th-hr9-ball" /></div>
         <Pic name="hrstar" className="th-hr9-star" style={delay} />
@@ -195,8 +212,60 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
   );
 }
 
-/** names：每個座位的名字（全壘打畫面的名牌用） */
-export default function ThRevealFx({ active, t, mySeat, names = [] }: { active: Step[]; t: number; mySeat: number; names?: string[] }) {
+/** 場內全壘打 5.0 秒（老闆 2026-11-28「被三家打槍＝場內全壘打，悲情版、風格跟全壘打一樣」；阿哲分鏡；老闆「可以久一點」從 3.2 拉長到 5.0）：
+ *  0～0.55 被打那一家的牌依序中三個彈孔、整組牌變灰 → 0.55 冷白閃光換景到雨夜球場（悶雷）→ 0.55～1.6 打者站著、快跪下去 →
+ *  1.6～1.85 交叉淡入跪姿、往下沉 → 1.85～2.05「場內全壘打」大字從上方重重落下（不彈跳，「咚」）→ 2.3 遠處一盞燈熄掉、畫面暗一階（小號 C），
+ *  跪姿肩膀一直微微起伏 → 2.25 被打那一家的名字（灰白）→ 停到 4.5 → 4.5～5.0 淡出。方向照全壘打（mirrorFor）：鏡射版右家、對家觸發時整個畫面左右鏡射（人在右、大字在左），不翻轉版四家都人在左。
+ *  位置、大小都是畫面寬高的比例（thReveal.css .th-ihr），四家看到同一個畫面（只差鏡射，跟全壘打一樣） */
+const IHR_HOLES: [number, number, number][] = [[0.3, 0.42, -18], [0.56, 0.58, 24], [0.78, 0.38, 70]]; // 三個彈孔在那組牌上的位置（寬、高的比例）和角度
+function InsideHrFx({ step, elapsed: elapsed0, mySeat, name, trial }: { step: Extract<Step, { kind: "insidehr" }>; elapsed: number; mySeat: number; name: string; trial: FxTrial }) {
+  const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
+  const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
+  const h = useMount(() => {
+    const rs = [...document.querySelectorAll(`.th-table [data-th-pos="${pos}"] [data-th-card]`)].map((e) => e.getBoundingClientRect());
+    const c = seatCenter(pos) ?? tableCenter();
+    const box = rs.length
+      ? { l: Math.min(...rs.map((r) => r.left)), t: Math.min(...rs.map((r) => r.top)), r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)) }
+      : { l: c.x - 80, t: c.y - 50, r: c.x + 80, b: c.y + 50 };
+    return { box, hole: Math.max(36, (box.b - box.t) * 0.5), flip: fxOpts(pos, trial).flip, sizeB: fxOpts(pos, trial).sizeB };
+  });
+  if (!h) return null;
+  const delay = { animationDelay: `${-elapsed}ms` };
+  const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name; // 名字最多 10 個字（同全壘打）
+  const { box } = h, w = box.r - box.l, ht = box.b - box.t;
+  return (
+    <>
+      {/* 整組牌變灰：只套在被打那一家的牌上（不畫灰色方塊，牌和牌之間的桌布不變色）；4.5～5.0 跟著淡出變回原色 */}
+      <style>{`.th-table [data-th-pos="${pos}"] [data-th-card]{animation:th-ihr-gray 5s linear both;animation-delay:${-elapsed}ms}`}</style>
+      {IHR_HOLES.map(([fx, fy, deg], i) => (
+        <div key={i} className="th-fx-at" style={{ left: box.l + w * fx - h.hole / 2, top: box.t + ht * fy - h.hole / 2 }} data-th-ihr-hole={i}>
+          {/* 寬高都寫明、不用 translate 置中（圖沒載完也不偏） */}
+          <Pic name={`hole${i + 1}`} className={`th-fx th-ihr-hole th-ihr-hole-${i}`} style={{ ...delay, width: h.hole, height: h.hole, ["--hr" as string]: `${deg}deg` }} />
+        </div>
+      ))}
+      <div className={`th-ihr${h.flip ? " is-flip" : ""}${h.sizeB ? " is-size-b" : ""}`} data-th-insidehr={step.seat} data-th-ihr-flip={h.flip ? 1 : 0} style={delay}>
+        <div className="th-ihr-stage" style={delay}>
+          <Pic name="ihrfield" className="th-ihr-field" />
+          <div className="th-ihr-lamp" style={delay} />
+        </div>
+        <div className="th-ihr-rain" style={delay} />
+        <div className="th-ihr-dim" style={delay} />
+        <div className="th-ihr-figs">
+          <Pic name="ihrstand" className="th-ihr-stand" style={delay} />
+          <Pic name="ihrkneel" className="th-ihr-kneel" style={delay} />
+        </div>
+        <div className="th-ihr-title">
+          <Pic name="ihrword" className="th-ihr-word" style={delay} />
+          <p className="th-ihr-name" data-th-ihr-name style={delay}>{shown}</p>
+        </div>
+        <div className="th-ihr-flash" style={delay} />
+      </div>
+    </>
+  );
+}
+
+/** names：每個座位的名字（全壘打畫面的名牌用）；trial：只有特效測試頁傳，正式牌局不傳＝定案（FX_FINAL） */
+export default function ThRevealFx({ active, t, mySeat, names = [], trial = FX_FINAL }: { active: Step[]; t: number; mySeat: number; names?: string[]; trial?: FxTrial }) {
   return (
     <div className="th-fx-layer" aria-hidden>
       {active.map((s) => {
@@ -205,7 +274,8 @@ export default function ThRevealFx({ active, t, mySeat, names = [] }: { active: 
         if (s.kind === "start") return <StartFx key={key} elapsed={elapsed} />;
         if (s.kind === "fx") return <PatternFxView key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
         if (s.kind === "gun") return <GunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} />;
-        if (s.kind === "homerun") return <HomeRunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} name={names[s.seat] ?? ""} />;
+        if (s.kind === "homerun") return <HomeRunFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} name={names[s.seat] ?? ""} trial={trial} />;
+        if (s.kind === "insidehr") return <InsideHrFx key={key} step={s} elapsed={elapsed} mySeat={mySeat} name={names[s.seat] ?? ""} trial={trial} />;
         return null;
       })}
     </div>

@@ -44,8 +44,11 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   ok(gtl.end === 22400 && gtl.steps.filter((s) => s.kind === "gun").every((s) => s.dur === 1500), `R4 有一槍：22.4 秒（實際 ${gtl.end / 1000}）`);
   const hr = must("homerun"), htl = T.buildTimeline(hr);
   const guns = htl.steps.filter((s) => s.kind === "gun"), home = htl.steps.find((s) => s.kind === "homerun")!;
-  ok(home.kind === "homerun" && home.seat === 0 && home.t0 === guns[guns.length - 1].t0 + 1500 && htl.end === home.t0 + 3200 + 1200,
-    "R5 全壘打接在所有打槍之後、3.2 秒，再停 1.2 秒出結算");
+  const ihr = htl.steps.find((s) => s.kind === "insidehr"); // 這副預覽牌另外有一家被三家打槍：先播場內全壘打 5.0 秒、再播全壘打（老闆 2026-11-28）
+  const afterGuns = guns[guns.length - 1].t0 + 1500;
+  ok(home.kind === "homerun" && home.seat === 0 && (!ihr || ihr.t0 === afterGuns) && home.t0 === afterGuns + (ihr ? 5000 : 0)
+    && htl.end === home.t0 + 5000 + 1200,
+    `R5 ${ihr ? "所有打槍之後先場內全壘打 5.0 秒，再" : "接在所有打槍之後"}全壘打 5.0 秒，再停 1.2 秒出結算`);
   const f0 = T.frameAt(tl, 100), fMid = T.frameAt(tl, 1800);
   ok(f0.active.some((s) => s.kind === "start") && f0.open.every((o) => !o.front && !o.middle && !o.back) && !f0.board.show
     && fMid.open.filter((o) => o.front).length === 1 && fMid.glow.length === 1 && fMid.board.show,
@@ -54,7 +57,7 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   ok(g.kind === "gun" && T.frameAt(gtl, g.t0 + 200).shot[g.to] === 0 && T.frameAt(gtl, g.t0 + 300).shot[g.to] === 1 && T.frameAt(gtl, gtl.end - 1).shot[g.to] === 1
     && !T.frameAt(gtl, g.t0 + 10).board.show,
     "R7 被打槍：0.26 秒中彈多一個彈孔，彈孔留到結算；打槍時看板淡出");
-  ok(T.revealDurationV8(0, 0, false) === 20900 && T.revealDurationV8(2, 3, true) === 29200, `R9 前端公式：一般局 20.9 秒、最長例（衝三＋鐵支＋三槍＋全壘打）29.2 秒（實際 ${T.revealDurationV8(2, 3, true) / 1000}）`);
+  ok(T.revealDurationV8(0, 0, false) === 20900 && T.revealDurationV8(2, 3, true) === 31000, `R9 前端公式：一般局 20.9 秒、最長例（衝三＋鐵支＋三槍＋全壘打 5.0）31.0 秒（實際 ${T.revealDurationV8(2, 3, true) / 1000}）`);
 }
 
 // ---- K 中央看板（小宜 v12）：牌型落定才出、加分四家出完才出，留到下一墩第一家落定；加分時長都是正的 ----
@@ -255,7 +258,7 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
 {
   const { readFileSync, existsSync } = await import("node:fs");
   const { REVEAL_TIMING } = await import("../lib/thirteen/flow");
-  ok(T.MS.homerun === 3200 && REVEAL_TIMING.HOME_RUN_MS === 3200, `H9-1 全壘打總長維持 3.2 秒，前端和伺服器同一個常數（前端 ${T.MS.homerun}、伺服器 ${REVEAL_TIMING.HOME_RUN_MS}）`);
+  ok(T.MS.homerun === 5000 && REVEAL_TIMING.HOME_RUN_MS === 5000, `H9-1 全壘打總長 5.0 秒（老闆 2026-11-28，原本 3.2），前端和伺服器同一個常數（前端 ${T.MS.homerun}、伺服器 ${REVEAL_TIMING.HOME_RUN_MS}）`);
   const list = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
   const files = [["hrfield", "v1"], ["hrbatter", "v2"], ["hrstar", "v1"]].flatMap(([n, v]) => ["m", "d"].map((z) => `/tiles/thirteen/fx/th-fx-${n}.${v}.${z}.webp`)); // hrbatter v2：老闆第 12 輪新揮棒圖
   ok(files.every((f) => existsSync(`public${f}`) && f in list), "H9-2 球場背景、打擊者、十字星（手機 .m、桌機 .d）都在，也登記了長期快取雜湊");
@@ -270,12 +273,12 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   });
   ok(gaps.every((g) => g > 0), `H9-3 打擊者右緣和「全壘打」大字左緣不重疊（844×390、932×430、1440×900、1920×1080、2560×1260 間隔：${gaps.join("、")}px）`);
   const dur = [...css.matchAll(/@keyframes (th-hr9-[a-z]+)/g)].map((m) => m[1]);
-  ok(dur.length >= 9 && /\.th-hr9 > \*, \.th-hr9 picture > img, \.th-hr9-name \{ animation-duration: 3\.2s/.test(css) && /\.th-hr9 \{[^}]*animation: th-hr9-out 3\.2s/.test(css),
-    `H9-4 打擊者畫面每一層的動畫都是 3.2 秒的時間軸（${dur.length} 組 keyframes），結束時一起淡出`);
+  ok(dur.length >= 9 && /\.th-hr9 > \*, \.th-hr9 picture > img, \.th-hr9-name \{ animation-duration: 5s/.test(css) && /\.th-hr9 \{[^}]*animation: th-hr9-out 5s/.test(css),
+    `H9-4 打擊者畫面每一層的動畫都是 5.0 秒的時間軸（${dur.length} 組 keyframes），結束時一起淡出`);
   const { sfxEvents } = await import("../components/thirteen/sfx");
   const hr = must("homerun"), tl = T.buildTimeline(hr), home = tl.steps.find((x) => x.kind === "homerun")!;
   const inHr = sfxEvents(tl.steps, 0, "r3-a").filter((e) => e.t >= home.t0 && e.t < home.t0 + home.dur).map((e) => e.k);
-  ok(inHr.join(",") === "bat", `H9-5 全壘打 3.2 秒內只有擊球聲（選了大牌音效也一樣，集氣不播）；實際：${inHr.join("、")}`);
+  ok(inHr.join(",") === "bat", `H9-5 全壘打 5.0 秒內只有擊球聲（擊球後音效老闆 2026-11-28 試聽都不要，預設不播；選了大牌音效也一樣，集氣不播）；實際：${inHr.join("、")}`);
   const fxTsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8");
   const ready = ["m", "d"].map((z) => `/tiles/thirteen/fx/th-fx-hrready.v1.${z}.webp`);
   ok(ready.every((f) => existsSync(`public${f}`) && f in list) && /Pic name="hrready"/.test(fxTsx) && !/Pic name="bat"/.test(fxTsx) && /@keyframes th-ready/.test(css) && !/@keyframes th-bat/.test(css),
@@ -285,11 +288,11 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   ok(tf.length >= 4 && tf.every((t) => /^translate\(-50%,-50%\) scale\([\d.]+\)$/.test(t)) && !/rotate|var\(--face/.test(readyKf) && /scaleX\(-1\)/.test(fxTsx),
     `H9-7 集氣準備姿勢固定不動：動畫只有放大（${tf.map((t) => /scale\(([\d.]+)\)/.exec(t)![1]).join("→")}）和透明度，沒有旋轉、沒有水平位移；左右鏡射放在不動的外層`);
   const vw = (sel: string) => Number(new RegExp(`${sel.replace(/\./g, "\\.")} \\{[^}]*?left: ([\\d.]+)vw`).exec(css)?.[1]);
-  const pairs: [string, string][] = [[".th-hr9-ballpath", ".th-hr9.is-flip .th-hr9-ballpath"], [".th-hr9-star", ".th-hr9.is-flip .th-hr9-star"], [".th-hr9-title", ".th-hr9.is-flip .th-hr9-title"]];
+  const pairs: [string, string][] = [[".th-hr9-star", ".th-hr9.is-flip .th-hr9-star"], [".th-hr9-title", ".th-hr9.is-flip .th-hr9-title"]]; // 球的起點跟著打者算（--bx），鏡射版是 100vw - --bx，見 _thirteen-inside-hr I8
   const mirrored = pairs.every(([a, b]) => Math.abs(vw(a) + vw(b) - 100) < 0.01);
-  ok(mirrored && /\.th-hr9\.is-flip \.th-hr9-batter \{ left: auto; right: 7vw;/.test(css) && /@keyframes th-hr9-batter-r[\s\S]*?28\.125%, 100% \{ transform: translate\(0, 0\) scale\(1\) scaleX\(-1\)/.test(css)
+  ok(mirrored && /\.th-hr9\.is-flip \.th-hr9-batter \{ left: auto; right: 10vw;/.test(css) && /@keyframes th-hr9-batter-r[\s\S]*?27%, 100% \{ transform: translate\(0, 0\) scale\(1\) scaleX\(-1\)/.test(css)
     && /th-hr9\$\{h\.face < 0 \? " is-flip" : ""\}/.test(fxTsx),
-    `H9-8 右家、對家（人物朝左）的打擊者畫面左右對調：打擊者靠右、球和星星和大字以中線鏡射（${pairs.map(([a, b]) => `${vw(a)}→${vw(b)}`).join("、")}vw），間隔和原版一樣；自己、左家不變`);
+    `H9-8 鏡射版右家、對家（人物朝左）的打擊者畫面左右對調：打擊者靠右、球和星星和大字以中線鏡射（${pairs.map(([a, b]) => `${vw(a)}→${vw(b)}`).join("、")}vw），間隔和原版一樣；自己、左家不變`);
 }
 {
   const { readFileSync } = await import("node:fs");

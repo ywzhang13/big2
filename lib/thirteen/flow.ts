@@ -24,25 +24,34 @@ export const SETTLE_WAIT_MS = 30_000;
  *   START_MS 開始比牌 1.7；PLAY_MS 每家出一墩 1.5；ROW_WAIT_MS 一墩四家都出完後的等待 0（換墩不停，和同一墩一樣隔 1.5）；
  *   ROW_MS 一墩合計＝4×PLAY_MS＋ROW_WAIT_MS＝6.0（平手的兩家也各佔一格，照順序一家一家出）；
  *   SPECIAL_MS 每個大牌（衝三、中尾墩鐵支／同花順／五龍）另外多佔 0.3（特效和下一家出牌重疊，多出的留給中央顯示牌型名）；
- *   GUN_MS 每一槍 1.5；HOME_RUN_MS 全壘打 3.2；SETTLE_PAUSE_MS 結算面板出現前的停頓 1.2。
+ *   GUN_MS 每一槍 1.5；HOME_RUN_MS 全壘打 5.0（老闆 2026-11-28：預備時也要集氣、整體時間對齊場內全壘打，3.2 拉長到 5.0）；INSIDE_HR_MS 場內全壘打 5.0（老闆 2026-11-28：某一家被另外三家都打槍，悲情版全壘打；同一局也有全壘打時先播場內全壘打、再播全壘打；老闆說「可以久一點」，3.2 拉長到 5.0）；
+ *   SETTLE_PAUSE_MS 結算面板出現前的停頓 1.2。
  *   LEAD_MS 動畫起點排在決定亮牌之後 1.2 秒（老柯 2026-11-19，老闆回報「開始比牌只有 0.幾秒」）：存檔、廣播、瀏覽器收到再讀狀態，
  *     正式站實測要 0.5～1 秒；起點不往後排，這段會吃掉「開始比牌」大字（0.9 秒）和開頭音效。四家照樣同一個起點
- *   一般局＝1.7＋3×6.0＋1.2＝20.9 秒；整局＝20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打。
+ *   一般局＝1.7＋3×6.0＋1.2＝20.9 秒；整局＝20.9＋0.3×大牌＋1.5×槍＋5.0×全壘打＋5.0×場內全壘打。
  */
 export const REVEAL_TIMING = {
   START_MS: 1700, PLAY_MS: 1500, ROW_WAIT_MS: 0, ROW_MS: 4 * 1500 + 0,
-  SPECIAL_MS: 300, GUN_MS: 1500, HOME_RUN_MS: 3200, SETTLE_PAUSE_MS: 1200, LEAD_MS: 1200,
+  SPECIAL_MS: 300, GUN_MS: 1500, HOME_RUN_MS: 5000, INSIDE_HR_MS: 5000, SETTLE_PAUSE_MS: 1200, LEAD_MS: 1200,
 } as const;
-/** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個大牌（衝三、中尾墩鐵支／同花順／五龍）＋每一槍＋全壘打＋停頓 */
+/** 場內全壘打：被另外三家都打槍的那一家（只是動畫，不改計分；一局最多一家——兩家互相都被三家打，等於彼此三墩全贏對方，不可能）；沒有＝null */
+export function insideHomeRunOf(result: Pick<RoundResult, "pairs">): number | null {
+  const hit = [0, 0, 0, 0];
+  for (const p of result.pairs) if (p.gunner !== null) hit[p.gunner === p.a ? p.b : p.a]++;
+  const seat = hit.findIndex((n) => n === 3);
+  return seat >= 0 ? seat : null;
+}
+/** 從開始比牌到結算面板出現：開始比牌＋三墩＋每個大牌（衝三、中尾墩鐵支／同花順／五龍）＋每一槍＋全壘打＋場內全壘打＋停頓 */
 export function revealDurationMs(result: RoundResult): number {
   const t = REVEAL_TIMING;
   const specials = result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0);
   const guns = result.pairs.filter((p) => p.gunner !== null).length;
-  return t.START_MS + 3 * t.ROW_MS + specials * t.SPECIAL_MS + guns * t.GUN_MS + (result.homeRun !== null ? t.HOME_RUN_MS : 0) + t.SETTLE_PAUSE_MS;
+  return t.START_MS + 3 * t.ROW_MS + specials * t.SPECIAL_MS + guns * t.GUN_MS + (result.homeRun !== null ? t.HOME_RUN_MS : 0)
+    + (insideHomeRunOf(result) !== null ? t.INSIDE_HR_MS : 0) + t.SETTLE_PAUSE_MS;
 }
-/** 亮牌到自動開下一局最長要多久（四家三墩都是特效牌型、六槍、全壘打，再加 30 秒）；測試推進時間用 */
+/** 亮牌到自動開下一局最長要多久（四家三墩都是特效牌型、六槍、全壘打、場內全壘打，再加 30 秒）；測試推進時間用 */
 export const NEXT_HAND_MAX_MS = REVEAL_TIMING.LEAD_MS + REVEAL_TIMING.START_MS + 3 * REVEAL_TIMING.ROW_MS + 12 * REVEAL_TIMING.SPECIAL_MS + 6 * REVEAL_TIMING.GUN_MS
-  + REVEAL_TIMING.HOME_RUN_MS + REVEAL_TIMING.SETTLE_PAUSE_MS + SETTLE_WAIT_MS;
+  + REVEAL_TIMING.HOME_RUN_MS + REVEAL_TIMING.INSIDE_HR_MS + REVEAL_TIMING.SETTLE_PAUSE_MS + SETTLE_WAIT_MS;
 
 // ---- 每局統計（阿哲 2026-11-18：打槍、全壘打等改由後端每局記錄，前端不再自己累計）----
 /** 一家這一局的明細（v5 本局結算的左欄）：墩分＋各特殊加分＋打槍分＋全壘打分＝total（這局總分） */
