@@ -24,7 +24,7 @@ export const SFX_LIST: { key: SfxKey; name: string }[] = [
 /** 用哪個候選（老闆試聽後要換就改這裡）；數字＝第二輪候選 r2-1／2／3。老闆 2026-11-18：槍聲選 1、中彈選 3 */
 export const SFX_PICK: Record<SfxKey, SfxVariant> = {
   start: "a", play: "a", score: "a", chongsan: "a", tiezhi: "a", tonghuashun: "a", wulong: "b", gunshot: 1, hit: 3, charge: "a", bat: "a", homerun: "a", fireworks: "a",
-  hrafter: "b", // 全壘打擊球後（老闆 2026-11-28「打出去後的音效」）：預設 B 咻聲（跟球飛出去的畫面同步）；特效測試頁可換 A／B／C／無（HR_AFTER，記在本機）
+  hrafter: "b", // 全壘打擊球後的候選檔名用（預設播不播看 HR_AFTER_DEFAULT）
   ihrthunder: "a", ihrthud: "b", ihrtrumpet: 1, // 場內全壘打：老闆 2026-11-28 試聽選定悶雷 A、咚 B、小號 C；特效測試頁仍可換（IHR_SFX，記在本機）
 };
 /** 老闆 2026-11-18 試聽定案：開始比牌 A、出牌 A、分數 A、五龍 B、揮棒 A、槍聲 r2-1、中彈 r2-3；衝三、鐵支、同花順都不滿意、先靜音等重找（測試頁可試聽第二輪）；
@@ -59,15 +59,17 @@ export const IHR_SFX: { key: IhrSfxKey; name: string; at: number; options: { v: 
   { key: "ihrtrumpet", name: "小號", at: 2300, options: [{ v: "a", label: "A", name: "wah wah 悲情長號" }, { v: "b", label: "B", name: "失敗號角 wahwah" }, { v: 1, label: "C", name: "失敗小樂句" }] },
 ];
 /** 全壘打擊球後音效的候選（老馬 2026-11-28；來源見 public/tiles/thirteen/sfx/LICENSE-hrafter.v1.txt）：球飛出去那一刻（HR_LAUNCH_MS）播，約 2.2 秒、4.5 秒前收尾。
- *  特效測試頁選了記在本機 th_sfx_hrafter（"none"＝不播），完整牌局照同一個選擇；沒選＝SFX_PICK.hrafter */
+ *  特效測試頁選了記在本機 th_sfx_hrafter（"none"＝不播），完整牌局照同一個選擇；沒選＝HR_AFTER_DEFAULT（不播） */
 export type HrAfterPick = SfxVariant | "none";
+/** 老闆 2026-11-28 試聽三個都不喜歡 → 正式遊戲預設不播（全壘打只有原本的揮棒擊球聲）；測試頁那一排留著，選了只影響那支手機 */
+export const HR_AFTER_DEFAULT: HrAfterPick = "none";
 export const HR_AFTER: { v: HrAfterPick; label: string; name: string }[] = [
   { v: "a", label: "A", name: "觀眾歡呼（Freesound CC0）" }, { v: "b", label: "B", name: "球劃破天空的咻聲（Freesound CC0）" },
   { v: 1, label: "C", name: "重低音爆擊加回音（Freesound CC0）" }, { v: "none", label: "無", name: "不播" },
 ];
 const HR_AFTER_KEY = "th_sfx_hrafter";
 export function loadHrAfter(): HrAfterPick {
-  try { const raw = JSON.parse(localStorage.getItem(HR_AFTER_KEY) ?? "null") as unknown; return HR_AFTER.find((o) => o.v === raw)?.v ?? SFX_PICK.hrafter; } catch { return SFX_PICK.hrafter; }
+  try { const raw = JSON.parse(localStorage.getItem(HR_AFTER_KEY) ?? "null") as unknown; return HR_AFTER.find((o) => o.v === raw)?.v ?? HR_AFTER_DEFAULT; } catch { return HR_AFTER_DEFAULT; }
 }
 export function saveHrAfter(v: HrAfterPick): void {
   try { localStorage.setItem(HR_AFTER_KEY, JSON.stringify(v)); } catch { /* 存不了就只是這次 */ }
@@ -191,7 +193,7 @@ const FX_SFX: Record<PatternFx, SfxKey> = { chongsan: "chongsan", tiezhi: "tiezh
 
 /** 一段時間軸裡每個音效的時間點（毫秒，從開始比牌算）；bigId＝選了哪個大牌音效：衝三、鐵支、同花順、五龍都播那個檔（src）。
  *  values＝每家每墩的牌型（伺服器的 result.values）：有給就在每一墩牌落定時唸那一家的牌型；大牌和大字同時開始唸 */
-export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = null, values?: Record<Row, HandValue>[], ihrPick: Partial<Record<IhrSfxKey, SfxVariant>> = {}, hrAfter: HrAfterPick = SFX_PICK.hrafter): SfxEvent[] {
+export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = null, values?: Record<Row, HandValue>[], ihrPick: Partial<Record<IhrSfxKey, SfxVariant>> = {}, hrAfter: HrAfterPick = HR_AFTER_DEFAULT): SfxEvent[] {
   const out: SfxEvent[] = [];
   for (const s of steps) {
     if (s.kind === "start") out.push({ t: s.t0, k: "start" });

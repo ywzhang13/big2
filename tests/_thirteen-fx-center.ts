@@ -18,8 +18,8 @@ for (const s of [".th-hr9 .th-hr9-field", ".th-hr9 .th-hr9-fw"]) {
   const r = rule(s);
   ok(/width: 100%; height: 100%; object-fit: cover/.test(r) && /left: 0; top: 0/.test(r), `C4 ${s}：鋪滿畫面＋object-fit: cover（和原本「蓋滿、中心對中心」同一個結果）`);
 }
-ok(/display: flex; align-items: center; justify-content: center/.test(rule(".th-hr9-title")) && /left: 72vw; top: 50vh/.test(rule(".th-hr9-title")), "C5 全壘打大字：外層在 (0.72W, 0.50H)、flex 置中，位置和原本一樣");
-ok(/\.th-hr9-batter \{ left: 7vw; bottom: -2vh;/.test(css) && /\.th-hr9-star \{ left: 62vw; top: 18vh;/.test(css) && /\.th-hr9-ballpath \{ --hb: min\(92vh, 44vw\);[^}]*left: var\(--bx\); top: var\(--by\);/.test(css), "C6 打擊者、星星的位置沒動；球的起點 2026-11-28 改成跟著打者的球棒甜蜜點（老闆「像從後腦勺飛出去」）");
+ok(/display: flex; align-items: center; justify-content: center/.test(rule(".th-hr9-title")) && /left: 74vw; top: 50vh/.test(rule(".th-hr9-title")), "C5 全壘打大字：外層在 (0.74W, 0.50H)（2026-11-28 打者靠中間，大字讓開 2vw）、flex 置中");
+ok(/\.th-hr9-batter \{ left: 12vw; bottom: -2vh;/.test(css) && /\.th-hr9-star \{ left: 64vw; top: 18vh;/.test(css) && /\.th-hr9-ballpath \{ --hl: 12vw; --hb: min\(92vh, 44vw\);[^}]*left: var\(--bx\); top: var\(--by\);/.test(css), "C6 打者靠中間（12vw，老闆 2026-11-28）、星星 64vw；球的起點跟著打者頭的右上方");
 // 打槍、集氣（老馬 2026-11-22 第二段）：這幾張還是用 translate(-50%) 系列（槍口火光要對準噴口、要保留角度），改成寬高都寫明，圖沒載完也照對的大小算
 ok(/className="th-fx th-fx-gun" style=\{\{ \.\.\.delay, width: g\.gunW, height: g\.gunH,/.test(tsx) && /gunH = gunW \* 131 \/ 256/.test(tsx), "C7 槍：寬高都寫明（高＝寬×131/256，素材比例）");
 ok(/\.th-fx-muzzle-img \{ width: calc\(112px \* var\(--th-s, 1\)\); height: calc\(112px \* var\(--th-s, 1\) \* 232 \/ 336\);/.test(css), "C8 槍口火光：寬高都寫明（336:232）");

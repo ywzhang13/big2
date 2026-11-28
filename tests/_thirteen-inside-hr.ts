@@ -5,7 +5,7 @@
 //   I4 計分不變：有沒有場內全壘打，每家的分數都只是兩兩比牌＋打槍＋全壘打（scoreRound 沒有新加分）
 //   I5 畫面：特效層有場內全壘打這一段、四張新圖有長寬比、登記長期快取；測試頁有「場內全壘打」按鈕
 //   I6 音效（老闆「要配聲音」）：0.55 悶雷、1.85 咚、2.3 小號（一度拔掉，老闆改口「小號 C 好了」）；預設悶雷 A、咚 B、小號 C、可換候選；檔案都在、登記長期快取、來源有寫；原本選好的音效沒動
-//   I8 全壘打 5.0 秒：集氣縮短、1.0 揮棒；1.25 球從球棒甜蜜點飛出去（老闆「像從後腦勺飛出去」）；擊球後音效 A／B／C／無
+//   I8 全壘打 5.0 秒：集氣縮短、1.0 揮棒；1.25 球從打者頭的右上方直線飛出去（老闆第二輪：弧線不要、回到直線）；打者靠中間 12vw；擊球後音效預設不播（測試頁可試 A／B／C）
 import { readFileSync, existsSync } from "node:fs";
 import { autoArrange, deal, revealOrder, scoreRound, type RoundResult } from "../lib/thirteen";
 import { insideHomeRunOf, REVEAL_TIMING, revealDurationMs, NEXT_HAND_MAX_MS, SETTLE_WAIT_MS } from "../lib/thirteen/flow";
@@ -130,7 +130,7 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const others = ["components/thirteen/ThReveal.tsx", "components/thirteen/ThTable.tsx", "app/thirteen/page.tsx"].filter((f) => existsSync(f)).some((f) => /thTrialReady|thFxsize|th_lab_trial/.test(readFileSync(f, "utf8")));
   ok(setters > 0 && !others && /data-th-lab-ready=/.test(lab) && /data-th-lab-size=/.test(lab), "I7 切換只在特效測試頁（記在 th_lab_trial），正式牌局的頁面不會設");
   ok(/const ready2 = document\.documentElement\.dataset\.thTrialReady === "new";/.test(tsx) && /\{!h\.ready2 && \(/.test(tsx) && /\{h\.ready2 && <Pic name="hrready" className="th-hr9-ready"/.test(tsx), "I7 預備新版：沒切的時候照舊在牌桌上畫預備姿勢；切了才改畫在球場上");
-  ok(/\.th-hr9-batter \{ left: 7vw; bottom: -2vh; height: min\(92vh, 44vw\)/.test(css) && /--hs: min\(62vh, 29\.6vw\)/.test(css), "I7 預設大小（甲）不變：打者 min(92vh, 44vw)、場內 min(62vh, 29.6vw)");
+  ok(/\.th-hr9-batter \{ left: 12vw; bottom: -2vh; height: min\(92vh, 44vw\)/.test(css) && /--hs: min\(62vh, 29\.6vw\)/.test(css), "I7 預設大小（甲）不變：打者 min(92vh, 44vw)（位置靠中間 12vw）、場內 min(62vh, 29.6vw)");
   ok(/:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-batter \{ left: 2vw; height: min\(117vh, 56vw\); \}/.test(css) && /:root\[data-th-fxsize="b"\] \.th-ihr \{ --hs: min\(84vh, 40vw\); \}/.test(css), "I7 乙案：打者 min(117vh, 56vw)（852 寬人物約 320）、場內回到 min(84vh, 40vw)");
   ok(/\.th-hr9\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2; \}/.test(css) && /\.th-hr9\.is-flip\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2-r; \}/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ready \{[^}]*th-hr9-ready2-r/.test(css), "I7 預備新版的交叉淡入在鏡射版也會鏡射");
 }
@@ -153,21 +153,22 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(/\{h\.ready2 && <Pic name="burst" className="th-hr9-charge"/.test(tsx) && /is-quick/.test(tsx) && /9%, 100% \{[^}]*opacity: 0;/.test(kf("th-charge-q"))
     && /20% \{ transform: scale\(1\); opacity: 1; filter: brightness\(1\.6\); \}/.test(kf("th-hr9-charge")) && /mix-blend-mode: screen; animation-name: th-hr9-charge/.test(css),
     "I8 新預備：牌上集氣光只亮 0～0.3，換景後球場上預備姿勢背後有同一張集氣光（0.3～1.0 放大、變亮）");
-  // 球從球棒出去（老闆「球看起來像是從後腦勺飛出去」）：起點＝打擊者圖上球棒甜蜜點，跟著打者的位置、大小算；1.25 起飛、1.7 變十字星
-  ok(/\.th-hr9-ballpath \{ --hb: min\(92vh, 44vw\); --bx: calc\(7vw \+ var\(--hb\) \* \.9071 \* \.1297\); --by: calc\(102vh - var\(--hb\) \* \(1 - \.1206\)\);/.test(css)
+  // 球（老闆第二輪「從打擊者的頭右上方直線飛出去，跟上一版類似」）：起點＝打擊者圖上頭的右上方，跟著打者的位置、大小算；1.25 起飛、直線、1.7 變十字星
+  ok(/\.th-hr9-ballpath \{ --hl: 12vw; --hb: min\(92vh, 44vw\); --bx: calc\(var\(--hl\) \+ var\(--hb\) \* \.9071 \* \.7263\); --by: calc\(102vh - var\(--hb\) \* \(1 - \.3059\)\);/.test(css)
     && /left: var\(--bx\); top: var\(--by\);/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ballpath \{ left: calc\(100vw - var\(--bx\)\);/.test(css)
-    && /:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-ballpath \{ --hb: min\(117vh, 56vw\); --bx: calc\(2vw/.test(css),
-    "I8 球的起點是球棒甜蜜點（甲、乙兩種大小、鏡射都跟著打者走），不再固定在 (36vw, 40vh)＝打者頭後面");
-  ok(/0%, 24\.99% \{[^}]*opacity: 0; \}\n  25% \{[^}]*opacity: 1;/.test(kf("th-hr9-ballpath")) && /34%, 100% \{ transform: translate\(calc\(62vw - var\(--bx\)\), calc\(18vh - var\(--by\)\)\) scale\(\.12\)/.test(kf("th-hr9-ballpath"))
-    && /34%, 100% \{ transform: translate\(calc\(var\(--bx\) - 62vw\), calc\(18vh - var\(--by\)\)\) scale\(\.12\) scaleX\(-1\)/.test(kf("th-hr9-ballpath-r"))
+    && /:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-ballpath \{ --hl: 2vw; --hb: min\(117vh, 56vw\); \}/.test(css),
+    "I8 球的起點是打者頭的右上方（鏡射版左上方；甲、乙兩種大小都跟著打者走）");
+  ok(/0%, 24\.99% \{[^}]*opacity: 0; \}\n  25% \{[^}]*opacity: 1;/.test(kf("th-hr9-ballpath")) && /34%, 100% \{ transform: translate\(calc\(64vw - var\(--bx\)\), calc\(18vh - var\(--by\)\)\) scale\(\.12\);/.test(kf("th-hr9-ballpath"))
+    && /34%, 100% \{ transform: translate\(calc\(var\(--bx\) - 64vw\), calc\(18vh - var\(--by\)\)\) scale\(\.12\) scaleX\(-1\);/.test(kf("th-hr9-ballpath-r"))
+    && kf("th-hr9-ballpath").split("transform:").length === 5 && !/rotate/.test(kf("th-hr9-ballpath") + kf("th-hr9-ballpath-r"))
     && /0%, 34% \{[^}]*scale\(0\)/.test(kf("th-hr9-star")),
-    "I8 1.25 球從球棒飛出去、1.7 落到星星中心變十字星（鏡射版 x 反過來）");
+    "I8 1.25 球直線飛出去（只有起點、終點兩格，沒有弧線中繼點、不轉向）、1.7 落到星星中心變十字星（鏡射版 x 反過來）");
   // 擊球後音效（老闆「全壘打也幫忙找一個打出去後的音效」）：球飛出去那一刻播；預設 B；可選 A／B／C／無；4.5 秒前結束
   const reg = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
   const after = (p?: import("../components/thirteen/sfx").HrAfterPick) => S.sfxEvents(steps, 0, null, undefined, {}, p).filter((e) => e.k === "hrafter").map((e) => `${e.t - hr.t0}:${(e.src ?? "").split("/").pop()}`);
-  ok(S.HR_LAUNCH_MS === 1250 && JSON.stringify(after()) === JSON.stringify(["1250:th-sfx-hrafter-b.v1.mp3"]) && JSON.stringify(after("a")) === JSON.stringify(["1250:th-sfx-hrafter-a.v1.mp3"])
+  ok(S.HR_LAUNCH_MS === 1250 && after().length === 0 && S.HR_AFTER_DEFAULT === "none" && JSON.stringify(after("b")) === JSON.stringify(["1250:th-sfx-hrafter-b.v1.mp3"]) && JSON.stringify(after("a")) === JSON.stringify(["1250:th-sfx-hrafter-a.v1.mp3"])
     && JSON.stringify(after(1)) === JSON.stringify(["1250:th-sfx-hrafter-r2-1.v1.mp3"]) && after("none").length === 0,
-    `I8 擊球後音效 1.25 秒（球飛出去）播，預設 B，可換 A、C 或不播：${after().join("、")}`);
+    "I8 擊球後音效預設不播（老闆試聽都不喜歡）；測試頁選了 A／B／C 才在 1.25 秒播");
   const afterFiles = S.HR_AFTER.filter((o) => o.v !== "none").map((o) => S.sfxSrc("hrafter", o.v as import("../components/thirteen/sfx").SfxVariant));
   const lic2 = readFileSync("public/tiles/thirteen/sfx/LICENSE-hrafter.v1.txt", "utf8");
   ok(afterFiles.length === 3 && afterFiles.every((f) => existsSync(`public${f}`) && !!reg[f] && lic2.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-hrafter.v1.txt"] && /CC0/.test(lic2),

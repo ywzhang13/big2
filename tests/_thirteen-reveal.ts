@@ -278,7 +278,7 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   const { sfxEvents } = await import("../components/thirteen/sfx");
   const hr = must("homerun"), tl = T.buildTimeline(hr), home = tl.steps.find((x) => x.kind === "homerun")!;
   const inHr = sfxEvents(tl.steps, 0, "r3-a").filter((e) => e.t >= home.t0 && e.t < home.t0 + home.dur).map((e) => e.k);
-  ok(inHr.join(",") === "bat,hrafter", `H9-5 全壘打 5.0 秒內只有擊球聲和擊球後音效（老闆 2026-11-28 加；選了大牌音效也一樣，集氣不播）；實際：${inHr.join("、")}`);
+  ok(inHr.join(",") === "bat", `H9-5 全壘打 5.0 秒內只有擊球聲（擊球後音效老闆 2026-11-28 試聽都不要，預設不播；選了大牌音效也一樣，集氣不播）；實際：${inHr.join("、")}`);
   const fxTsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8");
   const ready = ["m", "d"].map((z) => `/tiles/thirteen/fx/th-fx-hrready.v1.${z}.webp`);
   ok(ready.every((f) => existsSync(`public${f}`) && f in list) && /Pic name="hrready"/.test(fxTsx) && !/Pic name="bat"/.test(fxTsx) && /@keyframes th-ready/.test(css) && !/@keyframes th-bat/.test(css),
@@ -290,7 +290,7 @@ const must = (name: string) => { const rv = buildCase(name); if (!rv) throw new 
   const vw = (sel: string) => Number(new RegExp(`${sel.replace(/\./g, "\\.")} \\{[^}]*?left: ([\\d.]+)vw`).exec(css)?.[1]);
   const pairs: [string, string][] = [[".th-hr9-star", ".th-hr9.is-flip .th-hr9-star"], [".th-hr9-title", ".th-hr9.is-flip .th-hr9-title"]]; // 球的起點跟著打者算（--bx），鏡射版是 100vw - --bx，見 _thirteen-inside-hr I8
   const mirrored = pairs.every(([a, b]) => Math.abs(vw(a) + vw(b) - 100) < 0.01);
-  ok(mirrored && /\.th-hr9\.is-flip \.th-hr9-batter \{ left: auto; right: 7vw;/.test(css) && /@keyframes th-hr9-batter-r[\s\S]*?27%, 100% \{ transform: translate\(0, 0\) scale\(1\) scaleX\(-1\)/.test(css)
+  ok(mirrored && /\.th-hr9\.is-flip \.th-hr9-batter \{ left: auto; right: 12vw;/.test(css) && /@keyframes th-hr9-batter-r[\s\S]*?27%, 100% \{ transform: translate\(0, 0\) scale\(1\) scaleX\(-1\)/.test(css)
     && /th-hr9\$\{h\.face < 0 \? " is-flip" : ""\}/.test(fxTsx),
     `H9-8 鏡射版右家（人物朝左）的打擊者畫面左右對調：打擊者靠右、球和星星和大字以中線鏡射（${pairs.map(([a, b]) => `${vw(a)}→${vw(b)}`).join("、")}vw），間隔和原版一樣；自己、左家、對家不變`);
 }

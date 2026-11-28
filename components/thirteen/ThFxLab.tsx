@@ -5,7 +5,7 @@ import ThTable from "./ThTable";
 import ThRevealFx, { preloadRevealFx } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
-import { BIG_SFX, HR_AFTER, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type HrAfterPick, type IhrSfxKey, type SfxVariant } from "./sfx";
+import { BIG_SFX, HR_AFTER, HR_AFTER_DEFAULT, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type HrAfterPick, type IhrSfxKey, type SfxVariant } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
 import { loadBuffer } from "./thAudio";
 import "./thRoom.css";
@@ -41,7 +41,7 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
   const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
-  const [hrAfter, setHrAfter] = useState<HrAfterPick>(SFX_PICK.hrafter);
+  const [hrAfter, setHrAfter] = useState<HrAfterPick>(HR_AFTER_DEFAULT);
   // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機，套在 <html> 的 data-th-trial-ready、data-th-fxsize、data-th-trial-dir
   // （不能叫 data-th-hr-ready：牌桌上的預備姿勢已經用這個名字當標記）（正式遊戲不設＝舊＋甲＋鏡射）
   const [trial, setTrial] = useState<Trial>({ ready: "old", size: "a", dir: "mirror" });
