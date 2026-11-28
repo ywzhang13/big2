@@ -202,6 +202,30 @@
 }
 .th-hr9.is-flip .th-hr9-star { left: 38vw; }
 .th-hr9.is-flip .th-hr9-title { left: 28vw; }
+/* ---- 試做（老闆 2026-11-28，只有特效測試頁會切換；正式遊戲維持上面的舊預備＋甲大小）----
+   ① 預備新版（:root 沒設、.th-hr9.is-ready2）：預備姿勢不在牌桌上——0.3 秒先換景到球場，預備姿勢出現在揮棒打者同一個位置（腳底、腰帶中線對齊），
+   0.3～0.55 慢慢放大 3%（蓄力），0.55～0.65 交叉淡入成揮棒那張（打者不再從左下滑進來），0.6 補一下小閃光；後面球、星星、大字、煙火照舊，總長 3.2 秒不變。
+   預備圖裡人佔圖高 80%（上面是舉起的球棒），揮棒圖 69.6% → 預備圖高＝揮棒圖高 × 0.87；腰帶中線：揮棒圖寬 52%、預備圖寬 49% → left＝7vw＋揮棒圖高 × 0.169 */
+.th-hr9 .th-hr9-ready { --hb: min(92vh, 44vw); left: calc(7vw + var(--hb) * .169); bottom: -2vh; height: calc(var(--hb) * .87); width: calc(var(--hb) * .87 * .7148);
+  transform-origin: 50% 100%; animation-name: th-hr9-ready2; }
+.th-hr9.is-flip .th-hr9-ready { left: auto; right: calc(7vw + var(--hb) * .169); animation-name: th-hr9-ready2-r; }
+@keyframes th-hr9-ready2 { 0%, 9.37% { transform: none; opacity: 0; } 9.375% { transform: none; opacity: 1; } 17.19% { transform: scale(1.03); opacity: 1; } 20.3%, 100% { transform: scale(1.03); opacity: 0; } }
+@keyframes th-hr9-ready2-r { 0%, 9.37% { transform: scaleX(-1); opacity: 0; } 9.375% { transform: scaleX(-1); opacity: 1; } 17.19% { transform: scale(1.03) scaleX(-1); opacity: 1; } 20.3%, 100% { transform: scale(1.03) scaleX(-1); opacity: 0; } }
+.th-hr9.is-ready2 .th-hr9-flash { animation-name: th-hr9-flash2; }
+@keyframes th-hr9-flash2 { 0%, 5% { opacity: 0; } 9.375% { opacity: 1; } 14%, 17.19% { opacity: 0; } 18.75% { opacity: .55; } 23%, 100% { opacity: 0; } }
+.th-hr9.is-ready2 .th-hr9-field { animation-name: th-hr9-field2; }
+@keyframes th-hr9-field2 { 0%, 9.37% { transform: scale(1.1); opacity: 0; } 9.375% { transform: scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); } 39.0625%, 100% { transform: scale(1); opacity: 1; } }
+.th-hr9.is-ready2 .th-hr9-batter { animation-name: th-hr9-batter2; }
+.th-hr9.is-flip.is-ready2 .th-hr9-batter { animation-name: th-hr9-batter2-r; }
+@keyframes th-hr9-batter2 { 0%, 17.19% { transform: none; opacity: 0; } 20.3%, 100% { transform: none; opacity: 1; } }
+@keyframes th-hr9-batter2-r { 0%, 17.19% { transform: scaleX(-1); opacity: 0; } 20.3%, 100% { transform: scaleX(-1); opacity: 1; } }
+/* ② 人物大小乙案（:root[data-th-fxsize="b"]）：全壘打打者放大成跟場內全壘打原本一樣大（852 寬人物約 320），往左移到 2vw 讓出大字；
+   場內全壘打站姿、跪姿回到 b849165 之前的 min(84vh, 40vw)（腳底仍離畫面底 1.5vh） */
+:root[data-th-fxsize="b"] .th-hr9 .th-hr9-batter { left: 2vw; height: min(117vh, 56vw); }
+:root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-batter { left: auto; right: 2vw; }
+:root[data-th-fxsize="b"] .th-hr9 .th-hr9-ready { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .169); }
+:root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-ready { left: auto; right: calc(2vw + var(--hb) * .169); }
+:root[data-th-fxsize="b"] .th-ihr { --hs: min(84vh, 40vw); }
 
 /* ---- 場內全壘打（老闆 2026-11-28：被三家打槍；悲情版全壘打，風格同 .th-hr9）。全部 5.0 秒（老闆「可以久一點」，原本 3.2）、百分比＝秒數 ÷ 5；W＝100vw、H＝100vh ----
    0～0.55 牌上三個彈孔、整組牌變灰 → 0.55 冷白閃光換景（悶雷）→ 0.65 雨夜球場＋站著的打者 → 1.6～1.85 交叉淡入跪姿、往下沉 →

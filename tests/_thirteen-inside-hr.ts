@@ -122,6 +122,19 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(/data-th-lab-ihr=/.test(readFileSync("components/thirteen/ThFxLab.tsx", "utf8")), "I6 特效測試頁可以試聽、切換場內全壘打的候選");
 }
 
+// ---- I7 試做切換（老闆 2026-11-28：全壘打預備新版、人物大小乙案）：只有特效測試頁會切，正式遊戲維持舊預備＋甲 ----
+{
+  const tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), css = readFileSync("components/thirteen/thReveal.css", "utf8"), lab = readFileSync("components/thirteen/ThFxLab.tsx", "utf8");
+  const setters = [...readFileSync("components/thirteen/ThFxLab.tsx", "utf8").matchAll(/thTrialReady|thFxsize/g)].length;
+  const others = ["components/thirteen/ThReveal.tsx", "components/thirteen/ThTable.tsx", "app/thirteen/page.tsx"].filter((f) => existsSync(f)).some((f) => /thTrialReady|thFxsize|th_lab_trial/.test(readFileSync(f, "utf8")));
+  ok(setters > 0 && !others && /data-th-lab-ready=/.test(lab) && /data-th-lab-size=/.test(lab), "I7 切換只在特效測試頁（記在 th_lab_trial），正式牌局的頁面不會設");
+  ok(/const ready2 = document\.documentElement\.dataset\.thTrialReady === "new";/.test(tsx) && /\{!h\.ready2 && \(/.test(tsx) && /\{h\.ready2 && <Pic name="hrready" className="th-hr9-ready"/.test(tsx), "I7 預備新版：沒切的時候照舊在牌桌上畫預備姿勢；切了才改畫在球場上");
+  ok(/\.th-hr9-batter \{ left: 7vw; bottom: -2vh; height: min\(92vh, 44vw\)/.test(css) && /--hs: min\(62vh, 29\.6vw\)/.test(css), "I7 預設大小（甲）不變：打者 min(92vh, 44vw)、場內 min(62vh, 29.6vw)");
+  ok(/:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-batter \{ left: 2vw; height: min\(117vh, 56vw\); \}/.test(css) && /:root\[data-th-fxsize="b"\] \.th-ihr \{ --hs: min\(84vh, 40vw\); \}/.test(css), "I7 乙案：打者 min(117vh, 56vw)（852 寬人物約 320）、場內回到 min(84vh, 40vw)");
+  ok(/\.th-hr9\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2; \}/.test(css) && /\.th-hr9\.is-flip\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2-r; \}/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ready \{[^}]*th-hr9-ready2-r/.test(css), "I7 預備新版的交叉淡入在右家、對家也會鏡射");
+  ok(T.MS.homerun === 3200, "I7 全壘打預備新版總長仍是 3.2 秒，不用改伺服器時長");
+}
+
 for (const r of results) console.log(r);
 const fail = results.filter((r) => r.startsWith("❌")).length;
 console.log(`合計：通過 ${results.length - fail}、失敗 ${fail}`);

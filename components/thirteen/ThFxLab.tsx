@@ -40,11 +40,21 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
   const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
+  // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙；記在這支手機，套在 <html> 的 data-th-trial-ready、data-th-fxsize（不能叫 data-th-hr-ready：牌桌上的預備姿勢已經用這個名字當標記）（正式遊戲不設＝舊＋甲）
+  const [trial, setTrial] = useState<{ ready: "old" | "new"; size: "a" | "b" }>({ ready: "old", size: "a" });
+  const applyTrial = (t: { ready: "old" | "new"; size: "a" | "b" }) => {
+    setTrial(t);
+    const d = document.documentElement.dataset;
+    if (t.ready === "new") d.thTrialReady = "new"; else delete d.thTrialReady;
+    if (t.size === "b") d.thFxsize = "b"; else delete d.thFxsize;
+    try { localStorage.setItem("th_lab_trial", JSON.stringify(t)); } catch { /* 存不了就只是這次 */ }
+  };
 
   // 自動量測用（只有預覽站的這一頁有）：照正式牌局同一條路（playSrc → Web Audio、跟著互動音效音量）播一個檔
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
     setBig(loadBigSfx()); setIhr(loadIhrSfx());
+    try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string }; applyTrial({ ready: t.ready === "new" ? "new" : "old", size: t.size === "b" ? "b" : "a" }); } catch { /* 沒存過＝舊＋甲 */ }
     // 場內全壘打的候選全部先載好：試聽第一次按就有聲音（播放時檔案還沒載完會被當成太晚、直接略過，手機走外部網址最明顯）
     for (const x of IHR_SFX) for (const o of x.options) void loadBuffer(sfxSrc(x.key, o.v));
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();
@@ -120,6 +130,16 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
               </span>
             ))}
             <button type="button" className={big ? "" : "is-on"} data-th-lab-big="off" onClick={() => pickBig(null)}>不選</button>
+          </div>
+          <div className="th-lab-row" data-th-lab-trial>
+            <span className="th-lab-sfx">全壘打預備</span>
+            {(["old", "new"] as const).map((r) => (
+              <button key={r} type="button" className={trial.ready === r ? "is-on" : ""} data-th-lab-ready={r} onClick={() => { applyTrial({ ...trial, ready: r }); go("homerun", seat); }}>{r === "old" ? "舊（牌桌上）" : "新（球場上）"}</button>
+            ))}
+            <span className="th-lab-sfx">人物大小</span>
+            {(["a", "b"] as const).map((z) => (
+              <button key={z} type="button" className={trial.size === z ? "is-on" : ""} data-th-lab-size={z} onClick={() => applyTrial({ ...trial, size: z })}>{z === "a" ? "甲（約 240）" : "乙（約 320）"}</button>
+            ))}
           </div>
           <div className="th-lab-row" data-th-lab-ihr>
             <span className="th-lab-sfx">場內全壘打音效</span>

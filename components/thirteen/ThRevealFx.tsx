@@ -161,7 +161,9 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
     const a = seatCenter(pos) ?? tableCenter();
     const face = pos === "right" || pos === "top" ? -1 : 1;
     const readyH = 200 * s, half = readyH * 0.6; // 最大放到 1.12 倍：上下各留 0.6 倍高，對家（牌在上緣）頭頂才不會出畫面
-    return { a, face, readyH, readyY: Math.min(Math.max(a.y, half), window.innerHeight - half) };
+    // 預備新版（老闆 2026-11-28 試做，只有特效測試頁會切成 new）：預備姿勢不在牌桌上，先換景到球場、出現在揮棒打者同一個位置，再交叉淡入成揮棒
+    const ready2 = document.documentElement.dataset.thTrialReady === "new";
+    return { a, face, readyH, readyY: Math.min(Math.max(a.y, half), window.innerHeight - half), ready2 };
   });
   if (!h) return null;
   const delay = { animationDelay: `${-elapsed}ms` };
@@ -174,15 +176,18 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
       </div>
       {/* 打擊者準備姿勢：中心對齊那一家整組牌的中心（上下超出畫面才往內收） */}
       {/* 鏡射放在外層、固定不動（老闆第 10 輪：準備姿勢要定住）；動畫只做放大和透明度，沒有旋轉和水平位移 */}
+      {!h.ready2 && (
       <div className="th-fx-at" style={{ left: h.a.x, top: h.readyY, transform: h.face < 0 ? "scaleX(-1)" : undefined }} data-th-hr-ready={pos}>
         <Pic name="hrready" className="th-fx th-fx-ready" style={{ ...delay, height: h.readyH, width: (h.readyH * FX_AR.hrready[0]) / FX_AR.hrready[1] }} />{/* 寬也寫明（照素材比例），圖沒載完也不偏 */}
       </div>
+      )}
       {/* 打擊者畫面（v9 §3 圖層由下到上）：背景、壓暗、煙火（screen）、打擊者、球、星星、大字、名牌、換景亮光 */}
       {/* 右家、對家的集氣人物朝左 → 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
-      <div className={`th-hr9${h.face < 0 ? " is-flip" : ""}`} data-th-homerun={step.seat} data-th-hr-flip={h.face < 0 ? 1 : 0} style={delay}>
+      <div className={`th-hr9${h.face < 0 ? " is-flip" : ""}${h.ready2 ? " is-ready2" : ""}`} data-th-homerun={step.seat} data-th-hr-flip={h.face < 0 ? 1 : 0} style={delay}>
         <Pic name="hrfield" className="th-hr9-field" style={delay} />
         <div className="th-hr9-dim" style={delay} />
         <Pic name="fireworks" className="th-hr9-fw" style={delay} />
+        {h.ready2 && <Pic name="hrready" className="th-hr9-ready" style={delay} />}
         <Pic name="hrbatter" className="th-hr9-batter" style={delay} />
         <div className="th-hr9-ballpath" style={delay}><Pic name="ball" className="th-hr9-ball" /></div>
         <Pic name="hrstar" className="th-hr9-star" style={delay} />
