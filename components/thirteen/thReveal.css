@@ -84,28 +84,28 @@
 @keyframes th-hole2 { 0%, 47.9% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; } 48% { transform: translate(-50%,-50%) scale(1.4); opacity: 1; } 53%, 80% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
 
 /* 全壘打前段（v8-B §8）：牌桌上集氣；揮棒以後換成下面的打擊者畫面（v9）。
-   5.0 秒版（老闆 2026-11-28「全壘打一樣要集氣一下…整體動畫時間對齊場內全壘打」）：0～1.4 預備＋集氣光、1.4 揮棒（換景）、之後照原本的相對順序、停到 4.5、4.5～5.0 淡出。
+   5.0 秒版（老闆 2026-11-28「全壘打一樣要集氣一下…整體動畫時間對齊場內全壘打」）：0～1.0 預備＋集氣光、1.0 揮棒（換景）、之後照原本的相對順序、停到 4.5、（老闆「集氣有點太久」：揮棒從 1.4 提早到 1.0，多的時間留給停留）4.5～5.0 淡出。
    百分比＝秒數 ÷ 5（＝秒數 × 20） */
 /* 集氣（老闆 2026-11-18 第 10 輪：打擊者準備姿勢取代只有球棒的圖）。左右鏡射在外層 .th-fx-at（固定不動）。
    老闆：準備姿勢不要左右搖——只留淡入、放大、淡出，位置固定（沒有旋轉、沒有水平位移）：
-   0～0.15 淡入並由 0.9 倍放大到 1 倍 → 0.15～1.4 慢慢放大到 1.1 倍（集氣）→ 1.5 換景亮光最亮時消失 */
+   0～0.15 淡入並由 0.9 倍放大到 1 倍 → 0.15～1.0 慢慢放大到 1.1 倍（集氣）→ 1.1 換景亮光最亮時消失 */
 .th-fx-ready { left: 0; top: 0; /* 寬高由程式照素材比例寫明（ThRevealFx） */ animation-name: th-ready; animation-duration: 5s; }
 @keyframes th-ready {
   0% { transform: translate(-50%,-50%) scale(.9); opacity: 0; }
   3% { transform: translate(-50%,-50%) scale(1); opacity: 1; animation-timing-function: ease-out; }
-  28% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; }
-  30% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; }
-  30.02%, 100% { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
+  20% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; }
+  22% { transform: translate(-50%,-50%) scale(1.1); opacity: 1; }
+  22.02%, 100% { transform: translate(-50%,-50%) scale(1.1); opacity: 0; }
 }
-/* 集氣光（開場的 burst 縮小、疊在預備姿勢後面）：舊預備（牌桌上）0～1.4 由 0.2 倍放大到 0.7 倍、越來越亮（brightness 1 → 1.5），1.4～1.65 跟著換景散掉；
+/* 集氣光（開場的 burst 縮小、疊在預備姿勢後面）：舊預備（牌桌上）0～1.0 由 0.2 倍放大到 0.7 倍、越來越亮（brightness 1 → 1.5），1.0～1.25 跟著換景散掉；
    新預備（球場上，.is-quick）牌桌上只亮 0～0.3，0.3 換景後由球場上的 .th-hr9-charge 接手 */
 .th-fx-charge { left: 0; top: 0; width: calc(420px * var(--th-s, 1)); height: calc(420px * var(--th-s, 1) * 893 / 1600); /* 高照素材 1600:893 寫明 */ animation-name: th-charge; animation-duration: 5s; }
 @keyframes th-charge {
   0% { transform: translate(-50%,-50%) scale(.2); opacity: 0; filter: brightness(1); }
   4% { transform: translate(-50%,-50%) scale(.26); opacity: .7; }
-  28% { transform: translate(-50%,-50%) scale(.7); opacity: 1; filter: brightness(1.5); }
-  30% { transform: translate(-50%,-50%) scale(.75); opacity: 1; filter: brightness(1.5); }
-  33%, 100% { transform: translate(-50%,-50%) scale(.8); opacity: 0; filter: brightness(1.5); }
+  20% { transform: translate(-50%,-50%) scale(.7); opacity: 1; filter: brightness(1.5); }
+  22% { transform: translate(-50%,-50%) scale(.75); opacity: 1; filter: brightness(1.5); }
+  25%, 100% { transform: translate(-50%,-50%) scale(.8); opacity: 0; filter: brightness(1.5); }
 }
 .th-fx-charge.is-quick { animation-name: th-charge-q; }
 @keyframes th-charge-q {
@@ -117,90 +117,94 @@
 /* ---- 全壘打打擊者畫面（小宜 v9；老馬 2026-11-18 用老闆的正式素材）。全部 5.0 秒、百分比＝秒數 ÷ 5；W＝100vw、H＝100vh ----
    整面不透明、自成一組（z 35：蓋過牌桌和選單，低於結算 40、測試頁按鈕 60）；煙火的 screen 只和組內的球場疊。
    打擊者素材實際寬高比 0.9145（v9 估 0.8）：照 v9 §8 把大字寬 0.52W→0.48W、中心 0.70W→0.72W，手機和 1920 都留出間隔。
-   時間（5.0 秒版）：1.4 揮棒換景 → 1.6～2.1 球飛出去 → 2.1 十字星 → 2.2 壓暗 → 2.35 大字 → 2.55 名牌、煙火 → 停到 4.5 → 4.5～5.0 一起淡出 */
+   時間（5.0 秒版）：1.0 揮棒換景 → 1.25～1.7 球從球棒飛出去 → 1.7 十字星 → 1.8 壓暗 → 1.95 大字 → 2.15 名牌、煙火 → 停到 4.5 → 4.5～5.0 一起淡出 */
 .th-hr9 { position: fixed; inset: 0; z-index: 35; overflow: hidden; pointer-events: none; animation: th-hr9-out 5s linear both; }
 @keyframes th-hr9-out { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
 .th-hr9 img { position: absolute; display: block; max-width: none; }
 .th-hr9 > *, .th-hr9 picture > img, .th-hr9-name { animation-duration: 5s; animation-fill-mode: both; animation-timing-function: linear; }
-/* 換景亮光 1.4～1.5 亮起、1.5～1.65 退掉；背景、打擊者在 1.5（亮光最亮、看不到切換）才出現 */
+/* 換景亮光 1.0～1.1 亮起、1.1～1.25 退掉；背景、打擊者在 1.1（亮光最亮、看不到切換）才出現 */
 .th-hr9-flash { position: absolute; inset: 0; background: #FFF3C4; animation-name: th-hr9-flash; }
-@keyframes th-hr9-flash { 0%, 28% { opacity: 0; } 30% { opacity: 1; } 33%, 100% { opacity: 0; } }
-/* A 背景：蓋滿畫面、中心對中心；1.5～2.1 由 1.10 倍縮到 1 倍（先快後慢） */
+@keyframes th-hr9-flash { 0%, 20% { opacity: 0; } 22% { opacity: 1; } 25%, 100% { opacity: 0; } }
+/* A 背景：蓋滿畫面、中心對中心；1.1～1.7 由 1.10 倍縮到 1 倍（先快後慢） */
 /* 老馬 2026-11-22：改成鋪滿畫面＋object-fit: cover（和原本「寬 max(100vw, 179.17vh)、等比、中心對中心」同一個結果），不靠 translate(-50%) 置中，圖沒載完也不會偏 */
 .th-hr9 .th-hr9-field { left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; animation-name: th-hr9-field; }
 @keyframes th-hr9-field {
-  0%, 29.99% { transform: scale(1.1); opacity: 0; }
-  30% { transform: scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
-  42%, 100% { transform: scale(1); opacity: 1; }
+  0%, 21.99% { transform: scale(1.1); opacity: 0; }
+  22% { transform: scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
+  34%, 100% { transform: scale(1); opacity: 1; }
 }
-/* 壓暗 2.2～2.35：黑色 0 → 55% */
+/* 壓暗 1.8～1.95：黑色 0 → 55% */
 .th-hr9-dim { position: absolute; inset: 0; background: #000; animation-name: th-hr9-dim; }
-@keyframes th-hr9-dim { 0%, 44% { opacity: 0; } 47%, 100% { opacity: .55; } }
-/* 煙火（黑底、screen）：2.55 淡入 0.2 秒，1 倍慢慢放大到 1.08 倍到 4.5 */
+@keyframes th-hr9-dim { 0%, 36% { opacity: 0; } 39%, 100% { opacity: .55; } }
+/* 煙火（黑底、screen）：2.15 淡入 0.2 秒，1 倍慢慢放大到 1.08 倍到 4.5 */
 .th-hr9 .th-hr9-fw { left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; animation-name: th-hr9-fw; } /* 同背景的修法 */
 @keyframes th-hr9-fw {
-  0%, 51% { transform: scale(1); opacity: 0; }
-  55% { transform: scale(1.02); opacity: 1; }
+  0%, 43% { transform: scale(1); opacity: 0; }
+  47% { transform: scale(1.02); opacity: 1; }
   90%, 100% { transform: scale(1.08); opacity: 1; }
 }
-/* B 打擊者：高＝min(0.92H, 0.44W)，寬照素材比例；左緣 0.07W、下緣在畫面底往下 0.02H。1.5～1.75 從左 0.02W、下 0.03H 滑進定位、1.12 倍 → 1 倍（以腳底中央縮放） */
+/* B 打擊者：高＝min(0.92H, 0.44W)，寬照素材比例；左緣 0.07W、下緣在畫面底往下 0.02H。1.1～1.35 從左 0.02W、下 0.03H 滑進定位、1.12 倍 → 1 倍（以腳底中央縮放） */
 .th-hr9-batter { left: 7vw; bottom: -2vh; height: min(92vh, 44vw); width: auto; transform-origin: 50% 100%; animation-name: th-hr9-batter; }
 @keyframes th-hr9-batter {
-  0%, 29.99% { transform: translate(-2vw, 3vh) scale(1.12); opacity: 0; }
-  30% { transform: translate(-2vw, 3vh) scale(1.12); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
-  35%, 100% { transform: none; opacity: 1; }
+  0%, 21.99% { transform: translate(-2vw, 3vh) scale(1.12); opacity: 0; }
+  22% { transform: translate(-2vw, 3vh) scale(1.12); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
+  27%, 100% { transform: none; opacity: 1; }
 }
-/* 球：1.6～2.1 從 (0.36W, 0.40H) 直線飛到星星中心 (0.62W, 0.18H)，直徑 0.09H → 12%（先快後慢）；用現有「棒球加光尾」，光尾朝左下。
-   素材裡球心在 (87%, 33.6%)、球直徑約素材寬的 0.18 → 素材寬 50vh＝球 0.09H */
-.th-hr9-ballpath { position: absolute; left: 36vw; top: 40vh; width: 0; height: 0; animation-name: th-hr9-ballpath; }
+/* 球：用現有「棒球加光尾」，光尾朝左下。素材裡球心在 (87%, 33.6%)、球直徑約素材寬的 0.18 → 素材寬 50vh＝球 0.09H。
+   老闆 2026-11-28「球看起來像是從後腦勺飛出去」：原本起點固定 (0.36W, 0.40H)，剛好落在打者頭後面 →
+   起點改成揮棒圖上球棒的甜蜜點（素材 1542×1700 裡的 (200, 205)＝寬 12.97%、高 12.06%，跟著打者圖的位置大小算：--bx、--by），
+   1.25（換景亮光退掉、打者站定）從球棒出去，沿揮棒的方向往右上、往遠方飛，先升高再落到星星中心 (0.62W, 0.18H)，1.7 變十字星；直徑 1 → 12%（先快後慢），光尾跟著轉向 */
+.th-hr9-ballpath { --hb: min(92vh, 44vw); --bx: calc(7vw + var(--hb) * .9071 * .1297); --by: calc(102vh - var(--hb) * (1 - .1206));
+  position: absolute; left: var(--bx); top: var(--by); width: 0; height: 0; animation-name: th-hr9-ballpath; }
 @keyframes th-hr9-ballpath {
-  0%, 31.99% { transform: none; opacity: 0; }
-  32% { transform: none; opacity: 1; animation-timing-function: cubic-bezier(.2,.6,.4,1); }
-  41.99% { transform: translate(26vw, -22vh) scale(.12); opacity: 1; }
-  42%, 100% { transform: translate(26vw, -22vh) scale(.12); opacity: 0; }
+  0%, 24.99% { transform: translate(0, 0) scale(1) rotate(-8deg); opacity: 0; }
+  25% { transform: translate(0, 0) scale(1) rotate(-8deg); opacity: 1; animation-timing-function: cubic-bezier(.25,.6,.5,1); }
+  29% { transform: translate(calc((62vw - var(--bx)) * .4), calc((18vh - var(--by)) * .5 - 8vh)) scale(.45) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(.3,0,.6,1); }
+  33.99% { transform: translate(calc(62vw - var(--bx)), calc(18vh - var(--by))) scale(.12) rotate(15deg); opacity: 1; }
+  34%, 100% { transform: translate(calc(62vw - var(--bx)), calc(18vh - var(--by))) scale(.12) rotate(15deg); opacity: 0; }
 }
 .th-hr9 .th-hr9-ball { left: 0; top: 0; width: 50vh; transform: translate(-87%, -33.6%) rotate(-3deg); transform-origin: 87% 33.6%; animation: none; }
 /* C 十字星：中心 (0.62W, 0.18H)；v9 寫 0.16H 見方，但老闆的星星素材星芒細、亮核只佔圖的一小塊，0.16H 在亮天空和煙火上幾乎看不到 →
-   放大到 0.26H（下緣剛好在大字上緣之上）並加金色光暈（v9 §8：以實際素材為準調整）；2.1～2.25 由 0 放大到 1.3 倍再回 1 倍、同時轉 45°（停在正的十字）；2.25～4.5 透明度 100%↔60%（一次 0.7 秒） */
+   放大到 0.26H（下緣剛好在大字上緣之上）並加金色光暈（v9 §8：以實際素材為準調整）；1.7～1.85 由 0 放大到 1.3 倍再回 1 倍、同時轉 45°（停在正的十字）；1.85～4.5 透明度 100%↔60%（一次 0.7 秒） */
 .th-hr9-star { left: 62vw; top: 18vh; width: 26vh; height: 26vh; filter: drop-shadow(0 0 4px rgba(255,236,170,.95)) drop-shadow(0 0 12px rgba(255,190,80,.8)); animation-name: th-hr9-star; }
 @keyframes th-hr9-star {
-  0%, 42% { transform: translate(-50%,-50%) scale(0) rotate(-45deg); opacity: 0; }
-  42.01% { transform: translate(-50%,-50%) scale(0) rotate(-45deg); opacity: 1; }
-  43.5% { transform: translate(-50%,-50%) scale(1.3) rotate(-10deg); opacity: 1; }
-  45% { transform: translate(-50%,-50%) scale(1) rotate(0deg); opacity: 1; }
-  52% { transform: translate(-50%,-50%) scale(1); opacity: .6; }
-  59% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
-  66% { transform: translate(-50%,-50%) scale(1); opacity: .6; }
-  73% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
-  80% { transform: translate(-50%,-50%) scale(1); opacity: .6; }
-  87%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  0%, 34% { transform: translate(-50%,-50%) scale(0) rotate(-45deg); opacity: 0; }
+  34.01% { transform: translate(-50%,-50%) scale(0) rotate(-45deg); opacity: 1; }
+  35.5% { transform: translate(-50%,-50%) scale(1.3) rotate(-10deg); opacity: 1; }
+  37% { transform: translate(-50%,-50%) scale(1) rotate(0deg); opacity: 1; }
+  44% { transform: translate(-50%,-50%) scale(1); opacity: .6; }
+  51% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  58% { transform: translate(-50%,-50%) scale(1); opacity: .6; }
+  65% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  72% { transform: translate(-50%,-50%) scale(1); opacity: .6; }
+  79%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
 }
-/* 「全壘打」大字：寬 0.48W、中心 (0.72W, 0.50H)；2.35 由 2.2 倍砸到 0.95 倍（0.12 秒）、回 1 倍（0.08 秒），2.55～4.5 每 0.6 秒放大縮小 2% */
+/* 「全壘打」大字：寬 0.48W、中心 (0.72W, 0.50H)；1.95 由 2.2 倍砸到 0.95 倍（0.12 秒）、回 1 倍（0.08 秒），2.15～3.95 每 0.6 秒放大縮小 2% */
 .th-hr9-title { position: absolute; left: 72vw; top: 50vh; width: 0; height: 0; display: flex; align-items: center; justify-content: center; } /* 大字以這一點為中心（flex 置中，不靠 translate(-50%)） */
 .th-hr9 .th-hr9-word { position: relative; left: 0; top: 0; width: 48vw; filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); animation-name: th-hr9-word; }
 @keyframes th-hr9-word {
-  0%, 46.99% { transform: scale(2.2); opacity: 0; }
-  47% { transform: scale(2.2); opacity: 1; animation-timing-function: cubic-bezier(.55,0,1,.45); }
-  49.4% { transform: scale(.95); opacity: 1; }
-  51% { transform: scale(1); opacity: 1; animation-timing-function: ease-in-out; }
-  57% { transform: scale(1.02); }
-  63% { transform: scale(1); }
-  69% { transform: scale(1.02); }
-  75% { transform: scale(1); }
-  81% { transform: scale(1.02); }
-  87%, 100% { transform: scale(1); opacity: 1; }
+  0%, 38.99% { transform: scale(2.2); opacity: 0; }
+  39% { transform: scale(2.2); opacity: 1; animation-timing-function: cubic-bezier(.55,0,1,.45); }
+  41.4% { transform: scale(.95); opacity: 1; }
+  43% { transform: scale(1); opacity: 1; animation-timing-function: ease-in-out; }
+  49% { transform: scale(1.02); }
+  55% { transform: scale(1); }
+  61% { transform: scale(1.02); }
+  67% { transform: scale(1); }
+  73% { transform: scale(1.02); }
+  79%, 100% { transform: scale(1); opacity: 1; }
 }
 /* 名牌：照麻將自摸大字下的名字（components/mahjong/zimoTitle.css .zz-name）——系統字型粗體、字距 .12em、黑色字影，手機 22px、桌機 28px；
-   大字出現後 0.2 秒（2.55）往上淡入 0.26 秒（同 zz-name-up）。放在大字正下方、中線對齊大字 */
+   大字出現後 0.2 秒（2.15）往上淡入 0.26 秒（同 zz-name-up）。放在大字正下方、中線對齊大字 */
 .th-hr9-name { position: absolute; left: 0; top: calc(48vw * .3747 / 2 + 6px); transform: translateX(-50%); margin: 0; padding-left: .12em;
   max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #FFE9A8;
   font: 700 22px/1.3 "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; letter-spacing: .12em;
   text-shadow: 0 2px 0 rgba(0,0,0,.65), 0 0 10px rgba(0,0,0,.6); animation-name: th-hr9-name; }
 @media (min-width: 1100px) and (min-height: 700px) { .th-hr9-name { font-size: 28px; top: calc(48vw * .3747 / 2 + 10px); } }
 @keyframes th-hr9-name {
-  0%, 51% { transform: translate(-50%, 8px); opacity: 0; }
-  51.01% { transform: translate(-50%, 8px); opacity: 0; animation-timing-function: ease-out; }
-  56.2%, 100% { transform: translate(-50%, 0); opacity: 1; }
+  0%, 43% { transform: translate(-50%, 8px); opacity: 0; }
+  43.01% { transform: translate(-50%, 8px); opacity: 0; animation-timing-function: ease-out; }
+  48.2%, 100% { transform: translate(-50%, 0); opacity: 1; }
 }
 /* 鏡射版（.is-flip：方向選「鏡射」時右家觸發，集氣人物朝左）：打擊者在右（素材左右鏡射、從右下滑進）、球往左上飛、星星和大字＋名字在左；
    位置都是原版以畫面中線鏡射（x → 100vw − x），間隔和原版一樣不重疊。
@@ -211,28 +215,29 @@
 .th-hr9.is-flip .th-hr9-word { transform-origin: 0 50%; }
 .th-hr9.is-flip .th-hr9-batter { left: auto; right: 7vw; animation-name: th-hr9-batter-r; }
 @keyframes th-hr9-batter-r {
-  0%, 29.99% { transform: translate(2vw, 3vh) scale(1.12) scaleX(-1); opacity: 0; }
-  30% { transform: translate(2vw, 3vh) scale(1.12) scaleX(-1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
-  35%, 100% { transform: translate(0, 0) scale(1) scaleX(-1); opacity: 1; }
+  0%, 21.99% { transform: translate(2vw, 3vh) scale(1.12) scaleX(-1); opacity: 0; }
+  22% { transform: translate(2vw, 3vh) scale(1.12) scaleX(-1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); }
+  27%, 100% { transform: translate(0, 0) scale(1) scaleX(-1); opacity: 1; }
 }
-.th-hr9.is-flip .th-hr9-ballpath { left: 64vw; animation-name: th-hr9-ballpath-r; }
+.th-hr9.is-flip .th-hr9-ballpath { left: calc(100vw - var(--bx)); animation-name: th-hr9-ballpath-r; }
 @keyframes th-hr9-ballpath-r {
-  0%, 31.99% { transform: scaleX(-1); opacity: 0; }
-  32% { transform: scaleX(-1); opacity: 1; animation-timing-function: cubic-bezier(.2,.6,.4,1); }
-  41.99% { transform: translate(-26vw, -22vh) scale(.12) scaleX(-1); opacity: 1; }
-  42%, 100% { transform: translate(-26vw, -22vh) scale(.12) scaleX(-1); opacity: 0; }
+  0%, 24.99% { transform: translate(0, 0) scale(1) scaleX(-1) rotate(-8deg); opacity: 0; }
+  25% { transform: translate(0, 0) scale(1) scaleX(-1) rotate(-8deg); opacity: 1; animation-timing-function: cubic-bezier(.25,.6,.5,1); }
+  29% { transform: translate(calc((var(--bx) - 62vw) * .4), calc((18vh - var(--by)) * .5 - 8vh)) scale(.45) scaleX(-1) rotate(0deg); opacity: 1; animation-timing-function: cubic-bezier(.3,0,.6,1); }
+  33.99% { transform: translate(calc(var(--bx) - 62vw), calc(18vh - var(--by))) scale(.12) scaleX(-1) rotate(15deg); opacity: 1; }
+  34%, 100% { transform: translate(calc(var(--bx) - 62vw), calc(18vh - var(--by))) scale(.12) scaleX(-1) rotate(15deg); opacity: 0; }
 }
 .th-hr9.is-flip .th-hr9-star { left: 38vw; }
 .th-hr9.is-flip .th-hr9-title { left: 28vw; }
 /* ---- 試做（老闆 2026-11-28，只有特效測試頁會切換；正式遊戲維持上面的舊預備＋甲大小）----
    ① 預備新版（:root 沒設、.th-hr9.is-ready2）：預備姿勢不在牌桌上——牌上集氣光亮 0～0.3，0.3 換景到球場，預備姿勢出現在揮棒打者同一個位置（腳底、腰帶中線對齊），
-   0.3～1.4 背後集氣光（.th-hr9-charge）由小放大、越來越亮，人慢慢放大 3%（蓄力），1.4～1.5 交叉淡入成揮棒那張（打者不再從左下滑進來），1.45 補一下小閃光；後面照上面的 5.0 秒時間。
+   0.3～1.0 背後集氣光（.th-hr9-charge）由小放大、越來越亮，人慢慢放大 3%（蓄力），1.0～1.1 交叉淡入成揮棒那張（打者不再從左下滑進來），1.05 補一下小閃光；後面照上面的 5.0 秒時間。
    預備圖裡人佔圖高 80%（上面是舉起的球棒），揮棒圖 69.6% → 預備圖高＝揮棒圖高 × 0.87；腰帶中線：揮棒圖寬 52%、預備圖寬 49% → left＝7vw＋揮棒圖高 × 0.169 */
 .th-hr9 .th-hr9-ready { --hb: min(92vh, 44vw); left: calc(7vw + var(--hb) * .169); bottom: -2vh; height: calc(var(--hb) * .87); width: calc(var(--hb) * .87 * .7148);
   transform-origin: 50% 100%; animation-name: th-hr9-ready2; }
 .th-hr9.is-flip .th-hr9-ready { left: auto; right: calc(7vw + var(--hb) * .169); animation-name: th-hr9-ready2-r; }
-@keyframes th-hr9-ready2 { 0%, 5.99% { transform: none; opacity: 0; } 6% { transform: none; opacity: 1; } 28% { transform: scale(1.03); opacity: 1; } 30%, 100% { transform: scale(1.03); opacity: 0; } }
-@keyframes th-hr9-ready2-r { 0%, 5.99% { transform: scale(1) scaleX(-1); opacity: 0; } 6% { transform: scale(1) scaleX(-1); opacity: 1; } 28% { transform: scale(1.03) scaleX(-1); opacity: 1; } 30%, 100% { transform: scale(1.03) scaleX(-1); opacity: 0; } }
+@keyframes th-hr9-ready2 { 0%, 5.99% { transform: none; opacity: 0; } 6% { transform: none; opacity: 1; } 20% { transform: scale(1.03); opacity: 1; } 22%, 100% { transform: scale(1.03); opacity: 0; } }
+@keyframes th-hr9-ready2-r { 0%, 5.99% { transform: scale(1) scaleX(-1); opacity: 0; } 6% { transform: scale(1) scaleX(-1); opacity: 1; } 20% { transform: scale(1.03) scaleX(-1); opacity: 1; } 22%, 100% { transform: scale(1.03) scaleX(-1); opacity: 0; } }
 /* 鏡射版的 keyframes 每一格都寫成「scale(x) scaleX(-1)」同樣的函式清單：清單不一樣時瀏覽器改用矩陣內插，鏡射的人會在放大途中被壓扁（老馬 2026-11-28 抓到） */
 /* 球場上的集氣光：中心在預備姿勢的腰（腰帶中線、離腳底約 0.4 個揮棒圖高），寬 1.3 個揮棒圖高、高照素材 1600:893 寫明（不靠 translate 置中） */
 .th-hr9 .th-hr9-charge { --hb: min(92vh, 44vw); --cw: calc(var(--hb) * 1.3); left: calc(7vw + var(--hb) * .48 - var(--cw) / 2); bottom: calc(-2vh + var(--hb) * .4 - var(--cw) * .2791);
@@ -241,22 +246,23 @@
 @keyframes th-hr9-charge {
   0%, 5.99% { transform: scale(.3); opacity: 0; filter: brightness(1); }
   6% { transform: scale(.3); opacity: .45; filter: brightness(1); }
-  28% { transform: scale(1); opacity: 1; filter: brightness(1.6); }
-  30% { transform: scale(1.1); opacity: .9; filter: brightness(1.6); }
-  34%, 100% { transform: scale(1.2); opacity: 0; filter: brightness(1.6); }
+  20% { transform: scale(1); opacity: 1; filter: brightness(1.6); }
+  22% { transform: scale(1.1); opacity: .9; filter: brightness(1.6); }
+  26%, 100% { transform: scale(1.2); opacity: 0; filter: brightness(1.6); }
 }
 .th-hr9.is-ready2 .th-hr9-flash { animation-name: th-hr9-flash2; }
-@keyframes th-hr9-flash2 { 0%, 3.2% { opacity: 0; } 6% { opacity: 1; } 9%, 28% { opacity: 0; } 29% { opacity: .55; } 31.7%, 100% { opacity: 0; } }
+@keyframes th-hr9-flash2 { 0%, 3.2% { opacity: 0; } 6% { opacity: 1; } 9%, 20% { opacity: 0; } 21% { opacity: .55; } 23.7%, 100% { opacity: 0; } }
 .th-hr9.is-ready2 .th-hr9-field { animation-name: th-hr9-field2; }
-@keyframes th-hr9-field2 { 0%, 5.99% { transform: scale(1.1); opacity: 0; } 6% { transform: scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); } 42%, 100% { transform: scale(1); opacity: 1; } }
+@keyframes th-hr9-field2 { 0%, 5.99% { transform: scale(1.1); opacity: 0; } 6% { transform: scale(1.1); opacity: 1; animation-timing-function: cubic-bezier(.2,.7,.3,1); } 34%, 100% { transform: scale(1); opacity: 1; } }
 .th-hr9.is-ready2 .th-hr9-batter { animation-name: th-hr9-batter2; }
 .th-hr9.is-flip.is-ready2 .th-hr9-batter { animation-name: th-hr9-batter2-r; }
-@keyframes th-hr9-batter2 { 0%, 28% { transform: none; opacity: 0; } 30%, 100% { transform: none; opacity: 1; } }
-@keyframes th-hr9-batter2-r { 0%, 28% { transform: scaleX(-1); opacity: 0; } 30%, 100% { transform: scaleX(-1); opacity: 1; } }
+@keyframes th-hr9-batter2 { 0%, 20% { transform: none; opacity: 0; } 22%, 100% { transform: none; opacity: 1; } }
+@keyframes th-hr9-batter2-r { 0%, 20% { transform: scaleX(-1); opacity: 0; } 22%, 100% { transform: scaleX(-1); opacity: 1; } }
 /* ② 人物大小乙案（:root[data-th-fxsize="b"]）：全壘打打者放大成跟場內全壘打原本一樣大（852 寬人物約 320），往左移到 2vw 讓出大字；
    場內全壘打站姿、跪姿回到 b849165 之前的 min(84vh, 40vw)（腳底仍離畫面底 1.5vh） */
 :root[data-th-fxsize="b"] .th-hr9 .th-hr9-batter { left: 2vw; height: min(117vh, 56vw); }
 :root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-batter { left: auto; right: 2vw; }
+:root[data-th-fxsize="b"] .th-hr9 .th-hr9-ballpath { --hb: min(117vh, 56vw); --bx: calc(2vw + var(--hb) * .9071 * .1297); } /* 球的起點跟著放大的打者走（甜蜜點） */
 :root[data-th-fxsize="b"] .th-hr9 .th-hr9-ready { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .169); }
 :root[data-th-fxsize="b"] .th-hr9.is-flip .th-hr9-ready { left: auto; right: calc(2vw + var(--hb) * .169); }
 :root[data-th-fxsize="b"] .th-hr9 .th-hr9-charge { --hb: min(117vh, 56vw); left: calc(2vw + var(--hb) * .48 - var(--cw) / 2); }
@@ -265,7 +271,7 @@
 
 /* ---- 場內全壘打（老闆 2026-11-28：被三家打槍；悲情版全壘打，風格同 .th-hr9）。全部 5.0 秒（老闆「可以久一點」，原本 3.2）、百分比＝秒數 ÷ 5；W＝100vw、H＝100vh ----
    0～0.55 牌上三個彈孔、整組牌變灰 → 0.55 冷白閃光換景（悶雷）→ 0.65 雨夜球場＋站著的打者 → 1.6～1.85 交叉淡入跪姿、往下沉 →
-   1.85～2.05 大字從上方重落（不彈跳，「咚」）→ 2.25 名字 → 2.30 遠處一盞燈熄掉、畫面暗一階（沒有聲音，小號老闆拔掉了）→ 停到 4.5 → 4.5～5.0 淡出 */
+   1.85～2.05 大字從上方重落（不彈跳，「咚」）→ 2.25 名字 → 2.30 遠處一盞燈熄掉、畫面暗一階（小號 C；一度拔掉，老闆改口加回來）→ 停到 4.5 → 4.5～5.0 淡出 */
 /* 被打那一家的牌變灰（ThRevealFx 的 <style> 只套在那一家的 [data-th-card]）：0.2 秒內變灰，4.5～5.0 變回原色 */
 @keyframes th-ihr-gray { 0% { filter: none; } 4%, 90% { filter: grayscale(1) brightness(.72); } 100% { filter: none; } }
 /* 三個彈孔 0.08、0.22、0.36 一個一個打上去（1.4 倍縮到 1 倍），換景（0.65）後就不需要了 */

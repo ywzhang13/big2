@@ -1,0 +1,11 @@
+十三支全壘打「擊球後」音效來源（另開一個檔：LICENSE.txt、LICENSE-insidehr.v2.txt 已登記長期快取，同檔名不能改內容）
+
+全壘打擊球後音效候選（老馬 2026-11-28 剪輯；老闆「全壘打也幫忙找一個打出去後的音效」）：檔名 th-sfx-hrafter-a／b（／r2-1＝C）.v1.mp3，0 秒＝聲音開始。
+動畫 5.0 秒版：1.0 秒揮棒擊球聲（原本的 bat，不動）、1.25 秒球從球棒飛出去時播這個音效，長約 2.2～2.3 秒，4.5 秒前收尾。
+components/thirteen/sfx.ts 的 SFX_PICK.hrafter 預設 B；特效測試頁 /thirteen/preview/fx「全壘打擊球後音效」那一列可以試聽、切換（記在本機 localStorage th_sfx_hrafter，可選「無」）。
+Freesound 的都標為 CC0（Creative Commons 0，https://creativecommons.org/publicdomain/zero/1.0/），可商用、免授權費、不需標示；
+用的是網站公開的試聽檔（-hq.mp3），裁切、回音、音量拉齊（loudnorm -16 LUFS）、頭尾淡入淡出由老馬處理。
+
+- th-sfx-hrafter-a.v1.mp3（A 觀眾歡呼）：Freesound #397434「Crowd Cheer」｜FoolBoyMedia｜https://freesound.org/people/FoolBoyMedia/sounds/397434/，CC0（取 1.5～3.7 秒，尾巴淡出 0.8 秒）
+- th-sfx-hrafter-b.v1.mp3（B 球劃破天空的咻聲）：Freesound #462879「Long Ethereal Woosh.wav」｜newagesoup｜https://freesound.org/people/newagesoup/sounds/462879/，CC0（取 0.2～2.4 秒，尾巴淡出 0.7 秒）
+- th-sfx-hrafter-r2-1.v1.mp3（C 重低音爆擊加回音）：Freesound #268084「Bass Boom」｜LordHannes｜https://freesound.org/people/LordHannes/sounds/268084/，CC0（取前 2.3 秒，加兩道回音 0.32、0.64 秒，尾巴淡出 0.8 秒）

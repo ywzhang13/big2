@@ -5,7 +5,7 @@ import ThTable from "./ThTable";
 import ThRevealFx, { preloadRevealFx } from "./ThRevealFx";
 import { allOpen, MS, type PatternFx, type Step, type ThReveal } from "./revealTimeline";
 import { applyFelt, FELTS, isFelt, loadFelt, type FeltKey } from "./feltTheme";
-import { BIG_SFX, IHR_SFX, loadBigSfx, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type IhrSfxKey, type SfxVariant } from "./sfx";
+import { BIG_SFX, HR_AFTER, IHR_SFX, loadBigSfx, loadHrAfter, loadIhrSfx, playSfx, playSrc, saveBigSfx, saveHrAfter, saveIhrSfx, SFX_PICK, sfxSrc, useRevealSfx, type HrAfterPick, type IhrSfxKey, type SfxVariant } from "./sfx";
 import type { ThGameView } from "./useThirteenRoom";
 import { loadBuffer } from "./thAudio";
 import "./thRoom.css";
@@ -41,6 +41,7 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
   const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
+  const [hrAfter, setHrAfter] = useState<HrAfterPick>(SFX_PICK.hrafter);
   // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機，套在 <html> 的 data-th-trial-ready、data-th-fxsize、data-th-trial-dir
   // （不能叫 data-th-hr-ready：牌桌上的預備姿勢已經用這個名字當標記）（正式遊戲不設＝舊＋甲＋鏡射）
   const [trial, setTrial] = useState<Trial>({ ready: "old", size: "a", dir: "mirror" });
@@ -56,10 +57,11 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   // 自動量測用（只有預覽站的這一頁有）：照正式牌局同一條路（playSrc → Web Audio、跟著互動音效音量）播一個檔
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
-    setBig(loadBigSfx()); setIhr(loadIhrSfx());
+    setBig(loadBigSfx()); setIhr(loadIhrSfx()); setHrAfter(loadHrAfter());
     try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string; dir?: string }; applyTrial({ ready: t.ready === "new" ? "new" : "old", size: t.size === "b" ? "b" : "a", dir: t.dir === "none" ? "none" : "mirror" }); } catch { /* 沒存過＝舊＋甲＋鏡射 */ }
     // 場內全壘打的候選全部先載好：試聽第一次按就有聲音（播放時檔案還沒載完會被當成太晚、直接略過，手機走外部網址最明顯）
     for (const x of IHR_SFX) for (const o of x.options) void loadBuffer(sfxSrc(x.key, o.v));
+    for (const o of HR_AFTER) if (o.v !== "none") void loadBuffer(sfxSrc("hrafter", o.v));
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();
     setFelt(f); applyFelt(f, isFelt(initial.felt));
     // 特效圖都載好才播（第一次打開圖還在下載）；網址有 fx 就自動播一次
@@ -83,6 +85,8 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const batches = [...new Set(BIG_SFX.map((x) => x.batch))];
   // 場內全壘打音效候選（老闆 2026-11-28）：按了就試聽並選用（記在本機），完整牌局照同一個選擇播
   const pickIhr = (key: IhrSfxKey, v: SfxVariant) => { playSrc(sfxSrc(key, v), { force: true }); saveIhrSfx(key, v); setIhr(loadIhrSfx()); };
+  // 全壘打擊球後音效候選（老闆 2026-11-28）：同上，「無」＝不播
+  const pickHrAfter = (v: HrAfterPick) => { if (v !== "none") playSrc(sfxSrc("hrafter", v), { force: true }); saveHrAfter(v); setHrAfter(v); };
 
   const view: ThGameView = useMemo(() => ({
     status: "playing", code: "0000", sv: 0, phase: "revealed", handNo: 1, settings: { arrangeSec: 60, totalHands: 8 },
@@ -146,6 +150,12 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
             <span className="th-lab-sfx">方向</span>{/* 全壘打、場內全壘打都套用；按了直接重播現在選的那一個（不是這兩個就播全壘打） */}
             {(["mirror", "none"] as const).map((r) => (
               <button key={r} type="button" className={trial.dir === r ? "is-on" : ""} data-th-lab-dir={r} onClick={() => { applyTrial({ ...trial, dir: r }); go(fx === "insidehr" ? "insidehr" : "homerun", seat); }}>{r === "mirror" ? "鏡射" : "不翻轉"}</button>
+            ))}
+          </div>
+          <div className="th-lab-row" data-th-lab-hrafter>
+            <span className="th-lab-sfx">全壘打擊球後音效</span>
+            {HR_AFTER.map((o) => (
+              <button key={String(o.v)} type="button" title={o.name} className={hrAfter === o.v ? "is-on" : ""} data-th-lab-hrafter={String(o.v)} onClick={() => pickHrAfter(o.v)}>{o.label}</button>
             ))}
           </div>
           <div className="th-lab-row" data-th-lab-ihr>
