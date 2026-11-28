@@ -424,10 +424,12 @@ function v4Parts(fx: ZimoFxNew, root: HTMLElement, g: { W: number; H: number; u:
  * tile：自摸的那張牌（完整版：主擊後才從落點炸出來，停在那裡）。
  * warm：預熱（components/mahjong/fxWarmUp.tsx）：不出聲、不震、不攔點擊，看不見的狀態把整條時間軸一格一格走一遍，走完 onDone(false)
  */
-export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDone, warm, embedded = false, sound = true, onArtFail }: {
+export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDone, warm, embedded = false, sound = true, onArtFail, onTitle }: {
   fx: ZimoFxNew; seat: number; mySeat: number; mobile: boolean; tile: Tile | null | undefined; name?: string; onDone: (skipped: boolean) => void; warm?: WarmMode;
   /** 設定頁預覽用：限制在自己的手機牌桌容器，不能影響正式牌桌。 */
   embedded?: boolean; sound?: boolean;
+  /** 「自摸」大字出現的那一刻（配音的「自摸」跟著這一刻唸，老闆 2026-11-28） */
+  onTitle?: () => void;
   /** 櫻花紛飛開播時才發現圖沒好（平常開播前就擋掉了）：頁面退回金色自摸 */
   onArtFail?: () => void;
 }) {
@@ -436,8 +438,9 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
   const bg = (f: string) => ({ backgroundImage: `url("${art(f)}")` });
   const ref = useRef<HTMLDivElement>(null);
   const doneRef = useRef(onDone);
+  const titleRef = useRef(onTitle);
   const artFailRef = useRef(onArtFail);
-  useLayoutEffect(() => { doneRef.current = onDone; artFailRef.current = onArtFail; });
+  useLayoutEffect(() => { doneRef.current = onDone; artFailRef.current = onArtFail; titleRef.current = onTitle; });
   const ended = useRef(false);
   const segRef = useRef<ReturnType<typeof holdStageForSegment> | null>(null); // 牌桌根節點的 will-change：播完就放掉（審伯 R1）
   const stopRef = useRef(() => {});
@@ -585,6 +588,15 @@ export default function ZimoFx({ fx, seat, mySeat, mobile, tile, name = "", onDo
       else if (anim && !rm) void anim.ready.then(() => go(typeof anim.startTime === "number" ? anim.startTime : null), () => go(null));
       else go(null);
     }
+    // 「自摸」大字出現那一刻（跟專屬音效同一個起點：動畫真正開始的時間 + ZFX_TL.zimo；減少動態時字直接出現）
+    const title = (z: number | null) => {
+      if (!alive || ended.current) return;
+      const wait = rm ? 0 : Math.max(0, ZFX_TL[fx].zimo - (z == null ? 0 : performance.now() - z));
+      ts.push(setTimeout(() => { if (alive && !ended.current) titleRef.current?.(); }, wait));
+    };
+    if (isCanvasFx(fx) && !rm) title(zeroRef.current);
+    else if (anim && !rm) void anim.ready.then(() => title(typeof anim.startTime === "number" ? anim.startTime : null), () => title(null));
+    else title(null);
     // 播完：先放掉牌桌根節點的 will-change，後面接的自摸浮層（fixed）才蓋得滿整個螢幕（審伯 R1）
     ts.push(setTimeout(() => { if (!ended.current) { ended.current = true; segRef.current?.end(); doneRef.current(false); } }, rm ? OWN_RM : zfxTotal(fx)));
     if (!rm && fx !== "sakura") ts.push(setTimeout(() => { gameVibrate([110, 50, 40]); }, boomOf(fx)));
