@@ -12,27 +12,29 @@ import { loadBuffer, playBuffer } from "./thAudio";
 
 export type SfxKey = "start" | "play" | "score" | "chongsan" | "tiezhi" | "tonghuashun" | "wulong" | "gunshot" | "hit" | "charge" | "bat" | "homerun" | "fireworks"
   | IhrSfxKey;
-/** 場內全壘打的三個聲音（老闆 2026-11-28「要配聲音」）：0.55 換景悶雷、1.85 大字落地「咚」、2.3 走音慢版小號（5 秒版） */
-export type IhrSfxKey = "ihrthunder" | "ihrthud" | "ihrtrumpet";
+/** 場內全壘打的兩個聲音（老闆 2026-11-28「要配聲音」）：0.55 換景悶雷、1.85 大字落地「咚」（5 秒版；小號老闆說拔掉） */
+export type IhrSfxKey = "ihrthunder" | "ihrthud";
 export const SFX_LIST: { key: SfxKey; name: string }[] = [
   { key: "start", name: "開始比牌" }, { key: "play", name: "出牌" }, { key: "score", name: "分數出現" }, { key: "chongsan", name: "衝三" },
   { key: "tiezhi", name: "鐵支" }, { key: "tonghuashun", name: "同花順" }, { key: "wulong", name: "五龍" }, { key: "gunshot", name: "槍聲" },
   { key: "hit", name: "中彈" }, { key: "charge", name: "集氣" }, { key: "bat", name: "揮棒擊球" }, { key: "homerun", name: "全壘打" }, { key: "fireworks", name: "煙火" },
-  { key: "ihrthunder", name: "場內全壘打悶雷" }, { key: "ihrthud", name: "場內全壘打落地" }, { key: "ihrtrumpet", name: "場內全壘打小號" },
+  { key: "ihrthunder", name: "場內全壘打悶雷" }, { key: "ihrthud", name: "場內全壘打落地" },
 ];
 /** 用哪個候選（老闆試聽後要換就改這裡）；數字＝第二輪候選 r2-1／2／3。老闆 2026-11-18：槍聲選 1、中彈選 3 */
 export const SFX_PICK: Record<SfxKey, SfxVariant> = {
   start: "a", play: "a", score: "a", chongsan: "a", tiezhi: "a", tonghuashun: "a", wulong: "b", gunshot: 1, hit: 3, charge: "a", bat: "a", homerun: "a", fireworks: "a",
-  ihrthunder: "a", ihrthud: "b", ihrtrumpet: 1, // 場內全壘打：老闆 2026-11-28 試聽選定悶雷 A、咚 B、小號 C；特效測試頁仍可換（IHR_SFX，記在本機）
+  ihrthunder: "a", ihrthud: "b", // 場內全壘打：老闆 2026-11-28 試聽選定悶雷 A、咚 B（小號拔掉）；特效測試頁仍可換（IHR_SFX，記在本機）
 };
 /** 老闆 2026-11-18 試聽定案：開始比牌 A、出牌 A、分數 A、五龍 B、揮棒 A、槍聲 r2-1、中彈 r2-3；衝三、鐵支、同花順都不滿意、先靜音等重找（測試頁可試聽第二輪）；
  *  集氣不留；全壘打只要打出去那一聲（揮棒擊球），之後的歡呼、煙火不要。選了大牌音效（BIG_SFX）後，衝三、鐵支、同花順、五龍都改播那一個 */
+/** 全壘打揮棒擊球的時間點（從全壘打開始算）：老闆 2026-11-28 預備也要集氣、總長拉到 5.0 秒，揮棒從 0.55 移到 1.4（thReveal.css 同一個時間點） */
+export const HR_SWING_MS = 1400;
 export const SFX_MUTED: ReadonlySet<SfxKey> = new Set<SfxKey>(["chongsan", "tiezhi", "tonghuashun", "charge", "homerun", "fireworks"]);
 /** 數字＝第二輪候選 r2-1／2／3（目前只有槍聲、中彈用到，已定案） */
 export type SfxR2 = 1 | 2 | 3;
 export type SfxVariant = "a" | "b" | SfxR2;
-/** 檔案版本：同檔名不能換內容（長期快取），重剪就升版本。場內全壘打小號 v2＝配合 5 秒版拉回約 2.1 秒（老馬 2026-11-28） */
-const SFX_VER: Partial<Record<SfxKey, string>> = { ihrtrumpet: "v2" };
+/** 檔案版本：同檔名不能換內容（長期快取），重剪就升版本 */
+const SFX_VER: Partial<Record<SfxKey, string>> = {};
 export const sfxSrc = (k: SfxKey, v: SfxVariant = SFX_PICK[k]) =>
   `/tiles/thirteen/sfx/th-sfx-${k}-${typeof v === "number" ? `r2-${v}` : v}.${SFX_VER[k] ?? "v1"}.mp3`;
 
@@ -45,12 +47,11 @@ export const BIG_SFX: { id: string; batch: string; label: string; name: string; 
   { id: "r3-d", batch: "第三輪", label: "D", name: "收銀機叮鈴", src: "/tiles/thirteen/sfx/th-sfx-big-r3-d.v1.mp3" },
   { id: "r3-e", batch: "第三輪", label: "E", name: "拔刀亮音", src: "/tiles/thirteen/sfx/th-sfx-big-r3-e.v1.mp3" },
 ];
-/** 場內全壘打三個聲音的候選（老馬 2026-11-28；來源見 public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt）：at＝從場內全壘打開始算的毫秒（照分鏡）。
- *  特效測試頁按了就試聽並選用，記在本機 th_sfx_ihr，完整牌局照同一個選擇播；沒選＝SFX_PICK（老闆選定：悶雷 A、咚 B、小號 C） */
+/** 場內全壘打兩個聲音的候選（老馬 2026-11-28；來源見 public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt）：at＝從場內全壘打開始算的毫秒（照分鏡）。
+ *  特效測試頁按了就試聽並選用，記在本機 th_sfx_ihr，完整牌局照同一個選擇播；沒選＝SFX_PICK（老闆選定：悶雷 A、咚 B；小號 2026-11-28 拔掉，音檔一起刪了） */
 export const IHR_SFX: { key: IhrSfxKey; name: string; at: number; options: { v: SfxVariant; label: string; name: string }[] }[] = [
   { key: "ihrthunder", name: "悶雷", at: 550, options: [{ v: "a", label: "A", name: "麻將雷霆自摸的雷聲" }, { v: "b", label: "B", name: "遠方滾雷（Freesound CC0）" }] },
   { key: "ihrthud", name: "咚", at: 1850, options: [{ v: "a", label: "A", name: "麻將 thud 降調加重" }, { v: "b", label: "B", name: "低沉悶響（Freesound CC0）" }] },
-  { key: "ihrtrumpet", name: "小號", at: 2300, options: [{ v: "a", label: "A", name: "wah wah 悲情長號" }, { v: "b", label: "B", name: "失敗號角 wahwah" }, { v: 1, label: "C", name: "失敗小樂句" }] },
 ];
 const IHR_KEY = "th_sfx_ihr";
 /** 本機記住的場內全壘打候選（不在候選清單裡的不算） */
@@ -185,8 +186,8 @@ export function sfxEvents(steps: Step[], mySeat: number, bigId: string | null = 
       if (values) out.push({ t: s.t0, k: "voice", src: voiceSrc(s.row, values[s.seat][s.row]) });
     }
     else if (s.kind === "gun") { out.push({ t: s.t0 + 180, k: "gunshot" }); out.push({ t: s.t0 + 260, k: "hit", volume: s.to === mySeat ? 1 : 0.6 }); } // 被打的人自己聽比較大聲
-    else if (s.kind === "homerun") { out.push({ t: s.t0, k: "charge" }, { t: s.t0 + 550, k: "bat" }, { t: s.t0 + 1150, k: "homerun" }, { t: s.t0 + 1350, k: "fireworks" }); }
-    // 場內全壘打：0.55 悶雷（換景閃光）、1.85 咚（大字落地）、2.3 小號（燈熄掉）；四家都一樣大聲
+    else if (s.kind === "homerun") { out.push({ t: s.t0, k: "charge" }, { t: s.t0 + HR_SWING_MS, k: "bat" }, { t: s.t0 + HR_SWING_MS + 600, k: "homerun" }, { t: s.t0 + HR_SWING_MS + 800, k: "fireworks" }); } // 5 秒版：1.4 揮棒
+    // 場內全壘打：0.55 悶雷（換景閃光）、1.85 咚（大字落地）；四家都一樣大聲
     else if (s.kind === "insidehr") for (const x of IHR_SFX) out.push({ t: s.t0 + x.at, k: x.key, src: sfxSrc(x.key, ihrPick[x.key] ?? SFX_PICK[x.key]) });
   }
   if (steps.some((x) => x.kind === "flip")) for (const w of scoreWindows({ steps, end: Infinity })) out.push({ t: w.from, k: "score" }); // 四家出完、看板出現加分

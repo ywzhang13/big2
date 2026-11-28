@@ -78,7 +78,7 @@ const v1 = (await state(roomId, "p1")).body;
   const d = f.revealDurationMs ? f.revealDurationMs(result) : null;
   // 照老闆定案的新節奏另外算一次（特效牌型、打槍組數、全壘打從結算結果數；別家隨機牌也可能有特效牌型）
   const specials = result ? result.values.reduce((n, v) => n + ROWS.filter((row) => bonusOf(row, v[row]) > 0).length, 0) : -1;
-  const v8b = 20900 + specials * 300 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1500 + (result?.homeRun !== null ? 3200 : 0); // 老闆定案新節奏：20.9＋0.3×大牌＋1.5×槍＋3.2×全壘打
+  const v8b = 20900 + specials * 300 + (result?.pairs.filter((p) => p.gunner !== null).length ?? 0) * 1500 + (result?.homeRun !== null ? 5000 : 0); // 老闆定案新節奏：20.9＋0.3×大牌＋1.5×槍＋5.0×全壘打（2026-11-28 前 3.2）
   const L = flow.REVEAL_TIMING.LEAD_MS; // 2026-11-19：動畫起點排在亮牌那一刻之後 1.2 秒（見 tests/_thirteen-reveal-lead.ts）
   eq([L, rev1?.revealedAt, rev1?.settleAt, rev1?.nextHandAt, v1.reveal?.revealedAt, v1.reveal?.settleAt, v1.nextHandAt, d],
     [1200, NOW + L, NOW + L + v8b, NOW + L + v8b + 30_000, NOW + L, NOW + L + v8b, NOW + L + v8b + 30_000, v8b],

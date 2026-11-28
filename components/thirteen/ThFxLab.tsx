@@ -17,6 +17,7 @@ const FX_LIST: { key: LabFx; name: string }[] = [
   { key: "start", name: "開始比牌" }, { key: "chongsan", name: "衝三" }, { key: "tiezhi", name: "鐵支" }, { key: "tonghuashun", name: "同花順" },
   { key: "wulong", name: "五龍" }, { key: "jpchongsan", name: "彩金衝三" }, { key: "jphulu", name: "彩金葫蘆" }, { key: "jptiezhi", name: "彩金鐵支" }, { key: "gun", name: "打槍" }, { key: "gun3", name: "被打三槍" }, { key: "homerun", name: "全壘打" }, { key: "insidehr", name: "場內全壘打" },
 ];
+type Trial = { ready: "old" | "new"; size: "a" | "b"; dir: "mirror" | "none" };
 const SEATS = ["自己", "右家", "對家", "左家"]; // 自己坐 0 號：1 號在右、2 號對家、3 號在左（同 ThTable）
 const isFx = (v: unknown): v is LabFx => FX_LIST.some((f) => f.key === v);
 
@@ -40,13 +41,15 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   const [now, setNow] = useState(() => Date.now());
   const [big, setBig] = useState<string | null>(null);
   const [ihr, setIhr] = useState<Partial<Record<IhrSfxKey, SfxVariant>>>({});
-  // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙；記在這支手機，套在 <html> 的 data-th-trial-ready、data-th-fxsize（不能叫 data-th-hr-ready：牌桌上的預備姿勢已經用這個名字當標記）（正式遊戲不設＝舊＋甲）
-  const [trial, setTrial] = useState<{ ready: "old" | "new"; size: "a" | "b" }>({ ready: "old", size: "a" });
-  const applyTrial = (t: { ready: "old" | "new"; size: "a" | "b" }) => {
+  // 試做切換（老闆 2026-11-28）：全壘打預備舊／新、人物大小甲／乙、方向鏡射／不翻轉；記在這支手機，套在 <html> 的 data-th-trial-ready、data-th-fxsize、data-th-trial-dir
+  // （不能叫 data-th-hr-ready：牌桌上的預備姿勢已經用這個名字當標記）（正式遊戲不設＝舊＋甲＋鏡射）
+  const [trial, setTrial] = useState<Trial>({ ready: "old", size: "a", dir: "mirror" });
+  const applyTrial = (t: Trial) => {
     setTrial(t);
     const d = document.documentElement.dataset;
     if (t.ready === "new") d.thTrialReady = "new"; else delete d.thTrialReady;
     if (t.size === "b") d.thFxsize = "b"; else delete d.thFxsize;
+    if (t.dir === "none") d.thTrialDir = "none"; else delete d.thTrialDir;
     try { localStorage.setItem("th_lab_trial", JSON.stringify(t)); } catch { /* 存不了就只是這次 */ }
   };
 
@@ -54,7 +57,7 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
   useEffect(() => { (window as unknown as { __thPlay?: typeof playSrc }).__thPlay = playSrc; }, []);
   useEffect(() => {
     setBig(loadBigSfx()); setIhr(loadIhrSfx());
-    try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string }; applyTrial({ ready: t.ready === "new" ? "new" : "old", size: t.size === "b" ? "b" : "a" }); } catch { /* 沒存過＝舊＋甲 */ }
+    try { const t = JSON.parse(localStorage.getItem("th_lab_trial") ?? "{}") as { ready?: string; size?: string; dir?: string }; applyTrial({ ready: t.ready === "new" ? "new" : "old", size: t.size === "b" ? "b" : "a", dir: t.dir === "none" ? "none" : "mirror" }); } catch { /* 沒存過＝舊＋甲＋鏡射 */ }
     // 場內全壘打的候選全部先載好：試聽第一次按就有聲音（播放時檔案還沒載完會被當成太晚、直接略過，手機走外部網址最明顯）
     for (const x of IHR_SFX) for (const o of x.options) void loadBuffer(sfxSrc(x.key, o.v));
     const f = isFelt(initial.felt) ? initial.felt : loadFelt();
@@ -139,6 +142,10 @@ export default function ThFxLab({ rv, initial }: { rv: ThReveal; initial: { fx: 
             <span className="th-lab-sfx">人物大小</span>
             {(["a", "b"] as const).map((z) => (
               <button key={z} type="button" className={trial.size === z ? "is-on" : ""} data-th-lab-size={z} onClick={() => applyTrial({ ...trial, size: z })}>{z === "a" ? "甲（約 240）" : "乙（約 320）"}</button>
+            ))}
+            <span className="th-lab-sfx">方向</span>{/* 全壘打、場內全壘打都套用；按了直接重播現在選的那一個（不是這兩個就播全壘打） */}
+            {(["mirror", "none"] as const).map((r) => (
+              <button key={r} type="button" className={trial.dir === r ? "is-on" : ""} data-th-lab-dir={r} onClick={() => { applyTrial({ ...trial, dir: r }); go(fx === "insidehr" ? "insidehr" : "homerun", seat); }}>{r === "mirror" ? "鏡射" : "不翻轉"}</button>
             ))}
           </div>
           <div className="th-lab-row" data-th-lab-ihr>

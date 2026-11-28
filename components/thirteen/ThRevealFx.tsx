@@ -65,6 +65,9 @@ function seatCenter(pos: Pos): Pt | null {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 const tableCenter = (): Pt => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+/** 全壘打、場內全壘打要不要左右鏡射（老闆 2026-11-28「對家跟右家翻轉怪怪的」）：鏡射版只有右家翻（對家坐正對面，沒有朝左的理由，改成不翻）；
+ *  特效測試頁切成「不翻轉」（<html data-th-trial-dir="none">）時四家都不翻＝打者在左、大字在右，只靠名牌分是誰。正式遊戲不設＝鏡射版 */
+const mirrorFor = (pos: Pos) => document.documentElement.dataset.thTrialDir !== "none" && pos === "right";
 const isDesktop = () => window.matchMedia(DESKTOP).matches;
 
 /** 一段特效：掛上去那一刻算好位置和「已播毫秒」 */
@@ -149,17 +152,16 @@ function GunFx({ step, elapsed: elapsed0, mySeat }: { step: Extract<Step, { kind
   );
 }
 
-/** 全壘打 3.2 秒（小宜 v9，取代 v8-B §8 的 0.55 秒以後）：0～0.55 在打者那組牌上集氣——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
- * （人一直是正的，只左右鏡射面向球飛的方向：自己、左家面向右，右家、對家面向左；0.55 秒後的打擊者畫面跟著同一個方向）；
- * 0.55 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、球飛上天變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 2.80～3.20 一起淡出。
- * 0.55 秒以後四家看到的畫面完全相同（不翻面）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
+/** 全壘打 5.0 秒（小宜 v9；老闆 2026-11-28 預備也要集氣、總長對齊場內全壘打，原本 3.2 秒、0.55 揮棒）：0～1.4 在打者那組牌上集氣——老闆 2026-11-18 第 10 輪：只有球棒的圖換成打擊者準備姿勢圖
+ * （人一直是正的，只左右鏡射面向球飛的方向：鏡射版只有右家面向左（mirrorFor）；1.4 秒後的打擊者畫面跟著同一個方向）；
+ * 1.4 擊中 → 全螢幕亮光換景成打擊者畫面（球場背景、打擊者背影在左、球飛上天變十字星、壓暗、「全壘打」大字在右、打出全壘打那一家的名牌、煙火）→ 停到 4.5 → 4.5～5.0 一起淡出（時間在 thReveal.css）。位置、大小都是畫面寬高的比例（thReveal.css .th-hr9），不跟牌桌倍數走 */
 function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "homerun" }>; elapsed: number; mySeat: number; name: string }) {
   const [elapsed] = useState(elapsed0); // 掛上去那一刻就固定（之後每次重畫都改 delay 會讓動畫跳格）
   const pos = POS_BY_OFFSET[(step.seat - mySeat + 4) % 4];
   const h = useMount(() => {
     const s = stageScale(); // v8-A：特效尺寸跟著牌桌倍數放大
     const a = seatCenter(pos) ?? tableCenter();
-    const face = pos === "right" || pos === "top" ? -1 : 1;
+    const face = mirrorFor(pos) ? -1 : 1;
     const readyH = 200 * s, half = readyH * 0.6; // 最大放到 1.12 倍：上下各留 0.6 倍高，對家（牌在上緣）頭頂才不會出畫面
     // 預備新版（老闆 2026-11-28 試做，只有特效測試頁會切成 new）：預備姿勢不在牌桌上，先換景到球場、出現在揮棒打者同一個位置，再交叉淡入成揮棒
     const ready2 = document.documentElement.dataset.thTrialReady === "new";
@@ -170,9 +172,9 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
   const shown = Array.from(name).length > 10 ? `${Array.from(name).slice(0, 10).join("")}…` : name; // 名字最多 10 個字（同麻將自摸）
   return (
     <>
-      {/* 集氣的光（全螢幕爆發圖縮小，0～0.45 秒在打擊者後面由 0.2 倍放大到 0.5 倍） */}
+      {/* 集氣的光（開場的全螢幕爆發圖縮小）：舊預備 0～1.4 在牌上的預備姿勢後面由小放大、越來越亮；新預備只在牌上亮 0～0.3，換景後由球場上的 th-hr9-charge 接手 */}
       <div className="th-fx-at is-blend" style={{ left: h.a.x, top: h.a.y }}>
-        <Pic name="burst" className="th-fx th-fx-charge" style={delay} />
+        <Pic name="burst" className={`th-fx th-fx-charge${h.ready2 ? " is-quick" : ""}`} style={delay} />
       </div>
       {/* 打擊者準備姿勢：中心對齊那一家整組牌的中心（上下超出畫面才往內收） */}
       {/* 鏡射放在外層、固定不動（老闆第 10 輪：準備姿勢要定住）；動畫只做放大和透明度，沒有旋轉和水平位移 */}
@@ -182,11 +184,12 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
       </div>
       )}
       {/* 打擊者畫面（v9 §3 圖層由下到上）：背景、壓暗、煙火（screen）、打擊者、球、星星、大字、名牌、換景亮光 */}
-      {/* 右家、對家的集氣人物朝左 → 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
+      {/* 集氣人物朝左（鏡射版的右家）→ 打擊者畫面也左右對調（打擊者在右、大字和名字在左），方向一致（老闆第 10 輪） */}
       <div className={`th-hr9${h.face < 0 ? " is-flip" : ""}${h.ready2 ? " is-ready2" : ""}`} data-th-homerun={step.seat} data-th-hr-flip={h.face < 0 ? 1 : 0} style={delay}>
         <Pic name="hrfield" className="th-hr9-field" style={delay} />
         <div className="th-hr9-dim" style={delay} />
         <Pic name="fireworks" className="th-hr9-fw" style={delay} />
+        {h.ready2 && <Pic name="burst" className="th-hr9-charge" style={delay} />}
         {h.ready2 && <Pic name="hrready" className="th-hr9-ready" style={delay} />}
         <Pic name="hrbatter" className="th-hr9-batter" style={delay} />
         <div className="th-hr9-ballpath" style={delay}><Pic name="ball" className="th-hr9-ball" /></div>
@@ -203,8 +206,8 @@ function HomeRunFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<St
 
 /** 場內全壘打 5.0 秒（老闆 2026-11-28「被三家打槍＝場內全壘打，悲情版、風格跟全壘打一樣」；阿哲分鏡；老闆「可以久一點」從 3.2 拉長到 5.0）：
  *  0～0.55 被打那一家的牌依序中三個彈孔、整組牌變灰 → 0.55 冷白閃光換景到雨夜球場（悶雷）→ 0.55～1.6 打者站著、快跪下去 →
- *  1.6～1.85 交叉淡入跪姿、往下沉 → 1.85～2.05「場內全壘打」大字從上方重重落下（不彈跳，「咚」）→ 2.3 遠處一盞燈熄掉、畫面暗一階（小號），
- *  跪姿肩膀一直微微起伏 → 2.25 被打那一家的名字（灰白）→ 停到 4.5 → 4.5～5.0 淡出。方向照全壘打：右家、對家觸發時整個畫面左右鏡射（人在右、大字在左）。
+ *  1.6～1.85 交叉淡入跪姿、往下沉 → 1.85～2.05「場內全壘打」大字從上方重重落下（不彈跳，「咚」）→ 2.3 遠處一盞燈熄掉、畫面暗一階（小號拔掉了，這段沒有聲音），
+ *  跪姿肩膀一直微微起伏 → 2.25 被打那一家的名字（灰白）→ 停到 4.5 → 4.5～5.0 淡出。方向照全壘打（mirrorFor）：鏡射版右家觸發時整個畫面左右鏡射（人在右、大字在左），不翻轉版四家都人在左。
  *  位置、大小都是畫面寬高的比例（thReveal.css .th-ihr），四家看到同一個畫面（只差鏡射，跟全壘打一樣） */
 const IHR_HOLES: [number, number, number][] = [[0.3, 0.42, -18], [0.56, 0.58, 24], [0.78, 0.38, 70]]; // 三個彈孔在那組牌上的位置（寬、高的比例）和角度
 function InsideHrFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<Step, { kind: "insidehr" }>; elapsed: number; mySeat: number; name: string }) {
@@ -216,7 +219,7 @@ function InsideHrFx({ step, elapsed: elapsed0, mySeat, name }: { step: Extract<S
     const box = rs.length
       ? { l: Math.min(...rs.map((r) => r.left)), t: Math.min(...rs.map((r) => r.top)), r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)) }
       : { l: c.x - 80, t: c.y - 50, r: c.x + 80, b: c.y + 50 };
-    return { box, hole: Math.max(36, (box.b - box.t) * 0.5), flip: pos === "right" || pos === "top" };
+    return { box, hole: Math.max(36, (box.b - box.t) * 0.5), flip: mirrorFor(pos) };
   });
   if (!h) return null;
   const delay = { animationDelay: `${-elapsed}ms` };

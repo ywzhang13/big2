@@ -1,10 +1,10 @@
-// 十三支「場內全壘打」（老闆 2026-11-28：某一家被另外三家都打槍，播悲情版全壘打 5.0 秒——老闆「可以久一點」從 3.2 拉長；全壘打維持 3.2；只加動畫、不改計分）
+// 十三支「場內全壘打」（老闆 2026-11-28：某一家被另外三家都打槍，播悲情版全壘打 5.0 秒——老闆「可以久一點」從 3.2 拉長；全壘打後來也拉到 5.0；只加動畫、不改計分）
 //   I1 誰是場內全壘打：被三家打槍才算；只被兩家打不算；一局最多一家
 //   I2 時間軸：有場內全壘打才有 insidehr 這一段（5.0 秒、座位對）；同一局也有全壘打時先場內全壘打、再全壘打（老闆 2026-11-28）
 //   I3 揭牌總長：伺服器 revealDurationMs 多 5.0 秒，前端時間軸的結束時間跟伺服器一樣（隨機 3000 局逐局比）；最長等待 NEXT_HAND_MAX_MS 也算進去
 //   I4 計分不變：有沒有場內全壘打，每家的分數都只是兩兩比牌＋打槍＋全壘打（scoreRound 沒有新加分）
 //   I5 畫面：特效層有場內全壘打這一段、四張新圖有長寬比、登記長期快取；測試頁有「場內全壘打」按鈕
-//   I6 音效（老闆「要配聲音」）：0.55 悶雷、1.85 咚、2.3 小號（4.5 前收尾）；預設候選 A、可換候選；檔案都在、登記長期快取、來源有寫；原本選好的音效沒動
+//   I6 音效（老闆「要配聲音」）：0.55 悶雷、1.85 咚（小號老闆拔掉）；預設悶雷 A、咚 B、可換候選；檔案都在、登記長期快取、來源有寫；原本選好的音效沒動
 import { readFileSync, existsSync } from "node:fs";
 import { autoArrange, deal, revealOrder, scoreRound, type RoundResult } from "../lib/thirteen";
 import { insideHomeRunOf, REVEAL_TIMING, revealDurationMs, NEXT_HAND_MAX_MS, SETTLE_WAIT_MS } from "../lib/thirteen/flow";
@@ -42,7 +42,7 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(a[0]?.t0 === lastGun.t0 + lastGun.dur, "I2 場內全壘打接在最後一槍後面");
   const b = st(both), h = b.find((s) => s.kind === "homerun"), i = b.find((s) => s.kind === "insidehr");
   const lg = b.filter((s) => s.kind === "gun").pop();
-  ok(!!h && !!i && !!lg && i.t0 === lg.t0 + lg.dur && h.t0 === i.t0 + i.dur && h.dur === 3200 && b.indexOf(i) < b.indexOf(h), `I2 同局也有全壘打：最後一槍後先場內全壘打（${i?.t0}）、再全壘打（${h?.t0}，3.2 秒不變）`);
+  ok(!!h && !!i && !!lg && i.t0 === lg.t0 + lg.dur && h.t0 === i.t0 + i.dur && h.dur === 5000 && b.indexOf(i) < b.indexOf(h), `I2 同局也有全壘打：最後一槍後先場內全壘打（${i?.t0}）、再全壘打（${h?.t0}，5.0 秒）`);
   // 播放中看板淡出（跟打槍、全壘打一樣）
   const tl = T.buildTimeline(ihr);
   const at = (a[0]?.t0 ?? tl.end) + 1000;
@@ -51,7 +51,7 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
 
 // ---- I3 ----
 {
-  ok(REVEAL_TIMING.INSIDE_HR_MS === 5000 && T.MS.insidehr === 5000 && REVEAL_TIMING.HOME_RUN_MS === 3200, "I3 場內全壘打 5.0 秒（伺服器、前端同一個常數）；全壘打維持 3.2 秒");
+  ok(REVEAL_TIMING.INSIDE_HR_MS === 5000 && T.MS.insidehr === 5000 && REVEAL_TIMING.HOME_RUN_MS === 5000 && T.MS.homerun === 5000, "I3 場內全壘打、全壘打都是 5.0 秒（伺服器、前端同一個常數）");
   const ihr = must("insidehr"), both = must("ihrhr");
   for (const [n, rv] of [["insidehr", ihr], ["ihrhr", both]] as const) {
     const end = T.buildTimeline(rv).end, server = revealDurationMs(rv.result);
@@ -95,7 +95,7 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const files = names.flatMap((n) => (["m", "d"] as const).map((z) => fxSrc(n, z)));
   ok(files.every((f) => /\.v1\.[md]\.webp$/.test(f) && existsSync(`public${f}`) && !!reg[f]), `I5 8 個檔名有版本號、檔案存在、登記長期快取：${files.filter((f) => !reg[f]).join("、") || "全部"}`);
   ok(/s\.kind === "insidehr"\) return <InsideHrFx/.test(tsx) && /data-th-insidehr=/.test(tsx), "I5 特效層會畫場內全壘打");
-  ok(/\.th-ihr\.is-flip \.th-ihr-figs \{ transform: scaleX\(-1\); \}/.test(css) && /pos === "right" \|\| pos === "top"/.test(tsx.slice(tsx.indexOf("function InsideHrFx"))), "I5 右家、對家觸發時左右鏡射（同全壘打）");
+  ok(/\.th-ihr\.is-flip \.th-ihr-figs \{ transform: scaleX\(-1\); \}/.test(css) && /flip: mirrorFor\(pos\)/.test(tsx.slice(tsx.indexOf("function InsideHrFx"))), "I5 鏡射跟全壘打用同一個判斷（mirrorFor）");
   ok(/@keyframes th-ihr-out \{.*90% \{ opacity: 1; \} 100% \{ opacity: 0; \} \}/.test(css) && /\.th-ihr \{[^}]*animation: th-ihr-out 5s/.test(css), "I5 整段 5 秒、4.5～5.0 秒淡出");
   ok(/key: "insidehr", name: "場內全壘打"/.test(readFileSync("components/thirteen/ThFxLab.tsx", "utf8")), "I5 特效測試頁有「場內全壘打」按鈕");
 }
@@ -106,14 +106,17 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   const reg = JSON.parse(readFileSync("scripts/immutable-assets.json", "utf8")) as Record<string, string>;
   const steps = T.buildTimeline(must("insidehr")).steps, ihr = steps.find((s) => s.kind === "insidehr")!;
   const ev = S.sfxEvents(steps, 0).filter((e) => e.t >= ihr.t0 && e.t < ihr.t0 + ihr.dur).map((e) => `${e.t - ihr.t0}:${e.k}:${(e.src ?? "").split("/").pop()}`);
-  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3", "2300:ihrtrumpet:th-sfx-ihrtrumpet-r2-1.v2.mp3"]),
-    `I6 場內全壘打的聲音：0.55 悶雷、1.85 咚、2.3 小號，預設是老闆選的悶雷 A、咚 B、小號 C：${ev.join("、")}`);
-  const ev2 = S.sfxEvents(steps, 2, null, undefined, { ihrtrumpet: "b", ihrthud: "a" }).filter((e) => e.t >= ihr.t0).map((e) => (e.src ?? "").split("/").pop());
-  ok(ev2.includes("th-sfx-ihrthud-a.v1.mp3") && ev2.includes("th-sfx-ihrtrumpet-b.v2.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3"), "I6 換候選（咚 A、小號 B）照選的播，沒選的維持預設；不管自己坐哪都一樣");
+  ok(JSON.stringify(ev) === JSON.stringify(["550:ihrthunder:th-sfx-ihrthunder-a.v1.mp3", "1850:ihrthud:th-sfx-ihrthud-b.v1.mp3"]),
+    `I6 場內全壘打的聲音只有兩個：0.55 悶雷 A、1.85 咚 B（小號老闆拔掉）：${ev.join("、")}`);
+  const ev2 = S.sfxEvents(steps, 2, null, undefined, { ihrthud: "a" }).filter((e) => e.t >= ihr.t0 && e.t < ihr.t0 + ihr.dur).map((e) => (e.src ?? "").split("/").pop());
+  ok(ev2.includes("th-sfx-ihrthud-a.v1.mp3") && ev2.includes("th-sfx-ihrthunder-a.v1.mp3") && ev2.length === 2, "I6 換候選（咚 A）照選的播，沒選的維持預設；不管自己坐哪都一樣");
+  const lab = readFileSync("components/thirteen/ThFxLab.tsx", "utf8");
+  ok(!S.SFX_LIST.some((x) => /trumpet/.test(x.key)) && !Object.keys(reg).some((f) => /trumpet/.test(f)) && !existsSync("public/tiles/thirteen/sfx/th-sfx-ihrtrumpet-r2-1.v2.mp3") && S.IHR_SFX.length === 2 && !/小號/.test(lab),
+    "I6 小號拔掉：音效清單、長期快取清單、音檔、測試頁那一排都沒有了");
   const files = S.IHR_SFX.flatMap((x) => x.options.map((o) => S.sfxSrc(x.key, o.v)));
   const lic = readFileSync("public/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt", "utf8");
-  ok(files.length === 7 && files.every((f) => existsSync(`public${f}`) && !!reg[f] && lic.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt"],
-    `I6 7 個候選音檔都在、登記長期快取、來源寫在 LICENSE-insidehr.v2.txt`);
+  ok(files.length === 4 && files.every((f) => existsSync(`public${f}`) && !!reg[f] && lic.includes(f.split("/").pop()!)) && !!reg["/tiles/thirteen/sfx/LICENSE-insidehr.v2.txt"],
+    `I6 4 個候選音檔都在、登記長期快取、來源寫在 LICENSE-insidehr.v2.txt`);
   const PICK = S.SFX_PICK as Record<string, unknown>;
   ok(JSON.stringify(["start", "play", "score", "chongsan", "tiezhi", "tonghuashun", "wulong", "gunshot", "hit", "charge", "bat", "homerun", "fireworks"].map((k) => PICK[k]))
     === JSON.stringify(["a", "a", "a", "a", "a", "a", "b", 1, 3, "a", "a", "a", "a"]), "I6 原本選好的音效（SFX_PICK）都沒變");
@@ -131,8 +134,41 @@ ok(insideHomeRunOf(fake([])) === null, "I1 沒有打槍 → 沒有");
   ok(/const ready2 = document\.documentElement\.dataset\.thTrialReady === "new";/.test(tsx) && /\{!h\.ready2 && \(/.test(tsx) && /\{h\.ready2 && <Pic name="hrready" className="th-hr9-ready"/.test(tsx), "I7 預備新版：沒切的時候照舊在牌桌上畫預備姿勢；切了才改畫在球場上");
   ok(/\.th-hr9-batter \{ left: 7vw; bottom: -2vh; height: min\(92vh, 44vw\)/.test(css) && /--hs: min\(62vh, 29\.6vw\)/.test(css), "I7 預設大小（甲）不變：打者 min(92vh, 44vw)、場內 min(62vh, 29.6vw)");
   ok(/:root\[data-th-fxsize="b"\] \.th-hr9 \.th-hr9-batter \{ left: 2vw; height: min\(117vh, 56vw\); \}/.test(css) && /:root\[data-th-fxsize="b"\] \.th-ihr \{ --hs: min\(84vh, 40vw\); \}/.test(css), "I7 乙案：打者 min(117vh, 56vw)（852 寬人物約 320）、場內回到 min(84vh, 40vw)");
-  ok(/\.th-hr9\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2; \}/.test(css) && /\.th-hr9\.is-flip\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2-r; \}/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ready \{[^}]*th-hr9-ready2-r/.test(css), "I7 預備新版的交叉淡入在右家、對家也會鏡射");
-  ok(T.MS.homerun === 3200, "I7 全壘打預備新版總長仍是 3.2 秒，不用改伺服器時長");
+  ok(/\.th-hr9\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2; \}/.test(css) && /\.th-hr9\.is-flip\.is-ready2 \.th-hr9-batter \{ animation-name: th-hr9-batter2-r; \}/.test(css) && /\.th-hr9\.is-flip \.th-hr9-ready \{[^}]*th-hr9-ready2-r/.test(css), "I7 預備新版的交叉淡入在鏡射版也會鏡射");
+}
+
+// ---- I8 全壘打 5.0 秒加集氣（老闆 2026-11-28「全壘打一樣要集氣一下…整體動畫時間對齊場內全壘打」）----
+{
+  const S = await import("../components/thirteen/sfx");
+  const tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), css = readFileSync("components/thirteen/thReveal.css", "utf8");
+  const kf = (n: string) => { const i = css.indexOf(`@keyframes ${n} {\n`); return i < 0 ? "" : css.slice(i, css.indexOf("\n}", i) + 2); }; // 多行的 keyframes 整段
+  const steps = T.buildTimeline(must("homerun")).steps, hr = steps.find((s) => s.kind === "homerun")!;
+  const bat = S.sfxEvents(steps, 0).filter((e) => e.k === "bat").map((e) => e.t - hr.t0);
+  ok(hr.dur === 5000 && S.HR_SWING_MS === 1400 && JSON.stringify(bat) === "[1400]", `I8 全壘打 5.0 秒、揮棒擊球聲在 1.4 秒（原本 0.55）：${bat.join("、")}`);
+  ok(/\.th-hr9 \{[^}]*animation: th-hr9-out 5s/.test(css) && /@keyframes th-hr9-out \{ 0%, 90% \{ opacity: 1; \} 100% \{ opacity: 0; \} \}/.test(css), "I8 打擊者畫面整段 5 秒，停到 4.5、4.5～5.0 淡出");
+  ok(/@keyframes th-hr9-flash \{ 0%, 28% \{ opacity: 0; \} 30% \{ opacity: 1; \}/.test(css)
+    && /@keyframes th-hr9-batter2 \{ 0%, 28% \{ transform: none; opacity: 0; \} 30%, 100% \{ transform: none; opacity: 1; \} \}/.test(css)
+    && /@keyframes th-hr9-ready2 \{[^\n]*28% \{ transform: scale\(1\.03\); opacity: 1; \} 30%, 100% \{ transform: scale\(1\.03\); opacity: 0; \} \}/.test(css),
+    "I8 舊預備 1.4 閃光換景；新預備 1.4～1.5 交叉淡入成揮棒（28%＝1.4 秒）");
+  ok(/\.th-fx-charge \{[^}]*animation-duration: 5s/.test(css) && /28% \{ transform: translate\(-50%,-50%\) scale\(\.7\); opacity: 1; filter: brightness\(1\.5\); \}/.test(kf("th-charge")),
+    "I8 舊預備：牌上集氣光 0～1.4 由 0.2 倍放大到 0.7 倍、越來越亮");
+  ok(/\{h\.ready2 && <Pic name="burst" className="th-hr9-charge"/.test(tsx) && /is-quick/.test(tsx) && /9%, 100% \{[^}]*opacity: 0;/.test(kf("th-charge-q"))
+    && /28% \{ transform: scale\(1\); opacity: 1; filter: brightness\(1\.6\); \}/.test(kf("th-hr9-charge")) && /mix-blend-mode: screen; animation-name: th-hr9-charge/.test(css),
+    "I8 新預備：牌上集氣光只亮 0～0.3，換景後球場上預備姿勢背後有同一張集氣光（0.3～1.4 放大、變亮）");
+  const both = T.buildTimeline(must("ihrhr")).steps, i = both.find((s) => s.kind === "insidehr")!, h = both.find((s) => s.kind === "homerun")!;
+  ok(h.t0 === i.t0 + 5000 && h.dur === 5000, "I8 同局兩個都觸發：先場內全壘打 5 秒、再全壘打 5 秒");
+}
+
+// ---- I9 方向（老闆 2026-11-28「對家跟右家的全壘打翻轉怪怪的」）----
+{
+  const tsx = readFileSync("components/thirteen/ThRevealFx.tsx", "utf8"), css = readFileSync("components/thirteen/thReveal.css", "utf8"), lab = readFileSync("components/thirteen/ThFxLab.tsx", "utf8");
+  ok(/const mirrorFor = \(pos: Pos\) => document\.documentElement\.dataset\.thTrialDir !== "none" && pos === "right";/.test(tsx) && /const face = mirrorFor\(pos\) \? -1 : 1;/.test(tsx) && !/pos === "top"/.test(tsx),
+    "I9 鏡射版只有右家翻（對家不翻）；不翻轉版四家都不翻；全壘打、場內全壘打同一個判斷");
+  ok(/\.th-hr9\.is-flip \.th-hr9-field, \.th-hr9\.is-flip \.th-hr9-fw \{ scale: -1 1; \}/.test(css) && /\.th-ihr\.is-flip \.th-ihr-field \{ scale: -1 1; \}/.test(css), "I9 鏡射版的球場背景、煙火跟人一起翻（原本只翻人）");
+  ok(/\.th-hr9\.is-flip \.th-hr9-word \{ transform-origin: 0 50%; \}/.test(css), "I9 鏡射版大字從左緣放大：砸下來那一下切掉的是「打」，不是「全」");
+  ok(/data-th-lab-dir=/.test(lab) && /d\.thTrialDir = "none"/.test(lab) && /"鏡射"/.test(lab) && /"不翻轉"/.test(lab), "I9 特效測試頁有「方向：鏡射／不翻轉」");
+  const others = ["components/thirteen/ThReveal.tsx", "components/thirteen/ThTable.tsx", "app/thirteen/page.tsx"].filter((f) => existsSync(f)).some((f) => /thTrialDir/.test(readFileSync(f, "utf8")));
+  ok(!others, "I9 正式牌局不會設 data-th-trial-dir（預設＝鏡射版）");
 }
 
 for (const r of results) console.log(r);
